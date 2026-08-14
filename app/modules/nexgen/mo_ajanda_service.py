@@ -114,10 +114,18 @@ def _aday_map(con: sqlite3.Connection, aday_ids: list[int]) -> dict[int, dict]:
         return {}
     ph = ','.join('?' * len(aday_ids))
     rows = con.execute(
-        f'SELECT id, firma_adi FROM nexgen_musteri_aday WHERE id IN ({ph})',
+        f'SELECT id, firma_adi, yetkili_adi, telefon, sehir FROM nexgen_musteri_aday WHERE id IN ({ph})',
         aday_ids,
     ).fetchall()
-    return {int(r['id']): {'firma_adi': r['firma_adi']} for r in rows}
+    return {
+        int(r['id']): {
+            'firma_adi': r['firma_adi'] or '',
+            'yetkili_adi': r['yetkili_adi'] or '',
+            'telefon': r['telefon'] or '',
+            'sehir': r['sehir'] or '',
+        }
+        for r in rows
+    }
 
 
 def _kolon_var(con: sqlite3.Connection, table: str, col: str) -> bool:
@@ -157,9 +165,12 @@ def _row_dict(
     d['cari_kod'] = info.get('cari_kod') or '' if cid else ''
     d['saat'] = (d.get('plan_tarihi') or '')[11:16] or '-'
     d['tarih'] = (d.get('plan_tarihi') or '')[:10]
-    d['plan_yetkili_metin'] = (d.get('plan_yetkili_metin') or '').strip()
-    d['plan_telefon'] = (d.get('plan_telefon') or '').strip()
-    d['plan_sehir'] = (d.get('plan_sehir') or '').strip()
+    # Snapshot öncelikli; boşsa bağlı aday tablosundan fallback (tarihsel snapshot ezilmez)
+    _aid = d.get('musteri_aday_id')
+    _aday_info = (aday_map or {}).get(int(_aid)) if _aid else {}
+    d['plan_yetkili_metin'] = (d.get('plan_yetkili_metin') or '').strip() or _aday_info.get('yetkili_adi', '')
+    d['plan_telefon']       = (d.get('plan_telefon')       or '').strip() or _aday_info.get('telefon', '')
+    d['plan_sehir']         = (d.get('plan_sehir')         or '').strip() or _aday_info.get('sehir', '')
     d['plan_notu'] = (d.get('plan_notu') or '').strip()
     d['entity_type'] = 'ADAY' if d.get('musteri_aday_id') else 'CARI'
     d['musteri_tip_etiket'] = 'Yeni Müşteri' if d.get('musteri_aday_id') else 'Mevcut Müşteri'

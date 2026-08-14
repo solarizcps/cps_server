@@ -602,6 +602,7 @@
 .mpa-bh-saat { font-weight: 700; color: var(--mpa-primary); }
 .mpa-bh-firma { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mpa-bh-tip { color: var(--mpa-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ── Detay Modal ── */
 .mpa-detay-modal {
   width: min(640px, calc(100vw - 24px));
   max-height: calc(100vh - 40px);
@@ -611,44 +612,55 @@
 }
 .mpa-detay-modal .mpa-plan-hdr { flex-shrink: 0; }
 .mpa-detay-body {
-  padding: 0 20px 18px;
+  padding: 0 18px 18px;
   font-size: 12px;
   line-height: 1.45;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
 }
+
+/* Hero başlık */
 .mpa-detay-hero {
-  padding: 2px 0 14px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--mpa-border, #e2e8f0);
+  padding: 10px 0 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .mpa-detay-firma {
   font-size: 15px;
   font-weight: 700;
   color: #0f172a;
-  line-height: 1.35;
-  margin-bottom: 6px;
+  line-height: 1.3;
   word-break: break-word;
 }
 .mpa-detay-meta {
   font-size: 12px;
   color: #64748b;
   line-height: 1.4;
-  word-break: break-word;
 }
-.mpa-detay-sonuc-wrap { margin-top: 8px; }
+.mpa-detay-sonuc-wrap { margin-left: auto; }
 .mpa-detay-sonuc-chip {
   display: inline-block;
   font-size: 10px;
   font-weight: 700;
-  padding: 3px 8px;
+  padding: 3px 10px;
   border-radius: 5px;
   background: #f1f5f9;
   color: #475569;
   letter-spacing: .03em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
+.mpa-detay-chip-gercek { background: #dcfce7; color: #166534; }
+.mpa-detay-chip-plan   { background: #dbeafe; color: #1e40af; }
+.mpa-detay-chip-iptal  { background: #fee2e2; color: #991b1b; }
+
+/* Ortak etiket/değer */
 .mpa-detay-lbl {
   display: block;
   font-size: 10px;
@@ -656,14 +668,15 @@
   color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: .04em;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .mpa-detay-val {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   color: #1e293b;
-  line-height: 1.45;
+  line-height: 1.5;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 .mpa-detay-section-title {
   font-size: 10px;
@@ -671,15 +684,140 @@
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: .05em;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
-.mpa-detay-ticari {
-  margin-bottom: 14px;
-  padding: 12px 14px;
+
+/* Kimle ve Ne Zaman — kompakt 2×3 grid */
+.mpa-detay-zaman-blok {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 8px;
 }
+.mpa-detay-zaman-blok .mpa-detay-blok-item { min-width: 0; }
+
+/* Not kartları — yan yana, yüksek */
+.mpa-detay-not-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+  align-items: start;
+}
+/* Tek kart — tam genişlik (plan/iptal) */
+.mpa-detay-not-grid-tek {
+  grid-template-columns: 1fr;
+}
+/* Aksiyon butonu */
+.mpa-detay-aks {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+.mpa-detay-not-kart {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mpa-detay-not-kart .mpa-detay-lbl { margin-bottom: 6px; }
+.mpa-detay-not-val {
+  font-size: 12px;
+  color: #1e293b;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: pre-wrap;
+  min-height: 80px;
+}
+.mpa-detay-etiket-wrap {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.mpa-detay-etiket-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Ticari Özet — kompakt tek satır + alt bilgi */
+.mpa-detay-ticari {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.mpa-detay-ticari-metrik-satir {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0;
+}
+.mpa-detay-ticari-metrik {
+  flex: 1;
+  min-width: 0;
+  padding: 0 10px 0 0;
+  border-right: 1px solid #e2e8f0;
+  margin-right: 10px;
+}
+.mpa-detay-ticari-metrik:last-child {
+  border-right: none;
+  margin-right: 0;
+  padding-right: 0;
+}
+.mpa-detay-ticari-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+  word-break: break-word;
+}
+.mpa-detay-ticari-alt {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.mpa-detay-ticari-alt-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 11px;
+}
+.mpa-detay-ticari-alt-item .mpa-detay-lbl {
+  display: inline;
+  margin-bottom: 0;
+  font-size: 10px;
+}
+.mpa-detay-ticari-alt-item .mpa-detay-val {
+  display: inline;
+  font-size: 11px;
+  white-space: normal;
+}
+.mpa-detay-ticari-ek {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 6px;
+}
+
+/* Eski grid (plan detayı için) */
 .mpa-detay-ticari-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -689,39 +827,46 @@
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 10px 10px 8px;
+  padding: 8px 10px;
   min-width: 0;
 }
-.mpa-detay-ticari-val {
-  font-size: 15px;
-  font-weight: 700;
-  color: #0f172a;
-  line-height: 1.3;
-  word-break: break-word;
-}
 .mpa-detay-ticari-kart .mpa-detay-val {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: #0f172a;
 }
-.mpa-detay-ticari-ek {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #e2e8f0;
+
+/* Sonuç ve Takip — kompakt 2 sütun */
+.mpa-detay-sonuc-blok {
   display: grid;
-  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 4px;
 }
+.mpa-detay-sonuc-blok .mpa-detay-blok-item { min-width: 0; }
+
+/* Genel blok */
 .mpa-detay-takip-blok {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   padding-top: 2px;
+  margin-bottom: 10px;
 }
 .mpa-detay-blok-item { min-width: 0; }
+
 @media (max-width: 560px) {
   .mpa-detay-modal { width: calc(100vw - 16px); }
-  .mpa-detay-body { padding: 0 14px 16px; }
+  .mpa-detay-body { padding: 0 12px 16px; }
+  .mpa-detay-not-grid { grid-template-columns: 1fr; }
+  .mpa-detay-zaman-blok { grid-template-columns: 1fr; }
   .mpa-detay-ticari-grid { grid-template-columns: 1fr; }
-  .mpa-detay-ticari-val { font-size: 14px; }
+  .mpa-detay-ticari-metrik-satir { flex-direction: column; gap: 8px; }
+  .mpa-detay-ticari-metrik { border-right: none; margin-right: 0; padding-right: 0; }
+  .mpa-detay-sonuc-blok { grid-template-columns: 1fr; }
 }
 .mpa-toast {
   position: fixed; top: 70px; right: 16px; z-index: 9999; background: #0f172a; color: #fff;
@@ -815,6 +960,13 @@
     return '<div class="mpa-detay-blok-item"><span class="mpa-detay-lbl">' + esc(lbl) +
       '</span><span class="mpa-detay-val">' + esc(val || '—') + '</span></div>';
   }
+  function detayBlok(lbl, val) {
+    /* grid item — kompakt, tek satırlı label+değer */
+    return '<div class="mpa-detay-blok-item">' +
+      '<span class="mpa-detay-lbl">' + esc(lbl) + '</span>' +
+      '<span class="mpa-detay-val" style="white-space:normal">' + esc(val || '—') + '</span>' +
+      '</div>';
+  }
   function formatEtiketList(tags) {
     if (!tags) return '';
     if (typeof tags === 'string') {
@@ -823,45 +975,141 @@
     if (!Array.isArray(tags) || !tags.length) return '';
     return tags.join(', ');
   }
-  function openPlanDetay(k) {
-    var body = document.getElementById('mpa-detay-body');
-    var ov = document.getElementById('mpa-gorusme-detay-overlay');
+  function openAjandaKayitDetay(k) { openAjandaDetay(k); }
+  function openPlanDetay(k)        { openAjandaDetay(k); }
+  function openAjandaDetay(k) {
+    var oz    = k.gorusme_ozet || {};
+    var durum = (k.durum || '').toUpperCase();
+    var dg    = (k.durum_gorunum || durum).toUpperCase();
+    var isGerceklesti = (durum === 'GERCEKLESTI');
+    var isIptal      = (durum === 'IPTAL');
+
+    var body   = document.getElementById('mpa-detay-body');
+    var ov     = document.getElementById('mpa-gorusme-detay-overlay');
     var baslik = document.getElementById('mpa-detay-baslik');
     if (!body || !ov) return;
-    if (baslik) baslik.textContent = 'Plan Detayı';
-    var planTarih = formatDetayTarih(k.plan_tarihi || ((k.tarih || '') + ' ' + (k.saat || '')));
+
+    /* ── Başlık ve chip ── */
+    var baslikMetin = isGerceklesti ? 'GÖRÜŞME YAPILDI' : 'GÖRÜŞME PLANLANDI';
+    var chipMetin   = isGerceklesti ? 'GERÇEKLEŞTİ'
+                    : isIptal      ? 'İPTAL'
+                    : (dg === 'ZORUNLU_SONUC_BEKLIYOR' || dg === 'SONUC_BEKLIYOR') ? 'SONUÇ BEKLİYOR'
+                    : 'PLANLANDI';
+    var chipCls = isGerceklesti ? 'mpa-detay-chip-gercek'
+                : isIptal      ? 'mpa-detay-chip-iptal'
+                : 'mpa-detay-chip-plan';
+    if (baslik) baslik.textContent = baslikMetin;
+
+    /* ── Ortak alanlar ── */
+    var planTarih   = formatDetayTarih(k.plan_tarihi || ((k.tarih || '') + ' ' + (k.saat || '')));
+    var gercekTarih = isGerceklesti ? formatDetayTarih(oz.gorusme_tarihi || '') : '';
+    var tip         = (oz.gorusme_tipi || k.gorusme_tipi || '').trim();
+    var yetkili     = (oz.yetkili_metin || k.plan_yetkili_metin || '').trim();
+    var musteri_tip = k.musteri_tip_etiket || (k.musteri_aday_id ? 'Yeni Müşteri' : 'Mevcut Müşteri');
+    var olusturan   = oz.olusturan_adi || k.olusturan_adi || '';
+
+    /* ── Konu etiketleri (yalnız gerçekleşti) ── */
+    var etiketHtml = '';
+    if (isGerceklesti) {
+      var etiketRaw = oz.sonuc_etiketler;
+      var etiketArr = [];
+      if (etiketRaw) {
+        if (typeof etiketRaw === 'string') {
+          try { etiketArr = JSON.parse(etiketRaw); }
+          catch(e0) { etiketArr = etiketRaw.split(',').map(function(s){ return s.trim(); }).filter(Boolean); }
+        } else if (Array.isArray(etiketRaw)) { etiketArr = etiketRaw; }
+      }
+      if (etiketArr.length) {
+        etiketHtml = '<div class="mpa-detay-etiket-wrap">' +
+          etiketArr.map(function(t){ return '<span class="mpa-detay-etiket-pill">' + esc(t) + '</span>'; }).join('') +
+          '</div>';
+      }
+    }
+
+    /* ── Hero ── */
     var html =
       '<div class="mpa-detay-hero">' +
         '<div class="mpa-detay-firma">' + esc(k.musteri || '—') + '</div>' +
-        (planTarih ? '<div class="mpa-detay-meta">' + esc(planTarih) + '</div>' : '') +
-      '</div>' +
-      '<div class="mpa-detay-takip-blok">' +
-        detayRow('Firma', k.musteri) +
-        detayRow('Müşteri', k.musteri_tip_etiket || (k.musteri_aday_id ? 'Yeni Müşteri' : 'Mevcut Müşteri')) +
-        detayRow('Görüşülecek Kişi', k.plan_yetkili_metin) +
-        detayRow('Telefon', k.plan_telefon) +
-        detayRow('Şehir', k.plan_sehir) +
-        detayRow('Tarih-Saat', planTarih) +
-        detayRow('Görüşme Türü', k.gorusme_tipi) +
-        detayRow('Plan Notu', k.plan_notu) +
-        detayRow('Planlayan', k.olusturan_adi) +
-        detayRow('Durum', durumEtiket(k)) +
+        (yetkili ? '<div class="mpa-detay-meta">' + esc(yetkili) + '</div>' : '') +
+        '<div class="mpa-detay-sonuc-wrap"><span class="mpa-detay-sonuc-chip ' + chipCls + '">' + esc(chipMetin) + '</span></div>' +
       '</div>';
-    if (!ajandaReadonly && planAksiyonGerekli(k)) {
-      html += '<div class="mpa-detay-aks" style="margin-top:14px">' +
-        '<a href="' + esc(gorusmeAcUrl(k)) + '" class="mpa-btn mpa-btn-primary">GÖRÜŞMEYİ SONUÇLANDIR</a></div>';
+
+    /* ── Kimle ve Ne Zaman — boş alanları gizle ── */
+    var zamanItems = '';
+    function zamanItem(lbl, val) {
+      if (!val || !val.trim()) return '';
+      return '<div class="mpa-detay-blok-item">' +
+        '<span class="mpa-detay-lbl">' + esc(lbl) + '</span>' +
+        '<span class="mpa-detay-val" style="white-space:normal">' + esc(val) + '</span>' +
+        '</div>';
     }
+    zamanItems +=
+      zamanItem('Firma',              k.musteri) +
+      zamanItem('Müşteri Türü',       musteri_tip) +
+      zamanItem('Görüşülecek Kişi',  yetkili) +
+      zamanItem('Telefon',            k.plan_telefon) +
+      zamanItem('Şehir',             k.plan_sehir) +
+      zamanItem('Planlanan Tarih',   planTarih) +
+      (gercekTarih ? zamanItem('Gerçekleşen Tarih', gercekTarih) : '') +
+      zamanItem('Görüşme Türü',      tip) +
+      zamanItem('Planlayan',         olusturan);
+    html +=
+      '<div class="mpa-detay-section-title">Kimle ve Ne Zaman?</div>' +
+      '<div class="mpa-detay-zaman-blok">' + zamanItems + '</div>';
+
+    /* ── Not kartları ── */
+    var planNotu   = (k.plan_notu || '').trim();
+    var gorusmeNot = isGerceklesti ? (oz.kisa_not || '').trim() : '';
+    if (isGerceklesti) {
+      /* İki kart yan yana */
+      html +=
+        '<div class="mpa-detay-not-grid">' +
+          '<div class="mpa-detay-not-kart">' +
+            '<span class="mpa-detay-lbl">Neden Gidildi?</span>' +
+            '<div class="mpa-detay-not-val">' + esc(planNotu || '—') + '</div>' +
+          '</div>' +
+          '<div class="mpa-detay-not-kart">' +
+            '<span class="mpa-detay-lbl">Görüşmede Ne Oldu?</span>' +
+            '<div class="mpa-detay-not-val">' + esc(gorusmeNot || '—') + '</div>' +
+            etiketHtml +
+          '</div>' +
+        '</div>';
+    } else {
+      /* Tek tam genişlik kart — plan notu */
+      html +=
+        '<div class="mpa-detay-not-grid mpa-detay-not-grid-tek">' +
+          '<div class="mpa-detay-not-kart">' +
+            '<span class="mpa-detay-lbl">Neden Gidilecek?</span>' +
+            '<div class="mpa-detay-not-val">' + esc(planNotu || '—') + '</div>' +
+          '</div>' +
+        '</div>';
+    }
+
+    /* ── Ticari + Sonuç — yalnız gerçekleşti ── */
+    if (isGerceklesti) {
+      html += ticariDetayHtml(oz);
+      var sonuc        = (oz.sonuc_tipi || '').trim();
+      var fiyatVerildi = parseInt(oz.fiyat_verildi, 10) === 1 ? 'Evet' : (oz.fiyat_verildi === 0 ? 'Hayır' : '—');
+      html +=
+        '<div class="mpa-detay-section-title">Sonuç ve Takip</div>' +
+        '<div class="mpa-detay-sonuc-blok">' +
+          detayBlok('Görüşme Sonucu', sonuc) +
+          detayBlok('Sonraki Adım',   oz.sonraki_aksiyon) +
+          detayBlok('Fiyat Verildi',  fiyatVerildi) +
+          detayBlok('Takip Tarihi',   formatDetayTarih(oz.sonraki_takip_tarihi || '')) +
+        '</div>';
+    }
+
+    /* ── Aksiyon butonu ── */
+    if (!isIptal && !isGerceklesti && !ajandaReadonly && planAksiyonGerekli(k)) {
+      html += '<div class="mpa-detay-aks">' +
+        '<a href="' + esc(gorusmeAcUrl(k)) + '" class="mpa-btn mpa-btn-primary">GÖRÜŞMEYİ SONUÇLANDIR</a>' +
+        '</div>';
+    }
+
     body.innerHTML = html;
     ov.hidden = false;
     document.body.style.overflow = 'hidden';
-  }
-  function openAjandaKayitDetay(k) {
-    var durum = (k.durum || '').toUpperCase();
-    if (durum === 'GERCEKLESTI' && k.gorusme_ozet) {
-      openGorusmeDetay(k);
-      return;
-    }
-    openPlanDetay(k);
   }
   function gorusmeOzetHtml(k) {
     var oz = k.gorusme_ozet;
@@ -923,76 +1171,113 @@
   }
   function ticariDetayHtml(oz) {
     if (!oz || parseInt(oz.fiyat_verildi, 10) !== 1 || !oz.verilen_fiyat) return '';
-    var fiyat = formatTicariFiyat(oz);
+    var fiyat  = formatTicariFiyat(oz);
     var miktar = formatTicariMiktar(oz);
-    var odeme = formatTicariOdeme(oz);
-    var kartlar = '';
-    if (fiyat) {
-      kartlar += '<div class="mpa-detay-ticari-kart"><span class="mpa-detay-lbl">Konuşulan Fiyat</span><span class="mpa-detay-ticari-val">' + esc(fiyat) + '</span></div>';
-    }
-    if (miktar) {
-      kartlar += '<div class="mpa-detay-ticari-kart"><span class="mpa-detay-lbl">Konuşulan Miktar</span><span class="mpa-detay-ticari-val">' + esc(miktar) + '</span></div>';
-    }
-    if (odeme) {
-      kartlar += '<div class="mpa-detay-ticari-kart"><span class="mpa-detay-lbl">Ödeme</span><span class="mpa-detay-val">' + esc(odeme) + '</span></div>';
-    }
-    if (!kartlar) return '';
-    var html = '<div class="mpa-detay-ticari"><div class="mpa-detay-section-title">Ticari Görüşme Özeti</div><div class="mpa-detay-ticari-grid">' + kartlar + '</div>';
+    var odeme  = formatTicariOdeme(oz);
+    /* Üst satır: 3 metrik yan yana */
+    var metrikler = '';
+    if (fiyat)  metrikler += '<div class="mpa-detay-ticari-metrik"><span class="mpa-detay-lbl">Fiyat</span><span class="mpa-detay-ticari-val">' + esc(fiyat)  + '</span></div>';
+    if (miktar) metrikler += '<div class="mpa-detay-ticari-metrik"><span class="mpa-detay-lbl">Miktar</span><span class="mpa-detay-ticari-val">' + esc(miktar) + '</span></div>';
+    if (odeme)  metrikler += '<div class="mpa-detay-ticari-metrik"><span class="mpa-detay-lbl">Ödeme</span><span class="mpa-detay-ticari-val">' + esc(odeme)  + '</span></div>';
+    if (!metrikler) return '';
+    /* Alt satır: Ürün/Kalite + Fiyat Verildi */
+    var urun = (oz.urun_kalite || '').trim();
+    var fiyatVerildi = parseInt(oz.fiyat_verildi, 10) === 1 ? 'Evet' : '—';
+    var altHtml = '<div class="mpa-detay-ticari-alt">' +
+      (urun ? '<div class="mpa-detay-ticari-alt-item"><span class="mpa-detay-lbl">Ürün / Kalite</span><span class="mpa-detay-val">' + esc(urun) + '</span></div>' : '') +
+      '<div class="mpa-detay-ticari-alt-item"><span class="mpa-detay-lbl">Fiyat Verildi</span><span class="mpa-detay-val">' + esc(fiyatVerildi) + '</span></div>' +
+    '</div>';
+    var html = '<div class="mpa-detay-ticari">' +
+      '<div class="mpa-detay-section-title">Ticari Görüşme Özeti</div>' +
+      '<div class="mpa-detay-ticari-metrik-satir">' + metrikler + '</div>' +
+      altHtml;
+    /* Ek notlar */
     var ek = '';
-    if ((oz.ticari_not || '').trim()) {
-      ek += '<div class="mpa-detay-blok-item"><span class="mpa-detay-lbl">Ticari Not</span><span class="mpa-detay-val">' + esc(oz.ticari_not.trim()) + '</span></div>';
-    }
-    if ((oz.cek_notu || '').trim()) {
-      ek += '<div class="mpa-detay-blok-item"><span class="mpa-detay-lbl">Çek Notu</span><span class="mpa-detay-val">' + esc(oz.cek_notu.trim()) + '</span></div>';
-    }
+    if ((oz.ticari_not || '').trim()) ek += '<div class="mpa-detay-blok-item"><span class="mpa-detay-lbl">Ticari Not</span><span class="mpa-detay-val">' + esc(oz.ticari_not.trim()) + '</span></div>';
+    if ((oz.cek_notu   || '').trim()) ek += '<div class="mpa-detay-blok-item"><span class="mpa-detay-lbl">Çek Notu</span><span class="mpa-detay-val">'   + esc(oz.cek_notu.trim())   + '</span></div>';
     if (ek) html += '<div class="mpa-detay-ticari-ek">' + ek + '</div>';
     html += '</div>';
     return html;
   }
-  function openGorusmeDetay(k) {
+  function openGorusmeDetay(k) { openAjandaDetay(k); }
+  function _openGorusmeDetay_unused(k) {
     var oz = k.gorusme_ozet || {};
     var body = document.getElementById('mpa-detay-body');
     var ov = document.getElementById('mpa-gorusme-detay-overlay');
     var baslik = document.getElementById('mpa-detay-baslik');
     if (!body || !ov) return;
-    if (baslik) baslik.textContent = 'Gerçekleşen Görüşme Detayı';
+    if (baslik) baslik.textContent = 'Gerçekleşen Görüşme';
+
     var gercekTarih = formatDetayTarih(oz.gorusme_tarihi || '');
-    var planTarih = formatDetayTarih(k.plan_tarihi || ((k.tarih || '') + ' ' + (k.saat || '')));
-    var tip = (oz.gorusme_tipi || k.gorusme_tipi || '').trim();
-    var yetkili = (oz.yetkili_metin || k.plan_yetkili_metin || '').trim();
-    var etiketler = formatEtiketList(oz.sonuc_etiketler);
-    var sonuc = (oz.sonuc_tipi || '').trim();
-    var sonucHtml = sonuc
-      ? '<div class="mpa-detay-sonuc-wrap"><span class="mpa-detay-sonuc-chip">' + esc(sonuc.toUpperCase()) + '</span></div>'
-      : '';
+    var planTarih   = formatDetayTarih(k.plan_tarihi || ((k.tarih || '') + ' ' + (k.saat || '')));
+    var tip         = (oz.gorusme_tipi || k.gorusme_tipi || '').trim();
+    var yetkili     = (oz.yetkili_metin || k.plan_yetkili_metin || '').trim();
+    var sonuc       = (oz.sonuc_tipi || '').trim();
     var fiyatVerildi = parseInt(oz.fiyat_verildi, 10) === 1 ? 'Evet' : (oz.fiyat_verildi === 0 ? 'Hayır' : '—');
-    body.innerHTML =
+
+    /* Konu etiketleri */
+    var etiketRaw = oz.sonuc_etiketler;
+    var etiketArr = [];
+    if (etiketRaw) {
+      if (typeof etiketRaw === 'string') { try { etiketArr = JSON.parse(etiketRaw); } catch(e0) { etiketArr = etiketRaw.split(',').map(function(s){ return s.trim(); }).filter(Boolean); } }
+      else if (Array.isArray(etiketRaw)) { etiketArr = etiketRaw; }
+    }
+    var etiketHtml = etiketArr.length
+      ? '<div class="mpa-detay-etiket-wrap">' + etiketArr.map(function(t){ return '<span class="mpa-detay-etiket-pill">' + esc(t) + '</span>'; }).join('') + '</div>'
+      : '';
+
+    /* Hero */
+    var html =
       '<div class="mpa-detay-hero">' +
         '<div class="mpa-detay-firma">' + esc(k.musteri || '—') + '</div>' +
         (yetkili ? '<div class="mpa-detay-meta">' + esc(yetkili) + '</div>' : '') +
-        sonucHtml +
-      '</div>' +
-      '<div class="mpa-detay-takip-blok">' +
-        detayRow('Firma', k.musteri) +
-        detayRow('Görüşülen Kişi', yetkili) +
-        detayRow('Telefon', k.plan_telefon) +
-        detayRow('Şehir', k.plan_sehir) +
-        detayRow('Planlanan Tarih', planTarih) +
-        detayRow('Gerçek Görüşme Tarihi', gercekTarih) +
-        detayRow('Görüşme Türü', tip) +
-        detayRow('Ne İçin Gidildi (Plan Notu)', k.plan_notu) +
-        detayRow('Görüşme Özeti', oz.kisa_not) +
-        detayRow('Konu Etiketleri', etiketler) +
-        detayRow('Müşteri Ne İstedi', oz.konu) +
-      '</div>' +
-      ticariDetayHtml(oz) +
-      '<div class="mpa-detay-takip-blok">' +
-        detayRow('Fiyat Verildi', fiyatVerildi) +
-        detayRow('Görüşme Sonucu', sonuc) +
-        detayRow('Sonraki Adım', oz.sonraki_aksiyon) +
-        detayRow('Takip Tarihi', formatDetayTarih(oz.sonraki_takip_tarihi || '')) +
-        detayRow('Kaydı Oluşturan', oz.olusturan_adi || k.olusturan_adi) +
+        (sonuc ? '<div class="mpa-detay-sonuc-wrap"><span class="mpa-detay-sonuc-chip">' + esc(sonuc.toUpperCase()) + '</span></div>' : '') +
       '</div>';
+
+    /* Kimle ve Ne Zaman — kompakt 2-sütun grid */
+    html +=
+      '<div class="mpa-detay-section-title">Kimle ve Ne Zaman?</div>' +
+      '<div class="mpa-detay-zaman-blok">' +
+        detayBlok('Firma',            k.musteri) +
+        detayBlok('Planlanan Tarih',  planTarih) +
+        detayBlok('Görüşülen Kişi',  yetkili) +
+        detayBlok('Gerçekleşen Tarih', gercekTarih) +
+        detayBlok('Telefon',          k.plan_telefon) +
+        detayBlok('Görüşme Türü',    tip) +
+        detayBlok('Şehir',           k.plan_sehir) +
+        detayBlok('Kaydı Oluşturan', oz.olusturan_adi || k.olusturan_adi) +
+      '</div>';
+
+    /* Neden Gidildi? + Görüşmede Ne Oldu? — yan yana */
+    var planNotu   = (k.plan_notu || '').trim();
+    var gorusmeNot = (oz.kisa_not  || '').trim();
+    html +=
+      '<div class="mpa-detay-not-grid">' +
+        '<div class="mpa-detay-not-kart">' +
+          '<span class="mpa-detay-lbl">Neden Gidildi?</span>' +
+          '<div class="mpa-detay-not-val">' + esc(planNotu || '—') + '</div>' +
+        '</div>' +
+        '<div class="mpa-detay-not-kart">' +
+          '<span class="mpa-detay-lbl">Görüşmede Ne Oldu?</span>' +
+          '<div class="mpa-detay-not-val">' + esc(gorusmeNot || '—') + '</div>' +
+          etiketHtml +
+        '</div>' +
+      '</div>';
+
+    /* Ticari Görüşme Özeti — kompakt */
+    html += ticariDetayHtml(oz);
+
+    /* Sonuç ve Takip — kompakt 2-sütun */
+    html +=
+      '<div class="mpa-detay-section-title">Sonuç ve Takip</div>' +
+      '<div class="mpa-detay-sonuc-blok">' +
+        detayBlok('Görüşme Sonucu', sonuc) +
+        detayBlok('Sonraki Adım',   oz.sonraki_aksiyon) +
+        detayBlok('Fiyat Verildi',  fiyatVerildi) +
+        detayBlok('Takip Tarihi',   formatDetayTarih(oz.sonraki_takip_tarihi || '')) +
+      '</div>';
+
+    body.innerHTML = html;
     ov.hidden = false;
     document.body.style.overflow = 'hidden';
   }

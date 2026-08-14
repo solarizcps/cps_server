@@ -1069,10 +1069,29 @@ def gorusme_kaydet(
                 }
                 if cari_id:
                     takip_payload['cari_id'] = int(cari_id)
+                    # Mevcut müşteri: formda girilen yetkili/tel/şehir varsa snapshota aktar
+                    _tkp_y = (norm.get('yetkili_metin') or '').strip()
+                    if _tkp_y:
+                        takip_payload['plan_yetkili_metin'] = _tkp_y
+                        takip_payload['plan_telefon'] = (payload.get('telefon') or '').strip() or None
+                        takip_payload['plan_sehir'] = (payload.get('sehir') or '').strip() or None
                 elif aday_id:
                     takip_payload['musteri_aday_id'] = int(aday_id)
                     if aday:
                         takip_payload['firma_adi_gorunum'] = aday.get('firma_adi')
+                        # Aday görüşmesi: snapshot veya aday tablosundan yetkili/tel/şehir aktar
+                        takip_payload['plan_yetkili_metin'] = (
+                            (norm.get('yetkili_metin') or '').strip()
+                            or (aday.get('yetkili_adi') or '').strip() or None
+                        )
+                        takip_payload['plan_telefon'] = (
+                            (payload.get('telefon') or '').strip()
+                            or (aday.get('telefon') or '').strip() or None
+                        )
+                        takip_payload['plan_sehir'] = (
+                            (payload.get('sehir') or '').strip()
+                            or (aday.get('sehir') or '').strip() or None
+                        )
                 try:
                     ajanda_olustur(con, takip_payload, kullanici_id, yk, commit=False)
                 except Exception:
