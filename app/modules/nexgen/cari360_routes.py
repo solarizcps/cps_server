@@ -533,6 +533,13 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
             items = enrich_gorusmeler_bagli_numuneler(con, cari_id, items)
             items, sm = enrich_gorusmeler_zincir_flags(con, cari_id, items)
 
+            planli_gorusmeler: list = []
+            try:
+                from modules.nexgen.mo_ajanda_service import list_planli_by_cari
+                planli_gorusmeler = list_planli_by_cari(con, cari_id, uid, yk)
+            except Exception:
+                planli_gorusmeler = []
+
             return jsonify({
                 'ok': True,
                 'liste': items,
@@ -547,6 +554,7 @@ def register_cari360_routes(bp, db_fn, kullanici_id_fn):
                 'sorumlu': sm.get('sorumlu'),
                 'sorumlu_uyarilari': sm.get('sorumlu_uyarilari') or [],
                 'sorumlu_atanmamis': bool(sm.get('sorumlu_atanmamis')),
+                'planli_gorusmeler': planli_gorusmeler,
             })
         except MoGorusmeError as e:
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod

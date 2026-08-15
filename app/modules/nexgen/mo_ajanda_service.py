@@ -876,3 +876,88 @@ def gercek_gorusmeyi_ajandaya_bagla(
     if commit:
         con.commit()
     return {'durum': 'adhoc_olusturuldu', 'ajanda_id': int(new_id)}
+
+
+# ---------------------------------------------------------------------------
+# Cari360 — Planlı Görüşmeler read-only helper
+# ---------------------------------------------------------------------------
+
+def _c360_planli_durum_gorunum(dg: str) -> str:
+    """Ajanda durum_gorunum → Cari360 kullanıcı etiketi."""
+    if dg == 'ZORUNLU_SONUC_BEKLIYOR':
+        return 'GECİKTİ'
+    if dg == 'SONUC_BEKLIYOR':
+        return 'BUGÜN'
+    return 'PLANLANDI'
+
+
+
+def list_planli_by_cari(
+    con: sqlite3.Connection,
+    cari_id: int,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Cari360 Planlı Görüşmeler bölümü için read-only liste.
+
+    Yalnız:
+    - cari_id eşleşen
+    - aktif=1
+    - durum=PLANLANDI
+    - gorusme_id IS NULL
+    Sıralama: plan_tarihi ASC, id ASC (en yakın üstte).
+    """
+    if not _tablo_var(con, TABLO):
+        return []
+    if not can_mo_view_cari(con, kullanici_id, int(cari_id), yk):
+        return []
+
+    has_aday_col = _kolon_var(con, TABLO, 'musteri_aday_id')
+    has_snap_col = _kolon_var(con, TABLO, 'plan_yetkili_metin')
+
+    extra_sel = ''
+    if has_aday_col:
+        extra_sel += ', a.musteri_aday_id'
+    if has_snap_col:
+        extra_sel += ', a.plan_yetkili_metin, a.plan_telefon, a.plan_sehir'
+
+    rows = con.execute(
+        f"""
+        SELECT a.id, a.cari_id, a.plan_tarihi, a.kullanici_id,
+               a.gorusme_tipi, a.plan_notu, a.durum, a.gorusme_id{extra_sel},
+               sk.AdSoyad AS pazarlamaci_adi,
+               c.unvan AS cari_unvan
+        FROM {TABLO} a
+        LEFT JOIN sistem_kullanici sk ON sk.Id = a.kullanici_id
+        LEFT JOIN nexgen_cari c ON c.id = a.cari_id
+        WHERE a.cari_id = ? AND a.aktif = 1
+          AND a.durum = ? AND (a.gorusme_id IS NULL OR a.gorusme_id = 0)
+        ORDER BY a.plan_tarihi ASC, a.id ASC
+        """,
+        (int(cari_id), DURUM_PLANLANDI),
+    ).fetchall()
+
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        d = dict(r)
+        dg = _gorunum_durumu(d.get('durum'), d.get('plan_tarihi'), d.get('gorusme_id'))
+        row_out: dict[str, Any] = {
+            'id': d['id'],
+            'cari_id': d['cari_id'],
+            'plan_tarihi': d['plan_tarihi'],
+            'pazarlamaci_id': d['kullanici_id'],
+            'pazarlamaci': (d.get('pazarlamaci_adi') or '').strip() or str(d['kullanici_id']),
+            'yetkili': (d.get('plan_yetkili_metin') or '').strip(),
+            'gorusme_turu': d.get('gorusme_tipi') or '',
+            'plan_notu': (d.get('plan_notu') or '').strip(),
+            'durum': d.get('durum') or DURUM_PLANLANDI,
+            'durum_gorunum': _c360_planli_durum_gorunum(dg),
+            'mo_gorusme_id': None,
+            'sonuclandi': False,
+        }
+        row_out['ajanda_url'] = (
+            '/nexgen/musteri-pazarlama/ajanda'
+            + '?hedef_kullanici_id=' + str(d['kullanici_id'])
+        )
+        out.append(row_out)
+    return out

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -383,6 +384,81 @@ def _parse_decimal(v) -> float | None:
         return None
 
 
+_TONAJ_NUM_RE = re.compile(r'^[\d.,]+$')
+
+
+def _parse_konusulan_tonaj(v) -> float | None:
+    """Türkçe binlik/ondalık — yalnız görüşme konuşulan tonaj girişi."""
+    if v in (None, ''):
+        return None
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip().replace(' ', '')
+    if not s:
+        return None
+    if not _TONAJ_NUM_RE.match(s):
+        return None
+    try:
+        if ',' in s:
+            return float(s.replace('.', '').replace(',', '.'))
+        if '.' in s:
+            parts = s.split('.')
+            last = parts[-1]
+            if (
+                len(last) == 3
+                and last.isdigit()
+                and all(p.isdigit() and 1 <= len(p) <= 3 for p in parts)
+            ):
+                return float(''.join(parts))
+            return float(s)
+        return float(s)
+    except (TypeError, ValueError):
+        return None
+
+
+def format_tr_tonaj(v: float | int) -> str:
+    """Canonical tonaj → TR gösterim (ör. 10000 → 10.000)."""
+    n = float(v)
+    s = f'{n:g}'.replace('.', ',')
+    parts = s.split(',')
+    parts[0] = re.sub(r'\B(?=(\d{3})+(?!\d))', '.', parts[0])
+    return ','.join(parts)
+
+
+_TICARI_FLAG_REQUIRED_MSG = (
+    'Ticari bilgiler girildiği için "Fiyat verildi" seçilmelidir.'
+)
+
+
+def _payload_has_ticari_input(payload: dict) -> bool:
+    """Payload'da anlamlı ticari giriş var mı (fiyat_verildi gate dışı)."""
+    vf = payload.get('verilen_fiyat')
+    if vf not in (None, ''):
+        parsed = _parse_decimal(vf)
+        if parsed is not None and parsed > 0:
+            return True
+        if str(vf).strip():
+            return True
+    if (payload.get('fiyat_para_birimi') or '').strip():
+        return True
+    tonaj = payload.get('konusulan_tonaj')
+    if tonaj not in (None, '') and str(tonaj).strip():
+        return True
+    odeme = (payload.get('odeme_tipi') or '').strip()
+    if odeme:
+        return True
+    for key in ('vade_gun', 'cek_vade_gun', 'cek_adedi'):
+        val = payload.get(key)
+        if val not in (None, '') and str(val).strip():
+            return True
+    ticari_not = (payload.get('ticari_not') or payload.get('odeme_notu') or '').strip()
+    if ticari_not:
+        return True
+    return False
+
+
 def _validate_fiyat_snapshot(payload: dict) -> dict[str, Any]:
     """fiyat_verildi=0 → tüm ticari alanlar NULL; =1 → KG sabit + kurallar."""
     fiyat_verildi = _parse_boolish(payload.get('fiyat_verildi'))
@@ -400,6 +476,8 @@ def _validate_fiyat_snapshot(payload: dict) -> dict[str, Any]:
         'cek_notu': None,
     }
     if not fiyat_verildi:
+        if _payload_has_ticari_input(payload):
+            raise MoGorusmeError(_TICARI_FLAG_REQUIRED_MSG, 400)
         return empty
 
     fiyat = _parse_decimal(payload.get('verilen_fiyat'))
@@ -413,7 +491,13 @@ def _validate_fiyat_snapshot(payload: dict) -> dict[str, Any]:
     # Kullanıcı seçmez — her zaman KG
     birim = FIYAT_BIRIMI_KG
 
-    tonaj = _parse_decimal(payload.get('konusulan_tonaj'))
+    raw_tonaj = payload.get('konusulan_tonaj')
+    if raw_tonaj in (None, ''):
+        tonaj = None
+    else:
+        tonaj = _parse_konusulan_tonaj(raw_tonaj)
+        if tonaj is None:
+            raise MoGorusmeError('Konuşulan tonaj geçersiz.', 400)
     if tonaj is not None and tonaj <= 0:
         raise MoGorusmeError('Konuşulan tonaj 0\'dan büyük olmalıdır.', 400)
 
@@ -495,8 +579,7 @@ def fiyat_ozet_metin(kayit: dict[str, Any]) -> str | None:
     tonaj = kayit.get('konusulan_tonaj')
     if tonaj not in (None, ''):
         try:
-            ttxt = f'{float(tonaj):g}'.replace('.', ',')
-            parts.append(f'{ttxt} ton')
+            parts.append(f'{format_tr_tonaj(float(tonaj))} ton')
         except (TypeError, ValueError):
             parts.append(f'{tonaj} ton')
     if odeme == 'NAKIT':
@@ -1165,13 +1248,7 @@ def list_gorusmeler(
     if not _tablo_var(con, TABLO):
         return []
     yetkili_join, yetkili_sel = _yetkili_select_sql(con)
-    # Açık takipler önce, sonra tarih DESC
     order = 'g.gorusme_tarihi DESC, g.id DESC'
-    if _kolon_var(con, TABLO, 'takip_durumu'):
-        order = (
-            "CASE WHEN g.takip_durumu='ACIK' THEN 0 ELSE 1 END, "
-            "g.gorusme_tarihi DESC, g.id DESC"
-        )
     rows = con.execute(
         f"""
         SELECT g.*, {_kullanici_select_sql()}, {yetkili_sel}
@@ -1208,7 +1285,7 @@ def list_gorusmeler_paginated(
       page         int
       page_size    int
       total_pages  int
-    Sıralama: ACIK takipler önce, ardından gorusme_tarihi DESC (mevcut business rule korunur).
+    Sıralama: gorusme_tarihi DESC, id DESC (açık takip yalnız badge/sayaç).
     """
     if not can_mo_view_cari(con, kullanici_id, cari_id, yk):
         raise MoGorusmeError('Görüntüleme yetkiniz yok.', 403)
@@ -1232,11 +1309,6 @@ def list_gorusmeler_paginated(
 
     yetkili_join, yetkili_sel = _yetkili_select_sql(con)
     order = 'g.gorusme_tarihi DESC, g.id DESC'
-    if _kolon_var(con, TABLO, 'takip_durumu'):
-        order = (
-            "CASE WHEN g.takip_durumu='ACIK' THEN 0 ELSE 1 END, "
-            "g.gorusme_tarihi DESC, g.id DESC"
-        )
 
     rows = con.execute(
         f"""

@@ -345,6 +345,38 @@
       <button type="button" class="ckart-btn-birincil" onclick="ckartGorusmeYeni()">Yeni Görüşme</button>
       {% endif %}
     </div>
+
+    {# ── A: Planlı Görüşmeler (API'den dinamik doldurulur) ── #}
+    <div id="ckart-planli-gorusmeler-wrap" style="display:none;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <h3 style="margin:0;font-size:13.5px;font-weight:700;color:#1e293b;">Planlı Görüşmeler</h3>
+        <span id="ckart-planli-badge"
+              style="background:#b45309;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700;"></span>
+      </div>
+      <div class="ckart-tablo-wrap">
+        <table class="ckart-tablo" style="font-size:12.5px;">
+          <thead>
+            <tr>
+              <th>Plan Tarihi</th>
+              <th>Pazarlamacı</th>
+              <th>Yetkili</th>
+              <th>Tür</th>
+              <th>Plan Notu</th>
+              <th>Durum</th>
+              <th>Bağlantı</th>
+            </tr>
+          </thead>
+          <tbody id="ckart-planli-tbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {# ── B: Görüşme Geçmişi ── #}
+    <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px;">
+      <h3 style="margin:0;font-size:13.5px;font-weight:700;color:#1e293b;">Görüşme Geçmişi</h3>
+      <span class="ckart-muted" style="font-size:11.5px;">Sonuçlandırılan görüşmeler</span>
+    </div>
     <div class="ckart-tablo-wrap">
       <table class="ckart-tablo" id="ckart-gorusme-tablo">
         <thead>
@@ -2228,6 +2260,22 @@ main { padding: 16px 12px !important; }
       normalized = normalized.replace(/0+$/, '').replace(/\.$/, '');
     }
     return normalized.replace('.', ',');
+  }
+
+  /** TR binlik/ondalık — Ajanda formatTrSayi ile aynı kural. */
+  function formatTrSayi(n, ondalik) {
+    if (n === null || n === undefined || n === '') return '';
+    var num = parseFloat(n);
+    if (isNaN(num)) return String(n);
+    var s = (ondalik != null ? num.toFixed(ondalik) : String(num)).replace('.', ',');
+    var p = s.split(',');
+    p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return p.join(',');
+  }
+
+  function formatTonajTr(v) {
+    if (v == null || v === '') return '—';
+    return formatTrSayi(v, null) + ' ton';
   }
 
   /** İskonto: % öneki + formatDecimalTrim kuralı. */
@@ -5035,7 +5083,7 @@ main { padding: 16px 12px !important; }
       html += '<div class="ckart-urt-detail-field"><span class="lbl">Para Birimi</span><span class="val">' + esc(pb) + '</span></div>';
       html += '<div class="ckart-urt-detail-field"><span class="lbl">Fiyat Birimi</span><span class="val">' + esc(birim) + '</span></div>';
       if (g.konusulan_tonaj != null) {
-        html += '<div class="ckart-urt-detail-field"><span class="lbl">Konuşulan Tonaj</span><span class="val">' + esc(String(g.konusulan_tonaj)) + ' ton</span></div>';
+        html += '<div class="ckart-urt-detail-field"><span class="lbl">Konuşulan Tonaj</span><span class="val">' + esc(formatTonajTr(g.konusulan_tonaj)) + '</span></div>';
       }
       if (g.odeme_tipi) {
         html += '<div class="ckart-urt-detail-field"><span class="lbl">Ödeme Tipi</span><span class="val">' + esc(g.odeme_tipi) + '</span></div>';
@@ -5141,6 +5189,55 @@ main { padding: 16px 12px !important; }
     if (tbl) tbl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
+  /* Planlı Görüşmeler durum badge rengi */
+  function _planliDurumBadge(dg) {
+    var label = esc(dg || 'PLANLANDI');
+    var style;
+    if (dg === 'GECİKTİ') {
+      style = 'background:#dc2626;color:#fff;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;';
+    } else if (dg === 'BUGÜN') {
+      style = 'background:#2563eb;color:#fff;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;';
+    } else {
+      style = 'background:#b45309;color:#fff;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;';
+    }
+    return '<span style="' + style + '">' + label + '</span>';
+  }
+
+  function _renderPlanliGorusmeler(planlar) {
+    var wrap = document.getElementById('ckart-planli-gorusmeler-wrap');
+    var tb = document.getElementById('ckart-planli-tbody');
+    var badge = document.getElementById('ckart-planli-badge');
+    if (!wrap || !tb) return;
+    if (!planlar || !planlar.length) {
+      wrap.style.display = 'none';
+      return;
+    }
+    if (badge) badge.textContent = planlar.length;
+    var rows = [];
+    planlar.forEach(function(p) {
+      var notHtml = p.plan_notu
+        ? '<span style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;">' + esc(p.plan_notu) + '</span>'
+        : '<span class="ckart-muted">—</span>';
+      var islemHtml =
+        '<a href="' + esc(p.ajanda_url || '#') + '" '
+        + 'style="display:inline-block;font-size:11.5px;color:#2563eb;text-decoration:underline;white-space:nowrap;"'
+        + '>Ajandaya Git</a>';
+      rows.push(
+        '<tr>'
+        + '<td style="white-space:nowrap;font-size:12px;">' + esc((p.plan_tarihi || '').slice(0,16)) + '</td>'
+        + '<td><strong>' + esc(p.pazarlamaci || '—') + '</strong></td>'
+        + '<td>' + esc(p.yetkili || '—') + '</td>'
+        + '<td>' + esc(p.gorusme_turu || '—') + '</td>'
+        + '<td style="max-width:220px;">' + notHtml + '</td>'
+        + '<td>' + _planliDurumBadge(p.durum_gorunum) + '</td>'
+        + '<td style="white-space:nowrap;">' + islemHtml + '</td>'
+        + '</tr>'
+      );
+    });
+    tb.innerHTML = rows.join('');
+    wrap.style.display = '';
+  }
+
   window.ckartGorusmeYukle = function(force) {
     var tb = document.getElementById('ckart-gorusme-tbody');
     if (!tb) return;
@@ -5164,6 +5261,7 @@ main { padding: 16px 12px !important; }
           _gorTotalCount,
           d.page_size || _gorPageSize
         );
+        _renderPlanliGorusmeler(d.planli_gorusmeler || []);
         _gorusmeCache = d.liste || d.items || [];
         if (!_gorusmeCache.length) {
           tb.innerHTML = '<tr><td colspan="7" class="ckart-muted">Henüz görüşme kaydı yok.</td></tr>';

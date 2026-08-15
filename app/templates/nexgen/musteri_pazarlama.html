@@ -768,7 +768,7 @@
               <input type="text" id="mp-f-urun-kalite" name="ticari_not" maxlength="200" placeholder="Ürün veya kalite">
             </div>
             <div class="mp-fld mp-gor-col-miktar">
-              <label for="mp-f-miktar">Miktar</label>
+              <label for="mp-f-miktar">Konuşulan Tonaj (ton)</label>
               <input type="text" inputmode="decimal" id="mp-f-miktar" name="konusulan_tonaj" placeholder="10.000" autocomplete="off">
             </div>
             <div class="mp-fld mp-gor-col-birim">
@@ -3272,6 +3272,13 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       syncFiyatBlok();
     });
   }
+  ['mp-f-verilen-fiyat','mp-f-para','mp-f-miktar','mp-f-odeme','mp-f-vade-gun',
+   'mp-f-cek-vade','mp-f-cek-adet','mp-f-urun-kalite'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', syncFiyatVerildiFromTicariFields);
+    el.addEventListener('change', syncFiyatVerildiFromTicariFields);
+  });
   var odemeSel = document.getElementById('mp-f-odeme');
   if (odemeSel) odemeSel.addEventListener('change', syncOdemeAlt);
   document.querySelectorAll('.mp-konu-cb').forEach(function(cb){
@@ -4085,6 +4092,71 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
     var n = parseFloat(s);
     return isNaN(n) ? 0 : n;
+  }
+
+  /** Görüşme konuşulan tonaj — TR binlik/ondalık (parseTrMoney ile aynı mantık, boş→null). */
+  function parseTrTonaj(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') return isNaN(v) ? null : v;
+    var s = String(v).trim().replace(/\s/g, '');
+    if (!s) return null;
+    if (!/^[\d.,]+$/.test(s)) return null;
+    if (s.indexOf(',') >= 0) {
+      s = s.replace(/\./g, '').replace(',', '.');
+      var nComma = parseFloat(s);
+      return isNaN(nComma) ? null : nComma;
+    }
+    if (s.indexOf('.') >= 0) {
+      var parts = s.split('.');
+      var last = parts[parts.length - 1];
+      var isThousands = last.length === 3 && /^\d+$/.test(last);
+      if (isThousands) {
+        for (var i = 0; i < parts.length; i++) {
+          if (!/^\d+$/.test(parts[i]) || parts[i].length < 1 || parts[i].length > 3) {
+            isThousands = false;
+            break;
+          }
+        }
+      }
+      if (isThousands) {
+        var nJoin = parseFloat(parts.join(''));
+        return isNaN(nJoin) ? null : nJoin;
+      }
+      var nDot = parseFloat(s);
+      return isNaN(nDot) ? null : nDot;
+    }
+    var nPlain = parseFloat(s);
+    return isNaN(nPlain) ? null : nPlain;
+  }
+
+  function ticariFieldTrim(id) {
+    var el = document.getElementById(id);
+    if (!el) return '';
+    return String(el.value || '').trim();
+  }
+
+  function hasMeaningfulTicariFormInput() {
+    if (getGorusmeMod() === 'PLANLA') return false;
+    if (ticariFieldTrim('mp-f-verilen-fiyat')) return true;
+    if (ticariFieldTrim('mp-f-para')) return true;
+    if (ticariFieldTrim('mp-f-miktar')) return true;
+    if (ticariFieldTrim('mp-f-odeme')) return true;
+    if (ticariFieldTrim('mp-f-vade-gun')) return true;
+    if (ticariFieldTrim('mp-f-cek-vade')) return true;
+    if (ticariFieldTrim('mp-f-cek-adet')) return true;
+    if (ticariFieldTrim('mp-f-urun-kalite')) return true;
+    return false;
+  }
+
+  function syncFiyatVerildiFromTicariFields() {
+    if (!fvSel || getGorusmeMod() === 'PLANLA') return;
+    if (hasMeaningfulTicariFormInput()) {
+      fvSel.value = '1';
+    } else {
+      fvSel.value = '0';
+    }
+    syncFiyatToggleFromSelect();
+    syncFiyatBlok();
   }
 
   function formatTrMoney(v, withCurrency) {
@@ -6355,13 +6427,26 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     delete payload.konu;
     if (payload.yetkili_metin) payload.yetkili_metin = String(payload.yetkili_metin).trim();
     if (!payload.yetkili_metin) delete payload.yetkili_metin;
+    if (!modPlan) syncFiyatVerildiFromTicariFields();
     var fiyatEvet = !modPlan && fvSel && fvSel.value === '1';
     payload.fiyat_verildi = fiyatEvet ? 1 : 0;
     delete payload.cek_notu;
     delete payload.konu;
     delete payload.detay_not;
     if (!fiyatEvet) {
-      ['verilen_fiyat','fiyat_para_birimi','konusulan_tonaj','fiyat_birimi','ticari_not'].forEach(function(k){ delete payload[k]; });
+      ['verilen_fiyat','fiyat_para_birimi','konusulan_tonaj','fiyat_birimi','ticari_not',
+       'odeme_tipi','vade_gun','cek_vade_gun','cek_adedi'].forEach(function(k){ delete payload[k]; });
+    } else if (payload.konusulan_tonaj != null && payload.konusulan_tonaj !== '') {
+      var parsedTonaj = parseTrTonaj(payload.konusulan_tonaj);
+      if (parsedTonaj == null) {
+        submitting = false;
+        kaydetBtn.disabled = false;
+        kaydetBtn.textContent = 'Kaydet';
+        showTalepHata('Konuşulan tonaj geçersiz.');
+        toast('Konuşulan tonaj geçersiz.');
+        return;
+      }
+      payload.konusulan_tonaj = parsedTonaj;
     }
     normalizeGorusmeFiyatPayload(payload, fiyatEvet);
     if (payload.gorusme_tarihi && payload.gorusme_tarihi.length === 16) payload.gorusme_tarihi = payload.gorusme_tarihi.replace('T', ' ') + ':00';
