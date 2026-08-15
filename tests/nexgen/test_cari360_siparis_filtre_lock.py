@@ -338,11 +338,10 @@ class FiltreServiceTests(unittest.TestCase):
         self.assertTrue(ids1.isdisjoint(ids2))
 
 
-# C360-SIPARIS-FILTER-COVERAGE-01 — 17/17 kolon filtre zorunluluğu
+# C360-SIPARIS-FILTER-COVERAGE-01 — 10/10 kolon filtre (TRY/Plan/Batch/ÜretilenKG/Numune/SonSevk/SevkKG kaldırıldı)
 _TICARI_FILTER_COLS = (
     'siparis_no', 'tarih', 'durum', 'odeme', 'vade', 'pb', 'toplam',
-    'try', 'fiyat', 'termin', 'plan', 'batch', 'uretilen_kg', 'kalem',
-    'numune', 'son_sevk', 'sevk_kg',
+    'fiyat', 'termin', 'kalem',
 )
 
 
@@ -357,7 +356,7 @@ def _extract_ticari_thead_block(html: str) -> str:
 
 
 class FilterCoverageLockTests(unittest.TestCase):
-    """C360-SIPARIS-FILTER-COVERAGE-01 — İşlem hariç 17/17 filtre butonu."""
+    """C360-SIPARIS-FILTER-COVERAGE-01 — İşlem hariç 10/10 filtre butonu."""
 
     @classmethod
     def setUpClass(cls):
@@ -367,7 +366,7 @@ class FilterCoverageLockTests(unittest.TestCase):
     def test_coverage_17_filter_buttons(self):
         self.assertTrue(self.ticari_block, 'ticari thead block bulunamadi')
         fb_count = self.ticari_block.count("_fb('")
-        self.assertEqual(fb_count, 17, f'ticari _fb count={fb_count}, beklenen=17')
+        self.assertEqual(fb_count, 10, f'ticari _fb count={fb_count}, beklenen=10')
 
     def test_coverage_islem_no_filter(self):
         self.assertNotIn("_fb('islem'", self.ticari_block)
@@ -380,7 +379,7 @@ class FilterCoverageLockTests(unittest.TestCase):
 
     def test_coverage_column_count_18_with_islem(self):
         th_count = self.ticari_block.count('<th')
-        self.assertEqual(th_count, 18, f'th count={th_count}, beklenen=18 (17+İşlem)')
+        self.assertEqual(th_count, 11, f'th count={th_count}, beklenen=11 (10+İşlem)')
 
 
 class FiltreTemplateTests(unittest.TestCase):
@@ -392,8 +391,10 @@ class FiltreTemplateTests(unittest.TestCase):
     # 14 — filtre butonları mevcut
     def test_14_fbtn_buttons_present(self):
         self.assertIn('ckart-sip-fbtn', self.html)
-        for col in ('siparis_no', 'tarih', 'durum', 'termin'):
+        # statik header'da kalan kolonlar
+        for col in ('siparis_no', 'tarih', 'durum'):
             self.assertIn('data-fcol="' + col + '"', self.html)
+        # ticari JS render'da tüm filtre kolonları var
         for col in _TICARI_FILTER_COLS:
             self.assertIn("_fb('" + col + "'", self.html)
 

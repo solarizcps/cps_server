@@ -536,6 +536,33 @@ def _build_siparis_filter_sql(
     return filter_sql, filter_params
 
 
+def _siparis_uretilen_kg(
+    con: sqlite3.Connection,
+    planlama_siparis_id: int,
+    *,
+    has_plan: bool,
+    has_rfk: bool,
+    has_parca: bool,
+) -> float | None:
+    """Sipariş bazında canonical üretilen KG — plan başına _uretim_uretilen_kg toplamı."""
+    if not has_plan:
+        return None
+    plan_rows = con.execute(
+        """
+        SELECT id FROM nexgen_uretim_plan
+        WHERE planlama_siparis_id=?
+          AND COALESCE(durum, '') NOT IN ('IPTAL')
+        """,
+        (int(planlama_siparis_id),),
+    ).fetchall()
+    if not plan_rows:
+        return None
+    total = 0.0
+    for pr in plan_rows:
+        total += _uretim_uretilen_kg(con, int(pr['id']), has_rfk, has_parca)
+    return total
+
+
 def load_cari360_siparisler(
     con: sqlite3.Connection,
     cari_id: int,
@@ -629,6 +656,7 @@ def load_cari360_siparisler(
     has_plan = _tablo_var(con, 'nexgen_uretim_plan')
     has_batch = _tablo_var(con, 'nexgen_uretim_batch')
     has_parca = _tablo_var(con, 'nexgen_uretim_parca')
+    has_rfk = _tablo_var(con, 'nexgen_rf_kullanim')
 
     scols = _kolonlar(con, 'nexgen_planlama_siparis')
     mo_sel = ', mo_gorusme_id' if 'mo_gorusme_id' in scols else ', NULL AS mo_gorusme_id'
@@ -785,18 +813,12 @@ def load_cari360_siparisler(
                     """,
                     (sid,),
                 ).fetchone()[0])
-            if has_parca and plan_sayisi:
-                uk = con.execute(
-                    """
-                    SELECT COALESCE(SUM(pr.uretilen_kg), 0)
-                    FROM nexgen_uretim_parca pr
-                    JOIN nexgen_uretim_plan p ON p.id = pr.plan_id
-                    WHERE p.planlama_siparis_id=?
-                      AND COALESCE(p.durum, '') NOT IN ('IPTAL')
-                    """,
-                    (sid,),
-                ).fetchone()
-                uretilen_kg = _fmt_num(uk[0] or 0)
+            if plan_sayisi:
+                kg_val = _siparis_uretilen_kg(
+                    con, sid, has_plan=has_plan, has_rfk=has_rfk, has_parca=has_parca,
+                )
+                if kg_val is not None:
+                    uretilen_kg = _fmt_num(kg_val)
 
         rel = classify_mo_gorusme_parent(
             r['mo_gorusme_id'], cid, gorusme_by_id, kind='SIPARIS',
@@ -845,6 +867,7 @@ def load_cari360_siparisler(
     # T4: hassas ticari alanlar yalnız can_view_cari_ticari ile
     # ticari_ok ve import batch'ten önce yapıldı; burada yeniden hesaplamıyoruz
     liste = enrich_siparis_listesi_ticari(con, liste, ticari_gorunur=ticari_ok)
+    liste = enrich_siparis_header_detay(con, liste)
     import math as _math
     total_pages = max(1, _math.ceil(total_count / limit)) if total_count else 1
     current_page = (offset // limit) + 1
@@ -1232,6 +1255,144 @@ def _load_kalem_sevk_tarihleri_batch(
     return out
 
 
+def _teslim_sekli_etiket(code: str | None) -> str | None:
+    c = (code or '').strip().upper()
+    if c == 'FABRIKA_TESLIM':
+        return 'Fabrika Teslim'
+    if c == 'MUSTERIYE_SEVK':
+        return 'Müşteriye Sevk'
+    return (code or '').strip() or None
+
+
+def _siparis_oncelik_etiket(code: str | None) -> str | None:
+    c = (code or 'NORMAL').strip().upper()
+    if c == 'ACIL':
+        return 'Acil'
+    if c in ('YUKSEK', 'KRITIK'):
+        return 'Kritik'
+    if c == 'DUSUK':
+        return 'Düşük'
+    return 'Normal'
+
+
+def _kullanici_gorunen_ad_batch(
+    con: sqlite3.Connection, user_ids: set[int],
+) -> dict[int, str]:
+    if not user_ids or not _tablo_var(con, 'sistem_kullanici'):
+        return {}
+    ph = ','.join('?' * len(user_ids))
+    out: dict[int, str] = {}
+    for r in con.execute(
+        f'SELECT Id, AdSoyad, KullaniciAdi FROM sistem_kullanici WHERE Id IN ({ph})',
+        list(user_ids),
+    ).fetchall():
+        uid = int(r['Id'])
+        ad = (r['AdSoyad'] or r['KullaniciAdi'] or '').strip()
+        out[uid] = ad or f'#{uid}'
+    return out
+
+
+def _mtt_renk_snapshot_batch(
+    con: sqlite3.Connection, mtt_kalem_ids: set[int],
+) -> dict[int, str]:
+    """MO müşteri rengi — nexgen_musteri_temsilcisi_talep_kalem.renk_aciklama (mtt_kalem_id)."""
+    if not mtt_kalem_ids or not _tablo_var(con, 'nexgen_musteri_temsilcisi_talep_kalem'):
+        return {}
+    ph = ','.join('?' * len(mtt_kalem_ids))
+    out: dict[int, str] = {}
+    for r in con.execute(
+        f'SELECT id, renk_aciklama FROM nexgen_musteri_temsilcisi_talep_kalem'
+        f' WHERE id IN ({ph})',
+        list(mtt_kalem_ids),
+    ).fetchall():
+        renk = (r['renk_aciklama'] or '').strip()
+        if renk:
+            out[int(r['id'])] = renk
+    return out
+
+
+def enrich_siparis_header_detay(
+    con: sqlite3.Connection,
+    liste: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Sipariş geçmişi expand header — canonical snapshot (cari sorumlusu değil)."""
+    if not liste or not _tablo_var(con, 'nexgen_planlama_siparis'):
+        return liste
+
+    from modules.nexgen.pzm_siparis_read import pzm_payload_unpack
+
+    ids = [int(x['id']) for x in liste if x.get('id')]
+    if not ids:
+        return liste
+
+    scols = _kolonlar(con, 'nexgen_planlama_siparis')
+    sel = ['id', 'notlar', 'talep_referansi']
+    if 'olusturan_id' in scols:
+        sel.append('olusturan_id')
+    if 'teslim_sekli' in scols:
+        sel.append('teslim_sekli')
+
+    ph = ','.join('?' * len(ids))
+    rows = {
+        int(r['id']): r
+        for r in con.execute(
+            f"SELECT {', '.join(sel)} FROM nexgen_planlama_siparis WHERE id IN ({ph})",
+            ids,
+        ).fetchall()
+    }
+
+    uid_set: set[int] = set()
+    for r in rows.values():
+        if 'olusturan_id' not in r.keys() or r['olusturan_id'] in (None, '', 0):
+            continue
+        try:
+            uid_set.add(int(r['olusturan_id']))
+        except (TypeError, ValueError):
+            pass
+    user_map = _kullanici_gorunen_ad_batch(con, uid_set)
+
+    for item in liste:
+        sid = int(item['id'])
+        r = rows.get(sid)
+        item.setdefault('genel_not', None)
+        item.setdefault('pazarlamaci', None)
+        item.setdefault('teslim_sekli', None)
+        item.setdefault('teslim_sekli_etiket', None)
+        item.setdefault('siparis_onceligi', None)
+        item.setdefault('siparis_onceligi_etiket', None)
+        if not r:
+            continue
+
+        payload = pzm_payload_unpack(
+            r['talep_referansi'] if 'talep_referansi' in r.keys() else None,
+        ) or {}
+
+        genel = (r['notlar'] or '').strip() if 'notlar' in r.keys() else ''
+        item['genel_not'] = genel or None
+
+        uid = None
+        if 'olusturan_id' in r.keys() and r['olusturan_id'] not in (None, '', 0):
+            try:
+                uid = int(r['olusturan_id'])
+            except (TypeError, ValueError):
+                uid = None
+        item['pazarlamaci'] = user_map.get(uid) if uid else None
+
+        ts_col = (r['teslim_sekli'] or '').strip() if 'teslim_sekli' in r.keys() else ''
+        ts_raw = ts_col or (payload.get('teslim_sekli') or '')
+        ts = str(ts_raw).strip().upper() if ts_raw not in (None, '') else None
+        item['teslim_sekli'] = ts
+        item['teslim_sekli_etiket'] = _teslim_sekli_etiket(ts)
+
+        oncelik = (payload.get('siparis_onceligi') or '').strip().upper() or None
+        item['siparis_onceligi'] = oncelik
+        item['siparis_onceligi_etiket'] = (
+            _siparis_oncelik_etiket(oncelik) if oncelik else None
+        )
+
+    return liste
+
+
 def _load_siparis_kalemleri_batch(
     con: sqlite3.Connection,
     siparis_ids: list[int],
@@ -1277,6 +1438,19 @@ def _load_siparis_kalemleri_batch(
         con, [int(kr['id']) for kr in kalem_rows],
     )
 
+    mtt_ids: set[int] = set()
+    has_mtt_col = 'mtt_kalem_id' in kcols
+    if has_mtt_col:
+        for kr in kalem_rows:
+            raw_mtt = kr['mtt_kalem_id']
+            if raw_mtt in (None, '', 0):
+                continue
+            try:
+                mtt_ids.add(int(raw_mtt))
+            except (TypeError, ValueError):
+                pass
+    mtt_renk_map = _mtt_renk_snapshot_batch(con, mtt_ids)
+
     result: dict[int, list[dict[str, Any]]] = {sid: [] for sid in siparis_ids}
     for kr in kalem_rows:
         sid = int(kr['planlama_siparis_id'])
@@ -1304,6 +1478,18 @@ def _load_siparis_kalemleri_batch(
         if '_plan_kodu' in kr.keys():
             plan_kodu = kr['_plan_kodu'] or None
 
+        renk_ad_val = (kr['renk_ad'] or '').strip()
+        kalem_notu = None
+        if 'notlar' in kcols:
+            kn = (kr['notlar'] or '').strip()
+            kalem_notu = kn or None
+        musteri_rengi = None
+        if has_mtt_col and kr['mtt_kalem_id'] not in (None, '', 0):
+            try:
+                musteri_rengi = mtt_renk_map.get(int(kr['mtt_kalem_id']))
+            except (TypeError, ValueError):
+                musteri_rengi = None
+
         kalem: dict[str, Any] = {
             'id': int(kr['id']),
             'sira_no': kr['sira_no'],
@@ -1311,7 +1497,10 @@ def _load_siparis_kalemleri_batch(
             'formul_id': kr['formul_id'],
             'formul_ad': kr['formul_ad'] or '',
             'renk_varyant_id': kr['renk_varyant_id'],
-            'renk_ad': kr['renk_ad'] or '',
+            'renk_ad': renk_ad_val,
+            'uretim_rengi': renk_ad_val or None,
+            'musteri_rengi': musteri_rengi,
+            'kalem_notu': kalem_notu,
             'rf_renk_id': kr['rf_renk_id'] if has_rf else None,
             'rf_label': rf_label,
             'miktar_l': _fmt_num(ml),

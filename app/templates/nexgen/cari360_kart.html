@@ -212,19 +212,12 @@
             <th>Sipariş No <button type="button" class="ckart-sip-fbtn" data-fcol="siparis_no" title="Sipariş No filtrele">▾</button></th>
             <th>Sipariş Tarihi <button type="button" class="ckart-sip-fbtn" data-fcol="tarih" title="Tarih aralığı filtrele">▾</button></th>
             <th>Durum <button type="button" class="ckart-sip-fbtn" data-fcol="durum" title="Durum filtrele">▾</button></th>
-            <th>Termin <button type="button" class="ckart-sip-fbtn" data-fcol="termin" title="Termin aralığı filtrele">▾</button></th>
-            <th>Plan</th>
-            <th>Batch</th>
-            <th>Üretilen KG</th>
             <th>Kalem</th>
-            <th>Numune</th>
-            <th>Son Sevkiyat</th>
-            <th>Sevk KG</th>
             <th style="text-align:right">İşlem</th>
           </tr>
         </thead>
         <tbody id="ckart-siparis-tbody">
-          <tr><td colspan="12" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
+          <tr><td colspan="10" class="ckart-muted">Sekme açıldığında yüklenecek.</td></tr>
         </tbody>
       </table>
     </div>
@@ -1771,23 +1764,119 @@ main { padding: 16px 12px !important; }
 }
 
 .ckart-siparis-kalem-row > td.ckart-siparis-kalem-td {
-  padding: 4px 8px 6px;
+  padding: 0 0 6px 0;
   border-top: none;
   border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  background: #f1f5f9;
 }
 .ckart-siparis-kalem-inner {
   box-sizing: border-box;
-  padding: 0 6px 6px;
+  padding: 0 8px 0;
   overflow: hidden;
 }
 
+/* ── Expand container ─────────────────────────────── */
 .ckart-kalem-detail-wrap {
   border: 1px solid #e2e8f0;
-  border-radius: 4px;
+  border-radius: 0 0 6px 6px;
   background: #ffffff;
   overflow: hidden;
+  margin: 0;
 }
+
+/* ── Üst bilgi paneli — 2 satır düzeni ───────────── */
+.ckart-sip-expand-panels {
+  display: flex; flex-direction: column;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+/* Satır 1: Sipariş Bilgisi + Ticari Bilgi yan yana */
+.ckart-sip-expand-row1 {
+  display: flex; flex-wrap: nowrap;
+  border-bottom: 1px solid #e2e8f0;
+}
+/* Satır 2: Teslimat / Not — tam genişlik */
+.ckart-sip-expand-row2 {
+  display: flex;
+}
+.ckart-sip-expand-panel {
+  padding: 7px 14px 8px;
+  border-right: 1px solid #e2e8f0;
+  min-width: 0;
+}
+.ckart-sip-expand-panel:last-child { border-right: none; }
+/* Satır 1 panelleri eşit yarı */
+.ckart-sip-expand-row1 .ckart-sip-expand-panel { flex: 1 1 0; }
+/* Satır 2 tam genişlik */
+.ckart-sip-expand-row2 .ckart-sip-expand-panel { flex: 1 1 100%; border-right: none; }
+.ckart-sip-expand-panel-title {
+  font-size: 9px; font-weight: 800; color: #006a8e;
+  text-transform: uppercase; letter-spacing: .5px;
+  margin-bottom: 5px; padding-bottom: 3px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.ckart-sip-expand-rows {
+  display: flex; flex-wrap: wrap;
+  gap: 2px 20px;
+}
+.ckart-sip-expand-row { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.ckart-sip-expand-lbl {
+  font-size: 9px; font-weight: 700; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: .2px;
+  flex-shrink: 0;
+}
+.ckart-sip-expand-val {
+  font-size: 11px; font-weight: 600; color: #0f172a;
+  overflow: hidden; text-overflow: ellipsis; max-width: 260px;
+}
+.ckart-sip-expand-val.muted { color: #94a3b8; font-weight: 400; }
+
+/* Genel Not — satır 2 içinde */
+.ckart-sip-expand-not {
+  margin-top: 4px; padding-top: 4px; border-top: 1px dashed #e2e8f0;
+  width: 100%;
+}
+.ckart-sip-expand-not .lbl {
+  font-size: 9px; font-weight: 700; color: #94a3b8;
+  text-transform: uppercase; letter-spacing: .2px; margin-bottom: 2px;
+  display: block;
+}
+.ckart-sip-expand-not .txt {
+  font-size: 11px; color: #334155; line-height: 1.4;
+  white-space: pre-wrap; word-break: break-word;
+  padding: 4px 8px; background: #fff;
+  border: 1px solid #e2e8f0; border-radius: 4px;
+  max-height: 60px; overflow-y: auto;
+}
+
+/* ── Kalem tablo ──────────────────────────────────── */
+.ck-kalem-meta-row td {
+  padding: 4px 8px 8px !important;
+  background: #fafbfc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+.ck-kalem-meta-bar {
+  display: flex; flex-wrap: wrap; gap: 4px 16px;
+  font-size: 10px; color: #475569; line-height: 1.4;
+}
+.ck-kalem-meta-bar .mi { display: inline-flex; align-items: baseline; gap: 4px; }
+.ck-kalem-meta-bar .mi .l {
+  color: #94a3b8; font-weight: 700; font-size: 9px;
+  text-transform: uppercase; letter-spacing: .2px;
+}
+.ck-kalem-meta-bar .mi .v { color: #334155; font-weight: 600; }
+.ck-kalem-tip { font-weight: 700; color: #0f172a; font-size: 10.5px; }
+.ck-musteri-rengi { color: #334155; font-weight: 600; font-size: 10.5px; }
+.ck-uretim-rengi {
+  display: inline-flex; align-items: center; gap: 4px;
+  color: #334155; font-weight: 600; font-size: 10.5px;
+}
+.ck-renk-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  display: inline-block; flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,.12);
+}
+
 .ckart-kalem-detail-hdr {
   display: flex; align-items: center; gap: 6px;
   min-height: 28px; padding: 5px 10px;
@@ -3197,9 +3286,81 @@ main { padding: 16px 12px !important; }
 
   function ckartKdvDurumuLabel(raw) {
     var v = (raw || '').toUpperCase();
-    if (v === 'RESMI') return 'RESMİ';
-    if (v === 'GAYRI_RESMI' || v === 'GAYRI') return 'GAYRİRESMİ';
+    if (v === 'RESMI') return 'Resmi / %20 KDV';
+    if (v === 'GAYRI_RESMI' || v === 'GAYRI') return 'Gayri Resmi';
     return '—';
+  }
+
+  function _sipExpRow(lbl, val) {
+    var v = (val == null || val === '') ? '—' : String(val);
+    var cls = (v === '—') ? ' muted' : '';
+    return '<div class="ckart-sip-expand-row">'
+      + '<span class="ckart-sip-expand-lbl">' + esc(lbl) + '</span>'
+      + '<span class="ckart-sip-expand-val' + cls + '">' + esc(v) + '</span>'
+      + '</div>';
+  }
+
+  function ckartSiparisBilgiHtml(s) {
+    /* Panel A — Sipariş Bilgisi */
+    var panelA = '<div class="ckart-sip-expand-panel">'
+      + '<div class="ckart-sip-expand-panel-title">Sipariş Bilgisi</div>'
+      + '<div class="ckart-sip-expand-rows">'
+      + _sipExpRow('Sipariş No', s.siparis_no)
+      + _sipExpRow('Durum', s.durum)
+      + _sipExpRow('Tarih', ckartFmtDate(s.siparis_tarihi))
+      + _sipExpRow('Termin', ckartFmtDate(s.termin))
+      + _sipExpRow('Pazarlamacı', s.pazarlamaci)
+      + (s.uretilen_kg != null ? _sipExpRow('Üretilen KG', formatDecimalTrim(s.uretilen_kg) + ' kg') : '')
+      + '</div></div>';
+
+    /* Panel B — Ticari Bilgi */
+    var vadeStr = (s.gosterilecek_vade_gun != null && s.gosterilecek_vade_gun !== '')
+      ? String(s.gosterilecek_vade_gun) + ' gün'
+      : (s.vade_gun != null && s.vade_gun !== '' ? String(s.vade_gun) + ' gün' : null);
+    var odemelbl = s.odeme_tipi
+      ? (s.odeme_tipi === 'NAKIT' ? 'Nakit'
+        : s.odeme_tipi === 'CEK' ? 'Çek'
+        : s.odeme_tipi === 'VADELI' ? 'Vadeli'
+        : s.odeme_tipi)
+      : null;
+    var panelB = '<div class="ckart-sip-expand-panel">'
+      + '<div class="ckart-sip-expand-panel-title">Ticari Bilgi</div>'
+      + '<div class="ckart-sip-expand-rows">'
+      + _sipExpRow('Para Birimi', s.para_birimi)
+      + _sipExpRow('Ödeme', odemelbl)
+      + _sipExpRow('Vade', vadeStr)
+      + _sipExpRow('KDV', ckartKdvDurumuLabel(s.kdv_durumu))
+      + _sipExpRow('Öncelik', s.siparis_onceligi_etiket || s.siparis_onceligi)
+      + '</div></div>';
+
+    /* Satır 1 */
+    var row1 = '<div class="ckart-sip-expand-row1">' + panelA + panelB + '</div>';
+
+    /* Panel C — Teslimat / Not (tam genişlik, satır 2) */
+    var teslimStr = s.teslim_sekli_etiket || s.teslim_sekli || null;
+    var notHtml = '';
+    if (s.genel_not) {
+      notHtml = '<div class="ckart-sip-expand-not">'
+        + '<span class="lbl">Genel Talep Notu</span>'
+        + '<div class="txt">' + esc(s.genel_not) + '</div>'
+        + '</div>';
+    }
+    var panelC = '<div class="ckart-sip-expand-panel">'
+      + '<div class="ckart-sip-expand-panel-title">Teslimat / Not</div>'
+      + '<div class="ckart-sip-expand-rows">'
+      + _sipExpRow('Teslim Şekli', teslimStr)
+      + '</div>'
+      + notHtml
+      + '</div>';
+    var row2 = '<div class="ckart-sip-expand-row2">' + panelC + '</div>';
+
+    return '<div class="ckart-sip-expand-panels">' + row1 + row2 + '</div>';
+  }
+
+  function ckartKalemMetaItem(label, value) {
+    var v = (value == null || value === '') ? '—' : value;
+    return '<span class="mi"><span class="l">' + esc(label) + '</span>'
+      + '<span class="v">' + esc(v) + '</span></span>';
   }
 
   function ckartKalemSevkFooterLabel(kalemler, s) {
@@ -3269,10 +3430,12 @@ main { padding: 16px 12px !important; }
     if (!kalemler || !kalemler.length) return '';
     var count = kalemler.length;
     var faturaLbl = ckartKdvDurumuLabel(s.kdv_durumu);
+    /* 8 kolon: # | Ürün Tipi | Formül | Müşteri Rengi | Üretim Rengi | Miktar (KG) | Birim Fiyat | Tutar */
+    var colSpan = 8;
     var rows = kalemler.map(function(k, ki) {
       var siraNo = k.sira_no != null ? k.sira_no : ki + 1;
+      var urunTipi = k.urun_ailesi || '—';
       var formul = k.formul_ad || '—';
-      var renk = k.renk_ad || '—';
       var miktarKg = k.miktar_kg != null ? formatDecimalTrim(k.miktar_kg) + ' kg' : '—';
       var bfCell = '—';
       if (ticari && k.birim_fiyat != null) {
@@ -3283,30 +3446,56 @@ main { padding: 16px 12px !important; }
       if (ticari && k.satir_tutari != null) {
         satirTutar = esc(formatFiyatPb(k.satir_tutari, s.para_birimi));
       }
-      var sevkCell = ckartKalemSevkHtml(k);
+      /* Müşteri Rengi: MTT snapshot'tan gelen serbest metin */
+      var musteriRengiHtml = k.musteri_rengi
+        ? '<span class="ck-musteri-rengi">' + esc(k.musteri_rengi) + '</span>'
+        : '<span style="color:#94a3b8">—</span>';
+      /* Üretim Rengi: renk_kodu + renk_ad, küçük renk dot ile */
+      var urRenkStr = k.uretim_rengi || k.renk_ad || null;
+      var uretimRengiHtml;
+      if (urRenkStr) {
+        uretimRengiHtml = '<span class="ck-uretim-rengi">'
+          + '<span class="ck-renk-dot" style="background:#e07b39"></span>'
+          + esc(urRenkStr)
+          + '</span>';
+      } else {
+        uretimRengiHtml = '<span style="color:#94a3b8">—</span>';
+      }
+      var metaBar = '<div class="ck-kalem-meta-bar">'
+        + ckartKalemMetaItem('Termin', k.termin_tarihi ? ckartFmtDate(k.termin_tarihi) : null)
+        + ckartKalemMetaItem('Kalem Notu', k.kalem_notu)
+        + ckartKalemMetaItem('Sevk', k.sevk_tarihi ? ckartFmtDate(k.sevk_tarihi) : null)
+        + ckartKalemMetaItem('Fatura', faturaLbl)
+        + '<span class="mi"><span class="l">Üretim Planı</span><span class="v">' + ckartPlanLinkHtml(k) + '</span></span>'
+        + '<span class="mi"><span class="l">Durum</span><span class="v">' + ckartKalemDurumBadge(k) + '</span></span>'
+        + '</div>';
       return '<tr>'
         + '<td class="ck-kalem-sira">' + esc(String(siraNo)) + '</td>'
+        + '<td><span class="ck-kalem-tip">' + esc(urunTipi) + '</span></td>'
         + '<td class="ck-kalem-formul-cell"><span class="ck-kalem-formul">' + esc(formul) + '</span></td>'
-        + '<td><span class="ck-kalem-renk">' + esc(renk) + '</span></td>'
+        + '<td class="ck-kalem-renk">' + musteriRengiHtml + '</td>'
+        + '<td class="ck-kalem-renk">' + uretimRengiHtml + '</td>'
         + '<td class="ck-kalem-miktar">' + esc(miktarKg) + '</td>'
         + '<td>' + bfCell + '</td>'
-        + '<td>' + esc(k.termin_tarihi || '—') + '</td>'
-        + '<td>' + sevkCell + '</td>'
-        + '<td>' + esc(faturaLbl) + '</td>'
-        + '<td>' + ckartPlanLinkHtml(k) + '</td>'
-        + '<td>' + ckartKalemDurumBadge(k) + '</td>'
         + '<td>' + satirTutar + '</td>'
-        + '</tr>';
+        + '</tr>'
+        + '<tr class="ck-kalem-meta-row"><td colspan="' + colSpan + '">' + metaBar + '</td></tr>';
     }).join('');
 
     var ftrHtml = ckartKalemDetailFooterHtml(s, ticari, kalemler);
 
     return '<div class="ckart-kalem-detail-wrap">'
-      + '<div class="ckart-kalem-detail-hdr">▾ ' + esc(String(count)) + ' KALEM DETAYI</div>'
+      + ckartSiparisBilgiHtml(s)
+      + '<div class="ckart-kalem-detail-hdr">▾ KALEM DETAYI (' + esc(String(count)) + ')</div>'
       + '<table class="ckart-kalem-detail-tablo"><thead><tr>'
-      + '<th>#</th><th>Formül</th><th>Renk</th>'
-      + '<th>Miktar</th><th>Birim Fiyat</th><th>Termin</th><th>Sevk Tarihi</th><th>Fatura</th>'
-      + '<th>Üretim Planı</th><th>Durum</th><th>Satır Tutarı</th>'
+      + '<th style="width:24px">#</th>'
+      + '<th>Ürün Tipi</th>'
+      + '<th>Formül</th>'
+      + '<th>Müşteri Rengi</th>'
+      + '<th>Üretim Rengi</th>'
+      + '<th>Miktar (KG)</th>'
+      + '<th>Birim Fiyat</th>'
+      + '<th>Tutar</th>'
       + '</tr></thead><tbody>' + rows + '</tbody></table>'
       + (ftrHtml ? '<div class="ckart-kalem-detail-ftr">' + ftrHtml + '</div>' : '')
       + '</div>';
@@ -3746,16 +3935,9 @@ main { padding: 16px 12px !important; }
               + '<th>' + _fb('vade','Vade') + '</th>'
               + '<th>' + _fb('pb','PB') + '</th>'
               + '<th>' + _fb('toplam','Toplam') + '</th>'
-              + '<th>' + _fb('try','TRY') + '</th>'
               + '<th>' + _fb('fiyat','Fiyat') + '</th>'
               + '<th>' + _fb('termin','Termin') + '</th>'
-              + '<th>' + _fb('plan','Plan') + '</th>'
-              + '<th>' + _fb('batch','Batch') + '</th>'
-              + '<th>' + _fb('uretilen_kg','Üretilen KG') + '</th>'
               + '<th>' + _fb('kalem','Kalem') + '</th>'
-              + '<th>' + _fb('numune','Numune') + '</th>'
-              + '<th>' + _fb('son_sevk','Son Sevkiyat') + '</th>'
-              + '<th>' + _fb('sevk_kg','Sevk KG') + '</th>'
               + '<th style="text-align:right">İşlem</th>';
           } else {
             head.innerHTML =
@@ -3763,12 +3945,11 @@ main { padding: 16px 12px !important; }
               + '<th>' + _fb('tarih','Sipariş Tarihi') + '</th>'
               + '<th>' + _fb('durum','Durum') + '</th>'
               + '<th>' + _fb('termin','Termin') + '</th>'
-              + '<th>Plan</th><th>Batch</th><th>Üretilen KG</th><th>Kalem</th>'
-              + '<th>Numune</th><th>Son Sevkiyat</th><th>Sevk KG</th>'
+              + '<th>' + _fb('kalem','Kalem') + '</th>'
               + '<th style="text-align:right">İşlem</th>';
           }
         }
-        var coln = ticari ? 18 : 12;
+        var coln = ticari ? 11 : 6;
         if (!liste.length) {
           tb.innerHTML = '<tr><td colspan="' + coln + '" class="ckart-muted">Bu cari için sipariş kaydı yok.</td></tr>';
           return;
@@ -3805,7 +3986,6 @@ main { padding: 16px 12px !important; }
               + '<td>' + esc(vade) + '</td>'
               + '<td>' + esc(dash(s.para_birimi)) + '</td>'
               + '<td>' + esc(tutar) + '</td>'
-              + '<td>' + esc(tryT) + '</td>'
               + '<td>' + anaFiyat + '</td>';
           }
           var kalemler = s.kalemler || [];
@@ -3829,19 +4009,13 @@ main { padding: 16px 12px !important; }
             + '<td>' + ckartSiparisDurumBadge(s.durum) + '</td>'
             + ticariCells
             + '<td>' + esc(ckartFmtDate(s.termin)) + '</td>'
-            + '<td>' + esc(s.plan_sayisi != null ? s.plan_sayisi : 0) + '</td>'
-            + '<td>' + esc(s.batch_sayisi != null ? s.batch_sayisi : 0) + '</td>'
-            + '<td>' + esc(dash(s.uretilen_kg)) + '</td>'
             + '<td>' + kalemCell + '</td>'
-            + '<td class="ckart-wrap">' + numHtml + '</td>'
-            + '<td>' + esc(ckartFmtDate(s.son_sevkiyat_tarihi)) + '</td>'
-            + '<td>' + esc(dash(s.sevk_edilen_kg)) + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + link + '</td>'
             + '</tr>';
 
           var kalemRow = '';
           if (hasKalem) {
-            var colSpan = ticari ? 18 : 12;
+            var colSpan = ticari ? 11 : 6;
             kalemRow = '<tr id="' + sipRowId + '" class="ckart-siparis-kalem-row" style="display:none">'
               + '<td colspan="' + colSpan + '" class="ckart-siparis-kalem-td">'
               + ckartKalemDetailTableHtml(kalemler, s, ticari)
@@ -3852,7 +4026,7 @@ main { padding: 16px 12px !important; }
       })
       .catch(function(e) {
         console.error('Cari360 siparişler', e);
-        tb.innerHTML = '<tr><td colspan="18" class="ckart-muted">Sipariş geçmişi yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="11" class="ckart-muted">Sipariş geçmişi yüklenemedi. Lütfen yeniden deneyin.</td></tr>';
       });
   };
 

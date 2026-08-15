@@ -54,29 +54,50 @@ class Cari360SiparisKalemCompactExpandLockTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.src, msg=f'missing {marker}')
         self.assertNotIn('ckart-kalem-compakt-hdr', self.src)
+        self.assertIn('ckart-sip-expand-panels', self.src)
+        self.assertIn('ckart-sip-expand-row1', self.src)
+        self.assertIn('ckart-sip-expand-row2', self.src)
+        self.assertIn('function ckartSiparisBilgiHtml', self.src)
         hdr = self.src[self.src.index('ckart-kalem-detail-tablo"><thead><tr>'):self.src.index('</tr></thead><tbody>')]
-        self.assertIn('<th>Renk</th>', hdr)
-        self.assertIn('<th>Sevk Tarihi</th>', hdr)
-        self.assertIn('<th>Fatura</th>', hdr)
+        self.assertIn('<th>Ürün Tipi</th>', hdr)
+        self.assertIn('<th>Formül</th>', hdr)
+        self.assertIn('<th>Müşteri Rengi</th>', hdr)
+        self.assertIn('<th>Üretim Rengi</th>', hdr)
+        self.assertIn('<th>Tutar</th>', hdr)
+        self.assertNotIn('<th>Termin</th>', hdr)
+        self.assertNotIn('<th>Renk</th>', hdr)
+        self.assertNotIn('<th>Sevk Tarihi</th>', hdr)
+        self.assertNotIn('<th>Fatura</th>', hdr)
         self.assertNotIn('<th>Ürün Ailesi</th>', hdr)
         self.assertNotIn('<th>RF</th>', hdr)
         self.assertNotIn('MTT Kalem</th>', hdr)
         self.assertNotIn('Net Satır TRY</th>', hdr)
-        self.assertEqual(hdr.count('<th>'), 11, msg='kalem detay 11 kolon olmalı')
+        self.assertEqual(hdr.count('<th>'), 7, msg='kalem detay 8 ana kolon (1i style ile)')
+        self.assertIn('<th style="width:24px">#</th>', hdr)
+        self.assertIn('ck-kalem-meta-row', self.src)
+        # Termin meta satırda olmalı
+        meta_fn = self.src[self.src.index('function ckartKalemDetailTableHtml'):]
+        meta_fn = meta_fn[:meta_fn.index('window.ckartSiparisYukle')]
+        self.assertIn("'Termin'", meta_fn)
 
     def test_e_kalem_fields_preserved_in_render(self) -> None:
         block = self.src[self.src.index('function ckartKdvDurumuLabel'):]
         block = block[:block.index('window.ckartSiparisYukle')]
         for field in (
             'plan_kodu', 'uretim_plan_id', 'formul_ad', 'renk_ad',
+            'urun_ailesi', 'musteri_rengi', 'uretim_rengi', 'kalem_notu',
             'miktar_kg', 'birim_fiyat', 'termin_tarihi', 'satir_tutari',
             'sevk_tarihi', 'kdv_durumu', 'son_sevkiyat_tarihi', 'toplam_tutar', 'toplam_tutar_try',
+            'pazarlamaci', 'genel_not', 'teslim_sekli', 'siparis_onceligi',
         ):
             self.assertIn(field, block, msg=f'missing kalem field {field}')
         table_fn = self.src[self.src.index('function ckartKalemDetailTableHtml'):]
         table_fn = table_fn[:table_fn.index('window.ckartSiparisYukle')]
+        self.assertIn('urun_ailesi', table_fn)
+        self.assertIn('musteri_rengi', table_fn)
+        self.assertIn('uretim_rengi', table_fn)
+        self.assertIn('kalem_notu', table_fn)
         self.assertNotIn('mtt_kalem_id', table_fn)
-        self.assertNotIn('urun_ailesi', table_fn)
         self.assertNotIn('rf_label', table_fn)
         self.assertNotIn('satir_tutari_try', table_fn)
         self.assertNotIn('ckartKalemFormulCellHtml', table_fn)
@@ -92,11 +113,20 @@ class Cari360SiparisKalemCompactExpandLockTests(unittest.TestCase):
         self.assertIn('ckart-sip-durum-badge', self.src)
         self.assertIn('ckart-odeme-cek', self.src)
 
-    def test_h_eighteen_columns_preserved(self) -> None:
+    def test_h_eleven_columns_preserved(self) -> None:
         self.assertIn("'<th style=\"text-align:right\">İşlem</th>'", self.src)
         head_block = self.src[self.src.index('if (ticari)'):self.src.index('} else {', self.src.index('if (ticari)'))]
-        self.assertEqual(head_block.count('<th>'), 17)
+        # ticari modda: Sipariş No, Sipariş Tarihi, Durum, Ödeme, Vade, PB, Toplam, Fiyat, Termin, Kalem = 10 <th> + 1 style th = 11 toplam
+        self.assertEqual(head_block.count('<th>'), 10)
         self.assertIn('text-align:right', head_block)
+        # kaldırılan kolonlar
+        self.assertNotIn("'TRY'", head_block)
+        self.assertNotIn("'Plan'", head_block)
+        self.assertNotIn("'Batch'", head_block)
+        self.assertNotIn("'Üretilen KG'", head_block)
+        self.assertNotIn("'Numune'", head_block)
+        self.assertNotIn("'Son Sevkiyat'", head_block)
+        self.assertNotIn("'Sevk KG'", head_block)
 
     def test_i_old_large_kalem_card_removed(self) -> None:
         self.assertNotIn('ckart-kalem-kart-header', self.src)
