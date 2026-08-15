@@ -61,9 +61,6 @@ var _PARCA_VAR = {% if devam_eden_batches and devam_eden_batches[0]['toplam_alt_
       <button type="button" class="rm-fb nxt-fsekme" data-filtre="devam" onclick="filtreUygula('devam',this)">
         Devam Eden <span class="nxt-fsayi" id="fs-devam">0</span>
       </button>
-      <button type="button" class="rm-fb nxt-fsekme" data-filtre="bitti" onclick="filtreUygula('bitti',this)">
-        Biten <span class="nxt-fsayi" id="fs-bitti">0</span>
-      </button>
       <button type="button" class="rm-fb nxt-fsekme nxt-fsekme-ikincil" data-filtre="bekleme" onclick="filtreUygula('bekleme',this)">
         Beklemeye Alındı <span class="nxt-fsayi" id="fs-bekleme">0</span>
       </button>
@@ -659,6 +656,7 @@ function filtrele() {
   return _gruplar.filter(function(sip) {
     var gd = siparisDurum(sip);
     var vm = durumVm(gd);
+    if (vm.filtre === 'bitti') return false;
     var cari = sip.musteri_adi.toLowerCase();
     var sipNo = (sip.siparis_no || '').toLowerCase();
     var arama = _aktifArama.toLowerCase();
@@ -675,25 +673,24 @@ function filtrele() {
 }
 
 function sayacGuncelle() {
-  var sayac = { tumu: 0, hazir: 0, devam: 0, bekleme: 0, bitti: 0 };
+  var sayac = { tumu: 0, hazir: 0, devam: 0, bekleme: 0 };
   _gruplar.forEach(function(sip) {
     var f = durumVm(siparisDurum(sip)).filtre;
+    if (f === 'bitti') return;
     sayac.tumu++;
     if (f === 'hazir') sayac.hazir++;
     else if (f === 'devam') sayac.devam++;
     else if (f === 'bekleme') sayac.bekleme++;
-    else if (f === 'bitti') sayac.bitti++;
   });
   document.getElementById('fs-tumu').textContent = sayac.tumu;
   document.getElementById('fs-hazir').textContent = sayac.hazir;
   document.getElementById('fs-devam').textContent = sayac.devam;
   document.getElementById('fs-bekleme').textContent = sayac.bekleme;
-  document.getElementById('fs-bitti').textContent = sayac.bitti;
   var aktifRozet = document.getElementById('nxt-aktif-rozet');
   var aktifSayi = document.getElementById('nxt-aktif-sayi');
   if (aktifRozet && aktifSayi) {
-    aktifSayi.textContent = sayac.devam + sayac.hazir;
-    aktifRozet.style.display = (sayac.devam + sayac.hazir) > 0 ? 'flex' : 'none';
+    aktifSayi.textContent = sayac.tumu;
+    aktifRozet.style.display = sayac.tumu > 0 ? 'flex' : 'none';
   }
 }
 

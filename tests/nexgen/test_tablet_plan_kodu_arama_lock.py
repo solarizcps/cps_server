@@ -102,6 +102,8 @@ def tablet_filtre_eslesir(sip: dict, arama: str, aktif_filtre: str = 'tumu') -> 
     """tablet.html filtrele() ile aynı arama/durum mantığı (Python simülasyonu)."""
     gd = _siparis_durum(sip)
     vm_filtre = DURUM_VM.get(gd, 'hazir')
+    if vm_filtre == 'bitti':
+        return False
     cari = (sip.get('musteri_adi') or '').lower()
     sip_no = (sip.get('siparis_no') or '').lower()
     q = (arama or '').lower()
