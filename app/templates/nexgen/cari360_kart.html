@@ -1363,6 +1363,28 @@ main { padding: 16px 12px !important; }
   color: #64748b; min-width: 110px; flex-shrink: 0; font-size: 11px;
 }
 .ckart-urt-detail-field .val { color: #0f172a; font-weight: 500; }
+/* C360-GORUSME-NOT-FULL-01 — Görüşmeler expand: tam genişlik not (scoped) */
+.ckart-gor-not-full {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+.ckart-gor-not-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: #94a3b8;
+  margin-bottom: 6px;
+}
+.ckart-gor-not-value {
+  display: block;
+  font-size: 12px; line-height: 1.5; color: #0f172a; font-weight: 500;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+  max-width: 100%;
+}
 .ckart-urt-progress-bar {
   height: 6px; border-radius: 3px; background: #e2e8f0;
   overflow: hidden; margin-top: 2px; margin-bottom: 6px;
@@ -5000,7 +5022,6 @@ main { padding: 16px 12px !important; }
     if (g.konu) {
       html += '<div class="ckart-urt-detail-field"><span class="lbl">Konu</span><span class="val">' + esc(g.konu) + '</span></div>';
     }
-    html += '<div class="ckart-urt-detail-field"><span class="lbl">Görüşme Notu</span><span class="val" style="white-space:pre-wrap">' + esc(g.kisa_not || '—') + '</span></div>';
     html += '</div>';
 
     /* B — Ticari Bilgi */
@@ -5072,6 +5093,14 @@ main { padding: 16px 12px !important; }
     /* Kaynak */
     html += '<div class="ckart-urt-detail-field"><span class="lbl">Kaynak</span><span class="val">' + esc(g.kaynak || '—') + '</span></div>';
     html += '</div>';
+
+    var gorNot = (g.kisa_not || '').trim();
+    if (gorNot) {
+      html += '<div class="ckart-gor-not-full">';
+      html += '<div class="ckart-gor-not-label">Görüşme Notu</div>';
+      html += '<div class="ckart-gor-not-value">' + esc(g.kisa_not) + '</div>';
+      html += '</div>';
+    }
 
     html += '</div>'; /* ckart-urt-detail-panel */
     return html;
