@@ -479,6 +479,7 @@ function veriGrupla() {
     sip.kalemler.push({
       kalem_no: b.kalem_no || 1,
       plan_id: b.plan_id,
+      plan_kodu: b.plan_kodu || '',
       batch_kodu: b.batch_kodu,
       durum: b.durum,
       formul_ad: b.formul_ad || '—',
@@ -509,6 +510,7 @@ function veriGrupla() {
     sip.kalemler.push({
       kalem_no: p.kalem_no || 1,
       plan_id: p.plan_id,
+      plan_kodu: p.plan_kodu || '',
       batch_kodu: null,
       durum: 'PLANLI',
       formul_ad: p.formul_ad || '—',
@@ -661,11 +663,13 @@ function filtrele() {
     var sipNo = (sip.siparis_no || '').toLowerCase();
     var arama = _aktifArama.toLowerCase();
     var fPas = (_aktifFiltre === 'tumu') || vm.filtre === _aktifFiltre;
+    var planKod = sip.kalemler.map(function(k) { return (k.plan_kodu || '').toLowerCase(); }).join(' ');
     var urun = sip.kalemler.map(function(k) { return k.formul_ad; }).join(' ').toLowerCase();
     var batchKod = sip.kalemler.map(function(k) { return (k.batch_kodu || '').toLowerCase(); }).join(' ');
     var renk = sip.kalemler.map(function(k) { return renkKimlikMetin(k); }).join(' ').toLowerCase();
     var aPas = !arama || cari.includes(arama) || sipNo.includes(arama) ||
-               urun.includes(arama) || batchKod.includes(arama) || renk.includes(arama);
+               planKod.includes(arama) || urun.includes(arama) || batchKod.includes(arama) ||
+               renk.includes(arama);
     return fPas && aPas;
   });
 }

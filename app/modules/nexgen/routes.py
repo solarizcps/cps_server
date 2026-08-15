@@ -17614,6 +17614,7 @@ def _tablet_ana_veri(con):
             if b:
                 row = dict(b)
                 row['plan_id'] = row.get('plan_id') or pl.get('id')
+                row['plan_kodu'] = pl.get('plan_kodu')
                 row['musteri_adi'] = pl.get('musteri_adi') or pl.get('hdr_cari_unvan')
                 row['siparis_no'] = pl.get('siparis_no') or pl.get('hdr_siparis_no') or pl.get('plan_kodu')
                 sn = row['siparis_no']
