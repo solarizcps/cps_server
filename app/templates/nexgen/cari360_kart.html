@@ -4717,7 +4717,17 @@ main { padding: 16px 12px !important; }
     html += '<div class="ckart-urt-detail-group-title">D — Bağlantılar</div>';
     html += '<div class="ckart-urt-detail-field"><span class="lbl">Bağlı Siparişler</span><span class="val">' + sipHtml + '</span></div>';
     html += '<div class="ckart-urt-detail-field"><span class="lbl">Numune No</span><span class="val">' + esc(n.talep_kodu || '—') + '</span></div>';
-    if (arge && arge.id) { var _argeLabel = (arge.arge_kodu || '').trim() || '—'; html += '<div class="ckart-urt-detail-field"><span class="lbl">AR-GE</span><span class="val">' + (_argeLabel !== '—' ? '<a class="ckart-link" href="/nexgen/arge/nx-ar/' + esc(String(arge.id)) + '">' + esc(_argeLabel) + ' ↗</a>' : '—') + '</span></div>'; }
+    if (arge && arge.id) {
+      var _argeKod = (arge.arge_kodu || '').trim();
+      var _argeTestNo = (arge.test_no || '').trim();
+      var _argeLabel = _argeKod || _argeTestNo || ('AR-GE #' + String(arge.id));
+      var _argeHtml = (_argeKod.indexOf('NX-AR-') === 0)
+        ? ('<a class="ckart-link" href="/nexgen/arge/nx-ar/' + esc(String(arge.id)) + '">' + esc(_argeLabel) + ' ↗</a>')
+        : esc(_argeLabel);
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">AR-GE</span><span class="val">' + _argeHtml + '</span></div>';
+    } else {
+      html += '<div class="ckart-urt-detail-field"><span class="lbl">AR-GE</span><span class="val">' + esc('—') + '</span></div>';
+    }
     html += '</div>';
 
     html += '</div>'; /* ckart-urt-detail-panel */
