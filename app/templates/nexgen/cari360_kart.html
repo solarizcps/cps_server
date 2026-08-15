@@ -3197,7 +3197,7 @@ main { padding: 16px 12px !important; }
         setText('kpi-toplam-siparis', k.toplam_siparis != null ? k.toplam_siparis : 0);
         setText('kpi-aktif-siparis', k.aktif_siparis != null ? k.aktif_siparis : 0);
         setText('kpi-toplam-sevkiyat', k.toplam_sevkiyat != null ? k.toplam_sevkiyat : 0);
-        setText('kpi-toplam-sevk-kg', k.toplam_sevk_kg != null ? k.toplam_sevk_kg : 0);
+        setText('kpi-toplam-sevk-kg', formatTrSayi(k.toplam_sevk_kg != null ? k.toplam_sevk_kg : 0));
         setText('kpi-son-sevkiyat', dash(k.son_sevkiyat_tarihi));
         setText('kpi-son-gorusme', dash(k.son_gorusme_tarihi));
         setText('kpi-son-gorusme-ust', dash(k.son_gorusme_tarihi));
