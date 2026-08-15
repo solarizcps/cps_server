@@ -2476,6 +2476,7 @@ main { padding: 16px 12px !important; }
     var m = {
       /* olay_kodu bazlı */
       GORUSME_CREATED: 'Görüşme', GORUSME_UPDATED: 'Görüşme', GORUSME_IPTAL: 'Görüşme',
+      GORUSME_PLANLANDI: 'Görüşme',
       NUMUNE_CREATED: 'Numune', NUMUNE_ONAYLANDI: 'Numune', NUMUNE_REDDEDILDI: 'Numune',
       SIPARIS_CREATED: 'NexGen Sipariş', SIPARIS_ONAYLANDI: 'NexGen Sipariş',
       SIPARIS_REDDEDILDI: 'NexGen Sipariş', SIPARIS_REVIZYON: 'NexGen Sipariş',
@@ -2483,6 +2484,8 @@ main { padding: 16px 12px !important; }
       CEK_KAYDI: 'Çek', CEK_GUNCELLENDI: 'Çek',
       TAHSILAT: 'NexGen Tahsilat',
       SEVKIYAT: 'Sevkiyat',
+      URETIM_STARTED: 'Üretim',
+      URETIM_COMPLETED: 'Üretim',
       ONAY_TALEBI: 'Onay Merkezi',
       /* source_type bazlı fallback */
       musteri_operasyon_gorusme: 'Görüşme',
@@ -3142,6 +3145,7 @@ main { padding: 16px 12px !important; }
       mo_musteri_sevkiyat: 'sevkiyatlar',
       nexgen_uretim_plan: 'uretim', nexgen_uretim_batch: 'uretim', nexgen_uretim_parca: 'uretim',
       musteri_operasyon_gorusme: 'gorusmeler',
+      musteri_operasyon_ajanda: 'gorusmeler',
     };
     function _kategoriAl(e) {
       if (e.kategori) return e.kategori;
@@ -3169,24 +3173,7 @@ main { padding: 16px 12px !important; }
     }
     if (bos) bos.style.display = 'none';
 
-    /* Badge: entity_type veya olay_kodu üzerinden renk ve etiket belirle */
-    var html = '';
-    liste.slice(0, 200).forEach(function(e) {
-      var src = e.entity_type || '';
-      var ok = e.olay_kodu || '';
-      /* Önce entity_type'a göre badge; yoksa olay_kodu */
-      var bdgClass = ckartHafizaBadgeClass(ok || src);
-      var etiket = ckartHafizaKaynakEtiket(src) !== (src || '—') ? ckartHafizaKaynakEtiket(src) : ckartHafizaKaynakEtiket(ok);
-      var tarih = (e.olay_tarihi || '').slice(0, 10);
-      var oz = e.aciklama || e.ozet || '';
-      html += '<li class="ckart-hafiza-satir">' +
-        '<span class="ckart-hafiza-kaynak ' + bdgClass + '">' + etiket + '</span>' +
-        '<span class="ckart-hafiza-bas">' + (e.baslik || ok || '') + '</span>' +
-        (oz ? '<span class="ckart-hafiza-oz" style="color:var(--ck-text-soft)"> · ' + oz.slice(0,120) + '</span>' : '') +
-        '<span class="ckart-hafiza-zaman" style="margin-left:auto;color:var(--ck-text-mute);font-size:11px;white-space:nowrap">' + tarih + '</span>' +
-        '</li>';
-    });
-    ul.innerHTML = html;
+    ckartHafizaDoldur(ul, liste.slice(0, 200));
   }
 
   function ckartOzetYukle() {
@@ -4935,6 +4922,7 @@ main { padding: 16px 12px !important; }
     } catch (e) {}
     /* C360-CANONICAL-REFRESH-01: her tab aktivasyonunda cache invalidate + fresh KPI */
     ckartOzetYukle();
+    if (tab === 'genel') { ckartSonHareketlerYukle(); }
     if (tab === 'siparisler') {
       _opsLoaded.siparisler = false;
       _opsLoaded.ticariOzet = false;
@@ -5010,6 +4998,8 @@ main { padding: 16px 12px !important; }
     _opsLoaded.gorusmeler = false;
     ckartGorusmeYukle(true);
     if (typeof ckartOzetYukle === 'function') ckartOzetYukle();
+    _ckartHafizaTabYuklendi = false;
+    ckartSonHareketlerYukle();
   }
 
   window.ckartTakipGerekliToggle = function() {

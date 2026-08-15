@@ -43,6 +43,7 @@ _EVENT_PRIORITY = {
     'ARGE_CREATED': 70,
     'NUMUNE_CREATED': 80,
     'GORUSME_CREATED': 90,
+    'GORUSME_PLANLANDI': 88,
     'PAZARLAMACI': 100,
 }
 
@@ -52,6 +53,27 @@ _URETIM_TAMAM_DURUM = frozenset({
 _URETIM_PARCA_TAMAM = frozenset({
     'TAMAMLANDI', 'BITTI', 'BITIRILDI', 'DONE', 'COMPLETED', 'BITTI_OK',
 })
+
+_AJANDA_TABLO = 'musteri_operasyon_ajanda'
+_AJANDA_DURUM_GOSTER = frozenset({'PLANLANDI', 'GERCEKLESTI'})
+
+
+def _sevk_timeline_baslik(durum: str | None) -> str:
+    """Sevkiyat timeline başlığı — canonical durum değerini değiştirmez."""
+    d = (durum or '').strip().upper()
+    if d == 'HAZIRLANIYOR':
+        return 'Sevkiyat hazırlanıyor'
+    if d == 'SEVK_EDILDI':
+        return 'Sevkiyat yapıldı'
+    if d == 'TESLIM_EDILDI':
+        return 'Sevkiyat teslim edildi'
+    if d == 'TAMAMLANDI':
+        return 'Sevkiyat tamamlandı'
+    return 'Sevkiyat yapıldı'
+
+
+def _ajanda_adhoc_idempotency(idem: str | None) -> bool:
+    return str(idem or '').startswith('ADHOC-GOR-')
 
 
 class Cari360TimelineError(Exception):
@@ -463,6 +485,32 @@ def build_ops_timeline(
                 user_ids.add(uid)
         qstats['q_sevkiyat'] = 1
 
+    # 9) Ajanda planları (timeline read-only)
+    ajanda_rows: list[dict] = []
+    if _tablo_var(con, _AJANDA_TABLO):
+        for r in con.execute(
+            f"""
+            SELECT id, cari_id, kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
+                   durum, gorusme_id, idempotency_key, olusturma_tarihi, aktif,
+                   plan_yetkili_metin, olusturan_kullanici_id
+            FROM {_AJANDA_TABLO}
+            WHERE cari_id=? AND COALESCE(aktif,1)=1
+            """,
+            (cid,),
+        ):
+            d = dict(r)
+            if _ajanda_adhoc_idempotency(d.get('idempotency_key')):
+                continue
+            durum_u = (d.get('durum') or '').strip().upper()
+            if durum_u not in _AJANDA_DURUM_GOSTER:
+                continue
+            ajanda_rows.append(d)
+            for k in ('kullanici_id', 'olusturan_kullanici_id'):
+                uid = _iid(d.get(k))
+                if uid:
+                    user_ids.add(uid)
+        qstats['q_ajanda'] = 1
+
     users = _user_map(con, user_ids)
     qstats['q_users'] = 1 if user_ids else 0
 
@@ -588,6 +636,55 @@ def build_ops_timeline(
             baslangic_tipi='GORUSME',
             kayit_no=str(gid),
             hareket_turu='Görüşme',
+        ))
+
+    # Ajanda planlama (olay_tarihi = olusturma_tarihi; plan_tarihi yalnız özet)
+    for a in ajanda_rows:
+        aid = int(a['id'])
+        olusturma = a.get('olusturma_tarihi') or ''
+        if not olusturma:
+            continue
+        uid = _iid(a.get('kullanici_id'))
+        pazarlamaci = users.get(uid or 0) or ''
+        ozet_parcalar: list[str] = []
+        if a.get('plan_tarihi'):
+            ozet_parcalar.append(f"Plan: {str(a['plan_tarihi'])[:16]}")
+        if a.get('gorusme_tipi'):
+            ozet_parcalar.append(str(a['gorusme_tipi']))
+        if a.get('plan_notu'):
+            ozet_parcalar.append(str(a['plan_notu'])[:200])
+        if pazarlamaci:
+            ozet_parcalar.append(pazarlamaci)
+        elif a.get('plan_yetkili_metin'):
+            ozet_parcalar.append(str(a['plan_yetkili_metin']))
+        _add(_event(
+            olay_kodu='GORUSME_PLANLANDI',
+            entity_type=_AJANDA_TABLO,
+            entity_id=aid,
+            cari_id=cid,
+            olay_tarihi=olusturma,
+            baslik='Görüşme planlandı',
+            aciklama=' · '.join(x for x in ozet_parcalar if x),
+            durum=(a.get('durum') or 'PLANLANDI'),
+            kategori='gorusmeler',
+            parent_type=PARENT_CARI,
+            parent_id=cid,
+            olusturan_kullanici_id=uid or _iid(a.get('olusturan_kullanici_id')),
+            olusturan_kullanici=pazarlamaci or None,
+            icon='calendar',
+            hedef_modul='gorusme',
+            hedef_id=aid,
+            detay_url=f'{kart}?tab=gorusmeler',
+            dedupe_key=f'GORUSME_PLANLANDI:{aid}',
+            baslangic_tipi='AJANDA_PLAN',
+            kayit_no=str(aid),
+            hareket_turu='Görüşme',
+            metadata={
+                'plan_tarihi': a.get('plan_tarihi'),
+                'gorusme_tipi': a.get('gorusme_tipi'),
+                'plan_notu': a.get('plan_notu'),
+                'gorusme_id': a.get('gorusme_id'),
+            },
         ))
 
     # Numune
@@ -1073,7 +1170,7 @@ def build_ops_timeline(
             entity_id=svid,
             cari_id=cid,
             olay_tarihi=s.get('sevk_tarihi') or s.get('olusturma_tarihi') or '',
-            baslik='Sevkiyat yapıldı',
+            baslik=_sevk_timeline_baslik(s.get('durum')),
             aciklama=f"{sno} · {sip_no}".strip(' ·'),
             durum=(s.get('durum') or '—'),
             kategori='sevkiyatlar',
@@ -1380,6 +1477,8 @@ def build_ops_timeline(
         'CEK_KAYDI', 'CEK_GUNCELLENDI',
         'TAHSILAT', 'ONAY_TALEBI', 'MTT_ONAY', 'MTT_YASAM',
         'SEVKIYAT',
+        'URETIM_STARTED', 'URETIM_COMPLETED',
+        'GORUSME_PLANLANDI',
     })
     events = [e for e in events if e.get('olay_kodu') in _IZIN]
 
