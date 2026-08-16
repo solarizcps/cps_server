@@ -486,75 +486,21 @@ def hafiza_liste(
                     dedupe_suffix='tahsilat-plan',
                 ))
 
-    # --- Tahsilat kaydı (finans yetkisi) ---
-    if finans_ok and _tablo_var(con, 'mo_tahsilat_kayit'):
-        for r in con.execute(
-            """SELECT tk.*, ps.siparis_no FROM mo_tahsilat_kayit tk
-               LEFT JOIN nexgen_planlama_siparis ps ON ps.id=tk.siparis_id
-               WHERE tk.cari_id=? AND tk.aktif=1 ORDER BY tk.guncelleme_tarihi DESC""",
-            (cari_id,),
-        ).fetchall():
-            d = dict(r)
-            if _test_mi(d.get('aciklama'), d.get('kayit_kodu')):
-                continue
-            durum = (d.get('durum') or '').upper()
-            bas = {
-                'ONAYLANDI': 'Tahsilat alındı',
-                'MUHASEBE_ONAY_BEKLIYOR': 'Tahsilat — Muhasebe onayında',
-                'REVIZYON_ISTENDI': 'Tahsilat — Revizyon istendi',
-                'REDDEDILDI': 'Tahsilat — Reddedildi',
-            }.get(durum, 'Tahsilat kaydı')
-            _add(_hafiza_satir(
-                event_date=d.get('alinan_tarih') or d.get('guncelleme_tarihi') or '',
-                hareket_turu='Tahsilat',
-                baslik=bas,
-                aciklama=d.get('aciklama') or d.get('kayit_kodu') or '',
-                durum=durum.replace('_', ' '),
-                source_type='mo_tahsilat_kayit',
-                source_id=d['id'],
-                kayit_no=d.get('kayit_kodu') or str(d['id']),
-                tutar=_fmt_tl(float(d.get('alinan_tutar') or 0)),
-                kategori='tahsilatlar',
-                metadata={'revizyon_gerekce': d.get('revizyon_gerekce'), 'siparis_no': d.get('siparis_no')},
-                detay_url=f'{kart_base}?tab=siparisler',
-                oncelik=89,
-            ))
+    # --- Tahsilat kaydı (FAZ-3: build_ops_timeline üretiyor, burada duplicate engeli) ---
+    # mo_tahsilat_kayit olayı TAHSILAT:{id} key ile ops_events içinde geliyor.
 
-    # --- Onay ---
-    if _tablo_var(con, 'onay_talep'):
-        for r in con.execute(
-            "SELECT * FROM onay_talep WHERE cari_id=? ORDER BY talep_tarihi DESC", (cari_id,),
-        ).fetchall():
-            d = dict(r)
-            durum = (d.get('durum') or '').upper()
-            if durum not in ('REVIZYON', 'REDDEDILDI', 'ONAYLANDI', 'BEKLIYOR', 'ONAY_BEKLIYOR'):
-                continue
-            notu = ''
-            if _tablo_var(con, 'onay_talep_adim'):
-                a = con.execute(
-                    """SELECT karar_notu FROM onay_talep_adim
-                       WHERE talep_id=? AND durum IN ('REVIZYON','REDDEDILDI','TAMAMLANDI')
-                       ORDER BY id DESC LIMIT 1""", (d['id'],),
-                ).fetchone()
-                if a:
-                    notu = a['karar_notu'] or ''
-            lbl = {
-                'ONAYLANDI': 'Onaylandı', 'REVIZYON': 'Revizyon', 'REDDEDILDI': 'Red',
-                'BEKLIYOR': 'Onay bekliyor', 'ONAY_BEKLIYOR': 'Onay bekliyor',
-            }.get(durum, durum)
-            _add(_hafiza_satir(
-                event_date=d.get('updated_at') or d.get('talep_tarihi') or '',
-                hareket_turu='Onay',
-                baslik=f"Merkezi Onay — {lbl}",
-                aciklama=notu or str(d.get('talep_kod') or d['id']),
-                durum=lbl,
-                source_type='onay_talep',
-                source_id=d['id'],
-                kayit_no=str(d.get('talep_kod') or d['id']),
-                kategori='onaylar',
-                detay_url=f'{kart_base}?tab=genel',
-                oncelik=84,
-            ))
+    # --- Onay bloğu kaldırıldı (FAZ-3 temizleme) ---
+    # build_ops_timeline ONAY_TALEBI olayı aynı kaynağı üretiyor; duplicate engeli.
+
+    # FAZ-3: Teknik hareket_turu ve ERP dışı olay kodlarını Timeline'dan çıkar
+    _TEKNIK_TUR = frozenset({
+        'AR-GE', 'RF', 'Numune gelişme', 'Pazarlamacı',
+        'Üretim', 'Üretim Planı', 'Cari',
+    })
+    # hafiza_liste kayıtları için izin verilen hareket türleri (olay_kodu olan ops olaylar zaten filtreli geliyor)
+    _IZINLI_TUR = frozenset({
+        'Görüşme', 'Numune', 'Sipariş', 'Çek', 'Tahsilat', 'Tahsilat Planı', 'Sevkiyat', 'Onay',
+    })
 
     bas, bit = _tarih_araligi(tarih_preset)
     # FAZ-3C: date_from/date_to ISO override (preset ile AND)
@@ -564,6 +510,25 @@ def hafiza_liste(
         bit = date_to if (not bit or date_to < bit) else bit
     out = []
     for e in events:
+        # Tarih normalize: event_date yoksa olay_tarihi'ni event_date'e kopyala
+        if not e.get('event_date') and e.get('olay_tarihi'):
+            e = dict(e)
+            e['event_date'] = e['olay_tarihi']
+        elif not e.get('olay_tarihi') and e.get('event_date'):
+            e = dict(e)
+            e['olay_tarihi'] = e['event_date']
+
+        # Teknik hareket_turu filtresi (olay_kodu olmayan hafiza satırları için)
+        tur = e.get('hareket_turu') or ''
+        olay_kodu = e.get('olay_kodu') or ''
+        if not olay_kodu and tur in _TEKNIK_TUR:
+            continue
+        if not olay_kodu and tur and tur not in _IZINLI_TUR:
+            continue
+        # baslik olmayan kayitlari gosterme (bozuk/eksik veri)
+        if not e.get('baslik') and not olay_kodu:
+            continue
+
         if kategori and kategori != 'tumu':
             if kategori == 'sozler' and e['category'] not in ('sozler', 'gorusmeler'):
                 if not (e.get('metadata') or {}).get('musteri_sozu') and not (e.get('metadata') or {}).get('bizim_sozumuz'):
@@ -572,7 +537,7 @@ def hafiza_liste(
                 continue
         if entity_type:
             et = (e.get('entity_type') or e.get('source_type') or '')
-            if et != entity_type and e.get('olay_kodu') != entity_type:
+            if et != entity_type and olay_kodu != entity_type:
                 continue
         d = (e.get('event_date') or e.get('olay_tarihi') or '')[:10]
         if bas and d and d < bas:
@@ -584,9 +549,11 @@ def hafiza_liste(
             if arama.lower() not in blob:
                 continue
         out.append(e)
+
+    # Tek tarih alanı üzerinden sırala
     out.sort(
         key=lambda x: (
-            x.get('event_date') or x.get('olay_tarihi') or '',
+            (x.get('event_date') or x.get('olay_tarihi') or ''),
             x.get('oncelik') or 0,
             int(x['entity_id']) if str(x.get('entity_id', '')).isdigit() else 0,
         ),
