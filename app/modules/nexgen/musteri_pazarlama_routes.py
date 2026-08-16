@@ -46,6 +46,7 @@ from modules.nexgen.mo_siparis_talep_service import (
 from modules.nexgen.mo_tahsilat_kayit_service import (
     MoTahsilatError,
     acik_planlar,
+    cari_tahsilat_listele,
     kayit_detay,
     onaya_gonder as tahsilat_onaya_gonder,
     taslak_kaydet as tahsilat_taslak_kaydet,
@@ -759,6 +760,28 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
                 return jsonify({'ok': False, 'mesaj': 'Bu müşteri için erişim yetkiniz yok.'}), 403
             planlar = acik_planlar(con, [cari_id])
             return jsonify({'ok': True, 'planlar': planlar})
+        finally:
+            con.close()
+
+    @bp.route('/api/musteri-pazarlama/tahsilat-kayitlari')
+    @login_gerekli
+    def api_mo_tahsilat_kayitlari():
+        """Cari bazlı tahsilat kayıt listesi — read-only, IDOR korumalı."""
+        u, yk = _yetki_kontrol()
+        cid = request.args.get('cari_id')
+        try:
+            cari_id = int(cid or 0)
+        except (TypeError, ValueError):
+            cari_id = 0
+        if not cari_id:
+            return jsonify({'ok': False, 'mesaj': 'cari_id gerekli.'}), 400
+        uid = kullanici_id_fn()
+        con = db_fn()
+        try:
+            kayitlar = cari_tahsilat_listele(con, cari_id, uid, yk)
+            return jsonify({'ok': True, 'kayitlar': kayitlar})
+        except MoTahsilatError as e:
+            return jsonify({'ok': False, 'mesaj': str(e)}), e.args[1] if len(e.args) > 1 else 400
         finally:
             con.close()
 

@@ -30,7 +30,10 @@ def tahsilat_snapshot_olustur(con, kayit_id: int) -> dict[str, Any]:
     row = con.execute(
         """
         SELECT tk.*, c.unvan AS cari_unvan, c.cari_kod,
-               ps.siparis_no, sk.KullaniciAdi AS pazarlamaci_adi
+               ps.siparis_no, ps.anlasma_para_birimi AS siparis_para_birimi,
+               ps.anlasma_birim_fiyat AS siparis_birim_fiyat, ps.kur AS siparis_kur,
+               ps.kur_tarihi AS siparis_kur_tarihi,
+               sk.KullaniciAdi AS pazarlamaci_adi
         FROM mo_tahsilat_kayit tk
         LEFT JOIN nexgen_cari c ON c.id = tk.cari_id
         LEFT JOIN nexgen_planlama_siparis ps ON ps.id = tk.siparis_id
@@ -50,9 +53,14 @@ def tahsilat_snapshot_olustur(con, kayit_id: int) -> dict[str, Any]:
         'cari_kod_snapshot': d.get('cari_kod'),
         'siparis_id': d.get('siparis_id'),
         'siparis_no': d.get('siparis_no'),
+        'siparis_para_birimi': d.get('siparis_para_birimi'),
+        'siparis_kur': float(d['siparis_kur']) if d.get('siparis_kur') else None,
+        'siparis_kur_tarihi': (d.get('siparis_kur_tarihi') or '')[:10] or None,
+        'siparis_toplami': float(d['siparis_birim_fiyat']) if d.get('siparis_birim_fiyat') else None,
         'pazarlamaci_id': d.get('olusturan_id'),
         'pazarlamaci_adi': d.get('pazarlamaci_adi'),
         'beklenen_tutar': d.get('beklenen_tutar'),
+        'paket_hedef_tutar': d.get('paket_hedef_tutar'),
         'alinan_tutar': d.get('alinan_tutar'),
         'kalan_tutar': d.get('kalan_tutar'),
         'planlanan_tahsilat_tarihi': d.get('planlanan_tahsilat_tarihi'),
@@ -66,8 +74,54 @@ def tahsilat_snapshot_olustur(con, kayit_id: int) -> dict[str, Any]:
         'kaynak_modul': KAYNAK_MUSTERI_OPERASYONU,
         'cari_entegrasyon_aktif': CARI_ENTEGRASYON_AKTIF,
     }
+
+    # CEK: vade_kontrol snapshot freeze
+    if (d.get('odeme_tipi') or '').upper() == 'CEK':
+        snap['vade_kontrol'] = _vade_kontrol_snapshot(con, kayit_id, d)
+
     snap['snapshot_hash'] = snapshot_hash(snap)
     return snap
+
+
+def _vade_kontrol_snapshot(con, kayit_id: int, parent: dict) -> dict[str, Any]:
+    """CEK paket için canonical vade kontrolü hesapla ve dondur."""
+    try:
+        from decimal import Decimal
+        from modules.nexgen.mo_tahsilat_cek_service import cek_listele
+        from modules.nexgen.mo_vade_kontrol_service import CekSatiriInput, hesapla
+
+        cekler = cek_listele(con, kayit_id)
+        satirlar = [
+            CekSatiriInput(
+                tutar=Decimal(str(c['tutar'])),
+                gercek_cek_vade_tarihi=c['gercek_cek_vade_tarihi'],
+                para_birimi=c['para_birimi'],
+                cek_alim_tarihi=c.get('cek_alim_tarihi'),
+                odeme_referansi=c.get('odeme_referansi'),
+                banka_adi=c.get('banka_adi'),
+            )
+            for c in cekler
+        ]
+        pb = (parent.get('para_birimi') or 'TRY').strip().upper()
+        hedef = parent.get('paket_hedef_tutar')
+        hedef_d = Decimal(str(hedef)) if hedef is not None else None
+        onaylanan = parent.get('onaylanan_vade_gun_snapshot')
+        sevk = parent.get('gercek_sevk_tarihi_snapshot')
+
+        sonuc = hesapla(
+            tahsilat_kayit_id=kayit_id,
+            odeme_tipi='CEK',
+            cek_satirlari=satirlar,
+            paket_hedef_tutar=hedef_d,
+            para_birimi=pb,
+            onaylanan_vade_gun=onaylanan,
+            sevk_tarihi=sevk,
+            con=con,
+        )
+        return sonuc.to_dict()
+    except Exception as e:
+        # snapshot freeze hatası onay akışını engellememeli
+        return {'hata': str(e), 'cek_adedi': 0}
 
 
 def tahsilat_onaya_gonder(con, kayit_id: int, talep_eden_id: int) -> dict[str, Any]:
@@ -75,7 +129,14 @@ def tahsilat_onaya_gonder(con, kayit_id: int, talep_eden_id: int) -> dict[str, A
     if not snap:
         return {'ok': False, 'hata': 'Kayıt bulunamadı.'}
 
-    idem = f'mo-tahsilat-onay-{kayit_id}-{snap.get("snapshot_hash", "")[:16]}'
+    # Revizyon sayacı: mevcut geçmiş taleplerin max revizyon_no + 1
+    mevcut = con.execute(
+        "SELECT COALESCE(MAX(revizyon_no),0) FROM onay_talep WHERE kaynak_modul=? AND kaynak_id=?",
+        (KAYNAK_MODUL, kayit_id),
+    ).fetchone()
+    rev_no = (mevcut[0] or 0) + 1
+
+    idem = f'mo-tahsilat-onay-{kayit_id}-r{rev_no}-{snap.get("snapshot_hash", "")[:12]}'
     adimlar = [
         {'sira': 1, 'adim_tipi': 'YONETIM_ONAY', 'kademe': 'K3', 'rol_adi': 'Yönetim', 'durum': 'BEKLIYOR'},
     ]
@@ -93,6 +154,7 @@ def tahsilat_onaya_gonder(con, kayit_id: int, talep_eden_id: int) -> dict[str, A
         para_birimi='TRY',
         idempotency_key=idem,
         adimlar=adimlar,
+        revizyon_no=rev_no,
     )
     if r.get('ok'):
         adapter_log(

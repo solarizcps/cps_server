@@ -13,7 +13,10 @@ from modules.nexgen.mo_tahsilat_config import (
     CARI_ENTEGRASYON_AKTIF,
     KAYIT_DURUM_ETIKET,
     KAYNAK_MUSTERI_OPERASYONU,
-    KAYIT_DURUM_MUHASEBE_BEKLIYOR,
+    KAYIT_DURUM_MUHASEBE_BEKLIYOR,   # alias → YONETIM_ONAY_BEKLIYOR
+    KAYIT_DURUM_YONETIM_ONAY_BEKLIYOR,
+    KAYIT_DURUM_ISTISNA_ONAY_BEKLIYOR,
+    KAYIT_DURUM_YONETIM_ONAYLANDI,
     KAYIT_DURUM_ONAYLANDI,
     KAYIT_DURUM_REDDEDILDI,
     KAYIT_DURUM_REVIZYON,
@@ -33,6 +36,28 @@ class MoTahsilatError(Exception):
         self.mesaj = mesaj
         self.kod = kod
         super().__init__(mesaj)
+
+
+_MSG_MANUEL_KUR_ZORUNLU = 'Manuel kur girilmeden devam edilemez.'
+_MSG_MANUEL_KUR_GECERSIZ = 'Geçerli bir manuel kur girin.'
+
+
+def _parse_manuel_kur_raw(raw, *, zorunlu: bool = False) -> float | None:
+    """Manuel kur parse — virgül/nokta kabul; 0/negatif/geçersiz reddedilir."""
+    if raw in (None, ''):
+        if zorunlu:
+            raise MoTahsilatError(_MSG_MANUEL_KUR_ZORUNLU, 400)
+        return None
+    if raw == 0:
+        raise MoTahsilatError(_MSG_MANUEL_KUR_GECERSIZ, 400)
+    try:
+        val = float(str(raw).replace(',', '.'))
+    except (TypeError, ValueError):
+        raise MoTahsilatError(_MSG_MANUEL_KUR_GECERSIZ, 400)
+    import math
+    if not math.isfinite(val) or val <= 0:
+        raise MoTahsilatError(_MSG_MANUEL_KUR_GECERSIZ, 400)
+    return val
 
 
 def _now() -> str:
@@ -87,11 +112,41 @@ def _recalc_try_kalan(norm: dict[str, Any]) -> None:
     alinan = norm.get('alinan_tutar')
     if hedef is None or alinan is None:
         return
-    if float(alinan) > float(hedef) + 0.009:
-        raise MoTahsilatError('Alınan tutar TRY hedefini aşıyor.', 400)
     kalan = round(max(float(hedef) - float(alinan), 0), 2)
     norm['kalan_tutar'] = kalan
     norm['kismi_mi'] = 1 if kalan > 0.009 else 0
+
+
+def _fill_missing_cek_paket_hedef(norm: dict[str, Any]) -> None:
+    """CEK taslağında paket_hedef_tutar boşsa frozen snapshot'tan deterministik olarak tamamla.
+
+    Koşulların tamamı sağlanmalı:
+    - odeme_tipi == 'CEK'
+    - paket_hedef_tutar is None
+    - tcmb_satis_kur_snapshot sayısal ve pozitif
+    - sevk_kalan_fx_snapshot sayısal ve negatif değil
+
+    Diğer hiçbir alan değiştirilmez; sistem_kur lookup yapılmaz.
+    """
+    if (norm.get('odeme_tipi') or '').upper() != 'CEK':
+        return
+    if norm.get('paket_hedef_tutar') is not None:
+        return
+    kur = norm.get('tcmb_satis_kur_snapshot')
+    fx = norm.get('sevk_kalan_fx_snapshot')
+    if kur is None or fx is None:
+        return
+    try:
+        kur_f = float(kur)
+        fx_f = float(fx)
+    except (TypeError, ValueError):
+        return
+    import math
+    if not math.isfinite(kur_f) or not math.isfinite(fx_f):
+        return
+    if kur_f < 0 or fx_f < 0:
+        return
+    norm['paket_hedef_tutar'] = round(fx_f * kur_f, 2)
 
 
 def _load_frozen_tcmb_snapshots(
@@ -123,6 +178,7 @@ def _load_frozen_tcmb_snapshots(
     norm['beklenen_tutar'] = row['beklenen_tutar']
     norm['paket_hedef_tutar'] = row['paket_hedef_tutar']
     norm['beklenen_tahmini'] = 0
+    _fill_missing_cek_paket_hedef(norm)
     _recalc_try_kalan(norm)
     return True
 
@@ -144,20 +200,12 @@ def _bind_sevkiyat_taslak_fx_legacy(
             raise MoTahsilatError(
                 f'Paket hedef tutarı sevk kalanını aşıyor (kalan={sevk_kalan}).', 409,
             )
-        if norm['alinan_tutar'] is not None and float(norm['alinan_tutar']) > sevk_kalan + 0.009:
-            raise MoTahsilatError(
-                f'Alınan tutar sevk kalanını aşıyor (kalan={sevk_kalan}).', 409,
-            )
     else:
         if norm['beklenen_tutar'] is None:
             norm['beklenen_tutar'] = sevk_kalan
         elif float(norm['beklenen_tutar']) > sevk_kalan + 0.009:
             raise MoTahsilatError(
                 f'Beklenen tutar sevk kalanını aşıyor (kalan={sevk_kalan}).', 409,
-            )
-        if norm['alinan_tutar'] is not None and float(norm['alinan_tutar']) > sevk_kalan + 0.009:
-            raise MoTahsilatError(
-                f'Alınan tutar sevk kalanını aşıyor (kalan={sevk_kalan}).', 409,
             )
 
 
@@ -167,25 +215,22 @@ def _tahsil_edilen_sevk(
     *,
     haric_kayit_id: int | None = None,
 ) -> float:
-    """ONAYLANDI + MUHASEBE_ONAY_BEKLIYOR alinan_tutar toplamı."""
+    """Sevkiyat PB cinsinden tahsil edilen / rezerve miktar (FX-aware)."""
     if not _tablo_var(con, 'mo_tahsilat_kayit') or not _sevk_tahsilat_kolonlari_var(con):
         return 0.0
-    ph = ','.join(['?'] * len(TAHSILAT_EDILEN_DURUMLARI))
-    haric_sql = ''
-    params: list[Any] = [int(sevkiyat_id), *sorted(TAHSILAT_EDILEN_DURUMLARI)]
-    if haric_kayit_id:
-        haric_sql = ' AND id != ?'
-        params.append(int(haric_kayit_id))
-    row = con.execute(
-        f"""
-        SELECT COALESCE(SUM(alinan_tutar), 0) AS toplam
-        FROM mo_tahsilat_kayit
-        WHERE sevkiyat_id=? AND aktif=1
-          AND durum IN ({ph}){haric_sql}
-        """,
-        params,
-    ).fetchone()
-    return round(float(row['toplam'] or 0), 2) if row else 0.0
+    from modules.nexgen.mo_tahsilat_sevk_service import sevk_hedef_hesapla, sevk_tahsil_kalan_hesapla
+
+    hedef_info = sevk_hedef_hesapla(con, sevkiyat_id)
+    info = sevk_tahsil_kalan_hesapla(
+        con,
+        sevkiyat_id,
+        hedef_info.get('sevk_hedef_tutar'),
+        hedef_info.get('para_birimi'),
+        haric_kayit_id=haric_kayit_id,
+    )
+    if info.get('kur_hesap_hatasi'):
+        return 0.0
+    return float(info.get('tahsil_edilen_fx') or 0.0)
 
 
 def _bind_sevkiyat_taslak(
@@ -196,8 +241,7 @@ def _bind_sevkiyat_taslak(
     kayit_id: int | None = None,
     preserve_tcmb_snapshot: bool = False,
 ) -> None:
-    """Sevkiyat bağlantısı + FX kalan → TCMB Satış → TRY hedef freeze."""
-    from modules.nexgen.mo_tahsilat_kur_service import MoTahsilatKurError, fx_try_hedef_hesapla
+    """Sevkiyat bağlantısı + manuel kur → TRY hedef snapshot freeze."""
     from modules.nexgen.mo_tahsilat_sevk_service import tahsilat_sevk_write_guard
 
     if not norm.get('siparis_id'):
@@ -223,31 +267,49 @@ def _bind_sevkiyat_taslak(
         return
 
     kur_tarihi = _kur_tarihi_sevk_belirle(con, int(sevkiyat_id), aday=aday)
-    try:
-        kur_out = fx_try_hedef_hesapla(
-            con,
-            para_birimi=sevk_pb,
-            kur_tarihi=kur_tarihi,
-            fx_tutar=sevk_kalan_fx,
-        )
-    except MoTahsilatKurError as exc:
-        raise MoTahsilatError(exc.mesaj, exc.kod) from exc
 
-    try_hedef = float(kur_out['try_hedef_tutar'])
-    norm['sevk_kalan_fx_snapshot'] = float(kur_out['fx_tutar'])
-    norm['sevk_para_birimi_snapshot'] = sevk_pb
-    norm['tcmb_satis_kur_snapshot'] = float(kur_out['tcmb_satis_kur'])
-    norm['kur_tarihi_snapshot'] = kur_out['kur_tarihi']
-    if aday.get('sevk_tarihi'):
-        norm['gercek_sevk_tarihi_snapshot'] = str(aday['sevk_tarihi'])[:10]
-    norm['para_birimi'] = 'TRY'
-    norm['beklenen_tahmini'] = 0
+    # Manuel kur: frontend'den gelen tcmb_satis_kur_snapshot veya manuel_fx_kur
+    manuel_kur_raw = norm.get('tcmb_satis_kur_snapshot') if not preserve_tcmb_snapshot else None
+    if manuel_kur_raw is None:
+        manuel_kur_raw = norm.get('manuel_fx_kur')
 
-    if norm['odeme_tipi'] == 'CEK':
-        norm['paket_hedef_tutar'] = try_hedef
-    else:
-        norm['beklenen_tutar'] = try_hedef
-    _recalc_try_kalan(norm)
+    if sevk_pb in ('USD', 'EUR'):
+        manuel_kur_f = _parse_manuel_kur_raw(manuel_kur_raw, zorunlu=True)
+        try_hedef = round(sevk_kalan_fx * float(manuel_kur_f), 2)
+        norm['sevk_kalan_fx_snapshot'] = round(sevk_kalan_fx, 6)
+        norm['sevk_para_birimi_snapshot'] = sevk_pb
+        norm['tcmb_satis_kur_snapshot'] = manuel_kur_f
+        norm['kur_tarihi_snapshot'] = kur_tarihi
+        if aday.get('sevk_tarihi'):
+            norm['gercek_sevk_tarihi_snapshot'] = str(aday['sevk_tarihi'])[:10]
+        norm['para_birimi'] = 'TRY'
+        norm['beklenen_tahmini'] = 0
+        if norm['odeme_tipi'] == 'CEK':
+            norm['paket_hedef_tutar'] = try_hedef
+        else:
+            norm['beklenen_tutar'] = try_hedef
+        _recalc_try_kalan(norm)
+        return
+
+    if sevk_pb == 'TRY':
+        # TRY: manuel kur gerekmez; TCMB lookup yok
+        try_hedef = sevk_kalan_fx
+        norm['sevk_kalan_fx_snapshot'] = round(sevk_kalan_fx, 6)
+        norm['sevk_para_birimi_snapshot'] = sevk_pb
+        norm['tcmb_satis_kur_snapshot'] = 1.0
+        norm['kur_tarihi_snapshot'] = kur_tarihi
+        if aday.get('sevk_tarihi'):
+            norm['gercek_sevk_tarihi_snapshot'] = str(aday['sevk_tarihi'])[:10]
+        norm['para_birimi'] = 'TRY'
+        norm['beklenen_tahmini'] = 0
+        if norm['odeme_tipi'] == 'CEK':
+            norm['paket_hedef_tutar'] = try_hedef
+        else:
+            norm['beklenen_tutar'] = try_hedef
+        _recalc_try_kalan(norm)
+        return
+
+    raise MoTahsilatError(_MSG_MANUEL_KUR_ZORUNLU, 400)
 
 
 def _sevk_onay_kontrol(con: sqlite3.Connection, kayit_id: int) -> None:
@@ -289,13 +351,9 @@ def _sevk_onay_kontrol(con: sqlite3.Connection, kayit_id: int) -> None:
             tutar = float(row['paket_hedef_tutar'] or 0)
         if tutar <= 0:
             raise MoTahsilatError('Onaya göndermek için alınan tutar zorunlu.', 400)
-        if tutar > hedef_try + 0.009:
-            raise MoTahsilatError(
-                f'TRY tahsilat hedefi aşıldı (hedef={hedef_try}, talep={tutar}).', 409,
-            )
         return
 
-    from modules.nexgen.mo_tahsilat_sevk_service import sevk_hedef_hesapla
+    from modules.nexgen.mo_tahsilat_sevk_service import sevk_hedef_hesapla, sevk_tahsil_kalan_hesapla
 
     hedef = row['sevk_hedef_tutar_snapshot']
     if hedef in (None, ''):
@@ -304,18 +362,30 @@ def _sevk_onay_kontrol(con: sqlite3.Connection, kayit_id: int) -> None:
     if hedef in (None, ''):
         raise MoTahsilatError('Sevk hedef tutarı hesaplanamadı.', 409)
 
-    edilen = _tahsil_edilen_sevk(con, sevkiyat_id, haric_kayit_id=kayit_id)
-    kalan = round(float(hedef) - edilen, 2)
+    hi = sevk_hedef_hesapla(con, sevkiyat_id)
+    kalan_info = sevk_tahsil_kalan_hesapla(
+        con, sevkiyat_id, hedef, hi.get('para_birimi'), haric_kayit_id=kayit_id,
+    )
+    kalan_fx = kalan_info.get('kalan_fx')
+    if kalan_fx is None:
+        raise MoTahsilatError('Sevk kalan tutarı hesaplanamadı.', 409)
+    sevk_pb = (hi.get('para_birimi') or 'TRY').upper()
+    kur = None
+    if row['tcmb_satis_kur_snapshot'] not in (None, ''):
+        try:
+            kur = float(row['tcmb_satis_kur_snapshot'])
+        except (TypeError, ValueError):
+            kur = None
+    if sevk_pb in ('USD', 'EUR') and kur and kur > 0:
+        kalan_karsilastir = round(float(kalan_fx) * kur, 2)
+    else:
+        kalan_karsilastir = round(float(kalan_fx), 2)
 
     if odeme == 'CEK':
         if tutar <= 0 and row['paket_hedef_tutar'] not in (None, ''):
             tutar = float(row['paket_hedef_tutar'] or 0)
     if tutar <= 0:
         raise MoTahsilatError('Onaya göndermek için alınan tutar zorunlu.', 400)
-    if tutar > kalan + 0.009:
-        raise MoTahsilatError(
-            f'Sevkiyat tahsilat kalanı aşıldı (kalan={kalan}, talep={tutar}).', 409,
-        )
 
 
 def _kayit_kodu_uret(con) -> str:
@@ -453,13 +523,9 @@ def _validate_payload(payload: dict, *, zorunlu_gonder: bool = False) -> dict[st
         except (TypeError, ValueError):
             kalan_f = None
     elif odeme == 'CEK' and paket_hedef_f is not None and alinan_f is not None:
-        if alinan_f > paket_hedef_f + 0.009:
-            raise MoTahsilatError('Alınan tutar paket hedefinden fazla olamaz.', 400)
         kalan_f = round(max(paket_hedef_f - alinan_f, 0), 2)
         kismi = kalan_f > 0.009
     elif beklenen_f is not None and alinan_f is not None:
-        if alinan_f > beklenen_f + 0.009:
-            raise MoTahsilatError('Alınan tutar beklenenden fazla olamaz.', 400)
         kalan_f = round(max(beklenen_f - alinan_f, 0), 2)
         kismi = kalan_f > 0.009
 
@@ -468,6 +534,11 @@ def _validate_payload(payload: dict, *, zorunlu_gonder: bool = False) -> dict[st
             raise MoTahsilatError('Çek tahsilatında bağlı sipariş zorunludur.', 400)
         if zorunlu_gonder and paket_hedef_f is None:
             raise MoTahsilatError('Çek paketi için hedef tutar zorunludur.', 400)
+
+    manuel_kur_raw = payload.get('tcmb_satis_kur_snapshot')
+    if manuel_kur_raw is None:
+        manuel_kur_raw = payload.get('manuel_fx_kur')
+    manuel_kur_f = _parse_manuel_kur_raw(manuel_kur_raw, zorunlu=False)
 
     return {
         'idempotency_key': idem,
@@ -486,6 +557,8 @@ def _validate_payload(payload: dict, *, zorunlu_gonder: bool = False) -> dict[st
         'beklenen_tutar': beklenen_f,
         'paket_hedef_tutar': paket_hedef_f,
         'planlanan_tahsilat_tarihi': (payload.get('planlanan_tahsilat_tarihi') or '')[:10] or None,
+        'tcmb_satis_kur_snapshot': manuel_kur_f,
+        'manuel_fx_kur': manuel_kur_f,
     }
 
 
@@ -873,8 +946,19 @@ def onaya_gonder(
     kullanici_id: int,
     yk: set[str] | None = None,
     payload: dict | None = None,
+    vade_asim_aciklamasi: str | None = None,
 ) -> dict[str, Any]:
+    """
+    Tahsilat kaydını yönetim onayına gönder.
+
+    Normal vade → YONETIM_ONAY_BEKLIYOR
+    Fazla vade  → vade_asim_aciklamasi zorunlu → YONETIM_ISTISNA_ONAY_BEKLIYOR
+
+    Backend, vade_kontrol sonucunu bağımsız hesaplar;
+    frontend'den gelen durum_kodu'na güvenmez.
+    """
     from modules.nexgen.onay_tahsilat_adapter import tahsilat_onaya_gonder
+    from modules.nexgen.mo_vade_kontrol_service import hesapla as vade_hesapla, DURUM_FAZLA_VADE
 
     if payload:
         _validate_payload({**payload, 'idempotency_key': payload.get('idempotency_key') or f'tahsilat-send-{kayit_id}'}, zorunlu_gonder=True)
@@ -898,22 +982,61 @@ def onaya_gonder(
     sip_row = con.execute(
         'SELECT odeme_tipi, siparis_id FROM mo_tahsilat_kayit WHERE id=?', (kayit_id,),
     ).fetchone()
-    if sip_row and (sip_row['odeme_tipi'] or '').upper() == 'CEK' and sip_row['siparis_id']:
+    is_cek = sip_row and (sip_row['odeme_tipi'] or '').upper() == 'CEK'
+    if is_cek and sip_row['siparis_id']:
         sync_cek_parent_tutarlar(con, kayit_id)
         _freeze_cek_snapshots(con, kayit_id, int(sip_row['siparis_id']))
 
     _sevk_onay_kontrol(con, kayit_id)
+
+    # --- Vade kontrol: backend bağımsız hesap ---
+    vade_sonuc = None
+    istisna_path = False
+    if is_cek:
+        try:
+            old_rf = con.row_factory
+            con.row_factory = __import__('sqlite3').Row
+            vade_sonuc = vade_hesapla(tahsilat_kayit_id=kayit_id, con=con)
+            con.row_factory = old_rf
+            if vade_sonuc and vade_sonuc.durum_kodu == DURUM_FAZLA_VADE:
+                istisna_path = True
+        except Exception:
+            pass  # vade kontrol hatası onayı bloklamasın (uyarı yeterli)
+
+    if istisna_path:
+        aciklama = (vade_asim_aciklamasi or '').strip()
+        if not aciklama:
+            raise MoTahsilatError(
+                'Vade aşımı var. Yönetime göndermek için açıklama zorunludur.', 400
+            )
+        hedef_durum = KAYIT_DURUM_ISTISNA_ONAY_BEKLIYOR
+    else:
+        hedef_durum = KAYIT_DURUM_YONETIM_ONAY_BEKLIYOR
 
     r = tahsilat_onaya_gonder(con, kayit_id, kullanici_id)
     if not r.get('ok'):
         raise MoTahsilatError(r.get('hata') or 'Onaya gönderilemedi.', 409)
 
     now = _now()
+
+    # İstisna açıklaması varsa onay_notu'na yaz
+    extra_fields = ''
+    extra_params: list[Any] = []
+    if istisna_path and aciklama:
+        extra_fields = ', onay_notu=?'
+        extra_params = [aciklama]
+
+    # Vade kontrol snapshot → audit_json'a ekle
+    vk_snap: dict[str, Any] = {}
+    if vade_sonuc is not None:
+        from modules.nexgen.mo_vade_kontrol_service import onay_snapshot_blogu
+        vk_snap = onay_snapshot_blogu(vade_sonuc)
+
     con.execute(
-        """
-        UPDATE mo_tahsilat_kayit SET durum=?, guncelleme_tarihi=? WHERE id=?
+        f"""
+        UPDATE mo_tahsilat_kayit SET durum=?, guncelleme_tarihi=?{extra_fields} WHERE id=?
         """,
-        (KAYIT_DURUM_MUHASEBE_BEKLIYOR, now, kayit_id),
+        (hedef_durum, now, *extra_params, kayit_id),
     )
     sip = con.execute('SELECT siparis_id FROM mo_tahsilat_kayit WHERE id=?', (kayit_id,)).fetchone()
     if sip and sip['siparis_id']:
@@ -925,19 +1048,30 @@ def onaya_gonder(
             (PLAN_DURUM_MUHASEBE_BEKLIYOR, now, sip['siparis_id']),
         )
     con.commit()
-    return {'ok': True, 'kayit_id': kayit_id, 'onay_talep_id': r.get('talep_id'), 'talep_kod': r.get('talep_kod')}
+    return {
+        'ok': True,
+        'kayit_id': kayit_id,
+        'onay_talep_id': r.get('talep_id'),
+        'talep_kod': r.get('talep_kod'),
+        'hedef_durum': hedef_durum,
+        'istisna_path': istisna_path,
+        'vade_snapshot': vk_snap,
+    }
 
 
 def karar_sonrasi(con, kayit_id: int, sonuc: dict) -> None:
-    """Yönetim onay sonrası — cari hareket YAZILMAZ (entegrasyon kapalı)."""
+    """Yönetim onay sonrası — cari hareket YAZILMAZ (entegrasyon kapalı).
+
+    Legacy ONAYLANDI DB kaydı varsa korunur; yeni onaylar YONETIM_ONAYLANDI yazar.
+    """
     durum = sonuc.get('durum')
     now = _now()
     if durum == 'ONAYLANDI' and sonuc.get('tamamlandi'):
         ent = 'YAZILDI' if CARI_ENTEGRASYON_AKTIF else 'BEKLIYOR'
-        # Gerçek karar bilgisini onay_talep_adim'den oku (karar veren + tarihi)
         _onaylayan_id = sonuc.get('kullanici_id') or None
         _karar_tarihi = sonuc.get('karar_tarihi') or now
         _karar_notu = sonuc.get('not') or None
+        # Yeni onaylar YONETIM_ONAYLANDI yazar; legacy ONAYLANDI kayıtlar okunmaya devam eder
         con.execute(
             """
             UPDATE mo_tahsilat_kayit
@@ -945,7 +1079,7 @@ def karar_sonrasi(con, kayit_id: int, sonuc: dict) -> None:
                 onaylayan_id=?, onay_notu=?, guncelleme_tarihi=?
             WHERE id=?
             """,
-            (KAYIT_DURUM_ONAYLANDI, ent, _onaylayan_id, _karar_notu, _karar_tarihi, kayit_id),
+            (KAYIT_DURUM_YONETIM_ONAYLANDI, ent, _onaylayan_id, _karar_notu, _karar_tarihi, kayit_id),
         )
         row = con.execute('SELECT siparis_id, kalan_tutar FROM mo_tahsilat_kayit WHERE id=?', (kayit_id,)).fetchone()
         if row and row['siparis_id']:
@@ -968,6 +1102,39 @@ def karar_sonrasi(con, kayit_id: int, sonuc: dict) -> None:
         )
 
 
+def _pzm_siparis_payload_unpack(ref: Any) -> dict | None:
+    if not ref:
+        return None
+    s = str(ref)
+    for prefix in ('__PZM_V3__', '__PZM_V2__', '__PZM_V1__'):
+        if s.startswith(prefix):
+            try:
+                return json.loads(s[len(prefix):])
+            except Exception:
+                return None
+    return None
+
+
+def canonical_siparis_odeme_tipi(plan_row: dict, mo: dict | None = None) -> str | None:
+    """Sipariş canonical ödeme tipi — kolon, MO payload, PZM payload sırası."""
+    mo = mo or {}
+    pzm = _pzm_siparis_payload_unpack(plan_row.get('talep_referansi')) or {}
+    for raw in (
+        plan_row.get('odeme_tipi'),
+        plan_row.get('tahsilat_odeme_sekli'),
+        mo.get('tahsilat_odeme_sekli'),
+        mo.get('odeme_sekli'),
+        mo.get('odeme_tipi'),
+        pzm.get('odeme_tipi'),
+        pzm.get('tahsilat_odeme_sekli'),
+        pzm.get('odeme_sekli'),
+    ):
+        ot = (raw or '').strip().upper()
+        if ot in ODEME_SEKILLERI:
+            return ot
+    return None
+
+
 def acik_planlar(con, cari_ids: list[int]) -> list[dict[str, Any]]:
     """Tahsilata uygun siparişler — MO açık siparişler (dashboard_v2) ile aynı cari_id/durum mantığı."""
     if not cari_ids or not _tablo_var(con, 'nexgen_planlama_siparis'):
@@ -978,6 +1145,11 @@ def acik_planlar(con, cari_ids: list[int]) -> list[dict[str, Any]]:
     ph = ','.join(['?'] * len(cari_ids))
     has_kur = 'kur' in ps_cols
     kur_fields = ', ps.kur, ps.kur_tarihi' if has_kur else ''
+    odeme_fields = ''
+    if 'odeme_tipi' in ps_cols:
+        odeme_fields += ', ps.odeme_tipi'
+    if 'tahsilat_odeme_sekli' in ps_cols:
+        odeme_fields += ', ps.tahsilat_odeme_sekli'
     tahsilat_durum_sql = ''
     if 'tahsilat_durumu' in ps_cols:
         tahsilat_durum_sql = (
@@ -1001,7 +1173,7 @@ def acik_planlar(con, cari_ids: list[int]) -> list[dict[str, Any]]:
     sql = f"""
         SELECT ps.id, ps.siparis_no, ps.cari_id, ps.cari_unvan, ps.tahsilat_kurali, ps.tahsilat_gun_sayisi,
                ps.planlanan_tahsilat_tarihi, ps.tahsilat_durumu, ps.anlasma_birim_fiyat,
-               ps.anlasma_para_birimi, ps.talep_referansi, ps.durum, ps.vade_gun{kur_fields}
+               ps.anlasma_para_birimi, ps.talep_referansi, ps.durum, ps.vade_gun{odeme_fields}{kur_fields}
                {sevk_sub}
         FROM nexgen_planlama_siparis ps
         WHERE ps.cari_id IN ({ph})
@@ -1018,14 +1190,31 @@ def acik_planlar(con, cari_ids: list[int]) -> list[dict[str, Any]]:
         tutar, tahmini = beklenen_tutar_hesapla(d, mo)
         d['beklenen_tutar'] = tutar
         d['tahmini'] = tahmini
-        d['onaylanan_vade_gun'] = d.get('vade_gun')
+        # CEK: vade_gun NULL ise talep_referansi.cek_vade_gun fallback
+        _raw_vg = d.get('vade_gun')
+        _odeme = (d.get('odeme_tipi') or '').upper()
+        if _raw_vg is None and _odeme == 'CEK':
+            _ref = d.get('talep_referansi') or ''
+            _marker = '__PZM_V2__'
+            _idx = str(_ref).find(_marker)
+            if _idx >= 0:
+                try:
+                    import json as _json
+                    _pzm = _json.loads(str(_ref)[_idx + len(_marker):])
+                    _cv = _pzm.get('cek_vade_gun')
+                    if _cv is not None:
+                        _v = int(str(_cv).strip())
+                        _raw_vg = _v if _v > 0 else None
+                except Exception:
+                    pass
+        d['onaylanan_vade_gun'] = _raw_vg
         d['gercek_sevk_tarihi'] = sevk_tarihi
         d['tahsilat_uygunluk'] = 'sevk_yapildi' if sevk_tarihi else 'plan'
         d['siparis_kur'] = d.get('kur')
         d['siparis_kur_tarihi'] = (d.get('kur_tarihi') or '')[:10] or None
 
         # hedef_vade_tarihi = gerçek sevk tarihi + canonical vade_gun
-        _vg = d.get('vade_gun')
+        _vg = _raw_vg
         if sevk_tarihi and _vg is not None:
             try:
                 d['hedef_vade_tarihi'] = (
@@ -1072,5 +1261,66 @@ def acik_planlar(con, cari_ids: list[int]) -> list[dict[str, Any]]:
         else:
             d['siparis_toplam_fx'] = None
         d['siparis_para_birimi'] = pb
+        d['odeme_tipi'] = canonical_siparis_odeme_tipi(d, mo)
+        out.append(d)
+    return out
+
+
+def cari_tahsilat_listele(
+    con,
+    cari_id: int,
+    kullanici_id: int,
+    yk: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Cari bazlı tahsilat kayıt listesi (read-only).
+
+    Yalnız kullanıcının erişim yetkisi olan cari döner; başka cari için 403.
+    Canonical write=0.
+    """
+    from modules.nexgen.mo_tahsilat_config import KAYIT_DUZENLENEBILIR, KAYIT_DURUM_ETIKET
+    from modules.nexgen.mo_gorusme_service import can_mo_gorusme_yaz
+
+    if not _tablo_var(con, 'mo_tahsilat_kayit'):
+        return []
+    if not can_mo_gorusme_yaz(con, kullanici_id, cari_id, yk) and not can_muhasebe_onay(yk):
+        raise MoTahsilatError('Bu müşteri için erişim yetkiniz yok.', 403)
+
+    rows = con.execute(
+        """
+        SELECT
+            tk.id,
+            tk.kayit_kodu,
+            tk.siparis_id,
+            tk.sevkiyat_id,
+            tk.odeme_tipi,
+            tk.para_birimi,
+            tk.paket_hedef_tutar,
+            tk.beklenen_tutar,
+            tk.alinan_tutar,
+            tk.kalan_tutar,
+            tk.durum,
+            tk.olusturma_tarihi,
+            COALESCE(ps.siparis_no, '') AS siparis_no,
+            COALESCE(sv.sevkiyat_no, '') AS sevkiyat_no
+        FROM mo_tahsilat_kayit tk
+        LEFT JOIN nexgen_planlama_siparis ps ON ps.id = tk.siparis_id
+        LEFT JOIN mo_musteri_sevkiyat sv ON sv.id = tk.sevkiyat_id
+        WHERE tk.cari_id = ? AND tk.aktif = 1
+        ORDER BY tk.olusturma_tarihi DESC, tk.id DESC
+        """,
+        (cari_id,),
+    ).fetchall()
+
+    out = []
+    for r in rows:
+        d = dict(r)
+        durum = d.get('durum') or ''
+        d['durum_etiket'] = KAYIT_DURUM_ETIKET.get(durum, durum.replace('_', ' '))
+        d['duzenlenebilir'] = durum in KAYIT_DUZENLENEBILIR
+        # Canonical hedef: CEK için paket_hedef_tutar, diğerleri beklenen_tutar
+        if (d.get('odeme_tipi') or '').upper() == 'CEK':
+            d['hedef_tutar'] = d.get('paket_hedef_tutar')
+        else:
+            d['hedef_tutar'] = d.get('beklenen_tutar')
         out.append(d)
     return out

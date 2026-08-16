@@ -240,7 +240,11 @@
                 {% elif m.bakiye_yonu == 'SIFIR' %}<span class="mp-v2-yon-chip mp-v2-yon-sifir">Sıfır</span>
                 {% else %}<span style="color:#94a3b8;font-size:11px">—</span>{% endif %}
               </td>
-              <td class="mp-v2-sayi">{% if tah and tah.beklenen_tutar %}{{ '{:,.0f}'.format(tah.beklenen_tutar|float) }} ₺{% else %}—{% endif %}</td>
+              <td class="mp-v2-sayi">
+                {% if tah and tah.beklenen_tutar %}
+                <button type="button" class="mp-tah-liste-ac" data-cari-id="{{ m.cari_id }}" data-unvan="{{ (m.unvan or '')|e }}" style="background:none;border:none;padding:0;cursor:pointer;color:inherit;font:inherit;font-weight:700;text-decoration:underline dotted #94a3b8;text-underline-offset:2px;" title="Tahsilat kayıtlarını görüntüle">{{ '{:,.0f}'.format(tah.beklenen_tutar|float) }} ₺</button>
+                {% else %}—{% endif %}
+              </td>
               <td class="mp-v2-sayi">{% if tah and tah.kalan_tutar %}{{ '{:,.0f}'.format(tah.kalan_tutar|float) }} ₺{% else %}—{% endif %}</td>
               <td style="text-align:center;font-size:11px">
                 {% if cek %}
@@ -1071,6 +1075,38 @@
   </div>
 </div>
 
+{# Tahsilat Kayıt Listesi — dar liste modalı #}
+<div class="mp-modal-overlay" id="mp-modal-tah-liste" hidden style="align-items:center;justify-content:center;">
+  <div class="mp-modal" role="dialog" style="max-width:860px;width:96vw;max-height:80vh;display:flex;flex-direction:column;border-radius:10px;overflow:hidden;">
+    <div class="mp-modal-hdr" style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #e2e8f0;flex:0 0 auto;">
+      <h2 style="font-size:14px;font-weight:700;color:#0f172a;margin:0;" id="mp-tah-liste-baslik">Tahsilat Kayıtları</h2>
+      <button type="button" id="mp-tah-liste-kapat" style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;line-height:1;" aria-label="Kapat">✕</button>
+    </div>
+    <div id="mp-tah-liste-icerik" style="overflow-y:auto;flex:1 1 auto;padding:12px 16px;">
+      <div id="mp-tah-liste-yukl" style="text-align:center;color:#94a3b8;padding:24px;font-size:13px;">Yükleniyor…</div>
+      <table id="mp-tah-liste-tablo" style="width:100%;border-collapse:collapse;font-size:12.5px;display:none;">
+        <thead>
+          <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+            <th style="text-align:left;padding:7px 8px;font-weight:600;color:#475569;white-space:nowrap;">Kayıt No</th>
+            <th style="text-align:left;padding:7px 8px;font-weight:600;color:#475569;">Sipariş</th>
+            <th style="text-align:left;padding:7px 8px;font-weight:600;color:#475569;">Sevkiyat</th>
+            <th style="text-align:left;padding:7px 8px;font-weight:600;color:#475569;">Ödeme</th>
+            <th style="text-align:right;padding:7px 8px;font-weight:600;color:#475569;">Hedef</th>
+            <th style="text-align:right;padding:7px 8px;font-weight:600;color:#475569;">Alınan</th>
+            <th style="text-align:right;padding:7px 8px;font-weight:600;color:#475569;">Kalan</th>
+            <th style="text-align:center;padding:7px 8px;font-weight:600;color:#475569;">Durum</th>
+            <th style="text-align:left;padding:7px 8px;font-weight:600;color:#475569;">Tarih</th>
+            <th style="text-align:center;padding:7px 8px;font-weight:600;color:#475569;">İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="mp-tah-liste-tbody"></tbody>
+      </table>
+      <div id="mp-tah-liste-bos" style="display:none;text-align:center;color:#94a3b8;padding:24px;font-size:13px;">Bu müşteri için tahsilat kaydı bulunamadı.</div>
+      <div id="mp-tah-liste-hata" style="display:none;text-align:center;color:#b91c1c;padding:24px;font-size:13px;"></div>
+    </div>
+  </div>
+</div>
+
 {# Tahsilat Kaydı — popup shell #}
 <div class="mp-modal-overlay" id="mp-modal-tahsilat" hidden>
   <div class="mp-modal" role="dialog">
@@ -1191,12 +1227,12 @@
           </div>
           {# Döviz Kuru — USD/EUR için göster #}
           <div id="mp-t-manuel-kur-wrap" class="mp-fld" style="flex:0 0 auto;min-width:160px;margin:0;">
-            <label for="mp-t-manuel-kur">Döviz Kuru <span style="color:#ef4444;">*</span></label>
+            <label for="mp-t-manuel-kur">Manuel Kur <span style="color:#ef4444;">*</span></label>
             <input type="text" inputmode="decimal" id="mp-t-manuel-kur" name="tcmb_satis_kur_snapshot"
               placeholder="Örn. 47,25"
               autocomplete="off"
               style="font-weight:700;border:1.5px solid #e2e8f0;border-radius:6px;padding:6px 10px;font-size:14px;width:120px;">
-            <div style="color:#64748b;font-size:11px;margin-top:3px;" id="mp-t-manuel-kur-hint">1 USD kaç TL? Güncel satış kurunu yazın.</div>
+            <div style="color:#64748b;font-size:11px;margin-top:3px;" id="mp-t-manuel-kur-hint">Elle girin — otomatik kur yok.</div>
           </div>
           {# Tahsilat Hedefi — büyük kart #}
           <div style="flex:1;min-width:160px;background:#f0f9ff;border:1.5px solid #bae6fd;border-radius:10px;padding:12px 16px;position:relative;">
@@ -1323,7 +1359,7 @@
 
       <p class="mp-modal-not" style="display:flex;align-items:center;gap:6px;font-size:11px;color:#64748b;">
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style="flex-shrink:0;"><circle cx="10" cy="10" r="9" stroke="#006a8e" stroke-width="1.5"/><path d="M10 9v5M10 7h.01" stroke="#006a8e" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Kur ve hedef tutar otomatik olarak kayda alınır.
+        Manuel kur ve TRY karşılığı kayda alınır; otomatik kur getirilmez.
       </p>
       <div class="mp-modal-footer mp-modal-footer-sticky">
         <button type="button" class="mp-btn mp-btn-outline" data-close="tahsilat">İptal</button>
@@ -2550,7 +2586,8 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     gorusme: document.getElementById('mp-modal-gorusme'),
     numune: document.getElementById('mp-modal-numune'),
     siparis: document.getElementById('mp-modal-siparis'),
-    tahsilat: document.getElementById('mp-modal-tahsilat')
+    tahsilat: document.getElementById('mp-modal-tahsilat'),
+    tahsilatListe: document.getElementById('mp-modal-tah-liste')
   };
   try {
     Object.keys(sessionStorage).forEach(function(k){
@@ -3694,6 +3731,10 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
   var tahsilatSevkLoadSeq = 0;
   var tahsilatTcmbFrozen = false;
   var tahsilatSevkFxKalan = null;
+  // Modal session isolation: her reset'te artar, eski async response'ları engeller
+  var tahsilatModalSession = 0;
+  var tahsilatPreviewSession = 0;  // Hydrate final preview — stale response engeli
+  var tahsilatPlanAbort = null;  // AbortController
   var tahsilatSevkTarih = null;
   var tahsilatTryPreviewTimer = null;
   var tahsilatTryPreviewSeq = 0;
@@ -3701,6 +3742,45 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
   var tahsilatHydrateKayit = null;
   var tahsilatLastKurTarih = null;
   var tahsilatExplicitSave = false;
+  var MSG_MANUEL_KUR_ZORUNLU = 'Manuel kur girilmeden devam edilemez.';
+  var MSG_MANUEL_KUR_GECERSIZ = 'Geçerli bir manuel kur girin.';
+
+  function clearManuelKurInput() {
+    var kurInp = document.getElementById('mp-t-manuel-kur');
+    if (kurInp) { kurInp.value = ''; kurInp.style.borderColor = ''; }
+    var hedefFormula = document.getElementById('mp-t-hedef-formula');
+    if (hedefFormula) hedefFormula.textContent = '';
+  }
+
+  function parseManuelKurInput(raw) {
+    if (raw == null) return null;
+    var s = String(raw).replace(',', '.').trim();
+    if (!s) return null;
+    var n = parseFloat(s);
+    if (isNaN(n) || !isFinite(n)) return null;
+    return n;
+  }
+
+  function validateManuelKurForFx(options) {
+    options = options || {};
+    var pb = (tahsilatSevkPb || '').toUpperCase();
+    if (!tahsilatSevkBound || (pb !== 'USD' && pb !== 'EUR')) return true;
+    var kurInp = document.getElementById('mp-t-manuel-kur');
+    var kurRaw = kurInp ? kurInp.value.trim() : '';
+    var kurF = parseManuelKurInput(kurRaw);
+    if (!kurRaw) {
+      if (options.toast !== false) toast(MSG_MANUEL_KUR_ZORUNLU);
+      if (kurInp) { kurInp.style.borderColor = '#ef4444'; if (options.focus !== false) kurInp.focus(); }
+      return false;
+    }
+    if (kurF == null || kurF <= 0) {
+      if (options.toast !== false) toast(MSG_MANUEL_KUR_GECERSIZ);
+      if (kurInp) { kurInp.style.borderColor = '#ef4444'; if (options.focus !== false) kurInp.focus(); }
+      return false;
+    }
+    if (kurInp) kurInp.style.borderColor = '';
+    return true;
+  }
 
   function moneyHas(val, amount) {
     var s = String(val || '').replace(/\s/g, '');
@@ -3728,7 +3808,7 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     if (kurInp) kurInp.style.borderColor = '#ef4444';
     if (err) {
       err.hidden = false;
-      err.textContent = mesaj || 'Döviz satış kurunu girin.';
+      err.textContent = mesaj || MSG_MANUEL_KUR_GECERSIZ;
     }
     var tryEl = document.getElementById('mp-t-sevk-tcmb-try');
     if (tryEl) tryEl.textContent = '—';
@@ -3792,7 +3872,7 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     var manuelHint = document.getElementById('mp-t-manuel-kur-hint');
     if (manuelWrap) { manuelWrap.hidden = false; manuelWrap.style.display = ''; }
     if (manuelKurPb) manuelKurPb.textContent = 'TL/' + pb;
-    if (manuelHint) manuelHint.textContent = '1 ' + pb + ' kaç TL? Güncel satış kurunu yazın.';
+    if (manuelHint) manuelHint.textContent = 'Elle girin — otomatik kur yok.';
     if (!tahsilatTcmbFrozen) {
       var tryEl = document.getElementById('mp-t-sevk-tcmb-try');
       if (tryEl) tryEl.textContent = '—';
@@ -3847,7 +3927,7 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     var isFx = (pb === 'USD' || pb === 'EUR');
     if (manuelWrap) { manuelWrap.hidden = !isFx; if (isFx) manuelWrap.style.display = ''; }
     if (manuelKurPb) manuelKurPb.textContent = isFx ? ('TL/' + pb) : '';
-    if (manuelHint) manuelHint.textContent = isFx ? ('1 ' + pb + ' kaç TL? Güncel satış kurunu yazın.') : '';
+    if (manuelHint) manuelHint.textContent = isFx ? 'Elle girin — otomatik kur yok.' : '';
     if (kurInp && k.tcmb_satis_kur_snapshot != null) {
       var kurStr = parseFloat(k.tcmb_satis_kur_snapshot).toFixed(2).replace('.', ',');
       kurInp.value = kurStr;
@@ -3861,7 +3941,7 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     lockTahsilatPbForSevk(true);
     updateTahsilatHedefUi();
     updateTahsilatKalan();
-    if (isTahsilatCek() && typeof window.mpScheduleCekPreview === 'function') window.mpScheduleCekPreview();
+    if (isTahsilatCek() && !tahsilatHydrateKayit && typeof window.mpScheduleCekPreview === 'function') window.mpScheduleCekPreview();
   }
 
   function postTahsilatTaslak(payload) {
@@ -3948,6 +4028,176 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
   window.mpScheduleTahsilatTryPreview = scheduleTahsilatTryPreview;
   window.mpRefreshTahsilatTryPreview = refreshTahsilatTryPreview;
   window.resetTahsilatModal = resetTahsilatModal;
+
+  // ====== TAHSİLAT KAYIT LİSTESİ ======
+  var _tahListeAbort = null;
+  var _tahListeCariId = null;
+
+  function _fmt(v, pb) {
+    if (v === null || v === undefined || v === '') return '—';
+    try {
+      var n = parseFloat(v);
+      if (isNaN(n)) return '—';
+      return n.toLocaleString('tr-TR', {minimumFractionDigits:0, maximumFractionDigits:0}) + (pb ? ' ' + pb : ' ₺');
+    } catch(e) { return String(v); }
+  }
+
+  function _durumBadge(durum, etiket) {
+    var color = '#64748b';
+    var bg = '#f1f5f9';
+    if (durum === 'TASLAK') { color='#0369a1'; bg='#e0f2fe'; }
+    else if (durum === 'YONETIM_ONAYLANDI' || durum === 'ONAYLANDI') { color='#15803d'; bg='#dcfce7'; }
+    else if (durum && durum.indexOf('ONAY') >= 0) { color='#b45309'; bg='#fef3c7'; }
+    else if (durum === 'IPTAL') { color='#b91c1c'; bg='#fee2e2'; }
+    return '<span style="display:inline-block;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:600;background:' + bg + ';color:' + color + ';">' + (etiket || durum || '') + '</span>';
+  }
+
+  function openTahsilatListesi(cariId, unvan) {
+    var overlay = modals.tahsilatListe;
+    if (!overlay) return;
+    _tahListeCariId = cariId;
+    var baslik = document.getElementById('mp-tah-liste-baslik');
+    if (baslik) baslik.textContent = 'Tahsilat Kayıtları' + (unvan ? ' — ' + unvan : '');
+    var yukl = document.getElementById('mp-tah-liste-yukl');
+    var tablo = document.getElementById('mp-tah-liste-tablo');
+    var tbody = document.getElementById('mp-tah-liste-tbody');
+    var bos = document.getElementById('mp-tah-liste-bos');
+    var hata = document.getElementById('mp-tah-liste-hata');
+    if (yukl) { yukl.style.display=''; }
+    if (tablo) { tablo.style.display='none'; }
+    if (bos) { bos.style.display='none'; }
+    if (hata) { hata.style.display='none'; }
+    if (tbody) { tbody.innerHTML = ''; }
+    overlay.hidden = false;
+    document.body.style.overflow = 'hidden';
+
+    if (_tahListeAbort) { try { _tahListeAbort.abort(); } catch(e) {} }
+    _tahListeAbort = new AbortController();
+    var mySession = cariId;
+    fetch('/nexgen/api/musteri-pazarlama/tahsilat-kayitlari?cari_id=' + encodeURIComponent(cariId), {
+      signal: _tahListeAbort.signal
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (_tahListeCariId !== mySession) return;
+      if (yukl) yukl.style.display='none';
+      if (!data.ok) {
+        if (hata) { hata.style.display=''; hata.textContent = data.mesaj || 'Hata oluştu.'; }
+        return;
+      }
+      var kayitlar = data.kayitlar || [];
+      if (!kayitlar.length) {
+        if (bos) bos.style.display='';
+        return;
+      }
+      if (tbody) {
+        tbody.innerHTML = kayitlar.map(function(k) {
+          var pb = k.para_birimi || 'TRY';
+          var duzBtn = '';
+          if (k.duzenlenebilir) {
+            duzBtn = '<button type="button" class="mp-tah-liste-duz-btn" data-kayit-id="' + k.id + '" data-cari-id="' + cariId + '" data-siparis-no="' + (k.siparis_no || '') + '" style="background:#0ea5e9;color:#fff;border:none;border-radius:4px;padding:3px 10px;font-size:11.5px;font-weight:600;cursor:pointer;">Düzenle</button>';
+          }
+          var tarih = (k.olusturma_tarihi || '').substring(0, 10);
+          return '<tr style="border-bottom:1px solid #f1f5f9;">' +
+            '<td style="padding:7px 8px;white-space:nowrap;font-weight:600;color:#0f172a;">' + (k.kayit_kodu || '') + '</td>' +
+            '<td style="padding:7px 8px;font-size:11.5px;color:#334155;">' + (k.siparis_no || (k.siparis_id ? '#'+k.siparis_id : '—')) + '</td>' +
+            '<td style="padding:7px 8px;font-size:11.5px;color:#334155;">' + (k.sevkiyat_no || (k.sevkiyat_id ? '#'+k.sevkiyat_id : '—')) + '</td>' +
+            '<td style="padding:7px 8px;font-size:11.5px;color:#334155;">' + (k.odeme_tipi || '—') + '</td>' +
+            '<td style="padding:7px 8px;text-align:right;font-size:12px;">' + _fmt(k.hedef_tutar, pb) + '</td>' +
+            '<td style="padding:7px 8px;text-align:right;font-size:12px;">' + _fmt(k.alinan_tutar, pb) + '</td>' +
+            '<td style="padding:7px 8px;text-align:right;font-size:12px;">' + _fmt(k.kalan_tutar, pb) + '</td>' +
+            '<td style="padding:7px 8px;text-align:center;">' + _durumBadge(k.durum, k.durum_etiket) + '</td>' +
+            '<td style="padding:7px 8px;font-size:11px;color:#64748b;white-space:nowrap;">' + tarih + '</td>' +
+            '<td style="padding:7px 8px;text-align:center;">' + duzBtn + '</td>' +
+            '</tr>';
+        }).join('');
+      }
+      if (tablo) tablo.style.display='';
+    })
+    .catch(function(e) {
+      if (e && e.name === 'AbortError') return;
+      if (hata) { hata.style.display=''; hata.textContent = 'Bağlantı hatası. Lütfen tekrar deneyin.'; }
+      if (yukl) yukl.style.display='none';
+    });
+  }
+
+  function closeTahsilatListesi() {
+    var overlay = modals.tahsilatListe;
+    if (overlay) overlay.hidden = true;
+    document.body.style.overflow = '';
+    _tahListeCariId = null;
+    if (_tahListeAbort) { try { _tahListeAbort.abort(); } catch(e) {} _tahListeAbort = null; }
+  }
+
+  // Kapat butonu
+  var _tahListeKapat = document.getElementById('mp-tah-liste-kapat');
+  if (_tahListeKapat) {
+    _tahListeKapat.addEventListener('click', closeTahsilatListesi);
+  }
+  // Overlay backdrop kapat
+  var _tahListeOverlay = modals.tahsilatListe;
+  if (_tahListeOverlay) {
+    _tahListeOverlay.addEventListener('mousedown', function(e) {
+      if (e.target === _tahListeOverlay) closeTahsilatListesi();
+    });
+  }
+
+  // Düzenle butonu — event delegation
+  // Sayfa navigation YOK: preventDefault+stopPropagation zorunlu
+  var _tahDuzInProgress = false;
+  document.addEventListener('click', function(e) {
+    var duzBtn = e.target.closest('.mp-tah-liste-duz-btn');
+    if (!duzBtn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var kayitId = parseInt(duzBtn.dataset.kayitId, 10);
+    if (!kayitId || isNaN(kayitId)) return; // numeric olmayan id reddedilir
+    if (_tahDuzInProgress) return;          // çift tıklama koruması
+    _tahDuzInProgress = true;
+    var cariId = duzBtn.dataset.cariId ? parseInt(duzBtn.dataset.cariId, 10) : null;
+    // siparisNo liste satırından local context olarak geçirilir — global state yok
+    var _ctxSipNo = (duzBtn.dataset.siparisNo || '').trim();
+    var _ctx = { siparisNo: _ctxSipNo || null };
+    closeTahsilatListesi();
+    // Modal state'ini temizle — plan fetch YOK (hydrateTahsilatDraft kendi planlarını çeker)
+    resetTahsilatModal(cariId || undefined, null, { skipPlanLoad: true });
+    if (modals.tahsilat) {
+      // style.display'i sıfırla — closeModal 'none' set etmiş olabilir
+      modals.tahsilat.style.display = '';
+      modals.tahsilat.hidden = false;
+      document.body.style.overflow = 'hidden';
+    }
+    // window.hydrateTahsilatDraft: tek canonical giriş noktası — çek satırları dahil tüm hydrate
+    // _tahDuzInProgress: Promise finally ile serbest bırakılır — timer değil
+    function _releaseDuzLock() { _tahDuzInProgress = false; }
+    try {
+      var p = window.hydrateTahsilatDraft(kayitId, _ctx);
+      if (p && typeof p.then === 'function') {
+        p.then(_releaseDuzLock, function(err) {
+          console.error('[Düzenle] hydrateTahsilatDraft hata:', err);
+          if (typeof toast === 'function') toast('Taslak yüklenemedi. Lütfen tekrar deneyin.');
+          _releaseDuzLock();
+        });
+      } else {
+        // Sync dönüş veya thenable değil — hemen serbest bırak
+        _releaseDuzLock();
+      }
+    } catch(err) {
+      console.error('[Düzenle] hydrateTahsilatDraft sync hata:', err);
+      if (typeof toast === 'function') toast('Taslak yüklenemedi. Lütfen tekrar deneyin.');
+      _releaseDuzLock();
+    }
+  });
+
+  // Beklenen Tahsilat tutarı tıklanınca liste aç
+  document.getElementById('mp-sayfa').addEventListener('click', function(e) {
+    var listeBtn = e.target.closest('.mp-tah-liste-ac');
+    if (!listeBtn) return;
+    e.preventDefault();
+    var cid = listeBtn.dataset.cariId;
+    var unvan = listeBtn.dataset.unvan || '';
+    if (cid) openTahsilatListesi(cid, unvan);
+  });
 
   // ====== TCMB KUR PANELİ ======
   function updateTcmbPanel() {
@@ -4228,6 +4478,41 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     return tahsilatSevkPb || ((document.getElementById('mp-t-tahsilat-pb') || {}).value || 'TRY').toUpperCase();
   }
 
+  /**
+   * Senkron finansal bağlam sıfırlama.
+   * Cari/sipariş/sevkiyat bağlamı değiştiğinde eski hedef/kur/kalan state'ini
+   * anında DOM'dan siler. Draft hydrate sırasında çağrılmaz (flag kontrolü dışarıda).
+   */
+  function clearTahsilatFinancialContext() {
+    // Hedef display
+    var hedefDisp = document.getElementById('mp-t-hedef-display');
+    if (hedefDisp) hedefDisp.textContent = '—';
+    var hedefFormula = document.getElementById('mp-t-hedef-formula');
+    if (hedefFormula) hedefFormula.textContent = '';
+    var hedefSub = document.getElementById('mp-t-hedef-sub');
+    if (hedefSub) hedefSub.textContent = '';
+    // Beklenen hidden input
+    var bekEl = document.getElementById('mp-t-beklenen');
+    if (bekEl) { bekEl.value = ''; bekEl.readOnly = false; bekEl.classList.remove('mp-sevk-hedef-ro'); }
+    // Kalan
+    var kalanDisp = document.getElementById('mp-t-kalan-display');
+    if (kalanDisp) { kalanDisp.textContent = '—'; kalanDisp.style.color = ''; }
+    // Manuel kur
+    clearManuelKurInput();
+    var kurWrap = document.getElementById('mp-t-manuel-kur-wrap');
+    if (kurWrap) { kurWrap.hidden = true; kurWrap.style.display = ''; }
+    // Sevk finansal state
+    tahsilatSevkPb = null;
+    tahsilatSevkFxKalan = null;
+    tahsilatTcmbFrozen = false;
+    tahsilatSevkBound = false;
+    // Vade özet panel
+    var vadeEl = document.getElementById('mp-t-sevk-vade');
+    if (vadeEl) vadeEl.textContent = '—';
+    var hedefVadeEl = document.getElementById('mp-t-hedef-vade-tarihi');
+    if (hedefVadeEl) hedefVadeEl.textContent = '—';
+  }
+
   function updateTahsilatHedefUi() {
     var cek = isTahsilatCek();
     var lbl = document.getElementById('mp-t-hedef-label');
@@ -4252,7 +4537,8 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       var kurVal = kurInp ? kurInp.value.replace(',', '.').trim() : '';
       var kurF = parseFloat(kurVal);
       if (bek > 0 && fxKalan > 0 && (pb === 'USD' || pb === 'EUR') && !isNaN(kurF) && kurF > 0) {
-        hedefFormula.textContent = numFmt(fxKalan) + ' ' + pb + ' × ' + kurVal.replace('.', ',');
+        var kurDisp = kurVal.replace('.', ',');
+        hedefFormula.textContent = numFmt(fxKalan) + ' ' + pb + ' × ' + kurDisp + ' = ' + formatTrMoney(bek);
       } else {
         hedefFormula.textContent = '';
       }
@@ -4368,6 +4654,7 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     tahsilatTcmbFrozen = false;
     tahsilatSevkFxKalan = null;
     tahsilatSevkTarih = null;
+    clearManuelKurInput();
     clearTimeout(tahsilatTryPreviewTimer);
     var wrap = document.getElementById('mp-t-sevk-wrap');
     var sel = document.getElementById('mp-t-sevkiyat');
@@ -4456,7 +4743,10 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     tahsilatSevkList = [];
     tahsilatSevkBound = false;
     tahsilatSevkPb = null;
-    if (!preserveTcmb) tahsilatTcmbFrozen = false;
+    if (!preserveTcmb) {
+      tahsilatTcmbFrozen = false;
+      clearManuelKurInput();
+    }
     if (!siparisId || !wrap || !sel) {
       clearTahsilatSevk();
       return Promise.resolve();
@@ -4530,21 +4820,19 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       return false;
     }
     // USD/EUR: manuel kur zorunlu
-    var pb = (tahsilatSevkPb || '').toUpperCase();
-    if (tahsilatSevkBound && (pb === 'USD' || pb === 'EUR')) {
-      var kurInp = document.getElementById('mp-t-manuel-kur');
-      var kurRaw = kurInp ? kurInp.value.replace(',', '.').trim() : '';
-      var kurF = parseFloat(kurRaw);
-      if (!kurRaw || isNaN(kurF) || !isFinite(kurF) || kurF <= 0) {
-        toast('Döviz satış kurunu girin.');
-        if (kurInp) { kurInp.style.borderColor = '#ef4444'; kurInp.focus(); }
-        return false;
-      }
-    }
+    if (!validateManuelKurForFx()) return false;
     return true;
   }
 
-  function resetTahsilatModal(cariId, planCtx) {
+  function resetTahsilatModal(cariId, planCtx, _opts) {
+    // Yeni modal session başlat — in-flight plan response'ları bu session'a ait değil
+    _opts = _opts || {};
+    tahsilatModalSession += 1;
+    tahsilatPreviewSession += 1;
+    if (tahsilatPlanAbort) {
+      try { tahsilatPlanAbort.abort(); } catch(_) {}
+      tahsilatPlanAbort = null;
+    }
     tahsilatForm.reset();
     tahsilatIdemKey = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-t');
     tahsilatKayitId = null;
@@ -4581,8 +4869,9 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     // --- Manuel kur wrap gizle ---
     var kurWrap = document.getElementById('mp-t-manuel-kur-wrap');
     if (kurWrap) { kurWrap.hidden = true; kurWrap.style.display = ''; }
+    clearManuelKurInput();
     var kurHint = document.getElementById('mp-t-manuel-kur-hint');
-    if (kurHint) kurHint.textContent = '1 USD kaç TL? Güncel satış kurunu yazın.';
+    if (kurHint) kurHint.textContent = 'Elle girin — otomatik kur yok.';
 
     var sevkUyari = document.getElementById('mp-t-sevk-secim-uyari');
     if (sevkUyari) { sevkUyari.hidden = true; sevkUyari.textContent = ''; }
@@ -4594,6 +4883,12 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     var cariSel = document.getElementById('mp-t-cari');
     cariSel.disabled = !!cariId;
     if (cariId) cariSel.value = String(cariId);
+    if (_opts.skipPlanLoad) {
+      // Hydrate akışı kendi loadTahsilatPlanlar'ını zaten çağırır; burada çift fetch engellenir
+      updateTahsilatCekUi();
+      initTahsilatMoneyInputs();
+      return;
+    }
     loadTahsilatPlanlar(cariId || cariSel.value, planCtx).then(function(){
       if (!tahsilatSevkBound && planCtx && planCtx.beklenen != null && !isTahsilatCek()) {
         setMoneyInput(document.getElementById('mp-t-beklenen'), planCtx.beklenen, true);
@@ -4608,86 +4903,181 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     });
   }
 
-  function hydrateTahsilatDraft(kayitId) {
+  // _ctx: { siparisNo: string|null }  — Düzenle butonundan gelen liste satırı verisi
+  function hydrateTahsilatDraft(kayitId, _ctx) {
     if (!kayitId) return;
-    fetch('/nexgen/api/musteri-pazarlama/tahsilat-kayit/' + kayitId)
+    _ctx = _ctx || {};
+    var mySession = tahsilatModalSession;
+    var myPreviewSession = ++tahsilatPreviewSession;
+
+    function ensureDraftSipOption(k) {
+      var sipSel = document.getElementById('mp-t-siparis');
+      if (!sipSel || !k.siparis_id) return;
+      var sipId = String(k.siparis_id);
+      var ctxSipNo = (_ctx.siparisNo && String(_ctx.siparisNo).trim()) || null;
+      var _draftSipNo = ctxSipNo || k.siparis_no || null;
+      var draftLabel = (_draftSipNo || ('Sipariş #' + k.siparis_id)) + ' (kayıtlı taslak)';
+      var sipOpt = sipSel.querySelector('option[value="' + sipId + '"]');
+      if (!sipOpt) {
+        var draftOpt = document.createElement('option');
+        draftOpt.value = sipId;
+        draftOpt.textContent = draftLabel;
+        draftOpt.dataset.draftOnly = '1';
+        if (k.onaylanan_vade_gun_snapshot != null) {
+          draftOpt.dataset.plan = JSON.stringify({
+            onaylanan_vade_gun: k.onaylanan_vade_gun_snapshot,
+            gercek_sevk_tarihi: k.gercek_sevk_tarihi_snapshot || null,
+            hedef_vade_tarihi: k.hedef_vade_tarihi || null
+          });
+        }
+        sipSel.appendChild(draftOpt);
+        sipOpt = draftOpt;
+      } else if (ctxSipNo) {
+        sipOpt.textContent = draftLabel;
+        sipOpt.dataset.draftOnly = '1';
+        if (k.onaylanan_vade_gun_snapshot != null) {
+          sipOpt.dataset.plan = JSON.stringify({
+            onaylanan_vade_gun: k.onaylanan_vade_gun_snapshot,
+            gercek_sevk_tarihi: k.gercek_sevk_tarihi_snapshot || null,
+            hedef_vade_tarihi: k.hedef_vade_tarihi || null
+          });
+        }
+      }
+      sipSel.value = sipId;
+      updateTcmbPanel();
+    }
+
+    function applyVadeSnapshots(k) {
+      var vadeEl = document.getElementById('mp-t-sevk-vade');
+      if (vadeEl && (vadeEl.textContent === '—' || !vadeEl.textContent.trim()) &&
+          k.onaylanan_vade_gun_snapshot != null) {
+        vadeEl.textContent = k.onaylanan_vade_gun_snapshot + ' gün';
+      }
+      var hedefVadeEl = document.getElementById('mp-t-hedef-vade-tarihi');
+      if (hedefVadeEl && (hedefVadeEl.textContent === '—' || !hedefVadeEl.textContent.trim()) &&
+          k.hedef_vade_tarihi) {
+        hedefVadeEl.textContent = k.hedef_vade_tarihi;
+      }
+    }
+
+    function afterSevkHydrate(k) {
+      var uiOpts = { skipPreview: true, skipBaglam: true };
+      if (k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '') {
+        tahsilatSevkFxKalan = k.sevk_kalan_fx_snapshot;
+        applyTcmbTryFromKayit(k);
+      } else if (!tahsilatSevkBound) {
+        var hedefVal = ((k.odeme_tipi || '').toUpperCase() === 'CEK' && k.paket_hedef_tutar != null)
+          ? k.paket_hedef_tutar : k.beklenen_tutar;
+        if (hedefVal != null) setMoneyInput(document.getElementById('mp-t-beklenen'), hedefVal, true);
+      }
+      var alinanEl = document.getElementById('mp-t-alinan');
+      if (k.alinan_tutar != null && alinanEl) setMoneyInput(alinanEl, k.alinan_tutar, true);
+      var alinanTarihEl = document.getElementById('mp-t-alinan-tarih');
+      if (k.alinan_tarih && alinanTarihEl) alinanTarihEl.value = k.alinan_tarih;
+      if (k.odeme_tipi) {
+        document.getElementById('mp-t-odeme-tipi').value = k.odeme_tipi;
+        if (typeof updateTahsilatCekUi === 'function') updateTahsilatCekUi(uiOpts);
+      }
+      var refEl = document.getElementById('mp-t-ref');
+      if (k.odeme_referansi && refEl) refEl.value = k.odeme_referansi;
+      var aciklamaEl = tahsilatForm.querySelector('[name="aciklama"]');
+      if (k.aciklama && aciklamaEl) aciklamaEl.value = k.aciklama;
+      var onayNotuEl = tahsilatForm.querySelector('[name="onay_notu"]');
+      if (k.onay_notu && onayNotuEl) onayNotuEl.value = k.onay_notu;
+      if (k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '') {
+        tahsilatExplicitSave = true;
+        applyTcmbTryFromKayit(k, {freeze: true});
+      }
+      updateTahsilatKalan();
+      updateTcmbPanel();
+    }
+
+    function hydrateCekSatirlari(k) {
+      if ((k.odeme_tipi || '').toUpperCase() !== 'CEK') return Promise.resolve();
+      if (!Array.isArray(k.cek_satirlari) || !k.cek_satirlari.length) return Promise.resolve();
+      if (typeof window.mpHydrateCekSatirlar !== 'function') return Promise.resolve();
+      return window.mpHydrateCekSatirlar(k.cek_satirlari, k.paket_hedef_tutar);
+    }
+
+    function runFinalHydratePreview(k) {
+      if (tahsilatModalSession !== mySession) return Promise.resolve();
+      if ((k.odeme_tipi || '').toUpperCase() !== 'CEK') return Promise.resolve();
+      if (typeof window.mpTriggerCekPreviewSession !== 'function') return Promise.resolve();
+      return window.mpTriggerCekPreviewSession(myPreviewSession);
+    }
+
+    function finishHydrate(k) {
+      if (tahsilatModalSession !== mySession) return Promise.resolve();
+      tahsilatHydrateKayit = null;
+      _ctx.siparisNo = null;
+      return runFinalHydratePreview(k);
+    }
+
+    return fetch('/nexgen/api/musteri-pazarlama/tahsilat-kayit/' + kayitId)
       .then(function(r){ return r.json(); })
       .then(function(d){
         if (!d.ok || !d.kayit) return;
+        if (tahsilatModalSession !== mySession) return;
         var k = d.kayit;
+        tahsilatHydrateKayit = k;
         tahsilatKayitId = k.id;
         document.getElementById('mp-t-kayit-id').value = String(k.id);
         document.getElementById('mp-t-cari').value = String(k.cari_id || '');
-        loadTahsilatPlanlar(k.cari_id).then(function(){
-          var afterSevk = function() {
-            if (k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '') {
-              tahsilatSevkFxKalan = k.sevk_kalan_fx_snapshot;
-              applyTcmbTryFromKayit(k);
-            } else if (!tahsilatSevkBound) {
-              var hedefVal = ((k.odeme_tipi || '').toUpperCase() === 'CEK' && k.paket_hedef_tutar != null)
-                ? k.paket_hedef_tutar : k.beklenen_tutar;
-              if (hedefVal != null) setMoneyInput(document.getElementById('mp-t-beklenen'), hedefVal, true);
-            }
-            var alinanEl = document.getElementById('mp-t-alinan');
-            if (k.alinan_tutar != null && alinanEl) setMoneyInput(alinanEl, k.alinan_tutar, true);
-            var alinanTarihEl = document.getElementById('mp-t-alinan-tarih');
-            if (k.alinan_tarih && alinanTarihEl) alinanTarihEl.value = k.alinan_tarih;
-            if (k.odeme_tipi) {
-              document.getElementById('mp-t-odeme-tipi').value = k.odeme_tipi;
-              if (typeof updateTahsilatCekUi === 'function') updateTahsilatCekUi();
-              if (typeof window.mpLoadCekBaglam === 'function') window.mpLoadCekBaglam();
-              if ((k.odeme_tipi || '').toUpperCase() === 'CEK' && typeof window.mpScheduleCekPreview === 'function') {
-                window.mpScheduleCekPreview();
-              }
-            }
-            var refEl = document.getElementById('mp-t-ref');
-            if (k.odeme_referansi && refEl) refEl.value = k.odeme_referansi;
-            var aciklamaEl = tahsilatForm.querySelector('[name="aciklama"]');
-            if (k.aciklama && aciklamaEl) aciklamaEl.value = k.aciklama;
-            var onayNotuEl = tahsilatForm.querySelector('[name="onay_notu"]');
-            if (k.onay_notu && onayNotuEl) onayNotuEl.value = k.onay_notu;
-            if (k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '') {
-              tahsilatExplicitSave = true;
-              applyTcmbTryFromKayit(k, {freeze: true});
-              tahsilatHydrateKayit = null;
-            }
-            updateTahsilatKalan();
-            updateTcmbPanel();
-          };
+
+        return loadTahsilatPlanlar(k.cari_id).then(function(){
+          if (tahsilatModalSession !== mySession) return;
+          if (k.siparis_id) ensureDraftSipOption(k);
+          if (k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '') {
+            tahsilatTcmbFrozen = true;
+          }
           if (k.siparis_id && k.sevkiyat_id) {
-            var sipSel = document.getElementById('mp-t-siparis');
-            if (sipSel) {
-              var sipOpt = sipSel.querySelector('option[value="' + k.siparis_id + '"]');
-              if (sipOpt) {
-                sipSel.value = String(k.siparis_id);
-                updateTcmbPanel();
-              }
-            }
-            if (k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '') {
-              tahsilatTcmbFrozen = true;
-              tahsilatHydrateKayit = k;
-            }
             return loadTahsilatSevkiyatlar(k.siparis_id, {
               sevkiyat_id: k.sevkiyat_id,
               preserveTcmbFrozen: !!(k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '')
-            }).then(afterSevk);
+            }).then(function() {
+              if (tahsilatModalSession !== mySession) return;
+              applyVadeSnapshots(k);
+              afterSevkHydrate(k);
+              return hydrateCekSatirlari(k).then(function() {
+                return finishHydrate(k);
+              });
+            });
           }
-          afterSevk();
+          afterSevkHydrate(k);
+          return hydrateCekSatirlari(k).then(function() {
+            return finishHydrate(k);
+          });
         });
       }).catch(function(){});
   }
+  // Tek public giriş noktası — hydrateTahsilatDraft'ı wrap etmeden doğrudan expose et
+  window.hydrateTahsilatDraft = hydrateTahsilatDraft;
 
   function loadTahsilatPlanlar(cariId, planCtx) {
     tahsilatPlanCtx = planCtx || null;
+    // Önceki in-flight request'i iptal et
+    if (tahsilatPlanAbort) {
+      try { tahsilatPlanAbort.abort(); } catch(_) {}
+    }
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    tahsilatPlanAbort = ctl;
+    // Bu çağrıya ait session snapshot — response geldiğinde karşılaştırılır
+    var mySession = tahsilatModalSession;
     var sipSel = document.getElementById('mp-t-siparis');
     sipSel.innerHTML = '<option value="">Yükleniyor…</option>';
     if (!cariId) {
       sipSel.innerHTML = '<option value="">Önce müşteri seçin</option>';
       return Promise.resolve();
     }
-    return fetch('/nexgen/api/musteri-pazarlama/tahsilat-acik-planlar?cari_id=' + cariId)
+    var fetchOpts = ctl ? { signal: ctl.signal } : {};
+    return fetch('/nexgen/api/musteri-pazarlama/tahsilat-acik-planlar?cari_id=' + cariId, fetchOpts)
       .then(function(r){ return r.json(); })
       .then(function(d){
+        // Eski response stale ise DOM'a yazma
+        if (tahsilatModalSession !== mySession) return;
+        // Response, o anki seçili cari ile uyuşmuyorsa uygulama (cari A → cari B geçişi)
+        var currentCari = document.getElementById('mp-t-cari');
+        if (currentCari && currentCari.value && String(cariId) !== String(currentCari.value)) return;
         sipSel.innerHTML = '<option value="">Seçin (opsiyonel)</option>';
         (d.planlar || []).forEach(function(p){
           var pb = p.anlasma_para_birimi || 'TRY';
@@ -4715,7 +5105,11 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
           return applyTahsilatPlan(sipSel);
         }
         return Promise.resolve();
-      }).catch(function(){
+      }).catch(function(err){
+        // AbortError = kullanıcı hatası değil, stale request iptali — sessizce yut
+        if (err && err.name === 'AbortError') return;
+        // Sadece bu session hâlâ aktifse hata göster
+        if (tahsilatModalSession !== mySession) return;
         sipSel.innerHTML = '<option value="">Plan yüklenemedi</option>';
       });
   }
@@ -4755,7 +5149,8 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     return (document.getElementById('mp-t-odeme-tipi').value || '').toUpperCase() === 'CEK';
   }
 
-  function updateTahsilatCekUi() {
+  function updateTahsilatCekUi(opts) {
+    opts = opts || {};
     var cek = isTahsilatCek();
     var sipZorunlu = document.getElementById('mp-t-siparis-zorunlu');
     var alinanLabel = document.getElementById('mp-t-alinan-label');
@@ -4774,8 +5169,8 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     var baglamKutuEl = document.getElementById('mp-cek-baglam-kutu');
     if (baglamKutuEl && !cek) baglamKutuEl.hidden = true;
     if (cek) {
-      if (typeof window.mpLoadCekBaglam === 'function') window.mpLoadCekBaglam();
-      if (typeof window.mpTriggerCekPreview === 'function') window.mpTriggerCekPreview();
+      if (!opts.skipBaglam && typeof window.mpLoadCekBaglam === 'function') window.mpLoadCekBaglam();
+      if (!opts.skipPreview && typeof window.mpTriggerCekPreview === 'function') window.mpTriggerCekPreview();
     }
   }
 
@@ -4820,18 +5215,27 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
   document.getElementById('mp-t-cari').addEventListener('change', function(){
     var draftId = this.value ? sessionStorage.getItem('mo_tahsilat_draft_' + this.value) : null;
     if (draftId) {
+      // Draft hydrate: clearTahsilatSevk yeterli, finansal alanlar hydrate sonra doldurulur
+      clearTahsilatSevk();
       hydrateTahsilatDraft(parseInt(draftId, 10));
     } else {
+      // Yeni cari: eski finansal bağlamı anında temizle, sonra planları yükle
+      clearTahsilatFinancialContext();
+      clearTahsilatSevk();
       loadTahsilatPlanlar(this.value);
     }
   });
   document.getElementById('mp-t-siparis').addEventListener('change', function(){
+    // Sipariş değişiminde eski finansal bağlamı anında temizle
+    if (!tahsilatHydrateKayit) clearTahsilatFinancialContext();
     applyTahsilatPlan(this);
     if (typeof window.mpLoadCekBaglam === 'function') window.mpLoadCekBaglam();
   });
   var sevkSel = document.getElementById('mp-t-sevkiyat');
   if (sevkSel) {
     sevkSel.addEventListener('change', function(){
+      // Sevkiyat değişiminde eski FX/TRY hedefini temizle (hydrate değilse)
+      if (!tahsilatHydrateKayit) clearTahsilatFinancialContext();
       applyTahsilatSevk(this);
       if (typeof window.mpLoadCekBaglam === 'function') window.mpLoadCekBaglam();
     });
@@ -5151,7 +5555,8 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
           }
           if (ic) ic.innerHTML = html;
           cekBaglamCache = b;
-          schedulePreview();
+          // Hydrate aktifken çek satırları henüz DOM'da yok — erken preview engelle
+          if (!tahsilatHydrateKayit) schedulePreview();
         }).catch(function(){ if(ic) ic.textContent = 'Bağlam yüklenemedi.'; });
     }
 
@@ -5266,8 +5671,9 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       if (baglamIc) baglamIc.textContent = 'Sipariş seçilince bağlam yüklenir…';
     };
 
-    function triggerPreview() {
-      if (!isCek()) return;
+    function triggerPreview(previewSession) {
+      if (!isCek()) return Promise.resolve();
+      var myPreviewSession = (previewSession != null) ? previewSession : null;
       var sipId = siparisSel.value ? parseInt(siparisSel.value, 10) : null;
       var hedef = getMoneyInput(document.getElementById('mp-t-beklenen'));
       var pb = 'TRY';
@@ -5281,17 +5687,19 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       if (hedef > 0) payload.paket_hedef_tutar = hedef;
       if (baglam.sevk_tarihi) payload.sevk_tarihi = baglam.sevk_tarihi;
       if (baglam.onaylanan_vade_gun != null) payload.onaylanan_vade_gun = baglam.onaylanan_vade_gun;
-      fetch('/nexgen/api/musteri-pazarlama/vade-kontrol/preview', {
+      return fetch('/nexgen/api/musteri-pazarlama/vade-kontrol/preview', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
       }).then(function(r){ return r.json(); })
       .then(function(d) {
+        if (myPreviewSession != null && myPreviewSession !== tahsilatPreviewSession) return;
         if (!d.ok || !d.sonuc) return;
         renderCekOzet(d.sonuc);
       }).catch(function(){});
     }
-    window.mpTriggerCekPreview = triggerPreview;
+    window.mpTriggerCekPreview = function() { return triggerPreview(null); };
+    window.mpTriggerCekPreviewSession = function(session) { return triggerPreview(session); };
 
     function fmtMoney(n) { return formatTrMoney(n); }
 
@@ -5393,26 +5801,17 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       if (isCek()) schedulePreview();
     });
 
-    // Hydrate: kayit_detay'dan dönen cek_satirlari varsa tabloya ekle
-    var _origHydrate = typeof hydrateTahsilatDraft === 'function' ? hydrateTahsilatDraft : null;
-    window.hydrateTahsilatDraft = function(kayitId) {
-      if (kayitId) tahsilatKayitId = kayitId;
-      if (_origHydrate) _origHydrate(kayitId);
-      if (!kayitId) return;
-      fetch('/nexgen/api/musteri-pazarlama/tahsilat-kayit/' + kayitId)
-        .then(function(r){ return r.json(); })
-        .then(function(d) {
-          if (!d.ok || !d.kayit) return;
-          var k = d.kayit;
-          if ((k.odeme_tipi || '').toUpperCase() === 'CEK' && Array.isArray(k.cek_satirlari) && k.cek_satirlari.length) {
-            cekTbody.innerHTML = '';
-            cekSatirSayac = 0;
-            k.cek_satirlari.forEach(function(c){ addCekRow(c); });
-            cekPanel.hidden = false;
-            if (typeof updateTahsilatCekUi === 'function') updateTahsilatCekUi();
-            setTimeout(function(){ triggerPreview(); }, 500);
-          }
-        }).catch(function(){});
+    // mpHydrateCekSatirlar: çek satırlarını DOM'a doldurur — preview YOK (hydrate sonunda tek preview).
+    window.mpHydrateCekSatirlar = function(satirlar, paketHedef) {
+      if (!Array.isArray(satirlar) || !satirlar.length) return Promise.resolve();
+      cekTbody.innerHTML = '';
+      cekSatirSayac = 0;
+      satirlar.forEach(function(c){ addCekRow(c); });
+      cekPanel.hidden = false;
+      if (typeof updateTahsilatCekUi === 'function') {
+        updateTahsilatCekUi({ skipPreview: true, skipBaglam: true });
+      }
+      return Promise.resolve();
     };
   })();
   // ===== CEK PANELİ JS BİTİŞ =====

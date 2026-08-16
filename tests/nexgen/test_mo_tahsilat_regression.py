@@ -54,6 +54,7 @@ UID = 1
 KUR_TARIH = '2026-08-09'
 SEVK_KUR_TARIH = '2026-08-01'
 SEVK_TARIH = '2026-08-10'
+TCMB_KUR_REG = 47.25
 
 
 def _schema(con: sqlite3.Connection) -> None:
@@ -166,7 +167,12 @@ def _tahsilat_row(
     durum: str,
     alinan: float,
     kod: str,
+    odeme_tipi: str = 'NAKIT',
+    tcmb_kur: float = TCMB_KUR_REG,
+    alinan_fx: bool = True,
 ) -> int:
+    """alinan: USD sevk PB miktarı (alinan_fx=True) veya doğrudan TRY."""
+    try_tutar = round(alinan * tcmb_kur, 2) if alinan_fx else round(alinan, 2)
     if kid is None:
         cur = con.execute(
             """
@@ -174,26 +180,33 @@ def _tahsilat_row(
                 (kayit_kodu, cari_id, siparis_id, sevkiyat_id, kaynak_modul,
                  beklenen_tutar, alinan_tutar, kalan_tutar, para_birimi,
                  sevk_hedef_tutar_snapshot, sevk_para_birimi_snapshot,
+                 tcmb_satis_kur_snapshot, kur_tarihi_snapshot,
                  durum, aktif, odeme_tipi, idempotency_key, olusturan_id, olusturma_tarihi)
-            VALUES (?, 1, 1, ?, ?, 600, ?, 0, 'USD', 600, 'USD', ?, 1, 'NAKIT', ?, 1, datetime('now'))
+            VALUES (?, 1, 1, ?, ?, 600, ?, 0, 'TRY', 600, 'USD', ?, ?, ?, 1, ?, ?, 1, datetime('now'))
             """,
-            (kod, sevkiyat_id, KAYNAK_MUSTERI_OPERASYONU, alinan, durum, kod),
+            (
+                kod, sevkiyat_id, KAYNAK_MUSTERI_OPERASYONU, try_tutar,
+                tcmb_kur, SEVK_KUR_TARIH, durum, odeme_tipi, kod,
+            ),
         )
         con.commit()
         return int(cur.lastrowid)
     con.execute(
         """
-        UPDATE mo_tahsilat_kayit SET durum=?, alinan_tutar=?, sevkiyat_id=? WHERE id=?
+        UPDATE mo_tahsilat_kayit
+        SET durum=?, alinan_tutar=?, sevkiyat_id=?, odeme_tipi=?,
+            tcmb_satis_kur_snapshot=?, para_birimi='TRY'
+        WHERE id=?
         """,
-        (durum, alinan, sevkiyat_id, kid),
+        (durum, try_tutar, sevkiyat_id, odeme_tipi, tcmb_kur, kid),
     )
     con.commit()
     return kid
 
 
 def _reserve_200(con: sqlite3.Connection) -> None:
-    """600 USD hedef sevk üzerinde 200 rezerv → 400 USD kalan (PASS senaryosu)."""
-    _tahsilat_row(con, durum=KAYIT_DURUM_MUHASEBE_BEKLIYOR, alinan=200, kod='rez-200-reg')
+    """600 USD hedef sevk üzerinde 200 onaylı tahsilat → 400 USD kalan (taslak testleri için)."""
+    _tahsilat_row(con, durum=KAYIT_DURUM_ONAYLANDI, alinan=200, kod='rez-200-reg')
 
 
 def _payload(**kw) -> dict:
@@ -204,6 +217,7 @@ def _payload(**kw) -> dict:
         'sevkiyat_id': 10,
         'odeme_tipi': 'NAKIT',
         'alinan_tarih': KUR_TARIH,
+        'manuel_fx_kur': TCMB_KUR_REG,
     }
     base.update(kw)
     return base
@@ -333,7 +347,7 @@ class TestRegressionNakitCek(unittest.TestCase):
     def test_cek_paket_100_yuzde(self) -> None:
         con = _mem_con()
         _reserve_200(con)
-        p = {'idempotency_key': 'cek-reg', 'cari_id': 1, 'siparis_id': 1, 'odeme_tipi': 'CEK'}
+        p = {'idempotency_key': 'cek-reg', 'cari_id': 1, 'siparis_id': 1, 'odeme_tipi': 'CEK', 'manuel_fx_kur': TCMB_KUR_REG}
         kayit = taslak_kaydet(con, p, UID, YK)
         kid = kayit['id']
         for i, (tutar, vade) in enumerate([(10000, '2027-02-09'), (8900, '2027-03-09')], 1):
@@ -419,7 +433,7 @@ class TestRegressionTaslakHydrate(unittest.TestCase):
     def test_hydrate_cek_satirlari(self) -> None:
         con = _mem_con()
         _reserve_200(con)
-        p = {'idempotency_key': 'hydrate-cek', 'cari_id': 1, 'siparis_id': 1, 'odeme_tipi': 'CEK'}
+        p = {'idempotency_key': 'hydrate-cek', 'cari_id': 1, 'siparis_id': 1, 'odeme_tipi': 'CEK', 'manuel_fx_kur': TCMB_KUR_REG}
         kayit = taslak_kaydet(con, p, UID, YK)
         kid = kayit['id']
         con.execute(
@@ -599,11 +613,11 @@ class TestRegressionHaftaSonuKur(unittest.TestCase):
         con.commit()
         kayit = taslak_kaydet(
             con,
-            _payload(idempotency_key='wknd-kur', sevkiyat_id=50, alinan_tutar=1000),
+            _payload(idempotency_key='wknd-kur', sevkiyat_id=50, alinan_tutar=1000, manuel_fx_kur=47.20),
             UID,
             YK,
         )
-        self.assertEqual(kayit['kur_tarihi_snapshot'], '2026-08-21')
+        self.assertEqual(kayit['kur_tarihi_snapshot'], '2026-08-22')
         self.assertEqual(kayit['tcmb_satis_kur_snapshot'], 47.20)
 
 
@@ -638,7 +652,7 @@ class TestRegressionSevkTarihiKur(unittest.TestCase):
         con = self._mem_15k()
         kayit = taslak_kaydet(
             con,
-            _payload(idempotency_key='sevk-kur-n', sevkiyat_id=40, alinan_tutar=708000),
+            _payload(idempotency_key='sevk-kur-n', sevkiyat_id=40, alinan_tutar=708000, manuel_fx_kur=47.20),
             UID,
             YK,
         )
@@ -655,6 +669,7 @@ class TestRegressionSevkTarihiKur(unittest.TestCase):
             'siparis_id': 1,
             'odeme_tipi': 'CEK',
             'sevkiyat_id': 40,
+            'manuel_fx_kur': 47.20,
         }
         kayit = taslak_kaydet(con, p, UID, YK)
         kid = kayit['id']
