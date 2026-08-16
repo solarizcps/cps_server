@@ -14,8 +14,8 @@ G.  ckartTab/hafiza:     _ckartHafizaTabYuklendi = false
 H.  ckartTab: init block'ta ckartOzetYukle() init-çağrısı korunuyor
 I.  Pagination (ckartSipGitPage) filter-state bozmuyor, ticariOzet reset YOK
 J.  Filtre apply (_ckartSipApplyFilter): siparisler = false, ticariOzet reset YOK burada
-K.  gorusmeSonrasiYenile: ckartGorusmeYukle + ckartOzetYukle birlikte çağrılıyor
-L.  Görüşmeler sekmesinde _opsLoaded guard YOK (her geçiş fetch)
+K.  gorusmeSonrasiYenile: force refresh + KPI + Son Hareketler + hafiza flag reset
+L.  Görüşmeler: _opsLoaded guard + force=true bypass + tab invalidate fresh fetch
 M.  Onaylar sekmesinde _opsLoaded guard YOK (her geçiş fetch)
 N.  Son Alış Fiyatı: ticariOzet tab activation'da invalidate ediliyor
 O.  Duplicate ozet guard: filtre apply içinde ckartOzetYukle DOĞRUDAN çağrılmıyor
@@ -54,6 +54,23 @@ class TabRefreshContractTests(unittest.TestCase):
         idx = self.src.find('window.ckartSipGitPage = function(page)')
         self.assertGreater(idx, 0, 'ckartSipGitPage bulunamadı')
         return self.src[idx: idx + 300]
+
+    def _gorusme_sonrasi_block(self) -> str:
+        idx = self.src.find('function gorusmeSonrasiYenile')
+        self.assertGreater(idx, 0, 'gorusmeSonrasiYenile bulunamadı')
+        return self.src[idx: idx + 400]
+
+    def _gorusme_yukle_block(self) -> str:
+        idx = self.src.find('window.ckartGorusmeYukle = function')
+        self.assertGreater(idx, 0, 'ckartGorusmeYukle bulunamadı')
+        return self.src[idx: idx + 500]
+
+    def _assert_gorusmeler_tab_force_refresh(self, tab: str) -> None:
+        idx = tab.find("tab === 'gorusmeler'")
+        self.assertGreater(idx, 0, 'gorusmeler tab aktivasyonu yok')
+        chunk = tab[idx: idx + 160]
+        self.assertIn('_opsLoaded.gorusmeler = false', chunk)
+        self.assertRegex(chunk, r'ckartGorusmeYukle\s*\(\s*true\s*\)')
 
     # A — ckartTab her aktivasyonda ckartOzetYukle çağırıyor
     def test_A_tab_calls_ckartOzetYukle(self):
@@ -116,19 +133,25 @@ class TabRefreshContractTests(unittest.TestCase):
         self.assertNotIn('_opsLoaded.ticariOzet = false', blk,
                          'Filtre apply ticariOzet sıfırlamamalı (tab activation yeterli)')
 
-    # K — gorusmeSonrasiYenile: hem gorusme hem ozet çağrıyor
+    # K — gorusmeSonrasiYenile: force görüşme + KPI + Son Hareketler + hafiza reset
     def test_K_gorusmeSonrasiYenile_calls_ozet(self):
-        idx = self.src.find('function gorusmeSonrasiYenile')
-        blk = self.src[idx: idx + 250]
-        self.assertIn('ckartGorusmeYukle()', blk)
+        blk = self._gorusme_sonrasi_block()
+        self.assertIn('_opsLoaded.gorusmeler = false', blk)
+        self.assertRegex(blk, r'ckartGorusmeYukle\s*\(\s*true\s*\)')
         self.assertIn('ckartOzetYukle()', blk)
+        self.assertIn('_ckartHafizaTabYuklendi = false', blk)
+        self.assertIn('ckartSonHareketlerYukle()', blk)
 
-    # L — Görüşmeler: _opsLoaded.gorusmeler guard YOK
+    # L — Görüşmeler: guard korunur; force=true + tab invalidate fresh fetch sağlar
     def test_L_gorusmeler_no_opsLoaded_guard(self):
-        idx = self.src.find('ckartGorusmeYukle = function')
-        blk = self.src[idx: idx + 200]
-        self.assertNotIn('_opsLoaded.gorusmeler', blk,
-                         'Görüşmeler guard olmamalı — her geçiş fresh fetch')
+        loader = self._gorusme_yukle_block()
+        self.assertRegex(
+            loader,
+            r'if\s*\(\s*_opsLoaded\.gorusmeler\s*&&\s*!force\s*\)\s*return',
+            'force=true guard bypass kontratı yok',
+        )
+        tab = self._tab_block()
+        self._assert_gorusmeler_tab_force_refresh(tab)
 
     # M — Onaylar: guard yok
     def test_M_onaylar_no_opsLoaded_guard(self):

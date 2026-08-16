@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Cari360 Görüşmeler — fiyat_ozet API contract LOCK."""
+"""Cari360 Görüşmeler — API fiyat_ozet + template field-level ticari render LOCK."""
 from __future__ import annotations
 
 import os
@@ -159,9 +159,28 @@ class Cari360GorusmeTicariDisplayLockTests(unittest.TestCase):
 
     def test_template_fiyat_ozet_render_smoke(self) -> None:
         src = TEMPLATE.read_text(encoding='utf-8')
-        self.assertIn('ckart-ticari-ozet', src)
-        self.assertIn('g.fiyat_ozet', src)
+        idx = src.find('function _gorDetayHtml(g)')
+        self.assertGreater(idx, 0, '_gorDetayHtml bulunamadı')
+        end = src.find('\n  function _gorPaginationRender', idx)
+        self.assertGreater(end, idx, '_gorDetayHtml sonu bulunamadı')
+        det = src[idx: end]
+        self.assertNotIn('g.fiyat_ozet', det, 'UI eski tek parça fiyat_ozet kullanmamalı')
+        for field in (
+            'g.verilen_fiyat',
+            'g.fiyat_para_birimi',
+            'g.fiyat_birimi',
+            'g.konusulan_tonaj',
+            'g.odeme_tipi',
+            'g.vade_gun',
+            'g.cek_vade_gun',
+            'g.cek_adedi',
+            'g.ticari_not',
+        ):
+            self.assertIn(field, det, msg=f'missing {field} in _gorDetayHtml')
+        self.assertIn('formatTonajTr(g.konusulan_tonaj)', det)
+        self.assertIn('Ticari bilgi girilmemiş.', det)
         self.assertIn('ckartGorusmeYukle', src)
+        self.assertIn('ckart-gorusme-tablo', src)
 
 
 if __name__ == '__main__':

@@ -95,11 +95,37 @@ class Cari360V2LayoutLockTests(unittest.TestCase):
         self.assertIn("ckartFinansYukle()", self.src)
         self.assertIn("if (tab === 'onaylar') ckartOnaylarYukle()", self.src)
         self.assertIn("ckartHafizaTabYukle()", self.src)
-        self.assertIn("if (tab === 'gorusmeler') ckartGorusmeYukle()", self.src)
+        idx = self.src.find("tab === 'gorusmeler'")
+        self.assertGreater(idx, 0, 'gorusmeler tab aktivasyonu yok')
+        chunk = self.src[idx: idx + 160]
+        self.assertIn('_opsLoaded.gorusmeler = false', chunk)
+        self.assertRegex(chunk, r'ckartGorusmeYukle\s*\(\s*true\s*\)')
+
+    def _gor_detay_block(self) -> str:
+        idx = self.src.find('function _gorDetayHtml(g)')
+        self.assertGreater(idx, 0, '_gorDetayHtml bulunamadı')
+        end = self.src.find('\n  function _gorPaginationRender', idx)
+        self.assertGreater(end, idx, '_gorDetayHtml sonu bulunamadı')
+        return self.src[idx: end]
 
     def test_e_gorusme_ticari_ozet_lock_preserved(self) -> None:
-        # Görüşme ticari özet (fiyat_ozet) korunuyor — sipariş paneli değil
-        self.assertIn('g.fiyat_ozet', self.src)
+        # Görüşme ticari alanları field-level render — eski g.fiyat_ozet yok
+        det = self._gor_detay_block()
+        self.assertNotIn('g.fiyat_ozet', det)
+        for field in (
+            'g.verilen_fiyat',
+            'g.fiyat_para_birimi',
+            'g.fiyat_birimi',
+            'g.konusulan_tonaj',
+            'g.odeme_tipi',
+            'g.vade_gun',
+            'g.cek_vade_gun',
+            'g.cek_adedi',
+            'g.ticari_not',
+        ):
+            self.assertIn(field, det, msg=f'missing {field} in _gorDetayHtml')
+        self.assertIn('formatTonajTr(g.konusulan_tonaj)', det)
+        self.assertIn('Ticari bilgi girilmemiş.', det)
         self.assertIn('ckart-gorusme-tablo', self.src)
         # C360-UX-REV2: Sipariş paneli Ticari Özet HTML'i kaldırıldı
         self.assertNotIn('id="ckart-ticari-ozet"', self.src)
