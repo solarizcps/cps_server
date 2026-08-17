@@ -2841,6 +2841,27 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     setGorusmeMod('PLANLA');
   });
 
+  function gorusmeTarihGelecekMi(raw) {
+    var s = (raw || '').trim();
+    if (!s) return false;
+    var d = new Date(s.length === 10 ? s + 'T12:00:00' : s);
+    if (isNaN(d.getTime())) return false;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    d.setHours(0, 0, 0, 0);
+    return d > today;
+  }
+
+  var tarihInputEl = document.getElementById('mp-f-tarih');
+  if (tarihInputEl) {
+    tarihInputEl.addEventListener('change', function(){
+      if (gorusmeAjandaSonuc) return;
+      if (gorusmeTarihGelecekMi(tarihInputEl.value) && getGorusmeMod() !== 'PLANLA') {
+        setGorusmeMod('PLANLA');
+      }
+    });
+  }
+
   var GECMIS_ONIZLEME = 3;
   var MAX_TALEP_KALEM = 20;
 
@@ -6741,12 +6762,20 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     var modYeni = document.getElementById('mp-mod-yeni-r') && document.getElementById('mp-mod-yeni-r').checked;
     var adayId = document.getElementById('mp-f-aday-id').value;
     var cariIdVal = document.getElementById('mp-f-cari-id').value;
+    var modPlan = getGorusmeMod() === 'PLANLA';
+    if (gorusmeModKilitli && aktifAdayId) {
+      modYeni = false;
+      adayId = String(aktifAdayId);
+      document.getElementById('mp-f-aday-id').value = adayId;
+    }
+    if (modPlan && !modYeni && !adayId && !cariIdVal) {
+      toast('Plan için müşteri seçin'); return;
+    }
     if (modYeni) {
       if (!(document.getElementById('mp-f-firma').value || '').trim()) { toast('Firma adı zorunlu'); return; }
     } else if (!adayId && !cariIdVal) {
       toast('Müşteri seçin'); return;
     }
-    var modPlan = (document.getElementById('mp-f-mod') || {}).value === 'PLANLA';
     if (!modPlan) {
       var sonucErr = validateSonucTalep();
       if (sonucErr) {
@@ -6775,6 +6804,7 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     });
     delete payload.musteri_mod;
     delete payload.mp_talep_secim;
+    payload.mod = getGorusmeMod();
     if (modYeni) {
       payload.yeni_musteri = true;
       delete payload.cari_id;
@@ -6782,6 +6812,7 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     } else if (adayId) {
       payload.musteri_aday_id = parseInt(adayId, 10);
       delete payload.cari_id;
+      delete payload.yeni_musteri;
       delete payload.firma_adi;
       delete payload.yetkili_adi;
       delete payload.telefon;
@@ -6849,6 +6880,14 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     }
     normalizeGorusmeFiyatPayload(payload, fiyatEvet);
     if (payload.gorusme_tarihi && payload.gorusme_tarihi.length === 16) payload.gorusme_tarihi = payload.gorusme_tarihi.replace('T', ' ') + ':00';
+    if (!modPlan && gorusmeTarihGelecekMi(payload.gorusme_tarihi)) {
+      submitting = false;
+      kaydetBtn.disabled = false;
+      kaydetBtn.textContent = gorusmeKaydetBtnMetni(getGorusmeMod());
+      toast('Gelecek tarihli görüşme için Görüşme Planla modunu kullanın.');
+      setGorusmeMod('PLANLA');
+      return;
+    }
     var ajId = (document.getElementById('mp-f-ajanda-id') || {}).value;
     if (ajId) payload.ajanda_id = parseInt(ajId, 10);
     else delete payload.ajanda_id;
@@ -6857,6 +6896,14 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       .then(function(res){
         if (res.body.ok) {
           var kayit = res.body.kayit || res.body.ajanda || {};
+          if (modPlan && !(res.body.ajanda && res.body.ajanda.id) && !(kayit && kayit.id)) {
+            submitting = false;
+            kaydetBtn.disabled = false;
+            kaydetBtn.textContent = gorusmeKaydetBtnMetni(getGorusmeMod());
+            showTalepHata('Plan ajandaya yazılamadı.');
+            toast('Plan ajandaya yazılamadı.');
+            return;
+          }
           var aday = res.body.aday || null;
           var lines = [res.body.mesaj || (modPlan ? 'Plan kaydedildi.' : 'Görüşme kaydedildi.')];
           if (res.body.aciklama) lines.push(res.body.aciklama);
@@ -7155,6 +7202,7 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
           '<div class="mp-zg-aks">' +
             '<button type="button" class="mp-btn mp-btn-teal mp-zg-sonuc" ' +
               'data-cari-id="' + esc(String(it.cari_id || '')) + '" ' +
+              'data-musteri-aday-id="' + esc(String(it.musteri_aday_id || '')) + '" ' +
               'data-ajanda-id="' + esc(String(it.ajanda_id || '')) + '" ' +
               'data-unvan="' + esc(it.musteri || '') + '" ' +
               'data-gorusme-tipi="' + esc(it.gorusme_tipi || '') + '" ' +
@@ -7166,10 +7214,12 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
 
       gateListe.querySelectorAll('.mp-zg-sonuc').forEach(function(btn) {
         btn.addEventListener('click', function() {
-          var cid = parseInt(btn.getAttribute('data-cari-id'), 10);
-          if (!cid) return;
+          var cid = btn.getAttribute('data-cari-id') ? parseInt(btn.getAttribute('data-cari-id'), 10) : null;
+          var aid = btn.getAttribute('data-musteri-aday-id') ? parseInt(btn.getAttribute('data-musteri-aday-id'), 10) : null;
+          if (!cid && !aid) return;
           window.suspendZorunluGateForHandoff();
           openModal('gorusme', cid, btn.getAttribute('data-unvan') || '', '', {
+            adayId: aid,
             ajandaSonuc: true,
             ajandaId: btn.getAttribute('data-ajanda-id') ? parseInt(btn.getAttribute('data-ajanda-id'), 10) : null,
             gorusmeTipi: btn.getAttribute('data-gorusme-tipi') || '',

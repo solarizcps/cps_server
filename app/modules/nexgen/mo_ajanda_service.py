@@ -12,6 +12,7 @@ from modules.nexgen.mo_ajanda_config import (
     DURUM_IPTAL,
     DURUM_PLANLANDI,
     DURUMLAR,
+    MO_AJANDA_ERHAN_UID,
     TABLO,
 )
 from modules.nexgen.mo_gorusme_config import GORUSME_TIPLERI_ALL
@@ -27,6 +28,15 @@ class MoAjandaError(Exception):
 
 def _now() -> str:
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _yk_yukle(con: sqlite3.Connection, kullanici_id: int, yk: set[str] | None) -> set[str]:
+    if yk is not None:
+        return yk
+    try:
+        return load_kullanici_yetkileri(con, kullanici_id)
+    except Exception:
+        return set()
 
 
 def _today() -> str:
@@ -293,19 +303,62 @@ def _scope_kontrol(
     *,
     musteri_aday_id: int | None = None,
 ) -> None:
+    from modules.nexgen.cari360_yetki import can_cari360_view_all
+
+    if yk is None:
+        yk = load_kullanici_yetkileri(con, kullanici_id)
+    admin_cross = (
+        can_cari360_view_all(yk)
+        and mo_ajanda_owner_kullanici_id(int(kullanici_id), yk) != int(kullanici_id)
+    )
     if musteri_aday_id:
         from modules.nexgen.mo_gorusme_service import can_mo_gorusme_yaz_aday
         if not can_mo_gorusme_yaz_aday(con, kullanici_id, int(musteri_aday_id), yk):
-            raise MoAjandaError('Bu aday icin yetkiniz yok.', 403)
+            if not admin_cross:
+                raise MoAjandaError('Bu aday icin yetkiniz yok.', 403)
         return
     if not cari_id:
         raise MoAjandaError('cari_id veya musteri_aday_id zorunlu.', 400)
-    if yk is None:
-        yk = load_kullanici_yetkileri(con, kullanici_id)
     if not can_mo_view_cari(con, kullanici_id, int(cari_id), yk):
-        raise MoAjandaError('Bu cari icin yetkiniz yok.', 403)
+        if not admin_cross:
+            raise MoAjandaError('Bu cari icin yetkiniz yok.', 403)
     if not can_mo_gorusme_yaz(con, kullanici_id, int(cari_id), yk):
-        raise MoAjandaError('Bu cari icin plan olusturma yetkiniz yok.', 403)
+        if not admin_cross:
+            raise MoAjandaError('Bu cari icin plan olusturma yetkiniz yok.', 403)
+
+
+def mo_ajanda_cross_hedef_kullanici_id(
+    oturum_kullanici_id: int,
+    yk: set[str] | None,
+) -> int | None:
+    """Admin MO cross-view: oturum Erhan değilse ajanda owner Erhan."""
+    from modules.nexgen.cari360_yetki import can_cari360_view_all
+
+    oturum_uid = int(oturum_kullanici_id)
+    if can_cari360_view_all(yk or set()) and oturum_uid != MO_AJANDA_ERHAN_UID:
+        return MO_AJANDA_ERHAN_UID
+    return None
+
+
+def mo_ajanda_owner_kullanici_id(
+    oturum_kullanici_id: int,
+    yk: set[str] | None,
+    hedef_kullanici_id: int | None = None,
+) -> int:
+    """Canonical ajanda owner — read/write aynı kullanici_id filtresi."""
+    from modules.nexgen.cari360_yetki import can_cari360_view_all
+
+    oturum_uid = int(oturum_kullanici_id)
+    if hedef_kullanici_id is not None:
+        hedef = int(hedef_kullanici_id)
+        if hedef != oturum_uid:
+            if not can_cari360_view_all(yk or set()):
+                raise MoAjandaError('Başka pazarlamacının ajandası için yetki yok.', 403)
+            return hedef
+    cross = mo_ajanda_cross_hedef_kullanici_id(oturum_uid, yk)
+    if cross is not None:
+        return cross
+    return oturum_uid
 
 
 def ajanda_olustur(
@@ -318,6 +371,10 @@ def ajanda_olustur(
 ) -> dict[str, Any]:
     if not _tablo_var(con, TABLO):
         raise MoAjandaError('Ajanda tablosu bulunamadi.', 500)
+
+    yk = _yk_yukle(con, kullanici_id, yk)
+    oturum_uid = int(kullanici_id)
+    owner_uid = mo_ajanda_owner_kullanici_id(oturum_uid, yk)
 
     def _opt_int(v):
         if v in (None, '', 0, '0'):
@@ -406,8 +463,8 @@ def ajanda_olustur(
                     (
                         cari_id, musteri_aday_id, firma_adi_gorunum,
                         plan_yetkili, plan_telefon, plan_sehir,
-                        kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
-                        DURUM_PLANLANDI, idem, kullanici_id, _now(),
+                        owner_uid, plan_tarihi, gorusme_tipi, plan_notu,
+                        DURUM_PLANLANDI, idem, oturum_uid, _now(),
                     ),
                 )
             else:
@@ -422,8 +479,8 @@ def ajanda_olustur(
                     """,
                     (
                         cari_id, musteri_aday_id, firma_adi_gorunum,
-                        kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
-                        DURUM_PLANLANDI, idem, kullanici_id, _now(),
+                        owner_uid, plan_tarihi, gorusme_tipi, plan_notu,
+                        DURUM_PLANLANDI, idem, oturum_uid, _now(),
                     ),
                 )
         else:
@@ -438,8 +495,8 @@ def ajanda_olustur(
                 ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 1, ?, ?)
                 """,
                 (
-                    cari_id, kullanici_id, plan_tarihi, gorusme_tipi, plan_notu,
-                    DURUM_PLANLANDI, idem, kullanici_id, _now(),
+                    cari_id, owner_uid, plan_tarihi, gorusme_tipi, plan_notu,
+                    DURUM_PLANLANDI, idem, oturum_uid, _now(),
                 ),
             )
         aid = int(cur.lastrowid)
@@ -467,15 +524,12 @@ def ajanda_gorunen_kullanici(
     yk: set[str] | None,
     hedef_kullanici_id: int | None = None,
 ) -> tuple[int, bool]:
-    """Oturum + hedef → görünen pazarlamacı uid ve admin cross-view bayrağı."""
-    from modules.nexgen.cari360_yetki import can_cari360_view_all
-
+    """Oturum + hedef → canonical ajanda owner uid ve cross-view bayrağı."""
     oturum_uid = int(oturum_kullanici_id)
-    if hedef_kullanici_id and int(hedef_kullanici_id) != oturum_uid:
-        if not can_cari360_view_all(yk or set()):
-            raise MoAjandaError('Başka pazarlamacının ajandası için yetki yok.', 403)
-        return int(hedef_kullanici_id), True
-    return oturum_uid, False
+    if hedef_kullanici_id is None:
+        hedef_kullanici_id = mo_ajanda_cross_hedef_kullanici_id(oturum_uid, yk)
+    owner_uid = mo_ajanda_owner_kullanici_id(oturum_uid, yk, hedef_kullanici_id)
+    return owner_uid, owner_uid != oturum_uid
 
 
 def ajanda_listele(
@@ -643,7 +697,10 @@ def ajanda_getir(
     ).fetchone()
     if not row:
         raise MoAjandaError('Ajanda kaydi bulunamadi.', 404)
-    if int(row['kullanici_id']) != int(kullanici_id):
+    if yk is None:
+        yk = load_kullanici_yetkileri(con, kullanici_id)
+    owner_uid = mo_ajanda_owner_kullanici_id(int(kullanici_id), yk)
+    if int(row['kullanici_id']) != owner_uid:
         raise MoAjandaError('Bu plan size ait degil.', 403)
     aid = row['musteri_aday_id'] if 'musteri_aday_id' in row.keys() else None
     _scope_kontrol(
@@ -669,6 +726,10 @@ def ajanda_iptal(
     if kayit.get('durum') != DURUM_PLANLANDI:
         raise MoAjandaError('Yalniz planlanmis kayitlar iptal edilebilir.', 400)
 
+    if yk is None:
+        yk = load_kullanici_yetkileri(con, kullanici_id)
+    owner_uid = mo_ajanda_owner_kullanici_id(int(kullanici_id), yk)
+
     try:
         con.execute('BEGIN IMMEDIATE')
     except sqlite3.OperationalError:
@@ -681,7 +742,7 @@ def ajanda_iptal(
             SET durum=?, guncelleme_tarihi=?
             WHERE id=? AND kullanici_id=? AND aktif=1 AND durum=?
             """,
-            (DURUM_IPTAL, _now(), ajanda_id, kullanici_id, DURUM_PLANLANDI),
+            (DURUM_IPTAL, _now(), ajanda_id, owner_uid, DURUM_PLANLANDI),
         )
         if commit:
             con.commit()
@@ -711,12 +772,16 @@ def ajanda_tamamla(
     if not _tablo_var(con, TABLO):
         raise MoAjandaError('Ajanda tablosu bulunamadi.', 500)
 
+    if yk is None:
+        yk = load_kullanici_yetkileri(con, kullanici_id)
+    owner_uid = mo_ajanda_owner_kullanici_id(int(kullanici_id), yk)
+
     row = con.execute(
         f"""
         SELECT * FROM {TABLO}
         WHERE id=? AND aktif=1 AND kullanici_id=? AND durum=?
         """,
-        (ajanda_id, kullanici_id, DURUM_PLANLANDI),
+        (ajanda_id, owner_uid, DURUM_PLANLANDI),
     ).fetchone()
     if not row:
         raise MoAjandaError('Ajanda kaydi bulunamadi veya tamamlanamaz.', 404)
@@ -741,7 +806,7 @@ def ajanda_tamamla(
         SET durum=?, gorusme_id=?, guncelleme_tarihi=?
         WHERE id=? AND kullanici_id=? AND durum=? AND gorusme_id IS NULL
         """,
-        (DURUM_GERCEKLESTI, int(gorusme_id), _now(), ajanda_id, kullanici_id, DURUM_PLANLANDI),
+        (DURUM_GERCEKLESTI, int(gorusme_id), _now(), ajanda_id, owner_uid, DURUM_PLANLANDI),
     )
 
 
@@ -755,6 +820,7 @@ def gercek_gorusmeyi_ajandaya_bagla(
     cari_id: int | None = None,
     musteri_aday_id: int | None = None,
     firma_adi_gorunum: str | None = None,
+    yk: set[str] | None = None,
     commit: bool = False,
 ) -> dict[str, Any]:
     """Gerçek görüşme kaydını Ajanda ile senkronize eder.
@@ -766,6 +832,10 @@ def gercek_gorusmeyi_ajandaya_bagla(
     """
     if not _tablo_var(con, TABLO):
         return {'durum': 'skip', 'sebep': 'tablo_yok'}
+
+    yk = _yk_yukle(con, kullanici_id, yk)
+    oturum_uid = int(kullanici_id)
+    owner_uid = mo_ajanda_owner_kullanici_id(oturum_uid, yk)
 
     # Idempotency: bu görüşme zaten bir ajanda kaydına bağlı mı?
     existing = con.execute(
@@ -793,7 +863,7 @@ def gercek_gorusmeyi_ajandaya_bagla(
             ORDER BY plan_tarihi ASC
             LIMIT 1
             """,
-            (int(kullanici_id), int(cari_id), DURUM_PLANLANDI, gun),
+            (owner_uid, int(cari_id), DURUM_PLANLANDI, gun),
         ).fetchone()
     else:
         plan_row = con.execute(
@@ -804,7 +874,7 @@ def gercek_gorusmeyi_ajandaya_bagla(
             ORDER BY plan_tarihi ASC
             LIMIT 1
             """,
-            (int(kullanici_id), int(musteri_aday_id), DURUM_PLANLANDI, gun),
+            (owner_uid, int(musteri_aday_id), DURUM_PLANLANDI, gun),
         ).fetchone() if has_aday_cols else None
 
     if plan_row:
@@ -816,7 +886,7 @@ def gercek_gorusmeyi_ajandaya_bagla(
             WHERE id=? AND kullanici_id=? AND durum=? AND gorusme_id IS NULL
             """,
             (DURUM_GERCEKLESTI, int(gorusme_id), _now(),
-             int(plan_row['id']), int(kullanici_id), DURUM_PLANLANDI),
+             int(plan_row['id']), owner_uid, DURUM_PLANLANDI),
         )
         if commit:
             con.commit()
@@ -848,10 +918,10 @@ def gercek_gorusmeyi_ajandaya_bagla(
             """,
             (
                 cari_id, musteri_aday_id, firma_adi_gorunum,
-                int(kullanici_id), plan_tarihi,
+                owner_uid, plan_tarihi,
                 tip, None,
                 DURUM_GERCEKLESTI, int(gorusme_id),
-                idem, int(kullanici_id), _now(),
+                idem, oturum_uid, _now(),
             ),
         )
     else:
@@ -866,10 +936,10 @@ def gercek_gorusmeyi_ajandaya_bagla(
             ) VALUES (?,?,?,?,?,?,?,?,1,?,?)
             """,
             (
-                int(cari_id), int(kullanici_id), plan_tarihi,
+                int(cari_id), owner_uid, plan_tarihi,
                 tip, None,
                 DURUM_GERCEKLESTI, int(gorusme_id),
-                idem, int(kullanici_id), _now(),
+                idem, oturum_uid, _now(),
             ),
         )
     new_id = con.execute('SELECT last_insert_rowid()').fetchone()[0]

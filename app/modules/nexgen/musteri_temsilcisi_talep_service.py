@@ -1704,10 +1704,13 @@ def kaydet_gorusme_opsiyonel_talep(
     if mod == 'PLANLA':
         from modules.nexgen.mo_gorusme_service import gorusme_planla_kaydet
         plan = gorusme_planla_kaydet(con, g_payload, kullanici_id, yk, commit=True)
+        aj = plan.get('ajanda') or {}
+        if not aj.get('id'):
+            raise MoGorusmeError('Plan ajandaya yazılamadı.', 500)
         return {
             'ok': True,
-            'kayit': plan.get('ajanda'),
-            'ajanda': plan.get('ajanda'),
+            'kayit': aj,
+            'ajanda': aj,
             'aday': plan.get('aday'),
             'idempotent': plan.get('idempotent', False),
             'entity_type': plan.get('entity_type'),
@@ -1882,7 +1885,8 @@ def kaydet_gorusme_opsiyonel_talep(
             )
         elif not ajanda_id and (kayit.get('cari_id') or kayit.get('musteri_aday_id')):
             from modules.nexgen.mo_ajanda_service import gercek_gorusmeyi_ajandaya_bagla
-            gercek_gorusmeyi_ajandaya_bagla(
+            from modules.nexgen.mo_gorusme_service import ajanda_senkron_sonuc_zorunlu
+            aj_sonuc = gercek_gorusmeyi_ajandaya_bagla(
                 con,
                 gorusme_id=gid,
                 kullanici_id=kullanici_id,
@@ -1890,8 +1894,10 @@ def kaydet_gorusme_opsiyonel_talep(
                 musteri_aday_id=int(kayit['musteri_aday_id']) if kayit.get('musteri_aday_id') else None,
                 gorusme_tarihi=g_payload.get('gorusme_tarihi') or '',
                 gorusme_tipi=g_payload.get('gorusme_tipi') or '',
+                yk=yk,
                 commit=False,
             )
+            ajanda_senkron_sonuc_zorunlu(aj_sonuc, baglam='gorusme_kayit')
         trow = None
         if talep_norm:
             t_payload = {
@@ -1952,7 +1958,14 @@ def kaydet_gorusme_opsiyonel_talep(
         except Exception:
             pass
         raise
-    except Exception:
+    except Exception as exc:
+        from modules.nexgen.mo_ajanda_service import MoAjandaError
+        if isinstance(exc, MoAjandaError):
+            try:
+                con.rollback()
+            except Exception:
+                pass
+            raise MoGorusmeError(exc.mesaj, exc.kod) from exc
         try:
             con.rollback()
         except Exception:

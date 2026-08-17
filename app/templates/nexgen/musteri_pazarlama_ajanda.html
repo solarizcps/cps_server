@@ -41,10 +41,8 @@
           <span class="mpa-zu-firma">{{ z.musteri }}</span>
           <span>{{ z.tarih }} {{ z.saat }} — {{ z.gorusme_tipi }}</span>
           <span class="mpa-zu-bek">{{ z.bekleyen_metin }}</span>
-          {% if not ajanda_readonly %}
-          <a href="/nexgen/musteri-pazarlama?gorusme_ac=1&amp;source=ajanda&amp;cari_id={{ z.cari_id }}&amp;ajanda_id={{ z.ajanda_id }}&amp;gorusme_tipi={{ z.gorusme_tipi|urlencode }}&amp;unvan={{ z.musteri|urlencode }}{% if z.plan_notu %}&amp;plan_notu={{ z.plan_notu|urlencode }}{% endif %}"
+          <a href="/nexgen/musteri-pazarlama?gorusme_ac=1&amp;source=ajanda&amp;ajanda_sonuc=1&amp;ajanda_id={{ z.ajanda_id }}{% if z.cari_id %}&amp;cari_id={{ z.cari_id }}{% endif %}{% if z.musteri_aday_id %}&amp;musteri_aday_id={{ z.musteri_aday_id }}{% endif %}&amp;gorusme_tipi={{ z.gorusme_tipi|urlencode }}&amp;unvan={{ z.musteri|urlencode }}{% if z.plan_notu %}&amp;plan_notu={{ z.plan_notu|urlencode }}{% endif %}"
             class="mpa-btn mpa-btn-primary mpa-btn-xs">Görüşme Sonucunu Gir</a>
-          {% endif %}
         </li>
         {% endfor %}
       </ul>
@@ -946,7 +944,6 @@
     return 'Planlandı';
   }
   function planAksiyonGerekli(k) {
-    if (ajandaReadonly) return false;
     var dg = (k.durum_gorunum || '').toUpperCase();
     if (dg === 'SONUC_BEKLIYOR' || dg === 'ZORUNLU_SONUC_BEKLIYOR') return true;
     return (k.durum || '').toUpperCase() === 'PLANLANDI';
@@ -1101,7 +1098,7 @@
     }
 
     /* ── Aksiyon butonu ── */
-    if (!isIptal && !isGerceklesti && !ajandaReadonly && planAksiyonGerekli(k)) {
+    if (!isIptal && !isGerceklesti && planAksiyonGerekli(k)) {
       html += '<div class="mpa-detay-aks">' +
         '<a href="' + esc(gorusmeAcUrl(k)) + '" class="mpa-btn mpa-btn-primary">GÖRÜŞMEYİ SONUÇLANDIR</a>' +
         '</div>';

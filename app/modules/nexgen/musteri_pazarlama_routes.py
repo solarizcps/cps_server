@@ -258,7 +258,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
     @login_gerekli
     def musteri_pazarlama_ajanda_sayfa():
         from datetime import date as _date
-        MO_AJANDA_ERHAN_UID = 49
+        from modules.nexgen.mo_ajanda_service import mo_ajanda_cross_hedef_kullanici_id
         u, yk = _yetki_kontrol()
         hafta_arg = (request.args.get('hafta') or '').strip()
         hafta_ref = None
@@ -271,14 +271,9 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
         con = db_fn()
         try:
             from modules.nexgen.musteri_pazarlama_service import ajanda_sayfa_verisi
-            from modules.nexgen.cari360_yetki import can_cari360_view_all
-            cross_hedef = None
-            hedef_uid = None
-            ajanda_readonly = False
-            if can_cari360_view_all(yk) and int(uid) != MO_AJANDA_ERHAN_UID:
-                cross_hedef = MO_AJANDA_ERHAN_UID
-                hedef_uid = MO_AJANDA_ERHAN_UID
-                ajanda_readonly = True
+            cross_hedef = mo_ajanda_cross_hedef_kullanici_id(uid, yk)
+            hedef_uid = cross_hedef
+            ajanda_readonly = cross_hedef is not None
             aj_veri = ajanda_sayfa_verisi(
                 con, uid, yk, hafta_ref=hafta_ref, hedef_kullanici_id=cross_hedef,
             )
@@ -303,13 +298,15 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
         bit = (request.args.get('bit') or '').strip()
         uid = kullanici_id_fn()
         yk = kullanici_yetkileri(session.get('kullanici') or {})
-        MO_AJANDA_ERHAN_UID = 49
-        from modules.nexgen.cari360_yetki import can_cari360_view_all
-        if can_cari360_view_all(yk) and int(uid) != MO_AJANDA_ERHAN_UID:
-            hedef_uid = MO_AJANDA_ERHAN_UID
+        from modules.nexgen.mo_ajanda_service import mo_ajanda_cross_hedef_kullanici_id
+        cross_hedef = mo_ajanda_cross_hedef_kullanici_id(uid, yk)
+        hedef_raw = (request.args.get('hedef_kullanici_id') or '').strip()
+        if cross_hedef is not None:
+            hedef_uid = cross_hedef
+        elif hedef_raw.isdigit():
+            hedef_uid = int(hedef_raw)
         else:
-            hedef_raw = (request.args.get('hedef_kullanici_id') or '').strip()
-            hedef_uid = int(hedef_raw) if hedef_raw.isdigit() else None
+            hedef_uid = None
         con = db_fn()
         try:
             if bas and bit:
@@ -405,6 +402,11 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
         except MoGorusmeError as e:
             return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+        except Exception as e:
+            from modules.nexgen.mo_ajanda_service import MoAjandaError
+            if isinstance(e, MoAjandaError):
+                return jsonify({'ok': False, 'mesaj': e.mesaj}), e.kod
+            raise
         finally:
             con.close()
 

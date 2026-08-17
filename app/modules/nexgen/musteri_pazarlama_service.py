@@ -707,6 +707,7 @@ def _ajanda_zorunlu_gate_items(
         items.append({
             'ajanda_id': k.get('id'),
             'cari_id': k.get('cari_id'),
+            'musteri_aday_id': k.get('musteri_aday_id'),
             'musteri': k.get('musteri') or '-',
             'tarih': plan_tarih,
             'saat': plan_saat,

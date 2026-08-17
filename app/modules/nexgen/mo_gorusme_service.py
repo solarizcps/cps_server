@@ -48,6 +48,22 @@ class MoGorusmeError(Exception):
         super().__init__(mesaj)
 
 
+def ajanda_senkron_sonuc_zorunlu(
+    sonuc: dict[str, Any] | None,
+    *,
+    baglam: str,
+) -> dict[str, Any]:
+    """Ajanda write fail-open skip dönüşlerini görüşme TX içinde hataya çevirir."""
+    out = sonuc or {}
+    if out.get('durum') == 'skip':
+        sebep = out.get('sebep') or 'bilinmiyor'
+        raise MoGorusmeError(
+            f'Ajanda senkronizasyonu başarısız ({baglam}): {sebep}',
+            500,
+        )
+    return out
+
+
 def _now() -> str:
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -798,9 +814,12 @@ def gorusme_planla_kaydet(
         (ajanda_idem,),
     ).fetchone()
     if mevcut_a:
-        from modules.nexgen.mo_ajanda_service import _cari_map, _row_dict
+        from modules.nexgen.mo_ajanda_service import _aday_map, _cari_map, _row_dict
         cm = _cari_map(con, [int(mevcut_a['cari_id'])] if mevcut_a['cari_id'] else [])
-        kayit = _row_dict(mevcut_a, cm)
+        am = _aday_map(con, [int(mevcut_a['musteri_aday_id'])] if (
+            'musteri_aday_id' in mevcut_a.keys() and mevcut_a['musteri_aday_id']
+        ) else [])
+        kayit = _row_dict(mevcut_a, cm, am)
         aday = None
         aid = mevcut_a['musteri_aday_id'] if 'musteri_aday_id' in mevcut_a.keys() else None
         if aid:
@@ -908,11 +927,14 @@ def gorusme_planla_kaydet(
         aj_sonuc = ajanda_olustur(
             con, aj_payload, kullanici_id, yk, commit=False,
         )
+        aj_kayit = aj_sonuc.get('kayit') or {}
+        if not aj_kayit.get('id'):
+            raise MoGorusmeError('Plan ajandaya yazılamadı.', 500)
         if commit:
             con.commit()
         return {
             'ok': True,
-            'ajanda': aj_sonuc.get('kayit'),
+            'ajanda': aj_kayit,
             'aday': aday,
             'idempotent': aj_sonuc.get('idempotent', False),
             'mesaj': aj_sonuc.get('mesaj') or 'Plan oluşturuldu.',
@@ -1131,15 +1153,17 @@ def gorusme_kaydet(
         if _ajanda_tablo_var(con, AJANDA_TABLO) and (cari_id or aday_id):
             ajanda_id_explicit = payload.get('ajanda_id')
             if not ajanda_id_explicit:
-                gercek_gorusmeyi_ajandaya_bagla(
+                aj_sonuc = gercek_gorusmeyi_ajandaya_bagla(
                     con, gid, kullanici_id,
                     cari_id=int(cari_id) if cari_id else None,
                     musteri_aday_id=int(aday_id) if aday_id else None,
                     gorusme_tarihi=norm['gorusme_tarihi'],
                     gorusme_tipi=norm['gorusme_tipi'],
                     firma_adi_gorunum=(payload.get('firma_adi_gorunum') or payload.get('firma_adi') or '').strip() or None,
+                    yk=yk,
                     commit=False,
                 )
+                ajanda_senkron_sonuc_zorunlu(aj_sonuc, baglam='gercek_gorusme')
             takip_tarihi = norm.get('sonraki_takip_tarihi')
             if takip_tarihi and norm.get('sonraki_aksiyon'):
                 takip_idem = 'takip_plan:' + norm['idempotency_key']
@@ -1175,10 +1199,7 @@ def gorusme_kaydet(
                             (payload.get('sehir') or '').strip()
                             or (aday.get('sehir') or '').strip() or None
                         )
-                try:
-                    ajanda_olustur(con, takip_payload, kullanici_id, yk, commit=False)
-                except Exception:
-                    pass
+                ajanda_olustur(con, takip_payload, kullanici_id, yk, commit=False)
     except ImportError:
         pass
 
