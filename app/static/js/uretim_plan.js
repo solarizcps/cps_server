@@ -8,6 +8,9 @@
         onizleme: [],
         seciliCreate: null,
         detayPlanId: null,
+        detaySatir: null,
+        detayProsesKod: null,
+        detayKatFilter: 'TUMU',
         editPlanId: null,
         enj: {
             makineler: [],
@@ -148,20 +151,171 @@
         return html;
     }
 
-    function renderProsesKartGrid(prosesler) {
-        return (prosesler || []).map(function (p) {
-            var emirTxt = '';
-            if (p.emir_sayisi != null && p.emir_sayisi > 0) {
-                var bEm = p.biten_emir_sayisi != null ? p.biten_emir_sayisi : 0;
-                emirTxt = bEm + '/' + p.emir_sayisi + ' emir';
-            }
-            return '<div class="up-proses-kart">' +
-                '<div class="pct">' + (p.yuzde || 0) + '%</div>' +
-                '<div class="up-proses-durum ' + (p.renk || 'gri') + '">' + esc(p.durum) + '</div>' +
-                '<div class="up-proses-kart-meta">' + esc(p.proses_adi || p.proses_kod) + '</div>' +
-                '<div class="up-proses-kart-alt">' + esc(emirTxt) + '</div>' +
-                '<div class="up-proses-kart-alt">' + fmtN(p.biten) + ' / ' + fmtN(p.hedef_miktar || p.verilen) + '</div></div>';
-        }).join('');
+    function prosesByKod(prosesler, kod) {
+        kod = String(kod || '');
+        for (var i = 0; i < (prosesler || []).length; i++) {
+            if (String(prosesler[i].proses_kod) === kod) return prosesler[i];
+        }
+        return null;
+    }
+
+    function emirUrunTipi(e) {
+        if (e.urun_tipi) return e.urun_tipi;
+        return '—';
+    }
+
+    function emirRowClass(e) {
+        var renk = e.renk || 'gri';
+        if (renk === 'yesil' || e.durum === 'BİTTİ') return 'up-emir-row-bitmis';
+        if (renk === 'kirmizi' || e.durum === 'GERİDE') return 'up-emir-row-kirmizi';
+        if (renk === 'sari' || e.durum === 'DEVAM') return 'up-emir-row-devam';
+        return 'up-emir-row-gri';
+    }
+
+    function renderDetayProsesStep(p, active) {
+        var cls = p.renk || 'gri';
+        var emirTxt = '';
+        if (p.emir_sayisi != null && p.emir_sayisi > 0) {
+            var bEm = p.biten_emir_sayisi != null ? p.biten_emir_sayisi : 0;
+            emirTxt = bEm + '/' + p.emir_sayisi + ' emir';
+        }
+        var check = (cls === 'yesil' || (p.yuzde || 0) >= 100) ? '<span class="up-dstep-check">✓</span>' : '';
+        var pctW = Math.min(100, Math.max(0, p.yuzde || 0));
+        var kod = esc(p.proses_kod || '');
+        return '<button type="button" class="up-detay-proses-step' + (active ? ' active' : '') +
+            '" data-proses-kod="' + kod + '">' +
+            '<div class="up-dstep-name">' + esc(shortProsesLabel(p.proses_adi || p.proses_kod)) + '</div>' +
+            '<div class="up-dstep-pct-wrap"><span class="up-dstep-pct ' + cls + '">' + fmtPct(p.yuzde) + '</span>' + check + '</div>' +
+            '<div class="up-dstep-durum ' + cls + '">' + esc(p.durum || '') + '</div>' +
+            '<div class="up-dstep-bar"><i class="' + cls + '" style="width:' + pctW + '%"></i></div>' +
+            '<div class="up-dstep-emir">' + esc(emirTxt) + '</div></button>';
+    }
+
+    function renderDetayProsesFlow(prosesler, activeKod) {
+        var list = prosesler || [];
+        if (!list.length) return '<span class="up-proses-empty">—</span>';
+        var html = '<div class="up-detay-proses-flow" data-count="' + list.length + '">';
+        list.forEach(function (p, idx) {
+            if (idx > 0) html += '<span class="up-detay-proses-sep">&gt;</span>';
+            html += renderDetayProsesStep(p, String(p.proses_kod) === String(activeKod));
+        });
+        html += '</div>';
+        return html;
+    }
+
+    function prosesHasGovdeAtki(proses) {
+        var hasG = false, hasA = false;
+        (proses.emir_detay || []).forEach(function (e) {
+            var k = (e.kategori || '').toUpperCase();
+            if (k === 'GOVDE') hasG = true;
+            if (k === 'ATKI') hasA = true;
+        });
+        return hasG && hasA;
+    }
+
+    function filterEmirDetay(proses, katFilter) {
+        var rows = (proses && proses.emir_detay) ? proses.emir_detay.slice() : [];
+        if (katFilter === 'GOVDE') {
+            return rows.filter(function (e) { return (e.kategori || '').toUpperCase() === 'GOVDE'; });
+        }
+        if (katFilter === 'ATKI') {
+            return rows.filter(function (e) { return (e.kategori || '').toUpperCase() === 'ATKI'; });
+        }
+        return rows;
+    }
+
+    function renderDetayKatFilters(proses) {
+        if (!proses || !prosesHasGovdeAtki(proses)) return '';
+        var f = state.detayKatFilter || 'TUMU';
+        return '<div class="up-detay-kat-filters">' +
+            ['TUMU', 'GOVDE', 'ATKI'].map(function (k) {
+                var lbl = k === 'TUMU' ? 'TÜMÜ' : (k === 'GOVDE' ? 'GÖVDE' : 'ATKI');
+                return '<button type="button" class="up-detay-kat-btn' + (f === k ? ' active' : '') +
+                    '" data-kat="' + k + '">' + lbl + '</button>';
+            }).join('') + '</div>';
+    }
+
+    function renderDetayEmirOzet(rows) {
+        var biten = 0, devam = 0, verilen = 0, btop = 0, kalan = 0;
+        (rows || []).forEach(function (e) {
+            if (e.durum === 'BİTTİ') biten++;
+            if (e.durum === 'DEVAM') devam++;
+            verilen += e.verilen || 0;
+            btop += e.biten || 0;
+            kalan += e.kalan || 0;
+        });
+        return '<div class="up-detay-emir-ozet">' +
+            '<span>Toplam emir: <strong>' + rows.length + '</strong></span>' +
+            '<span>Biten emir: <strong>' + biten + '</strong></span>' +
+            '<span>Devam: <strong>' + devam + '</strong></span>' +
+            '<span>Verilen: <strong>' + fmtN(verilen) + '</strong></span>' +
+            '<span>Biten: <strong>' + fmtN(btop) + '</strong></span>' +
+            '<span>Kalan: <strong>' + fmtN(kalan) + '</strong></span></div>';
+    }
+
+    function renderDetayEmirTable(proses) {
+        if (!proses) return '<p class="up-hint">Proses seçin</p>';
+        var rows = filterEmirDetay(proses, state.detayKatFilter);
+        var prosesAdi = esc(proses.proses_adi || proses.proses_kod);
+        var head = '<div class="up-detay-detail-head"><h4>' + prosesAdi + ' — Alt Emir Detayları</h4></div>';
+        var filters = renderDetayKatFilters(proses);
+        if (!rows.length) {
+            return head + filters + '<p class="up-hint">Emir detayı yok</p>' + renderDetayEmirOzet(rows);
+        }
+        var tbl = '<div class="up-detay-emir-scroll"><table class="up-detay-emir-tbl"><thead><tr>' +
+            '<th>Emir No</th><th>M/Y</th><th>Ürün Tipi</th><th>Model</th>' +
+            '<th class="num">Verilen</th><th class="num">Biten</th><th class="num">Kalan</th>' +
+            '<th class="num">%</th><th>Durum</th></tr></thead><tbody>';
+        rows.forEach(function (e) {
+            tbl += '<tr class="' + emirRowClass(e) + '">' +
+                '<td><strong>' + e.emir_no + '</strong></td>' +
+                '<td>' + esc(e.tip || '—') + '</td>' +
+                '<td>' + esc(emirUrunTipi(e)) + '</td>' +
+                '<td title="' + esc(e.model_adi || e.model_kod) + '">' + esc(e.model_kod) + '</td>' +
+                '<td class="num">' + fmtN(e.verilen) + '</td>' +
+                '<td class="num">' + fmtN(e.biten) + '</td>' +
+                '<td class="num">' + fmtN(e.kalan) + '</td>' +
+                '<td class="num">' + (e.yuzde || 0) + '%</td>' +
+                '<td><span class="up-emir-durum-badge ' + (e.renk || 'gri') + '">' + esc(e.durum) + '</span></td>' +
+                '</tr>';
+        });
+        tbl += '</tbody></table></div>';
+        return head + filters + tbl + renderDetayEmirOzet(rows);
+    }
+
+    function bindDetayKatFilterEvents() {
+        document.querySelectorAll('.up-detay-kat-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                state.detayKatFilter = btn.getAttribute('data-kat');
+                refreshDetayDetailPanel();
+            });
+        });
+    }
+
+    function bindDetayProsesEvents() {
+        document.querySelectorAll('.up-detay-proses-step').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                selectDetayProses(btn.getAttribute('data-proses-kod'));
+            });
+        });
+    }
+
+    function refreshDetayDetailPanel() {
+        var panel = $('upDetayDetailPanel');
+        if (!panel || !state.detaySatir) return;
+        var proses = prosesByKod(state.detaySatir.prosesler, state.detayProsesKod);
+        panel.innerHTML = renderDetayEmirTable(proses);
+        bindDetayKatFilterEvents();
+    }
+
+    function selectDetayProses(prosesKod) {
+        if (!prosesKod || !state.detaySatir) return;
+        state.detayProsesKod = prosesKod;
+        state.detayKatFilter = 'TUMU';
+        document.querySelectorAll('.up-detay-proses-step').forEach(function (btn) {
+            btn.classList.toggle('active', btn.getAttribute('data-proses-kod') === String(prosesKod));
+        });
+        refreshDetayDetailPanel();
     }
 
     function renderProsesEmirBreakdown(prosesler) {
@@ -725,14 +879,7 @@
     }
 
     function focusDetayProses(prosesKod) {
-        if (!prosesKod) return;
-        var blocks = document.querySelectorAll('.up-proses-emir-block');
-        blocks.forEach(function (b) { b.classList.remove('up-proses-focus'); });
-        var target = document.getElementById('up-proses-block-' + prosesKod) ||
-            document.querySelector('.up-proses-emir-block[data-proses-kod="' + prosesKod + '"]');
-        if (!target) return;
-        target.classList.add('up-proses-focus');
-        target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        selectDetayProses(prosesKod);
     }
 
     function openDetay(planId, focusProsesKod) {
@@ -746,11 +893,7 @@
             .then(function (r) { return r.json(); })
             .then(function (d) {
                 if (!d.ok) throw new Error(d.mesaj);
-                renderDetayOzet(d.satir, body);
-                loadDetayMEmirler(planId, body, d.satir);
-                if (focusProsesKod) {
-                    setTimeout(function () { focusDetayProses(focusProsesKod); }, 80);
-                }
+                renderDetayOzet(d.satir, body, focusProsesKod);
             })
             .catch(function (e) { body.innerHTML = '<div class="up-error">' + esc(e.message) + '</div>'; });
     }
@@ -777,127 +920,57 @@
             '</dl></div>';
     }
 
-    function renderDetayOzet(r, body) {
+    function detayMetaRow(label, valueHtml, valueClass) {
+        return '<div class="up-detay-meta-row">' +
+            '<span class="up-detay-meta-lbl">' + esc(label) + '</span>' +
+            '<span class="up-detay-meta-val' + (valueClass ? ' ' + valueClass : '') + '">' + valueHtml + '</span>' +
+            '</div>';
+    }
+
+    function renderDetayOzet(r, body, focusProsesKod) {
+        state.detaySatir = r;
+        state.detayKatFilter = 'TUMU';
+        var prosesler = r.prosesler || [];
+        state.detayProsesKod = focusProsesKod || (prosesler[0] && prosesler[0].proses_kod) || '';
+        var activeProses = prosesByKod(prosesler, state.detayProsesKod);
         $('upDetayBaslik').textContent = (r.model_kod || '') + ' — ' + (r.renk || '');
-        var prosesGrid = renderProsesKartGrid(r.prosesler);
         body.innerHTML =
-            '<div class="up-detay-hero">' + thumbHtml(r, 'up-detay-hero-img') +
-            '<dl class="up-detay-meta">' +
-            '<dt>Sipariş No</dt><dd>' + esc(r.sip_no) + '</dd>' +
-            '<dt>Cari</dt><dd>' + esc(r.musteri || r.cari || '—') + '</dd>' +
-            '<dt>Model</dt><dd>' + esc(r.model_kod) + '</dd>' +
-            '<dt>Renk</dt><dd>' + esc(r.renk) + '</dd>' +
-            '<dt>Miktar</dt><dd>' + fmtN(r.miktar) + '</dd>' +
-            '<dt>Termin</dt><dd>' + fmtTarih(r.termin) + '</dd>' +
-            '<dt>Plan Dönemi</dt><dd>' + esc(r.plan_donemi) + '</dd>' +
-            '<dt>Plan Başlangıç</dt><dd>' + fmtTarih(r.plan_baslangic) + '</dd>' +
-            '<dt>Plan Bitiş</dt><dd>' + fmtTarih(r.plan_bitis) + '</dd>' +
-            '<dt>Öncelik</dt><dd>' + esc(r.oncelik) + '</dd>' +
-            '<dt>Durum</dt><dd>' + durumBadge(r.durum, r.durum_renk, r.yuzde) + '</dd>' +
-            '</dl></div>' +
+            '<div class="up-detay-layout">' +
+            '<div class="up-detay-top">' +
+            '<div class="up-detay-top-media">' + thumbHtml(r, 'up-detay-thumb') + '</div>' +
+            '<div class="up-detay-top-sip">' +
+            detayMetaRow('Sipariş No', esc(r.sip_no), 'up-detay-meta-val-key') +
+            detayMetaRow('Cari', esc(r.musteri || r.cari || '—')) +
+            detayMetaRow('Model', esc(r.model_kod), 'up-detay-meta-val-key') +
+            detayMetaRow('Renk', '<span class="up-renk-dot"></span>' + esc(r.renk)) +
+            detayMetaRow('Asorti', esc(r.asorti || '—')) +
+            detayMetaRow('Miktar', fmtN(r.miktar), 'up-detay-meta-val-key') +
+            detayMetaRow('Termin', fmtTarih(r.termin)) +
+            '</div>' +
+            '<div class="up-detay-top-plan">' +
+            detayMetaRow('Plan Dönemi', esc(r.plan_donemi || '—')) +
+            detayMetaRow('Plan Başlangıç', fmtTarih(r.plan_baslangic)) +
+            detayMetaRow('Plan Bitiş', fmtTarih(r.plan_bitis)) +
+            detayMetaRow('Öncelik', esc(r.oncelik != null && r.oncelik !== '' ? r.oncelik : '—')) +
+            detayMetaRow('Durum', durumBadge(r.durum, r.durum_renk, r.yuzde)) +
+            '</div></div>' +
             renderEnjOzetHtml(r) +
-            '<h4>Proses Durumları</h4><div class="up-proses-ozet-grid">' + prosesGrid + '</div>' +
-            '<div class="up-proses-emir-breakdown">' + renderProsesEmirBreakdown(r.prosesler) + '</div>' +
-            '<div class="up-detay-tabs">' +
-            '<button type="button" class="up-detay-tab active" data-tab="m">M EMİRLER</button>' +
-            '<button type="button" class="up-detay-tab" data-tab="y" disabled id="upTabY">Y EMİRLER</button>' +
-            '<button type="button" class="up-detay-tab" data-tab="p" disabled id="upTabP">PROSES DETAYI</button>' +
-            '</div><div id="upDetayTabBody"></div>';
+            '<div class="up-detay-proses-section">' +
+            '<div class="up-detay-proses-head">' +
+            '<span class="up-detay-proses-title">PROSES DURUMLARI</span>' +
+            '<span class="up-detay-legend-inline">' +
+            '<i class="dot yesil"></i> BİTTİ <i class="dot sari"></i> DEVAM ' +
+            '<i class="dot gri"></i> BAŞLANMADI <i class="dot kirmizi"></i> GERİDE</span></div>' +
+            renderDetayProsesFlow(prosesler, state.detayProsesKod) +
+            '</div>' +
+            '<div id="upDetayDetailPanel" class="up-detay-detail-panel">' +
+            renderDetayEmirTable(activeProses) +
+            '</div></div>';
         if (r.plan_notu) {
-            body.insertAdjacentHTML('beforeend', '<p><strong>Plan Notu:</strong> ' + esc(r.plan_notu) + '</p>');
+            body.insertAdjacentHTML('beforeend', '<p class="up-detay-not"><strong>Plan Notu:</strong> ' + esc(r.plan_notu) + '</p>');
         }
-    }
-
-    function loadDetayMEmirler(planId, body, satir) {
-        var tabBody = $('upDetayTabBody');
-        if (!tabBody) return;
-        tabBody.innerHTML = '<div class="up-loading">M emirler yükleniyor…</div>';
-        fetch('/planlama/uretim-plan/api/detay/' + planId + '/m-emirler', { credentials: 'include' })
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (!d.ok) throw new Error(d.mesaj);
-                var proCols = (satir && satir.prosesler) ? satir.prosesler : [];
-                var headPro = proCols.map(function (p) {
-                    return '<th>' + esc(p.proses_adi || p.proses_kod) + '</th>';
-                }).join('');
-                var html = '<table class="up-subtbl"><thead><tr><th>M Emir</th><th>Miktar</th><th>Durum</th>' +
-                    headPro + '</tr></thead><tbody>';
-                (d.m_lotlar || []).forEach(function (m) {
-                    var byKod = {};
-                    (m.prosesler || []).forEach(function (p) { byKod[String(p.proses_kod)] = p; });
-                    var proCells = proCols.map(function (p) {
-                        var mp = byKod[String(p.proses_kod)] || {};
-                        return '<td>' + (mp.yuzde != null ? mp.yuzde : 0) + '%</td>';
-                    }).join('');
-                    html += '<tr class="clickable" data-m="' + m.emir_no + '"><td><strong>' + m.emir_no + '</strong></td>' +
-                        '<td>' + fmtN(m.miktar) + '</td><td>' + esc(m.durum) + '</td>' + proCells + '</tr>';
-                });
-                html += '</tbody></table>';
-                tabBody.innerHTML = html;
-                tabBody.querySelectorAll('tr[data-m]').forEach(function (tr) {
-                    tr.addEventListener('click', function () {
-                        tabBody.querySelectorAll('tr.selected').forEach(function (x) { x.classList.remove('selected'); });
-                        tr.classList.add('selected');
-                        var mNo = tr.getAttribute('data-m');
-                        loadYEmirler(mNo);
-                        $('upTabY').disabled = false;
-                        document.querySelectorAll('.up-detay-tab').forEach(function (t) { t.classList.remove('active'); });
-                        $('upTabY').classList.add('active');
-                    });
-                });
-            })
-            .catch(function (e) { tabBody.innerHTML = esc(e.message); });
-    }
-
-    function loadYEmirler(mNo) {
-        var tabBody = $('upDetayTabBody');
-        tabBody.innerHTML = '<div class="up-loading">Y emirler…</div>';
-        fetch('/planlama/uretim-plan/api/detay/m/' + mNo + '/y-emirler', { credentials: 'include' })
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (!d.ok) throw new Error(d.mesaj);
-                var html = '<p><strong>M Emir ' + mNo + '</strong></p><table class="up-subtbl"><thead><tr>' +
-                    '<th>Y Emir</th><th>Kategori</th><th>Stok Kod</th><th>Miktar</th><th>Proses</th>' +
-                    '<th>Verilen</th><th>Devam</th><th>Biten</th><th>%</th><th>Durum</th></tr></thead><tbody>';
-                (d.y_emirler || []).forEach(function (y) {
-                    html += '<tr class="clickable" data-y="' + y.emir_no + '"><td>' + y.emir_no + '</td>' +
-                        '<td>' + esc(y.kategori) + '</td><td>' + esc(y.stok_kod) + '</td>' +
-                        '<td>' + fmtN(y.miktar) + '</td><td>' + esc(y.proses) + '</td>' +
-                        '<td>' + fmtN(y.verilen) + '</td><td>' + fmtN(y.devam) + '</td>' +
-                        '<td>' + fmtN(y.biten) + '</td><td>' + (y.yuzde || 0) + '%</td><td>' + esc(y.durum) + '</td></tr>';
-                });
-                html += '</tbody></table>';
-                tabBody.innerHTML = html;
-                tabBody.querySelectorAll('tr[data-y]').forEach(function (tr) {
-                    tr.addEventListener('click', function () {
-                        loadProsesDetay(tr.getAttribute('data-y'));
-                        $('upTabP').disabled = false;
-                        document.querySelectorAll('.up-detay-tab').forEach(function (t) { t.classList.remove('active'); });
-                        $('upTabP').classList.add('active');
-                    });
-                });
-            });
-    }
-
-    function loadProsesDetay(emirNo) {
-        var tabBody = $('upDetayTabBody');
-        tabBody.innerHTML = '<div class="up-loading">Proses detay…</div>';
-        fetch('/planlama/uretim-plan/api/detay/emir/' + emirNo + '/proses', { credentials: 'include' })
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                var html = '<p><strong>Emir ' + emirNo + ' — Proses Detayı</strong></p><table class="up-subtbl">' +
-                    '<thead><tr><th>Ana Proses</th><th>Alt Proses</th><th>Tezgah</th><th>Verilen</th>' +
-                    '<th>Devam</th><th>Biten</th><th>Kalan</th><th>%</th><th>Durum</th></tr></thead><tbody>';
-                (d.prosesler || []).forEach(function (p) {
-                    html += '<tr><td>' + esc(p.proses_adi) + '</td><td>' + esc(p.alt_proses_adi) + '</td>' +
-                        '<td>' + esc(p.tezgah || '—') + '</td><td>' + fmtN(p.verilen) + '</td>' +
-                        '<td>' + fmtN(p.devam) + '</td><td>' + fmtN(p.biten) + '</td>' +
-                        '<td>' + fmtN(p.kalan) + '</td><td>' + (p.yuzde || 0) + '%</td>' +
-                        '<td>' + esc(p.durum) + '</td></tr>';
-                });
-                html += '</tbody></table>';
-                tabBody.innerHTML = html;
-            });
+        bindDetayProsesEvents();
+        bindDetayKatFilterEvents();
     }
 
     function openEdit(planId) {

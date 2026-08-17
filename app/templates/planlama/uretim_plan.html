@@ -3,7 +3,7 @@
 {% block title %}Üretim Plan · Planlama · Solariz CPS{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=8">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=11">
 {% endblock %}
 
 {% block content %}
@@ -263,5 +263,5 @@
   window.UP_CAN_EDIT = {{ 'true' if can_edit else 'false' }};
   window.UP_GEREKCE = {{ gerekce_secenekleri | tojson }};
 </script>
-<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=8"></script>
+<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=11"></script>
 {% endblock %}

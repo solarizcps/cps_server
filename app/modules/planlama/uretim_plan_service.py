@@ -380,6 +380,9 @@ def _proses_ozet(emir_nos, con_by_emir, wait_by_emir, giren_map, proses_kod=None
         if v > 0 and b >= v:
             biten_emir_sayisi += 1
         meta = (emir_meta or {}).get(en) or {}
+        dur_emir, renk_emir = _durum_from_miktar(v, b, d)
+        kat = _kategori(meta.get('model_kod') or '', meta.get('model_adi') or '')
+        urun_map = {'GOVDE': 'GÖVDE', 'ATKI': 'ATKI', 'SAYA': 'SAYA', 'TABAN': 'TABAN', 'MAMUL': 'MAMUL'}
         emir_detay.append({
             'emir_no': en,
             'tip': (meta.get('tip') or '').upper(),
@@ -391,7 +394,10 @@ def _proses_ozet(emir_nos, con_by_emir, wait_by_emir, giren_map, proses_kod=None
             'biten': b,
             'kalan': max(0, v - b),
             'yuzde': _yuzde(b, v),
-            'durum': _durum_from_miktar(v, b, d)[0],
+            'durum': dur_emir,
+            'renk': renk_emir,
+            'kategori': kat,
+            'urun_tipi': urun_map.get(kat, kat),
         })
     durum, renk = _durum_from_miktar(verilen, biten, devam)
     pct = _yuzde(biten, verilen)
@@ -520,6 +526,31 @@ def _load_emir_hareket(cur, query_emirs):
             'devam_eden': r[3], 'biten': r[4],
         })
     return giren_map, con_by_emir, wait_by_emir
+
+
+def _resolve_asorti(cur, sip_no, sip_harinx, mamul_skod, rkod):
+    """Korgun canonical asorti: sipariş satırı → stok asorti fallback."""
+    rkod_i = int(rkod or 0)
+    cur.execute("""
+        SELECT TOP 1 LTRIM(RTRIM(ISNULL(a.Asorti, '')))
+        FROM K_SipAsortiList a WITH(NOLOCK)
+        WHERE a.FisNo = %s AND a.FisHarinx = %s AND a.SKod = %s
+          AND (%s = 0 OR a.RKod = %s)
+        ORDER BY CASE WHEN a.RKod = %s THEN 0 ELSE 1 END, a.kgid
+    """, (int(sip_no), int(sip_harinx), mamul_skod, rkod_i, rkod_i, rkod_i))
+    row = cur.fetchone()
+    if row and (row[0] or '').strip():
+        return (row[0] or '').strip()
+    cur.execute("""
+        SELECT TOP 1 LTRIM(RTRIM(ISNULL(a.Asorti, '')))
+        FROM Stok_Asortileri a WITH(NOLOCK)
+        WHERE a.SKod = %s
+        ORDER BY a.kgid
+    """, (mamul_skod,))
+    row = cur.fetchone()
+    if row and (row[0] or '').strip():
+        return (row[0] or '').strip()
+    return ''
 
 
 def _build_satir(cur, sip_no, sip_harinx, mamul_skod, rkod, har_ctx, sip_meta,
@@ -652,6 +683,7 @@ def _build_satir(cur, sip_no, sip_harinx, mamul_skod, rkod, har_ctx, sip_meta,
         plan_fields.get('plan_baslangic'), plan_fields.get('plan_bitis'),
     )
     emir_disp, lot_count = _emir_no_kompakt(m_emirs)
+    asorti = _resolve_asorti(cur, sip_no, sip_harinx, mamul_skod, rkod)
 
     row = {
         'canonical_key': f'{sip_no}|{sip_harinx}|{mamul_skod}|{rkod}',
@@ -666,6 +698,7 @@ def _build_satir(cur, sip_no, sip_harinx, mamul_skod, rkod, har_ctx, sip_meta,
         'sresim': (sresim or '').strip(),
         'renk': renk_tanim,
         'rkod': rkod,
+        'asorti': asorti or None,
         'miktar': toplam_m or har_miktar,
         'birim': birim or 'CIFT',
         'termin': termin or sip_meta.get('teslim_tar') or '-',
