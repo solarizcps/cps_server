@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% set active = 'planlama' %}
+{% block title %}Üretim Plan · Planlama · Solariz CPS{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=8">
+{% endblock %}
+
+{% block content %}
+<div class="up-wrap">
+  <div class="up-toolbar">
+    <div class="up-toolbar-left">
+      <h1>Üretim Plan</h1>
+      <p>Korgun canlı sipariş / emir / proses — Excel plan görünümü</p>
+    </div>
+    <div class="up-toolbar-right">
+      {% if can_edit %}
+      <button type="button" class="up-btn up-btn-accent" id="upPlanOlusturBtn">+ PLAN OLUŞTUR</button>
+      {% endif %}
+      <button type="button" class="up-btn up-btn-ghost" id="upYenileBtn" title="Yenile">↻ Yenile</button>
+      <span class="up-badge" id="upKaynak">Korgun</span>
+    </div>
+  </div>
+
+  <div class="up-tabs" role="tablist">
+    <button type="button" class="up-tab active" data-donem="bu_hafta">BU HAFTA</button>
+    <button type="button" class="up-tab" data-donem="gelecek_hafta">GELECEK HAFTA</button>
+    <button type="button" class="up-tab" data-donem="bu_ay">BU AY</button>
+    <button type="button" class="up-tab" data-donem="3_ay">3 AY</button>
+    <button type="button" class="up-tab" data-donem="gecmis">GEÇMİŞ</button>
+  </div>
+
+  <div id="upError" class="up-error" style="display:none;"></div>
+
+  <div class="up-tbl-wrap">
+    <table class="up-tbl" id="upTable">
+      <colgroup>
+        <col class="up-col-chk">
+        <col class="up-col-gorsel">
+        <col class="up-col-cari">
+        <col class="up-col-sip-emir">
+        <col class="up-col-model">
+        <col class="up-col-renk">
+        <col class="up-col-miktar">
+        <col class="up-col-termin">
+        <col class="up-col-proses">
+        <col class="up-col-enj">
+        <col class="up-col-plan">
+        <col class="up-col-plan">
+        <col class="up-col-oncelik">
+        <col class="up-col-durum">
+        <col class="up-col-aksiyon">
+      </colgroup>
+      <thead>
+        <tr>
+          <th class="up-col-chk"></th>
+          <th class="up-col-gorsel">RESİM</th>
+          <th class="up-col-cari">CARİ / FİRMA</th>
+          <th class="up-col-sip-emir">SİPARİŞ NO<br><span class="up-th-sub">(EMİR NO)</span></th>
+          <th class="up-col-model">MODEL KODU</th>
+          <th class="up-col-renk">RENK</th>
+          <th class="up-col-miktar num">MİKTAR</th>
+          <th class="up-col-termin">TERMİN</th>
+          <th class="up-col-proses up-th-grup">ÜRETİM PROSES ZİNCİRİ</th>
+          <th class="up-col-enj">ENJ MAKİNE</th>
+          <th class="up-col-plan">PLAN BAŞLANGIÇ</th>
+          <th class="up-col-plan">PLAN BİTİŞ</th>
+          <th class="up-col-oncelik">ÖNCELİK</th>
+          <th class="up-col-durum">DURUM</th>
+          <th class="up-col-aksiyon">AKSİYON</th>
+        </tr>
+        <tr class="up-subhead">
+          <th colspan="8"></th>
+          <th class="up-th-proses-hint">Soldan sağa üretim akışı</th>
+          <th colspan="6"></th>
+        </tr>
+      </thead>
+      <tbody id="upBody">
+        <tr><td colspan="15" class="up-loading">Yükleniyor…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="up-footer">
+    <div class="up-legend">
+      <span><i class="dot yesil"></i> BİTTİ</span>
+      <span><i class="dot sari"></i> DEVAM</span>
+      <span><i class="dot gri"></i> BAŞLANMADI</span>
+      <span><i class="dot kirmizi"></i> GERİDE</span>
+    </div>
+    <div id="upToplam" class="up-toplam">Toplam 0 kayıt</div>
+  </div>
+</div>
+
+<!-- PLAN OLUŞTUR MODAL -->
+<div id="upCreateModal" class="up-modal" hidden>
+  <div class="up-modal-backdrop" data-close="1"></div>
+  <div class="up-modal-panel up-modal-create">
+    <div class="up-modal-head">
+      <h2>Plan Oluştur</h2>
+      <button type="button" class="up-modal-x" data-close="1">×</button>
+    </div>
+    <div class="up-modal-body">
+      <div class="up-create-step">
+        <label>Sipariş No</label>
+        <div class="up-inline">
+          <input type="text" id="upCreateSipNo" maxlength="12" inputmode="numeric" placeholder="33919">
+          <button type="button" class="up-btn" id="upCreateGetirBtn">GETİR</button>
+        </div>
+        <div id="upCreateHint" class="up-hint"></div>
+        <div id="upCreateListe" class="up-create-liste"></div>
+      </div>
+      <div id="upCreatePlanForm" class="up-create-form" style="display:none;">
+        <h3>Plan Alanları</h3>
+        <div class="up-form-grid">
+          <label>Plan Dönemi
+            <select id="upFormDonem">
+              <option value="bu_hafta">Bu Hafta</option>
+              <option value="gelecek_hafta">Gelecek Hafta</option>
+              <option value="bu_ay">Bu Ay</option>
+              <option value="3_ay">3 Ay</option>
+            </select>
+          </label>
+          <label>Plan Başlangıç <input type="date" id="upFormBas"></label>
+          <label>Plan Bitiş <input type="date" id="upFormBit"></label>
+          <label>Öncelik
+            <select id="upFormOncelik">
+              <option value="1">1 — En yüksek</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+          <label>Gerekçe
+            <select id="upFormGerekce">
+              <option value="">— Seçin —</option>
+              {% for g in gerekce_secenekleri %}
+              <option value="{{ g }}">{{ g }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="up-span2">Plan Notu <textarea id="upFormNot" rows="2"></textarea></label>
+        </div>
+        <div id="upFormReadonly" class="up-form-readonly"></div>
+
+        <!-- ENJEKSİYON PLAN HESABI -->
+        <div class="up-enj-bolum">
+          <h3 class="up-enj-baslik">Enjeksiyon Plan Hesabı</h3>
+          <div id="upEnjUyari" class="up-enj-uyari" style="display:none;"></div>
+          <div class="up-form-grid up-enj-grid">
+            <label>Makine
+              <select id="upEnjMakine">
+                <option value="">— Makine Seçin —</option>
+              </select>
+            </label>
+            <label>İstasyon
+              <select id="upEnjIstasyon" disabled>
+                <option value="">— Önce Makine —</option>
+              </select>
+            </label>
+            <label>Slot
+              <select id="upEnjSlot" disabled>
+                <option value="">— Önce İstasyon —</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+              </select>
+            </label>
+            <label>Slot Durumu
+              <div id="upEnjSlotDurum" class="up-enj-slot-durum up-enj-bos">—</div>
+            </label>
+            <label>Kalıp
+              <select id="upEnjKalip" disabled>
+                <option value="">— Önce Slot —</option>
+              </select>
+            </label>
+            <label>Planlanacak Çift
+              <input type="number" id="upEnjPlanCift" min="1" placeholder="ör. 4000">
+            </label>
+            <label>Plan Günlük Tur
+              <input type="number" id="upEnjGunlukTur" min="1" placeholder="ör. 60">
+            </label>
+            <label>Enjeksiyon Başlangıç
+              <input type="date" id="upEnjBas">
+            </label>
+          </div>
+          <div id="upEnjHesapOzet" class="up-enj-hesap-ozet" style="display:none;">
+            <div class="up-enj-hesap-satir">
+              <span>Tur başı çift</span>
+              <strong id="upEnjTurCift">—</strong>
+            </div>
+            <div class="up-enj-hesap-satir">
+              <span>Günlük kapasite</span>
+              <strong id="upEnjGunlukKap">—</strong>
+              <em id="upEnjGunlukKapFormul" class="up-enj-formul"></em>
+            </div>
+            <div class="up-enj-hesap-satir">
+              <span>Tahmini üretim süresi</span>
+              <strong id="upEnjTahminiGun">—</strong>
+              <em id="upEnjTahminiFormul" class="up-enj-formul"></em>
+            </div>
+            <div class="up-enj-hesap-satir up-enj-bitis-satir">
+              <span>Hesaplanan bitiş</span>
+              <strong id="upEnjBitis" class="up-enj-bitis">—</strong>
+            </div>
+            <div id="upEnjCakismaUyari" class="up-enj-cakisma" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="up-modal-foot">
+      <button type="button" class="up-btn up-btn-ghost" data-close="1">İptal</button>
+      <button type="button" class="up-btn up-btn-accent" id="upPlanaEkleBtn" disabled>PLANA EKLE</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAY POPUP -->
+<div id="upDetayModal" class="up-modal" hidden>
+  <div class="up-modal-backdrop" data-close="1"></div>
+  <div class="up-modal-panel up-modal-detay">
+    <div class="up-modal-head">
+      <h2 id="upDetayBaslik">Detay</h2>
+      <button type="button" class="up-modal-x" data-close="1">×</button>
+    </div>
+    <div class="up-modal-body up-detay-body" id="upDetayBody">
+      <div class="up-loading">Yükleniyor…</div>
+    </div>
+    <div class="up-modal-foot">
+      <button type="button" class="up-btn up-btn-ghost" data-close="1">Kapat</button>
+      {% if can_edit %}
+      <button type="button" class="up-btn" id="upDetayDuzenleBtn">Düzenle</button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- DÜZENLE MODAL -->
+<div id="upEditModal" class="up-modal" hidden>
+  <div class="up-modal-backdrop" data-close="1"></div>
+  <div class="up-modal-panel up-modal-edit">
+    <div class="up-modal-head"><h2>Plan Düzenle</h2><button type="button" class="up-modal-x" data-close="1">×</button></div>
+    <div class="up-modal-body">
+      <div class="up-form-grid">
+        <label>Plan Dönemi <select id="upEditDonem"></select></label>
+        <label>Plan Başlangıç <input type="date" id="upEditBas"></label>
+        <label>Plan Bitiş <input type="date" id="upEditBit"></label>
+        <label>Öncelik <select id="upEditOncelik"></select></label>
+        <label>Gerekçe <select id="upEditGerekce"></select></label>
+        <label class="up-span2">Plan Notu <textarea id="upEditNot" rows="2"></textarea></label>
+      </div>
+    </div>
+    <div class="up-modal-foot">
+      <button type="button" class="up-btn up-btn-ghost" data-close="1">İptal</button>
+      <button type="button" class="up-btn up-btn-accent" id="upEditKaydetBtn">Kaydet</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.UP_CAN_EDIT = {{ 'true' if can_edit else 'false' }};
+  window.UP_GEREKCE = {{ gerekce_secenekleri | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=8"></script>
+{% endblock %}
