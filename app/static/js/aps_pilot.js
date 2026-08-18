@@ -580,6 +580,8 @@
     task.start_date = newStart;
     task.end_date = newEnd;
     task.duration = minutesBetween(newStart, newEnd);
+    task.$no_start = false;
+    task.$no_end = false;
     syncEmbeddedPlanDates(task);
     gantt.updateTask(taskId);
     isReverting = false;
@@ -687,8 +689,8 @@
     if (fromSlotId === toSlotId) return fromSlotId;
     var from = gantt.getTask(fromSlotId);
     var to = gantt.getTask(toSlotId);
-    var start = from.start_date;
-    var end = from.end_date || gantt.calculateEndDate(from);
+    var start = new Date(from.start_date.getTime());
+    var end = new Date((from.end_date || gantt.calculateEndDate(from)).getTime());
     var plan = from.aps_plan;
     var status = from.aps_status;
     var tooltip = from.aps_tooltip;
@@ -711,6 +713,8 @@
       to.end_date = new Date(end.getTime());
       to.duration = minutesBetween(start, end);
       to.unscheduled = false;
+      to.$no_start = false;
+      to.$no_end = false;
       to.readonly = false;
       to.type = 'task';
       to.aps_plan = plan;
@@ -1201,6 +1205,7 @@
       gantt.config.show_tooltips = false;
       if (mode === 'move') {
         beginGhostMoveDrag(id);
+        return false;
       }
       return true;
     });
@@ -1607,6 +1612,10 @@
         plan_id: c.plan_id,
         old_resource: c.old_resource,
         new_resource: c.new_resource,
+        old_start: c.old_start ? c.old_start.toISOString() : null,
+        old_end: c.old_end ? c.old_end.toISOString() : null,
+        proposed_start: c.proposed_start ? c.proposed_start.toISOString() : null,
+        proposed_end: c.proposed_end ? c.proposed_end.toISOString() : null,
         change_type: c.change_type.slice(),
         conflict: c.conflict,
         downstream_impact: c.downstream_impact.slice(),

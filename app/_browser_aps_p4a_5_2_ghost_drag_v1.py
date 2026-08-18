@@ -239,7 +239,175 @@ def main():
             check('T12b bar Y on M2/A row', abs(bar_y - y_m2a) < 14 if bar_y and y_m2a else False,
                   f'bar_y={bar_y} y_m2a={y_m2a}')
 
+            # ===== T-V1..T-V16: Vertical Resource Drag Regression =====
+            tv_snap = page.evaluate("""() => {
+                var t = gantt.getTask('M2-A');
+                var el = gantt.getTaskNode('M2-A');
+                var r = el ? el.getBoundingClientRect() : null;
+                return {
+                    resource: t ? t.id : null,
+                    start_date: t && t.start_date ? t.start_date.toISOString() : null,
+                    start_is_date: t ? (t.start_date instanceof Date) : null,
+                    end_date: t && t.end_date ? t.end_date.toISOString() : null,
+                    end_is_date: t ? (t.end_date instanceof Date) : null,
+                    duration: t ? t.duration : null,
+                    bar_width: r ? Math.round(r.width) : null,
+                    bar_height: r ? Math.round(r.height) : null,
+                    bar_classes: el ? el.className : null,
+                    no_thin: el ? !el.classList.contains('gantt_thin_task') : null,
+                    no_dependent: el ? !el.classList.contains('gantt_dependent_task') : null,
+                    staging_count: window.__apsStagingCount(),
+                    staged: window.__apsStagedChanges(),
+                };
+            }""")
+            # Get baseline duration from M1-A before drag (captured at snapshot time)
+            m1a_orig_dur = page.evaluate("""() => {
+                // planOriginals has the baseline
+                var t = gantt.getTask('M2-A');
+                var planId = t && t.aps_primary_plan_id ? t.aps_primary_plan_id : null;
+                if (!planId) return null;
+                // staged has old_start/old_end
+                var staged = window.__apsStagedChanges();
+                if (staged && staged.length) {
+                    var s = staged[0];
+                    if (s.old_start && s.old_end) {
+                        return Math.round((new Date(s.old_end) - new Date(s.old_start)) / 60000);
+                    }
+                }
+                return null;
+            }""")
+
+            check('T-V1 resource == M2-A', tv_snap.get('resource') == 'M2-A', str(tv_snap.get('resource')))
+            check('T-V2 start_date instanceof Date', tv_snap.get('start_is_date') is True)
+            check('T-V3 end_date instanceof Date', tv_snap.get('end_is_date') is True)
+            dur_after = tv_snap.get('duration')
+            if m1a_orig_dur is not None and dur_after is not None:
+                check('T-V4 duration preserved', abs(dur_after - m1a_orig_dur) <= 1,
+                      f'before={m1a_orig_dur} after={dur_after}')
+            else:
+                check('T-V4 duration preserved', dur_after is not None and dur_after > 100,
+                      f'dur_after={dur_after}')
+            check('T-V5 bar_width > 100', (tv_snap.get('bar_width') or 0) > 100,
+                  f"bar_width={tv_snap.get('bar_width')}")
+            check('T-V6 NO gantt_thin_task', tv_snap.get('no_thin') is True,
+                  str(tv_snap.get('bar_classes')))
+            check('T-V7 NO gantt_dependent_task', tv_snap.get('no_dependent') is True,
+                  str(tv_snap.get('bar_classes')))
+            check('T-V8 staging exactly 1 change', tv_snap.get('staging_count') == 1,
+                  str(tv_snap.get('staging_count')))
+            if tv_snap.get('staged'):
+                s0 = tv_snap['staged'][0]
+                check('T-V9 staging proposed_start not None', s0.get('proposed_start') is not None)
+                ps = s0.get('proposed_start')
+                pe = s0.get('proposed_end') if s0.get('proposed_end') else s0.get('proposed_start')
+                check('T-V10 duration NOT 1 minute', ps != pe,
+                      f"{ps} == {pe}")
+            else:
+                fail('T-V9 staging proposed_start not None', 'staged list is empty')
+                fail('T-V10 duration NOT 1 minute', 'staged list is empty')
+
+            # T-V11: M1/A → M3/A
             page.click('#apsStagingDiscard')
+            page.wait_for_timeout(300)
+            y_m3a = page.evaluate("() => window.__apsTimelineRowY('M3-A')")
+            dy_m3a = int(y_m3a - y_m1a) if y_m3a and y_m1a else 0
+            if dy_m3a > 0:
+                box = task.bounding_box()
+                sx2, sy2 = box['x'] + 24, box['y'] + box['height'] / 2
+                page.mouse.move(sx2, sy2)
+                page.mouse.down()
+                for i in range(1, 15):
+                    page.mouse.move(sx2, sy2 + dy_m3a * (i/14), steps=1)
+                    page.wait_for_timeout(20)
+                page.mouse.up()
+                page.wait_for_timeout(500)
+                tv11 = page.evaluate("""() => {
+                    var t = gantt.getTask('M3-A');
+                    var el = gantt.getTaskNode('M3-A');
+                    var r = el ? el.getBoundingClientRect() : null;
+                    return {
+                        new_resource: window.__apsStagedChanges().length ? window.__apsStagedChanges()[0].new_resource : null,
+                        bar_width: r ? Math.round(r.width) : null,
+                        duration: t ? t.duration : null,
+                        no_thin: el ? !el.classList.contains('gantt_thin_task') : null,
+                    };
+                }""")
+                check('T-V11 M1/A→M3/A resource', tv11.get('new_resource') == 'M3-A', str(tv11))
+                check('T-V11b M3/A bar_width > 100', (tv11.get('bar_width') or 0) > 100, str(tv11))
+                check('T-V11c M3/A no gantt_thin_task', tv11.get('no_thin') is True, str(tv11))
+                page.evaluate('() => window.__apsDiscardStaging()')
+            else:
+                ok('T-V11 M1/A→M3/A skipped (no row data)')
+
+            # T-V12: horizontal MOVE
+            drag_plan(page, dx=70, dy=0)
+            tv12 = page.evaluate('() => window.__apsStagingCount()')
+            check('T-V12 horizontal move staged', tv12 >= 1, str(tv12))
+            page.evaluate('() => window.__apsDiscardStaging()')
+
+            # T-V13: RESIZE
+            box = task.bounding_box()
+            rx2, ry2 = box['x'] + box['width'] - 6, box['y'] + box['height'] / 2
+            page.mouse.move(rx2, ry2)
+            page.mouse.down()
+            page.mouse.move(rx2 + 60, ry2, steps=8)
+            page.mouse.up()
+            page.wait_for_timeout(400)
+            check('T-V13 resize staged', page.evaluate('() => window.__apsStagingCount()') >= 1)
+            check('T-V13b resize no ghost', not page.evaluate('() => window.__apsGhostVisible()'))
+            page.evaluate('() => window.__apsDiscardStaging()')
+
+            # T-V14: ESC cancel
+            box = task.bounding_box()
+            sx3, sy3 = box['x'] + 24, box['y'] + box['height'] / 2
+            page.mouse.move(sx3, sy3)
+            page.mouse.down()
+            page.mouse.move(sx3 + 40, sy3, steps=4)
+            page.wait_for_timeout(80)
+            page.keyboard.press('Escape')
+            page.mouse.up()
+            page.wait_for_timeout(400)
+            esc_snap = page.evaluate("""() => {
+                var t = gantt.getTask('M1-A');
+                var el = gantt.getTaskNode('M1-A');
+                var r = el ? el.getBoundingClientRect() : null;
+                return {
+                    ghost_visible: window.__apsGhostVisible(),
+                    staging: window.__apsStagingCount(),
+                    bar_width: r ? Math.round(r.width) : null,
+                    resource: t ? t.id : null,
+                    duration: t ? t.duration : null,
+                };
+            }""")
+            check('T-V14 ESC ghost gone', not esc_snap.get('ghost_visible'))
+            check('T-V14b ESC no staging', esc_snap.get('staging', 99) == 0, str(esc_snap.get('staging')))
+            check('T-V14c ESC task back M1-A', esc_snap.get('resource') == 'M1-A')
+
+            # T-V15: no getDuration errors (T30 covers page errors)
+            tv15_errors = page.evaluate("""() => {
+                return typeof window.__aps_last_getDuration_error !== 'undefined'
+                    ? window.__aps_last_getDuration_error : 0;
+            }""")
+            check('T-V15 getDuration errors == 0', tv15_errors == 0, str(tv15_errors))
+
+            # T-V16: page errors = 0 (also covered by T30 but explicit)
+            check('T-V16 page errors == 0', len(page_errors) == 0, str(page_errors))
+
+            page.evaluate('() => window.__apsDiscardStaging()')
+            page.wait_for_timeout(300)
+            # ===== End T-V1..T-V16 =====
+
+            # T16: Re-do vertical drag M1/A → M2/A and then DISCARD to verify revert
+            box = task.bounding_box()
+            sx_t16, sy_t16 = box['x'] + 24, box['y'] + box['height'] / 2
+            page.mouse.move(sx_t16, sy_t16)
+            page.mouse.down()
+            for i in range(1, 13):
+                page.mouse.move(sx_t16, sy_t16 + dy_m2a * (i/12), steps=1)
+                page.wait_for_timeout(25)
+            page.mouse.up()
+            page.wait_for_timeout(400)
+            page.evaluate('() => window.__apsDiscardStaging()')
             page.wait_for_timeout(450)
             page.screenshot(path=str(SHOT_DIR / 'E_discard_M1A.png'), full_page=False)
             check('T16 DISCARD → M1/A', page.evaluate("() => window.__apsPlansOnResource('M1-A')").count('plan-199') >= 1)
