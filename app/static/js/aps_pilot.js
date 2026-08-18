@@ -71,7 +71,7 @@
     if (qs.get('aps_no_tooltip') === '1') dragFlags.tooltip = false;
   })();
 
-  var ZOOM_ORDER = ['1w', '1d', '1h', '30m', '10m'];
+  var ZOOM_ORDER = ['1y', '6m', '3m', '2m', '1w', '1d', '1h', '30m', '10m'];
 
   var PROCESS_COLORS = {
     enj: 'aps-process-enj',
@@ -80,50 +80,222 @@
     diger: 'aps-process-diger',
   };
 
+  // ─── ZOOM CONTRACT ──────────────────────────────────────────────────────────
+  // Each preset defines:
+  //   scales        – DHTMLX scale rows (top → bottom)
+  //   minColumnWidth – px per smallest time unit column
+  //   timeStep      – drag snap resolution (minutes)
+  //   windowDays    – total visible date range width
+  //   anchorOffset  – how many days BEFORE anchor to start the window (0..1 fraction)
+  //
+  // Visible window = [anchor - anchorOffset*windowDays, anchor + (1-anchorOffset)*windowDays]
+  // This guarantees anchor (= active plan start) is always in view.
+  // ─────────────────────────────────────────────────────────────────────────────
+
   var ZOOM_PRESETS = {
+    // ── CLOSE: minute-level columns ────────────────────────────────────────
     '10m': {
       scales: [
-        { unit: 'day', step: 1, format: '%d %M' },
-        { unit: 'hour', step: 1, format: '%H:%i' },
+        { unit: 'day',    step: 1,  format: '%d %M %Y' },
+        { unit: 'hour',   step: 1,  format: '%H:00' },
         { unit: 'minute', step: 10, format: '%H:%i' },
       ],
-      minColumnWidth: 56,
+      minColumnWidth: 40,
       timeStep: 10,
+      windowDays: 1,        // ~24 h visible
+      anchorOffset: 0.25,
     },
     '30m': {
       scales: [
-        { unit: 'day', step: 1, format: '%d %M' },
-        { unit: 'hour', step: 1, format: '%H:%i' },
+        { unit: 'day',    step: 1,  format: '%d %M %Y' },
+        { unit: 'hour',   step: 2,  format: '%H:00' },
         { unit: 'minute', step: 30, format: '%H:%i' },
       ],
-      minColumnWidth: 44,
+      minColumnWidth: 36,
       timeStep: 30,
+      windowDays: 2,        // ~2 days visible
+      anchorOffset: 0.25,
     },
+    // ── MEDIUM: hour-level columns ─────────────────────────────────────────
     '1h': {
       scales: [
-        { unit: 'day', step: 1, format: '%d %M' },
-        { unit: 'hour', step: 1, format: '%H:%i' },
+        { unit: 'day',  step: 1, format: '%d %M %Y' },
+        { unit: 'hour', step: 1, format: '%H:00' },
       ],
-      minColumnWidth: 72,
+      minColumnWidth: 56,
       timeStep: 60,
+      windowDays: 5,        // ~5 days visible
+      anchorOffset: 0.2,
     },
     '1d': {
       scales: [
         { unit: 'month', step: 1, format: '%F %Y' },
-        { unit: 'day', step: 1, format: '%d %M' },
+        { unit: 'day',   step: 1, format: '%d %M' },
       ],
-      minColumnWidth: 96,
-      timeStep: 1440,
+      minColumnWidth: 56,
+      timeStep: 60,
+      windowDays: 18,       // ~2.5 weeks visible
+      anchorOffset: 0.2,
     },
+    // ── WIDE: week-level columns ───────────────────────────────────────────
+    // "1 hf" = weekly planning scale: ~7–8 weeks visible so 2 months of
+    // context appear; each column = 1 day, grouped by week + month headers.
     '1w': {
       scales: [
         { unit: 'month', step: 1, format: '%F %Y' },
-        { unit: 'week', step: 1, format: 'Hafta %W' },
+        // weekScaleTemplate renders "Hafta N" using ISO week number
+        { unit: 'week',  step: 1, template: function(d){ return weekScaleTemplate(d); } },
+        { unit: 'day',   step: 1, format: '%j' },
       ],
-      minColumnWidth: 120,
+      minColumnWidth: 22,
+      timeStep: 1440,
+      windowDays: 56,       // 8 weeks visible
+      anchorOffset: 0.15,
+    },
+    // ── LONG: month/quarter/year ───────────────────────────────────────────
+    '2m': {
+      scales: [
+        { unit: 'year',  step: 1, format: '%Y' },
+        { unit: 'month', step: 1, format: '%F' },
+        { unit: 'week',  step: 1, template: function(d){ return weekScaleTemplate(d); } },
+      ],
+      minColumnWidth: 24,
       timeStep: 10080,
+      windowDays: 62,
+      anchorOffset: 0.15,
+    },
+    '3m': {
+      scales: [
+        { unit: 'year',  step: 1, format: '%Y' },
+        { unit: 'month', step: 1, format: '%F' },
+        { unit: 'week',  step: 1, template: function(d){ return weekScaleTemplate(d); } },
+      ],
+      minColumnWidth: 18,
+      timeStep: 10080,
+      windowDays: 92,
+      anchorOffset: 0.15,
+    },
+    '6m': {
+      scales: [
+        { unit: 'year',  step: 1, format: '%Y' },
+        { unit: 'month', step: 1, format: '%M' },
+      ],
+      minColumnWidth: 48,
+      timeStep: 10080,
+      windowDays: 184,
+      anchorOffset: 0.15,
+    },
+    '1y': {
+      scales: [
+        { unit: 'year',  step: 1, format: '%Y' },
+        { unit: 'month', step: 1, format: '%M' },
+      ],
+      minColumnWidth: 32,
+      timeStep: 10080,
+      windowDays: 366,
+      anchorOffset: 0.1,
     },
   };
+
+  // Build a {start, end} window so that anchorDate is always visible.
+  // anchorOffset fraction of windowDays is placed BEFORE the anchor.
+  function getVisibleWindow(anchorDate, key) {
+    var preset  = ZOOM_PRESETS[key] || ZOOM_PRESETS['1h'];
+    var days    = preset.windowDays    || 5;
+    var before  = Math.ceil(days * (preset.anchorOffset || 0.2));
+    var anchor  = anchorDate || new Date();
+    var start   = new Date(anchor.getTime());
+    start.setDate(start.getDate() - before);
+    start.setHours(0, 0, 0, 0);
+    var end = new Date(start.getTime());
+    end.setDate(end.getDate() + days + 1);
+    end.setHours(23, 59, 59, 0);
+    return { start: start, end: end };
+  }
+
+  // ─── CANONICAL TURKISH LOCALE ────────────────────────────────────────────────
+  // Single source of truth for all date labels shown in the DHTMLX timeline.
+  // Applied once via gantt.i18n.setLocale() before gantt.init() so that the
+  // %F (full month), %M (short month), %D (short day), %l (full day) tokens
+  // in scale format strings all render in Turkish automatically.
+  // ─────────────────────────────────────────────────────────────────────────────
+  var TR_LOCALE = {
+    month_full:  ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
+                  'Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'],
+    month_short: ['Oca','Şub','Mar','Nis','May','Haz',
+                  'Tem','Ağu','Eyl','Eki','Kas','Ara'],
+    day_full:    ['Pazar','Pazartesi','Salı','Çarşamba',
+                  'Perşembe','Cuma','Cumartesi'],
+    day_short:   ['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'],
+    // UI strings used by DHTMLX lightbox / tooltips (not shown in our UI but
+    // set for completeness so no English leaks through).
+    label_time:  'Zaman',
+    label_task:  'Görev Adı',
+    new_filters: 'Yeni Filtre',
+    confirm_closing:     'Değişiklikler kaybolacak. Emin misiniz?',
+    confirm_deleting:    'Görev kalıcı silinecek. Emin misiniz?',
+    section_description: 'Açıklama',
+    section_time:        'Süre',
+    section_type:        'Tür',
+    column_wbs:          'WBS',
+    link:                'Bağlantı',
+    confirm_link_deleting: 'Bağlantı silinecek. Emin misiniz?',
+    link_start:          ' (başlangıç)',
+    link_end:            ' (bitiş)',
+    message_ok:          'Tamam',
+    message_cancel:      'İptal',
+    next:                'İleri',
+    prev:                'Geri',
+    save:                'Kaydet',
+    icon_save:           'Kaydet',
+    icon_cancel:         'İptal',
+    icon_delete:         'Sil',
+  };
+
+  // Installs the Turkish locale into DHTMLX once.
+  // Safe to call before gantt.init(); DHTMLX merges locale on init.
+  function installTurkishLocale() {
+    if (gantt.i18n && typeof gantt.i18n.setLocale === 'function') {
+      gantt.i18n.setLocale({
+        date: {
+          month_full:  TR_LOCALE.month_full,
+          month_short: TR_LOCALE.month_short,
+          day_full:    TR_LOCALE.day_full,
+          day_short:   TR_LOCALE.day_short,
+        },
+        labels: {
+          new_task: 'Yeni Görev',
+          icon_save: TR_LOCALE.icon_save,
+          icon_cancel: TR_LOCALE.icon_cancel,
+          icon_delete: TR_LOCALE.icon_delete,
+          confirm_closing: TR_LOCALE.confirm_closing,
+          confirm_deleting: TR_LOCALE.confirm_deleting,
+          section_description: TR_LOCALE.section_description,
+          section_time: TR_LOCALE.section_time,
+          section_type: TR_LOCALE.section_type,
+          message_ok: TR_LOCALE.message_ok,
+          message_cancel: TR_LOCALE.message_cancel,
+        },
+      });
+    }
+  }
+
+  // ─── CUSTOM SCALE FORMATTER ───────────────────────────────────────────────────
+  // DHTMLX processes scale format strings through gantt.date.date_to_str().
+  // When a format contains custom tokens like "Hf %W" (Hafta + week number),
+  // we override scale_row_class / date_scale via template.  But it is simpler
+  // and safer to use a scale.template function for the week row only.
+  // The month/day tokens (%F, %M, %d) already work via TR_LOCALE above.
+  // We only need a custom formatter for the "Hafta N" week label.
+  function weekScaleTemplate(date) {
+    // ISO week number
+    var d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    var dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return 'Hafta ' + weekNo;
+  }
 
   function parseDt(str) {
     if (!str) return null;
@@ -200,11 +372,15 @@
     var el = document.getElementById('apsGanttEnj');
     var shell = document.getElementById('apsGanttShell');
     if (!el || !shell || !ganttReady) return;
-    var h = shell.clientHeight;
-    if (h > 0) {
+    // CSS already sets #apsGanttEnj { height: 100% !important; flex: 1 }.
+    // Read the real committed height via offsetHeight (forces layout flush).
+    // Always write an explicit px value so DHTMLX getSizes() sees a number,
+    // never an empty string or a percentage it cannot resolve.
+    var h = shell.offsetHeight || shell.getBoundingClientRect().height || shell.clientHeight;
+    if (h > 40) {
       el.style.height = h + 'px';
-      if (typeof gantt.setSizes === 'function') gantt.setSizes();
     }
+    if (typeof gantt.setSizes === 'function') gantt.setSizes();
   }
 
   function installDragForensics() {
@@ -590,10 +766,17 @@
     stagePlanChange(task);
   }
 
+  function fmtDateTR(d) {
+    if (!d) return '—';
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    var mon = TR_LOCALE.month_short[d.getMonth()];
+    return pad(d.getDate()) + ' ' + mon + ' ' + d.getFullYear();
+  }
+
   function updateDateRangeLabel(view) {
     var el = document.getElementById('apsDateRange');
     if (!el || !view) return;
-    el.textContent = fmtDateShort(view.start) + ' 00:00 → ' + fmtDateShort(view.end) + ' 23:59';
+    el.textContent = fmtDateTR(view.start) + ' → ' + fmtDateTR(view.end);
   }
 
   function resourceRowAtClientY(clientY) {
@@ -1099,7 +1282,11 @@
     loadWorkingWindows(payload);
     invalidateCellClassCache();
     var view = computeViewRange(payload);
-    viewAnchorDate = view.start;
+    // Anchor = first plan start so zoom always centres on the active plan.
+    // Fall back to view.start if no plans loaded yet.
+    var firstPlanStart = (payload.plans && payload.plans.length > 0)
+      ? parseDt(payload.plans[0].start) : null;
+    viewAnchorDate = firstPlanStart || view.start;
 
     gantt.config.date_format = '%d-%m-%Y %H:%i';
     gantt.config.xml_date = '%d-%m-%Y %H:%i';
@@ -1124,6 +1311,10 @@
     gantt.config.show_progress = false;
     gantt.config.show_links = false;
     gantt.config.scroll_on_click = false;
+    // Always render tasks that fall outside the visible date window —
+    // zoom changes the window, not the task data, so we must never drop rows.
+    gantt.config.show_tasks_outside_timescale = true;
+    // start/end are overridden per-zoom by applyZoom → getVisibleWindow.
     gantt.config.start_date = view.start;
     gantt.config.end_date = view.end;
 
@@ -1316,14 +1507,35 @@
   function applyZoom(key) {
     var preset = ZOOM_PRESETS[key] || ZOOM_PRESETS['1h'];
     currentZoomKey = key;
-    gantt.config.scales = preset.scales;
+
+    // Recompute visible date window for this zoom level around the anchor.
+    var anchor = viewAnchorDate || gantt.config.start_date || new Date();
+    var win = getVisibleWindow(anchor, key);
+    gantt.config.start_date = win.start;
+    gantt.config.end_date   = win.end;
+
+    gantt.config.scales           = preset.scales;
     gantt.config.min_column_width = preset.minColumnWidth;
-    gantt.config.time_step = preset.timeStep || 10;
-    gantt.config.round_dnd_dates = dragFlags.snap;
+    gantt.config.time_step        = preset.timeStep || 10;
+    gantt.config.round_dnd_dates  = dragFlags.snap;
+
     invalidateCellClassCache();
     gantt.eachTask(function (t) { delete t._aps_text_cache; });
+
+    // Keep all process/slot rows open so DHTMLX never collapses them.
+    if (ganttReady) {
+      gantt.eachTask(function (t) {
+        if (t.aps_type === 'process' || t.aps_type === 'slot') t.$open = true;
+      });
+    }
+
+    fitGanttToShell();
     gantt.render();
     fitGanttToShell();
+
+    // Scroll to anchor so the active plan is always visible horizontally.
+    if (gantt.showDate) gantt.showDate(anchor);
+
     setActiveZoomButton(key);
   }
 
@@ -1401,6 +1613,7 @@
     updateStagingBar();
     configureGantt(payload);
     if (!ganttReady) {
+      installTurkishLocale();
       gantt.init('apsGanttEnj');
       ganttReady = true;
       installDragForensics();
@@ -1410,11 +1623,7 @@
     gantt.parse({ data: buildTasksFromPayload(payload), links: [] });
     fitGanttToShell();
     applyZoom(currentZoomKey);
-    if (payload.plans && payload.plans.length > 1) {
-      var mid = parseDt(payload.plans[0].start);
-      if (mid) gantt.showDate(mid);
-      gantt.unselectTask();
-    }
+    gantt.unselectTask();
   }
 
   function loadTimeline() {
@@ -1664,6 +1873,21 @@
       timelineClientWidth: bg ? bg.clientWidth : 0,
       scaleText: scale ? scale.innerText.slice(0, 200) : '',
     };
+  };
+
+  window.__apsApplyZoom = function (key) { applyZoom(key); };
+
+  // Expose moveEmbeddedPlan for automated drag simulation in acceptance tests.
+  window.__apsMoveEmbeddedPlan = function (fromSlotId, toSlotId, planId) {
+    return moveEmbeddedPlan(fromSlotId, toSlotId, planId);
+  };
+
+  // Combined helper: move + stage (mirrors what a completed ghost drag does).
+  window.__apsDragAndStage = function (fromSlotId, toSlotId, planId) {
+    var newId = moveEmbeddedPlan(fromSlotId, toSlotId, planId);
+    var task  = gantt.getTask(newId);
+    stagePlanChange(task);
+    return newId;
   };
 
   window.__apsProcessTree = function () {

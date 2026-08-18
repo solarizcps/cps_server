@@ -741,6 +741,14 @@
   font-size: 0.68rem;
 }
 
+/* Zoom group buttons: slightly tighter padding so full Turkish labels
+   (1 saat, 1 hafta, 1 yıl) fit on one line without wrapping the toolbar. */
+.aps-zoom-group .aps-btn {
+  padding: 3px 6px;
+  font-size: 0.67rem;
+  white-space: nowrap;
+}
+
 .aps-gantt-toolbar-single .aps-btn-icon {
   min-width: 28px;
   padding: 2px 7px;
@@ -826,6 +834,13 @@
 /* P4A.5 — plan bar + drag UX */
 .gantt_task_line.aps-enj-task {
   cursor: grab;
+}
+
+/* Long-zoom view: task bar is narrow by nature; keep it visible with a
+   minimum width so it never collapses to an invisible line. */
+.gantt_task_line.aps-enj-task.gantt_thin_task {
+  min-width: 4px !important;
+  overflow: hidden;
 }
 
 .gantt_task_line.aps-enj-task:active {
