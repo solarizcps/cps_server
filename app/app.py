@@ -32,6 +32,9 @@ from modules.uretim_yonetim.routes import uretim_yonetim_bp
 from modules.planlama.routes import planlama_bp
 from modules.planlama.proses_takip import proses_takip_bp
 from modules.planlama.uretim_plan_routes import uretim_plan_bp
+from modules.planlama.enjeksiyon_plan_routes import enjeksiyon_plan_bp
+from modules.planlama.genel_plan_routes import genel_plan_bp  # GENEL_PLAN_C1
+from modules.planlama.aps_pilot_routes import aps_pilot_bp
 from modules.tasks import tasks_bp
 from modules.enjeksiyon import enjeksiyon_bp  # ENJ_F3_IMPORT
 from modules.saha import saha_bp  # SAHA_NUMUNE_TALEP_FAZ1
@@ -63,6 +66,9 @@ app.register_blueprint(uretim_yonetim_bp)
 app.register_blueprint(planlama_bp)
 app.register_blueprint(proses_takip_bp)
 app.register_blueprint(uretim_plan_bp)
+app.register_blueprint(enjeksiyon_plan_bp)
+app.register_blueprint(genel_plan_bp)  # GENEL_PLAN_C1
+app.register_blueprint(aps_pilot_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(canli_saha_bp)  # CANLI_SAHA_BRIDGE
 app.register_blueprint(personel_giris_bp)  # PERSONEL_GIRIS_BRIDGE

@@ -47,6 +47,7 @@ window.__cpsRootMap = function(pathname) {
   if (_h('/sablon'))           return {key:'/planlama',title:'Planlama',      href:'/planlama/'};
   if (_h('/alt-proses'))       return {key:'/planlama',title:'Planlama',      href:'/planlama/'};
   if (_h('/planlama/uretim-plan')) return {key:'/planlama',title:'Planlama', href:'/planlama/uretim-plan/'};
+  if (_h('/planlama/enjeksiyon-plan')) return {key:'/planlama',title:'Planlama', href:'/planlama/enjeksiyon-plan/'};
   if (_h('/planlama'))         return {key:'/planlama',title:'Planlama',      href:'/planlama/'};
   if (_h('/ithalat'))          return {key:'/finans',  title:'Finans',        href:'/finans/'};
   if (_h('/maliyet'))          return {key:'/finans',  title:'Finans',        href:'/finans/'};
@@ -1220,6 +1221,16 @@ window.__cpsRootMap = function(pathname) {
         <a href="/planlama/uretim-plan/" class="si {% if '/planlama/uretim-plan' in rp %}active{% endif %}" title="Üretim Plan">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 9h8"/><path d="M8 13h5"/><path d="M8 17h3"/></svg></span>
           <span class="sl">Üretim Plan</span>
+        </a>
+
+        <a href="/planlama/genel-plan/" class="si {% if '/planlama/genel-plan' in rp %}active{% endif %}" title="Genel Planlama">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M6 8h2"/><path d="M6 11h2"/><path d="M11 8h7"/><path d="M11 11h5"/></svg></span>
+          <span class="sl">Genel Planlama</span>
+        </a>
+
+        <a href="/planlama/enjeksiyon-plan/" class="si {% if '/planlama/enjeksiyon-plan' in rp %}active{% endif %}" title="Enjeksiyon Planı">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 10v4"/><path d="M10 10v4"/><path d="M14 10v4"/><path d="M18 10v4"/></svg></span>
+          <span class="sl">Enjeksiyon Planı</span>
         </a>
 
         <a href="/planlama/karar-masasi" class="si {% if '/planlama/karar-masasi' in rp %}active{% endif %}" title="Karar Masası">

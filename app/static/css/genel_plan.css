@@ -1,0 +1,341 @@
+/* ================================================================
+   GENEL PLANLAMA — C1 READ-ONLY CANONICAL TIMELINE
+   ================================================================ */
+
+/* -- Wrap & Toolbar ------------------------------------------------ */
+.gp-wrap {
+  padding: 16px 20px 40px;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.gp-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.gp-toolbar-left { flex: 1 1 auto; }
+.gp-toolbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+.gp-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+  margin: 0 0 2px;
+  color: var(--c-text, #1a1a1a);
+}
+
+.gp-sub {
+  font-size: .8rem;
+  color: var(--c-muted, #666);
+  margin: 0;
+}
+
+.gp-badge {
+  font-size: .7rem;
+  font-weight: 600;
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+
+.gp-btn {
+  font-size: .8rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--c-border, #ccc);
+  background: #fff;
+  cursor: pointer;
+  color: var(--c-text, #222);
+}
+.gp-btn:hover { background: #f5f5f5; }
+.gp-btn-ghost { background: transparent; border-color: transparent; }
+
+/* -- Filters ------------------------------------------------------- */
+.gp-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.gp-filter-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.gp-filter-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--c-border, #ddd);
+  flex-shrink: 0;
+}
+
+.gp-mach-btn,
+.gp-period-btn {
+  font-size: .75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--c-border, #ccc);
+  background: #fff;
+  cursor: pointer;
+  color: var(--c-text, #333);
+  transition: background .15s, border-color .15s;
+}
+.gp-mach-btn:hover,
+.gp-period-btn:hover { background: #f0f4ff; border-color: #7a9ef0; }
+.gp-mach-btn.active,
+.gp-period-btn.active {
+  background: #1a56db;
+  border-color: #1a56db;
+  color: #fff;
+}
+
+/* -- Period nav ---------------------------------------------------- */
+.gp-period-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.gp-nav-btn {
+  font-size: 1.1rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--c-border, #ccc);
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.gp-nav-btn:hover { background: #f0f4ff; }
+
+.gp-nav-label {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--c-text, #222);
+  min-width: 160px;
+}
+
+/* -- Error / Loading ----------------------------------------------- */
+.gp-error {
+  background: #fff3e0;
+  border: 1px solid #ffb74d;
+  color: #e65100;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: .83rem;
+  margin-bottom: 12px;
+}
+
+.gp-loading {
+  font-size: .85rem;
+  color: var(--c-muted, #666);
+  padding: 20px 0;
+}
+
+.gp-empty {
+  font-size: .85rem;
+  color: var(--c-muted, #666);
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* -- Timeline layout ---------------------------------------------- */
+.gp-timeline {
+  border: 1px solid var(--c-border, #ddd);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+/* Header row */
+.gp-timeline-head {
+  display: flex;
+  background: #f5f7fb;
+  border-bottom: 2px solid var(--c-border, #ddd);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.gp-res-col {
+  flex: 0 0 110px;
+  min-width: 110px;
+  max-width: 110px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border-right: 1px solid var(--c-border, #ddd);
+  background: #f5f7fb;
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--c-muted, #555);
+  letter-spacing: .04em;
+}
+
+.gp-res-header {
+  display: flex;
+  align-items: center;
+}
+
+.gp-time-col {
+  flex: 1 1 0;
+  position: relative;
+  min-height: 28px;
+}
+
+/* Column header ticks */
+.gp-col-hdr {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: .68rem;
+  color: var(--c-muted, #666);
+  text-align: center;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0;
+  gap: 1px;
+}
+
+.gp-col-hdr.gp-col-weekend { color: #aaa; }
+
+.gp-col-day { font-weight: 600; font-size: .65rem; }
+.gp-col-alt { font-size: .68rem; }
+
+/* Resource rows */
+.gp-row {
+  display: flex;
+  min-height: 52px;
+  border-bottom: 1px solid var(--c-border, #eee);
+}
+.gp-row:last-child { border-bottom: none; }
+
+.gp-res-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+.gp-res-label {
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--c-text, #222);
+}
+.gp-res-sub {
+  font-size: .65rem;
+  color: var(--c-muted, #888);
+}
+
+.gp-row-blocks {
+  position: relative;
+  overflow: visible;
+  background: #fafafa;
+}
+
+/* Weekend shading */
+.gp-weekend-shade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(0,0,0,.035);
+  pointer-events: none;
+}
+
+/* -- Plan blocks --------------------------------------------------- */
+.gp-block {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  border-radius: 5px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: filter .12s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.12);
+  min-width: 6px;
+  box-sizing: border-box;
+}
+.gp-block:hover,
+.gp-block:focus {
+  filter: brightness(1.08);
+  outline: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,.22);
+  z-index: 5;
+}
+
+/* A slot — blue family */
+.gp-block-a {
+  background: linear-gradient(135deg, #1a56db 0%, #3b82f6 100%);
+  border: 1.5px solid #1e40af;
+  color: #fff;
+}
+
+/* B slot — teal family */
+.gp-block-b {
+  background: linear-gradient(135deg, #0891b2 0%, #22d3ee 100%);
+  border: 1.5px solid #0e7490;
+  color: #fff;
+}
+
+.gp-block-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 5px;
+  height: 100%;
+  overflow: hidden;
+  justify-content: center;
+}
+
+.gp-block-sip,
+.gp-block-model,
+.gp-block-ist,
+.gp-block-kalip {
+  font-size: .62rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+.gp-block-sip { font-size: .65rem; }
+
+/* -- Tooltip ------------------------------------------------------- */
+.gp-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: #1e293b;
+  color: #f1f5f9;
+  border-radius: 8px;
+  padding: 10px 13px;
+  font-size: .75rem;
+  min-width: 200px;
+  max-width: 280px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.35);
+  pointer-events: none;
+  line-height: 1.5;
+}
+
+.gp-tip-row {
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gp-tip-row:last-child { margin-bottom: 0; }
+.gp-tip-row b { color: #7dd3fc; }
