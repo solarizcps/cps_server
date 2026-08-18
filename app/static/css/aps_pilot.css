@@ -470,7 +470,7 @@
 
 .aps-process-grid-row.aps-process-enj .gantt_cell {
   border-left: 3px solid #059669;
-  padding-left: 4px;
+  padding-left: 0;
 }
 
 .aps-process-grid-row.aps-process-monta .gantt_cell {
@@ -481,15 +481,30 @@
   border-left: 3px solid #7c3aed;
 }
 
+/* P5.1 hierarchy indent — DHTMLX native indent handles level offset;
+   we let padding-left: 0 on the cell so tree_indent spans drive the visual depth. */
+.aps-machine-grid-row .gantt_cell {
+  font-weight: 600;
+  font-size: 0.72rem;
+  color: #334155;
+  padding-left: 0;
+  background: #f1f5f9;
+}
+
 .aps-slot-grid-row .gantt_cell {
   font-weight: 600;
   font-size: 0.72rem;
   color: #475569;
-  padding-left: 18px;
+  padding-left: 0;
 }
 
 .gantt_task_line.aps-process-row,
 .gantt_task_line.gantt_project.aps-process-row {
+  display: none !important;
+}
+
+.gantt_task_line.aps-machine-row,
+.gantt_task_line.gantt_project.aps-machine-row {
   display: none !important;
 }
 
@@ -692,7 +707,67 @@
 .gantt_tooltip {
   font-size: 12px;
   line-height: 1.4;
-  max-width: 280px;
+  max-width: 320px;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* P5.1 UX — compact plan hover tooltip */
+.aps-plan-tip {
+  background: #1e293b;
+  color: #f1f5f9;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  min-width: 220px;
+  max-width: 300px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  overflow: hidden;
+}
+
+.aps-tip-header {
+  background: #0f172a;
+  color: #38bdf8;
+  font-weight: 700;
+  font-size: 12.5px;
+  padding: 7px 12px 6px;
+  letter-spacing: 0.02em;
+}
+
+.aps-tip-table {
+  border-collapse: collapse;
+  width: 100%;
+  padding: 4px 0;
+}
+
+.aps-tip-table tr { vertical-align: top; }
+
+.aps-tip-lbl {
+  color: #94a3b8;
+  padding: 2px 8px 2px 12px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.aps-tip-val {
+  color: #e2e8f0;
+  padding: 2px 12px 2px 4px;
+  font-weight: 500;
+}
+
+.aps-tip-sep td {
+  height: 6px;
+}
+
+.aps-tip-section {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 12px 1px;
 }
 
 /* P4A.4 — Wide workspace + drawer + staging */

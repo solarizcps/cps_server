@@ -127,30 +127,37 @@
       windowDays: 5,        // ~5 days visible
       anchorOffset: 0.2,
     },
+    // ── DAY VIEW: exactly 1 day (~24 hours) ───────────────────────────────
+    // Top scale:    "18 Ağustos 2026 Salı"  (full day header)
+    // Bottom scale: "00:00 | 02:00 | 04:00 ... 22:00"  (2-hour columns)
+    // windowDays = 1 so the visible range is always a single calendar day.
     '1d': {
       scales: [
-        { unit: 'month', step: 1, format: '%F %Y' },
-        { unit: 'day',   step: 1, format: '%d %M' },
+        { unit: 'day',  step: 1, template: function(d){ return dayFullScaleTemplate(d); } },
+        { unit: 'hour', step: 2, format: '%H:00' },
       ],
-      minColumnWidth: 56,
+      minColumnWidth: 60,   // ~12 columns × 60px ≈ 720px for 1366 screen
       timeStep: 60,
-      windowDays: 18,       // ~2.5 weeks visible
-      anchorOffset: 0.2,
+      windowDays: 1,
+      anchorOffset: 0.0,    // anchor date IS the day → window starts at midnight
+      exactWindow: true,    // no +1 buffer; show exactly 1 calendar day
     },
-    // ── WIDE: week-level columns ───────────────────────────────────────────
-    // "1 hf" = weekly planning scale: ~7–8 weeks visible so 2 months of
-    // context appear; each column = 1 day, grouped by week + month headers.
+    // ── WEEK VIEW: exactly 7 days + hour detail ────────────────────────────
+    // Top scale:    "Ağustos 2026"
+    // Middle scale: "Pzt 18 Ağu | Sal 19 Ağu | ..."  (1 column per day)
+    // Bottom scale: "00 | 04 | 08 | 12 | 16 | 20"    (4-hour slots per day)
+    // windowDays = 7, anchor at start of week.
     '1w': {
       scales: [
         { unit: 'month', step: 1, format: '%F %Y' },
-        // weekScaleTemplate renders "Hafta N" using ISO week number
-        { unit: 'week',  step: 1, template: function(d){ return weekScaleTemplate(d); } },
-        { unit: 'day',   step: 1, format: '%j' },
+        { unit: 'day',   step: 1, template: function(d){ return weekDayScaleTemplate(d); } },
+        { unit: 'hour',  step: 4, format: '%H' },
       ],
-      minColumnWidth: 22,
-      timeStep: 1440,
-      windowDays: 56,       // 8 weeks visible
-      anchorOffset: 0.15,
+      minColumnWidth: 32,   // 6 × 32px = 192px per day; 7 days × 192 = 1344px
+      timeStep: 60,
+      windowDays: 7,
+      anchorOffset: 0.0,    // anchor = plan start; window starts same day
+      exactWindow: true,    // no +1 buffer; show exactly 7 calendar days
     },
     // ── LONG: month/quarter/year ───────────────────────────────────────────
     '2m': {
@@ -208,7 +215,10 @@
     start.setDate(start.getDate() - before);
     start.setHours(0, 0, 0, 0);
     var end = new Date(start.getTime());
-    end.setDate(end.getDate() + days + 1);
+    // exactWindow=true: no +1 buffer — used for '1d'/'1w' where the
+    // contract specifies an exact 1-day / 7-day visible range.
+    var buffer = preset.exactWindow ? 0 : 1;
+    end.setDate(end.getDate() + days + buffer);
     end.setHours(23, 59, 59, 0);
     return { start: start, end: end };
   }
@@ -288,13 +298,30 @@
   // The month/day tokens (%F, %M, %d) already work via TR_LOCALE above.
   // We only need a custom formatter for the "Hafta N" week label.
   function weekScaleTemplate(date) {
-    // ISO week number
+    // ISO week number → "Hafta 34"
     var d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     var dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
     var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
     var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
     return 'Hafta ' + weekNo;
+  }
+
+  // "1 gün" top scale: "18 Ağustos 2026 Salı"
+  function dayFullScaleTemplate(date) {
+    var dayShort = TR_LOCALE.day_full[date.getDay()];
+    var dayNum   = date.getDate();
+    var mon      = TR_LOCALE.month_full[date.getMonth()];
+    var yr       = date.getFullYear();
+    return dayNum + ' ' + mon + ' ' + yr + ' ' + dayShort;
+  }
+
+  // "1 hafta" middle scale: "Pzt 18 Ağu"
+  function weekDayScaleTemplate(date) {
+    var pad  = function(n){ return n < 10 ? '0' + n : '' + n; };
+    var ds   = TR_LOCALE.day_short[date.getDay()];
+    var mon  = TR_LOCALE.month_short[date.getMonth()];
+    return ds + ' ' + pad(date.getDate()) + ' ' + mon;
   }
 
   function parseDt(str) {
@@ -1074,21 +1101,39 @@
     return cls;
   }
 
+  function tooltipRow(label, value) {
+    if (!value && value !== 0) return '';
+    return '<tr><td class="aps-tip-lbl">' + label + '</td>' +
+           '<td class="aps-tip-val">' + value + '</td></tr>';
+  }
+
   function buildTooltip(plan) {
-    return [
-      'Sipariş: ' + (plan.sip_no || '—'),
-      'Model: ' + (plan.mamul_skod || '—'),
-      'Renk: ' + (plan.renk || '—'),
-      'Müşteri: ' + (plan.musteri || '—'),
-      'Miktar: ' + (plan.miktar || 0) + ' çift',
-      'Proses: ' + (plan.process_name || 'ENJEKSİYON'),
-      'Makine/Slot: ' + (plan.makine || '—') + ' / ' + (plan.slot || '—'),
-      'İstasyon: ' + (plan.istasyonlar || '—'),
-      'Kalıp: ' + (plan.kalip || '—'),
-      'Başlangıç: ' + (plan.start || '—'),
-      'Bitiş: ' + (plan.end || '—'),
-      'Durum: ' + (plan.status || 'PLANLANDI'),
-    ].join('<br>');
+    if (!plan) return '';
+    return '<div class="aps-plan-tip">' +
+      '<div class="aps-tip-header">Sipariş ' + (plan.sip_no || '—') + '</div>' +
+      '<table class="aps-tip-table">' +
+      tooltipRow('Model', plan.mamul_skod) +
+      tooltipRow('Renk', plan.renk) +
+      tooltipRow('Müşteri', plan.musteri) +
+      tooltipRow('Miktar', plan.miktar ? Math.round(plan.miktar) + ' çift' : null) +
+      '<tr class="aps-tip-sep"><td colspan="2"></td></tr>' +
+      '<tr><td class="aps-tip-section" colspan="2">ENJEKSİYON</td></tr>' +
+      tooltipRow('Makine / Slot', (plan.makine || '—') + ' / ' + (plan.slot || '—')) +
+      tooltipRow('İstasyon', plan.istasyonlar) +
+      tooltipRow('Kalıp', plan.kalip) +
+      tooltipRow('Kalıp adedi', plan.kalip_adedi) +
+      tooltipRow('Aktif göz', plan.aktif_goz) +
+      tooltipRow('Tur', plan.gerekli_tur) +
+      tooltipRow('Çift / tur', plan.tur_cift) +
+      '<tr class="aps-tip-sep"><td colspan="2"></td></tr>' +
+      '<tr><td class="aps-tip-section" colspan="2">PLAN ZAMANI</td></tr>' +
+      tooltipRow('Başlangıç', plan.start) +
+      tooltipRow('Tahmini bitiş', plan.end) +
+      tooltipRow('Çalışma modu', plan.calisma_modu) +
+      tooltipRow('Hafta sonu', plan.hafta_sonu) +
+      tooltipRow('Kapasite kaynağı', plan.kapasite_kaynak) +
+      tooltipRow('Durum', plan.status || 'PLANLANDI') +
+      '</table></div>';
   }
 
   function adaptiveBlockText(plan) {
@@ -1180,12 +1225,31 @@
     });
 
     (payload.resources || []).forEach(function (res) {
-      if (res.kind !== 'slot' || !res.enabled) return;
+      if (!res.enabled) return;
+
+      // Intermediate machine parent row (P5.1 hierarchy)
+      if (res.kind === 'machine') {
+        tasks.push({
+          id: res.id,
+          text: res.display_name || res.label || res.makine,
+          parent: res.parent_process,
+          type: 'project',
+          open: true,
+          readonly: true,
+          aps_type: 'machine',
+          aps_makine: res.makine,
+          aps_process_code: res.process_code,
+          unscheduled: true,
+        });
+        return;
+      }
+
+      if (res.kind !== 'slot') return;
       var rplans = byRes[res.id] || [];
       var task = {
         id: res.id,
-        text: res.display_name || ((res.makine || '') + ' / ' + (res.label || '')),
-        parent: res.parent_process,
+        text: res.label || res.slot || res.display_name,
+        parent: res.parent_machine || res.parent_process,
         readonly: rplans.length ? false : true,
         aps_type: 'slot',
         aps_resource_id: res.id,
@@ -1302,6 +1366,7 @@
     gantt.config.fit_tasks = false;
     gantt.config.row_height = 40;
     gantt.config.bar_height = 30;
+    gantt.config.indent = 18;
     gantt.config.scale_height = 46;
     gantt.config.autosize = false;
     gantt.config.autoscroll = dragFlags.autoscroll;
@@ -1328,12 +1393,14 @@
       if (task.aps_type === 'process') {
         return 'aps-process-grid-row ' + (task.aps_process_class || '');
       }
+      if (task.aps_type === 'machine') return 'aps-machine-grid-row';
       if (task.aps_type === 'slot') return 'aps-slot-grid-row';
       return '';
     };
 
     gantt.templates.task_class = function (start, end, task) {
       if (task.aps_type === 'process') return 'aps-process-row ' + (task.aps_process_class || '');
+      if (task.aps_type === 'machine') return 'aps-machine-row';
       if (task.aps_type === 'slot') {
         if (task.render === 'split') return 'aps-slot-row aps-split-resource';
         if (task.aps_plan) return 'aps-enj-task ' + statusClass(task.aps_status);
@@ -1368,22 +1435,15 @@
       return '';
     };
 
+    // P5.1 UX: click no longer opens the right drawer — detail shown via hover tooltip.
     gantt.attachEvent('onTaskClick', function (id) {
-      if (isDragging) return true;
-      var task = gantt.getTask(id);
-      if (task.aps_type === 'enj_plan') {
-        renderDetailPanel(task.aps_plan);
-        openDrawer();
-      } else if (task.aps_type === 'slot' && task.aps_plan) {
-        renderDetailPanel(task.aps_plan);
-        openDrawer();
-      }
       return true;
     });
 
     gantt.attachEvent('onBeforeTaskDrag', function (id, mode) {
       var task = gantt.getTask(id);
       if (task.aps_type === 'process') return false;
+      if (task.aps_type === 'machine') return false;
       if (task.aps_type === 'slot' && !task.aps_plan) return false;
       if (!isPlanTask(task)) return false;
       isDragging = true;
@@ -1522,10 +1582,10 @@
     invalidateCellClassCache();
     gantt.eachTask(function (t) { delete t._aps_text_cache; });
 
-    // Keep all process/slot rows open so DHTMLX never collapses them.
+    // Keep process/machine rows open; slot rows are leaves (no children to collapse).
     if (ganttReady) {
       gantt.eachTask(function (t) {
-        if (t.aps_type === 'process' || t.aps_type === 'slot') t.$open = true;
+        if (t.aps_type === 'process' || t.aps_type === 'machine') t.$open = true;
       });
     }
 
@@ -1559,8 +1619,22 @@
   }
 
   function navDays(delta) {
+    // Navigation step is zoom-aware:
+    //   '1d'  → move 1 day per click
+    //   '1w'  → move 7 days per click
+    //   other → move 1 day per click (scroll-based navigation)
+    var step = 1;
+    if (currentZoomKey === '1w') step = 7;
     var base = viewAnchorDate || gantt.config.start_date || new Date();
-    scrollToDate(addDays(base, delta));
+    var next = addDays(base, delta * step);
+    // For day/week views re-render the full window centred on new anchor
+    // so the visible date range actually moves (not just a scroll offset).
+    if (currentZoomKey === '1d' || currentZoomKey === '1w') {
+      viewAnchorDate = next;
+      applyZoom(currentZoomKey);
+    } else {
+      scrollToDate(next);
+    }
   }
 
   function focusPlan(planId) {
@@ -1884,7 +1958,12 @@
 
   // Combined helper: move + stage (mirrors what a completed ghost drag does).
   window.__apsDragAndStage = function (fromSlotId, toSlotId, planId) {
-    var newId = moveEmbeddedPlan(fromSlotId, toSlotId, planId);
+    var resolvedPlanId = planId;
+    if (!resolvedPlanId) {
+      var fromTask = gantt.getTask(fromSlotId);
+      if (fromTask) resolvedPlanId = fromTask.aps_primary_plan_id || (fromTask.aps_plan && fromTask.aps_plan.id);
+    }
+    var newId = moveEmbeddedPlan(fromSlotId, toSlotId, resolvedPlanId);
     var task  = gantt.getTask(newId);
     stagePlanChange(task);
     return newId;

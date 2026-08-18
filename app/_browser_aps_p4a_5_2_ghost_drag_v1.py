@@ -132,7 +132,8 @@ def main():
             page.wait_for_timeout(2500)
 
             metrics = page.evaluate('() => window.__apsRowMetrics()')
-            check('T2 9 resource/process row korunuyor', metrics.get('gridRows') == 9, str(metrics))
+            # P5.1: 1 process + 4 machine + 8 slot = 13 rows (machine hierarchy added)
+            check('T2 13 resource/process row korunuyor', metrics.get('gridRows') == 13, str(metrics))
             on_m1 = page.evaluate("() => window.__apsPlansOnResource('M1-A')")
             check('T3 33917 M1/A', 'plan-199' in on_m1, str(on_m1))
 
