@@ -39,7 +39,7 @@
             motorResult: null,
             hesapOk: false,
             gridData: null,
-            referenceMode: 'AUTO',
+            referenceMode: 'MANUAL',
             manualRefGunduz: null,
             manualRefGece: null,
             autoRefGunduz: null,
@@ -651,6 +651,7 @@
         if (state.requiresEnj) {
             enjYukleKapasite();
             enjYukleKaliplar();
+            enjYukleSonHaftaHiz(null);
         }
         wizardUpdateNav();
     }
@@ -838,19 +839,19 @@
     }
 
     function enjUpdateManualRefVisibility() {
-        var mode = state.enj.referenceMode || 'AUTO';
+        // B2 SADELESTİRME: OTOMATİK kaldırıldı, MANUAL her zaman görünür
         var cm = state.enj.calismaModu || 'GUNDUZ_GECE';
         var wrap = $('upEnjManualRefWrap');
         var gW = $('upEnjManualGunduzWrap');
         var eW = $('upEnjManualGeceWrap');
-        if (wrap) wrap.style.display = mode === 'MANUAL' ? '' : 'none';
-        if (gW) gW.style.display = (mode === 'MANUAL' && cm !== 'GECE') ? '' : 'none';
-        if (eW) eW.style.display = (mode === 'MANUAL' && cm !== 'GUNDUZ') ? '' : 'none';
+        if (wrap) wrap.style.display = '';
+        if (gW) gW.style.display = cm !== 'GECE' ? '' : 'none';
+        if (eW) eW.style.display = cm !== 'GUNDUZ' ? '' : 'none';
     }
 
     function enjSyncReferenceModeFromDom() {
-        var sel = document.querySelector('input[name="upEnjRefMode"]:checked');
-        state.enj.referenceMode = sel ? sel.value : 'AUTO';
+        // B2 SADELESTİRME: radio kaldırıldı, daima MANUAL
+        state.enj.referenceMode = 'MANUAL';
         state.enj.manualRefGunduz = $('upEnjManualGunduz') && $('upEnjManualGunduz').value
             ? parseFloat($('upEnjManualGunduz').value) : null;
         state.enj.manualRefGece = $('upEnjManualGece') && $('upEnjManualGece').value
@@ -859,14 +860,7 @@
     }
 
     function enjUpdateLowConfHint(d) {
-        var hint = $('upEnjLowConfHint');
-        if (!hint) return;
-        if ((state.enj.referenceMode || 'AUTO') !== 'AUTO') {
-            hint.style.display = 'none';
-            return;
-        }
-        var conf = d && d.overall_confidence;
-        hint.style.display = (conf === 'DUSUK' || conf === 'DÜŞÜK') ? 'block' : 'none';
+        // B2 SADELESTİRME: OTOMATİK kaldırıldı, hint artık kullanılmıyor
     }
 
     function wizardUpdateNav() {
@@ -902,8 +896,9 @@
         e.istasyonPlanDurum = {};
         e.reservation = null;
         e.pendingConflict = null;
-        e.referenceMode = 'AUTO'; e.manualRefGunduz = null; e.manualRefGece = null;
+        e.referenceMode = 'MANUAL'; e.manualRefGunduz = null; e.manualRefGece = null;
         e.autoRefGunduz = null; e.autoRefGece = null;
+        e._sonHaftaVeri = null;
         enjHesapGizle();
         if ($('upEnjMakineCards')) $('upEnjMakineCards').innerHTML = '';
         if ($('upEnjIstasyonGrid')) $('upEnjIstasyonGrid').innerHTML = '';
@@ -922,11 +917,8 @@
         if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
         if ($('upEnjManualGunduz')) $('upEnjManualGunduz').value = '';
         if ($('upEnjManualGece')) $('upEnjManualGece').value = '';
-        document.querySelectorAll('input[name="upEnjRefMode"]').forEach(function (r) {
-            r.checked = r.value === 'AUTO';
-        });
+        // B2 SADELESTİRME: radio kaldırıldı, MANUAL sabit
         enjUpdateManualRefVisibility();
-        if ($('upEnjLowConfHint')) $('upEnjLowConfHint').style.display = 'none';
         enjUpdateGozField();
     }
 
@@ -1004,7 +996,12 @@
         if ($('upEnjBas')) $('upEnjBas').value = enjApiDtToLocal(d.ilk_uygun);
         if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
         enjHesapGizle();
-        enjFetchIstasyonPlanDurum();
+        enjFetchIstasyonPlanDurum(function () {
+            var m = (state.enj.gridData || []).find(function (x) {
+                return (x.makine_id || x.id) === state.enj.makineId;
+            });
+            if (m) enjRenderIstasyonGrid(m);
+        });
         enjUpdateHesapBtn();
     }
 
@@ -1021,18 +1018,11 @@
         var e = state.enj;
         var mr = d || e.motorResult || {};
         var istStr = e.istasyonlar.map(function (x) { return 'İST' + x; }).join('–');
-        var refMode = e.referenceMode || mr.reference_mode || 'AUTO';
+        // B PHASE CLEANUP: daima MANUEL mod
         var refLbl = '—';
-        if (refMode === 'MANUAL') {
-            var rv = mr.manual_reference_gunduz || e.manualRefGunduz;
-            if (e.calismaModu === 'GECE') rv = mr.manual_reference_gece || e.manualRefGece;
-            refLbl = rv != null ? ('MANUEL ' + Math.round(rv) + ' tur/vardiya') : 'MANUEL';
-        } else {
-            var gref = mr.gunduz_reference || e.autoRefGunduz || {};
-            if (gref.reference_value != null) {
-                refLbl = '≈ ' + Math.round(gref.reference_value) + ' tur/vardiya';
-            }
-        }
+        var rv = mr.manual_reference_gunduz || e.manualRefGunduz;
+        if (e.calismaModu === 'GECE') rv = mr.manual_reference_gece || e.manualRefGece;
+        refLbl = rv != null ? ('MANUEL ' + Math.round(rv) + ' tur/vardiya') : 'MANUEL';
         e.reservation = {
             makineKod: e.makineKod,
             slot: e.slot,
@@ -1441,64 +1431,22 @@
         if ($('upEnjOzetCalisma')) $('upEnjOzetCalisma').textContent = enjCalismaLabel(e.calismaModu);
         if ($('upEnjOzetBas')) $('upEnjOzetBas').textContent = enjFmtDtApi(e.baslangic);
         if ($('upEnjBitis')) $('upEnjBitis').textContent = enjFmtDtApi(d.tahmini_bitis);
-        var gref = d.gunduz_reference || {};
-        var eref = d.gece_reference || {};
-        var autoG = d.auto_gunduz_reference || e.autoRefGunduz || gref;
-        var autoE = d.auto_gece_reference || e.autoRefGece || eref;
-        var refMode = d.reference_mode || e.referenceMode || 'AUTO';
+        // B PHASE CLEANUP: OTOMATİK referans alanları kaldırıldı — yalnız MANUEL mod
         if ($('upEnjOzetRefMode')) {
-            $('upEnjOzetRefMode').textContent = refMode === 'MANUAL' ? 'MANUEL' : 'OTOMATİK';
+            $('upEnjOzetRefMode').textContent = 'MANUEL';
         }
-        var refUsed = (e.calismaModu === 'GECE') ? eref : gref;
-        if (e.calismaModu === 'GUNDUZ_GECE' && gref.reference_value) refUsed = gref;
-        if ($('upEnjOzetReferans')) {
-            var rv = refUsed.reference_value;
-            var vdLbl = (refUsed.vardiya || 'gunduz').toUpperCase();
-            if (refMode === 'MANUAL') {
-                $('upEnjOzetReferans').textContent = rv != null
-                    ? (Math.round(rv) + ' tur / ' + vdLbl + ' vardiyası (manuel)') : '—';
-            } else {
-                $('upEnjOzetReferans').textContent = rv != null
-                    ? ('≈ ' + Math.round(rv) + ' tur / ' + vdLbl + ' vardiyası') : '—';
-            }
-        }
-        var showManG = refMode === 'MANUAL' && e.calismaModu !== 'GECE';
-        var showManE = refMode === 'MANUAL' && e.calismaModu !== 'GUNDUZ';
+        var showManG = e.calismaModu !== 'GECE';
+        var showManE = e.calismaModu !== 'GUNDUZ';
         if ($('upEnjOzetManuelGWrap')) $('upEnjOzetManuelGWrap').style.display = showManG ? '' : 'none';
         if ($('upEnjOzetManuelGWrap2')) $('upEnjOzetManuelGWrap2').style.display = showManE ? '' : 'none';
-        if ($('upEnjOzetAutoGWrap')) $('upEnjOzetAutoGWrap').style.display = showManG ? '' : 'none';
-        if ($('upEnjOzetAutoGWrap2')) $('upEnjOzetAutoGWrap2').style.display = showManE ? '' : 'none';
         if ($('upEnjOzetManuelG') && showManG) {
             $('upEnjOzetManuelG').textContent = (d.manual_reference_gunduz || e.manualRefGunduz || '—') + ' tur/vardiya';
         }
         if ($('upEnjOzetManuelE') && showManE) {
             $('upEnjOzetManuelE').textContent = (d.manual_reference_gece || e.manualRefGece || '—') + ' tur/vardiya';
         }
-        if ($('upEnjOzetAutoG') && showManG) {
-            var agv = autoG.reference_value;
-            $('upEnjOzetAutoG').textContent = agv != null ? ('≈ ' + Math.round(agv) + ' tur/vardiya') : '—';
-        }
-        if ($('upEnjOzetAutoE') && showManE) {
-            var aev = autoE.reference_value;
-            $('upEnjOzetAutoE').textContent = aev != null ? ('≈ ' + Math.round(aev) + ' tur/vardiya') : '—';
-        }
         if ($('upEnjOzetRefKaynak')) {
-            if (refMode === 'MANUAL') {
-                $('upEnjOzetRefKaynak').textContent = 'Manuel operasyon tahmini';
-            } else {
-                var pn = refUsed.primary_sample_count != null ? refUsed.primary_sample_count : refUsed.sample_count;
-                var tier = refUsed.used_quality_tier === 'LOW' ? 'düşük kalite' : 'tam-vardiya eşdeğeri';
-                $('upEnjOzetRefKaynak').textContent = pn
-                    ? (pn + ' geçerli ' + tier + ' sample') : '—';
-            }
-        }
-        if ($('upEnjConfidence')) {
-            if (refMode === 'MANUAL') {
-                var ac = autoG.confidence || autoE.confidence || d.overall_confidence || '—';
-                $('upEnjConfidence').textContent = 'Geçmiş: ' + ac;
-            } else {
-                $('upEnjConfidence').textContent = d.overall_confidence || '—';
-            }
+            $('upEnjOzetRefKaynak').textContent = 'Manuel operasyon tahmini';
         }
         if ($('upEnjOzetHs')) {
             $('upEnjOzetHs').textContent = e.haftaSonu === 'EVET'
@@ -1601,6 +1549,10 @@
                 if ($('upEnjSlotB')) $('upEnjSlotB').classList.remove('selected');
                 if ($('upEnjKalip')) $('upEnjKalip').disabled = false;
                 enjUpdateHesapBtn();
+                // B2: SON 1 HAFTA kutusunda seçili makineyi vurgula
+                if (state.enj._sonHaftaVeri) {
+                    enjSonHaftaHizRender(state.enj._sonHaftaVeri, kod);
+                }
             });
             el.appendChild(card);
         });
@@ -1706,6 +1658,78 @@
                     enjRenderMakineCards(state.enj.gridData);
                 });
         });
+    }
+
+    // ─── SON 1 HAFTA MAKİNE VERİSİ — görsel referans kutusu ─────────────────
+    function enjSonHaftaHizRender(veri, secilenMakine) {
+        var kutu = $('upEnjSonHaftaHiz');
+        var icerik = $('upEnjSonHaftaIcerik');
+        if (!kutu || !icerik) return;
+
+        var mkodlar = Object.keys(veri || {}).sort();
+        if (!mkodlar.length) {
+            kutu.style.display = 'none';
+            return;
+        }
+
+        var html = '';
+        mkodlar.forEach(function (mkod) {
+            var isSelected = secilenMakine && mkod === secilenMakine;
+            var rowClass = 'up-shh-makine' + (isSelected ? ' up-shh-secili' : '');
+            html += '<div class="' + rowClass + '">';
+            html += '<div class="up-shh-mkod">' + esc(mkod) + '</div>';
+
+            var mkVeri = veri[mkod] || {};
+            var gunduzA = (mkVeri.gunduz || {}).A || {};
+            var gunduzB = (mkVeri.gunduz || {}).B || {};
+            var geceA   = (mkVeri.gece   || {}).A || {};
+            var geceB   = (mkVeri.gece   || {}).B || {};
+
+            // Slot A + B birleştir: en az birinde veri varsa göster
+            function slotSatir(label, slotA, slotB) {
+                var aOk = !slotA.calismadi && slotA.median != null;
+                var bOk = !slotB.calismadi && slotB.median != null;
+                if (!aOk && !bOk) {
+                    return '<div class="up-shh-satir"><span class="up-shh-vd">' + label + '</span>'
+                         + '<span class="up-shh-deger up-shh-yok">ÇALIŞMADI</span></div>';
+                }
+                var parts = [];
+                if (aOk) parts.push('A: ' + slotA.median + ' tur/vd (' + slotA.sample + ' vd)');
+                if (bOk) parts.push('B: ' + slotB.median + ' tur/vd (' + slotB.sample + ' vd)');
+                return '<div class="up-shh-satir"><span class="up-shh-vd">' + label + '</span>'
+                     + '<span class="up-shh-deger">' + parts.join(' &nbsp;|&nbsp; ') + '</span></div>';
+            }
+
+            html += slotSatir('Gündüz', gunduzA, gunduzB);
+            html += slotSatir('Gece',   geceA,   geceB);
+            html += '</div>';
+        });
+
+        icerik.innerHTML = html;
+        kutu.style.display = '';
+    }
+
+    function enjYukleSonHaftaHiz(secilenMakine) {
+        var kutu = $('upEnjSonHaftaHiz');
+        var icerik = $('upEnjSonHaftaIcerik');
+        if (!kutu || !icerik) return;
+        kutu.style.display = '';
+        icerik.innerHTML = '<span class="up-enj-son-hafta-yukleniyor">Yükleniyor…</span>';
+        fetch('/planlama/uretim-plan/api/enj/son-hafta-hiz?days=7', { credentials: 'include' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.ok && d.makineler) {
+                    state.enj._sonHaftaVeri = d.makineler;
+                    enjSonHaftaHizRender(d.makineler, secilenMakine);
+                } else {
+                    state.enj._sonHaftaVeri = null;
+                    icerik.innerHTML = '<span class="up-shh-yok">Veri alınamadı</span>';
+                }
+            })
+            .catch(function () {
+                state.enj._sonHaftaVeri = null;
+                icerik.innerHTML = '<span class="up-shh-yok">Veri alınamadı</span>';
+            });
     }
 
     function enjBuildKalipSelect() {
@@ -1905,8 +1929,6 @@
                 payload.enj_calisma_modu = rez.calismaModu || enj.calismaModu;
                 payload.enj_hafta_sonu_calisma = enj.haftaSonu;
                 payload.enj_hafta_sonu_vardiya = enj.haftaSonu === 'EVET' ? enj.hsVardiya : null;
-                var autoG = mr.auto_gunduz_reference || enj.autoRefGunduz || mr.gunduz_reference || {};
-                var autoE = mr.auto_gece_reference || enj.autoRefGece || mr.gece_reference || {};
                 payload.enj_kapasite_snapshot = JSON.stringify({
                     kalip_adedi: rez.kalipAdedi,
                     kalip_basi_cift: rez.kalipBasiCift,
@@ -1919,10 +1941,6 @@
                     teorik_cikan: mr.teorik_cikan,
                     fazla_cift: mr.fazla_cift,
                     gerekli_tur: mr.gerekli_tam_tur || mr.tahmini_gerekli_tur,
-                    reference_type: (mr.gunduz_reference || {}).reference_type,
-                    reference_value: (mr.gunduz_reference || {}).reference_value,
-                    sample_count: (mr.gunduz_reference || {}).sample_count,
-                    confidence: mr.overall_confidence,
                     warnings: mr.warnings || [],
                     tahmini_bitis: mr.tahmini_bitis,
                     calendar_rule: mr.hafta_sonu_kural,
@@ -1932,12 +1950,9 @@
                     calendar_breakdown: mr.vardiya_breakdown || [],
                     kalip_kod: rez.kalipKod,
                     manuel_kalip: enj.kalipMode === 'manuel',
-                    reference_mode: enj.referenceMode || 'AUTO',
-                    manual_reference_gunduz: enj.referenceMode === 'MANUAL' ? enj.manualRefGunduz : null,
-                    manual_reference_gece: enj.referenceMode === 'MANUAL' ? enj.manualRefGece : null,
-                    auto_reference_gunduz: autoG.reference_value,
-                    auto_reference_gece: autoE.reference_value,
-                    auto_confidence: autoG.confidence || autoE.confidence || mr.overall_confidence,
+                    reference_mode: 'MANUAL',
+                    manual_reference_gunduz: enj.manualRefGunduz,
+                    manual_reference_gece: enj.manualRefGece,
                 });
             }
             fetch('/planlama/uretim-plan/api/plan', {

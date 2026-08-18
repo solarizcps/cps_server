@@ -35,11 +35,21 @@
 .up-step3-radio.error { border-color: #ef4444 !important; background: #fef2f2; }
 .up-enj-ref-mode { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
 .up-enj-ref-mode-baslik { font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.04em; margin-bottom: 8px; }
-.up-enj-ref-radio { display: block; font-size: 12.5px; margin: 4px 0; cursor: pointer; }
-.up-enj-ref-radio input { margin-right: 6px; }
-.up-enj-manual-ref { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.up-enj-manual-ref { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
 .up-enj-manual-ref label { font-size: 12px; }
-.up-enj-hint { font-size: 11.5px; color: #92400e; margin-top: 8px; font-style: italic; }
+/* SON 1 HAFTA MAKİNE VERİSİ — görsel referans kutusu (hesap input değil) */
+.up-enj-son-hafta { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 7px; padding: 9px 11px; margin-top: 8px; }
+.up-enj-son-hafta-baslik { font-size: 10.5px; font-weight: 700; color: #15803d; letter-spacing: 0.05em; margin-bottom: 7px; }
+.up-enj-son-hafta-icerik { }
+.up-enj-son-hafta-yukleniyor { font-size: 11.5px; color: #6b7280; font-style: italic; }
+.up-shh-makine { margin-bottom: 7px; padding-bottom: 5px; border-bottom: 1px solid #d1fae5; }
+.up-shh-makine:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+.up-shh-secili { background: #dcfce7; border-radius: 5px; padding: 4px 6px; margin: -2px -4px 5px; }
+.up-shh-mkod { font-size: 11.5px; font-weight: 700; color: #064e3b; margin-bottom: 2px; }
+.up-shh-satir { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; line-height: 1.6; }
+.up-shh-vd { color: #374151; font-weight: 600; min-width: 46px; }
+.up-shh-deger { color: #1f2937; }
+.up-shh-yok { color: #9ca3af; font-style: italic; }
 
 /* ── TABLO ─────────────────────────────────────────────────────────────── */
 .up-tbl-wrap {

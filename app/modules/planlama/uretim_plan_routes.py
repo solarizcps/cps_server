@@ -109,10 +109,73 @@ def api_plan_ekle():
     try:
         row = repo.plan_ekle(body, _uid())
     except ValueError as e:
-        return jsonify({'ok': False, 'mesaj': str(e)}), 409
+        msg = str(e)
+        if 'zaten planlı' in msg or msg.startswith('CONFLICT'):
+            code = 409
+            payload = {'ok': False, 'mesaj': msg, 'errors': [msg]}
+            if msg.startswith('CONFLICT'):
+                con = get_conn()
+                try:
+                    from modules.planlama.enj_kapasite_motor import (
+                        _check_conflicts, _parse_dt,
+                    )
+                    from modules.planlama.enj_plan_availability_service import (
+                        enrich_conflict_payload,
+                    )
+                    mid = body.get('enj_makine_id')
+                    slot = (body.get('enj_slot') or 'A').upper()
+                    ist = body.get('enj_istasyonlar') or []
+                    bas = body.get('enj_plan_baslangic')
+                    bit = body.get('enj_plan_bitis')
+                    if mid and ist and bas:
+                        try:
+                            bas_dt = _parse_dt(bas)
+                            bit_dt = _parse_dt(bit) if bit else bas_dt
+                            conflicts = _check_conflicts(
+                                con, int(mid), slot,
+                                [int(x) for x in ist], bas_dt, bit_dt,
+                            )
+                            if conflicts:
+                                payload['conflict_detail'] = enrich_conflict_payload(
+                                    con, int(mid), slot, ist, conflicts,
+                                    calisma_modu=(body.get('enj_calisma_modu') or 'GUNDUZ_GECE').upper(),
+                                    hafta_sonu=(body.get('enj_hafta_sonu_calisma') or 'HAYIR').upper(),
+                                    hs_vardiya=body.get('enj_hafta_sonu_vardiya'),
+                                    from_dt=bas_dt,
+                                )
+                        except (ValueError, TypeError):
+                            pass
+                finally:
+                    con.close()
+            return jsonify(payload), code
+        return jsonify({'ok': False, 'mesaj': msg, 'errors': [msg]}), 400
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
-    return jsonify({'ok': True, 'plan': row})
+
+    calendar_ready = False
+    calendar_url = None
+    if row and row.get('enj_makine_id') and row.get('enj_plan_baslangic'):
+        con = get_conn()
+        try:
+            mk = con.execute(
+                'SELECT kod FROM enj_makine WHERE id=?', (int(row['enj_makine_id']),),
+            ).fetchone()
+            if mk:
+                calendar_ready = True
+                anchor = (row.get('enj_plan_baslangic') or '')[:10]
+                calendar_url = (
+                    f'/planlama/enjeksiyon-plan/?makine={mk["kod"]}'
+                    f'&view=bu_hafta&anchor={anchor}'
+                )
+        finally:
+            con.close()
+    return jsonify({
+        'ok': True,
+        'plan': row,
+        'plan_id': row.get('id') if row else None,
+        'calendar_ready': calendar_ready,
+        'calendar_url': calendar_url,
+    })
 
 
 @uretim_plan_bp.route('/api/plan/<int:plan_id>', methods=['PUT'])
@@ -215,6 +278,33 @@ def api_detay_proses(emir_no):
 
 
 # ─── ENJEKSİYON KAPASİTE API'LERİ ──────────────────────────────────────────
+
+@uretim_plan_bp.route('/api/enj-kapasite', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_kapasite_read():
+    """READ-ONLY enjeksiyon kapasite snapshot — Plan Oluştur read-model."""
+    makine_id = request.args.get('makine_id', type=int)
+    tarih = (request.args.get('tarih') or '').strip() or None
+    vardiya = (request.args.get('vardiya') or '').strip() or None
+    if vardiya and vardiya not in ('gunduz', 'gece', 'mesai'):
+        return jsonify({'ok': False, 'mesaj': 'Geçersiz vardiya'}), 400
+    ref_days = request.args.get('days', default=90, type=int)
+    con = get_conn()
+    try:
+        from modules.planlama.enj_kapasite_read_service import build_kapasite_snapshot
+        payload = build_kapasite_snapshot(
+            con,
+            makine_id=makine_id,
+            tarih=tarih,
+            vardiya=vardiya,
+            ref_days=ref_days,
+        )
+        return jsonify({'ok': True, **payload})
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
 
 @uretim_plan_bp.route('/api/enj/makineler', methods=['GET'])
 @yetki_gerekli('planlama', 'can_view')
@@ -336,15 +426,61 @@ def api_enj_kalip_kapasite():
             return jsonify({'ok': True, 'kapasite': None, 'kapasite_eksik': True,
                             'mesaj': 'Kapasite bilgisi eksik — manuel girin'})
 
+        hist_ag = con.execute("""
+            SELECT s.aktif_goz_sayisi
+            FROM enj_ab_setup s
+            WHERE s.kalip_id = ? AND COALESCE(s.aktif_goz_sayisi, 0) > 0
+            ORDER BY s.baslangic_zamani DESC
+            LIMIT 1
+        """, (kalip_id,)).fetchone()
+        ag = int(hist_ag['aktif_goz_sayisi']) if hist_ag else 1
+
         return jsonify({'ok': True, 'kapasite': {
-            'aktif_goz_sayisi': None,
+            'aktif_goz_sayisi': ag,
             'kalip_basi_cift': kbc,
-            'tur_cift': None,
-            'kaynak': 'master',
-        }, 'kapasite_eksik': True,
-            'mesaj': 'Aktif setup yok — aktif göz sayısını girin'})
+            'tur_cift': ag * kbc if ag and kbc else None,
+            'kaynak': 'master+setup_hist',
+        }, 'kapasite_eksik': False})
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/hesapla', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_hesapla():
+    """Canonical kapasite motoru — Plan Oluştur HESAPLA."""
+    body = request.get_json(silent=True) or {}
+    con = get_conn()
+    try:
+        from modules.planlama.enj_kapasite_motor import hesapla_kapasite, _parse_dt
+        from modules.planlama.enj_plan_availability_service import enrich_conflict_payload
+        result = hesapla_kapasite(con, body)
+        if result.get('conflict_var') and result.get('conflicts'):
+            ist = body.get('istasyonlar') or []
+            if body.get('istasyon_no') and not ist:
+                ist = [body.get('istasyon_no')]
+            from_dt = None
+            if body.get('plan_baslangic'):
+                try:
+                    from_dt = _parse_dt(body['plan_baslangic'])
+                except ValueError:
+                    from_dt = None
+            result['conflict_detail'] = enrich_conflict_payload(
+                con,
+                int(body.get('makine_id') or 0),
+                (body.get('slot') or body.get('taraf') or 'A').upper(),
+                ist,
+                result['conflicts'],
+                calisma_modu=(body.get('calisma_modu') or 'GUNDUZ_GECE').upper(),
+                hafta_sonu=(body.get('hafta_sonu_calisma') or 'HAYIR').upper(),
+                hs_vardiya=body.get('hafta_sonu_vardiya'),
+                from_dt=from_dt,
+            )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': str(e)[:200]}), 500
     finally:
         con.close()
 
@@ -352,48 +488,298 @@ def api_enj_kalip_kapasite():
 @uretim_plan_bp.route('/api/enj/cakisma-kontrol', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def api_enj_cakisma_kontrol():
-    """Aynı slot/tarih çakışma kontrolü — uyarı amaçlı."""
+    """Multi-istasyon çakışma kontrolü — child + legacy."""
     body = request.get_json(silent=True) or {}
     makine_id = body.get('makine_id')
-    istasyon_no = body.get('istasyon_no')
     slot = (body.get('slot') or '').upper()
     bas = body.get('enj_plan_baslangic')
     bit = body.get('enj_plan_bitis')
     hariç_plan_id = body.get('hariç_plan_id')
-    if not makine_id or not istasyon_no or slot not in ('A', 'B'):
-        return jsonify({'ok': False, 'mesaj': 'Eksik parametre'}), 400
+    istasyonlar = body.get('istasyonlar') or []
+    if body.get('istasyon_no') and not istasyonlar:
+        istasyonlar = [body.get('istasyon_no')]
+    istasyonlar = sorted({int(x) for x in istasyonlar if x is not None})
+    if not makine_id or not istasyonlar or slot not in ('A', 'B'):
+        return jsonify({'ok': False, 'mesaj': 'makine_id, istasyonlar, slot gerekli'}), 400
     if not bas:
         return jsonify({'ok': True, 'cakisma': False, 'cakisan_planlar': []})
     con = get_conn()
     try:
-        q = """
-            SELECT id, sip_no, mamul_skod, renk_adi,
-                   enj_plan_baslangic, enj_plan_bitis
-            FROM uretim_model_plan
-            WHERE aktif=1
-              AND enj_makine_id=? AND enj_istasyon_no=? AND enj_slot=?
-              AND enj_plan_baslangic IS NOT NULL
-        """
-        params = [makine_id, istasyon_no, slot]
-        if hariç_plan_id:
-            q += ' AND id <> ?'
-            params.append(hariç_plan_id)
-        rows = con.execute(q, params).fetchall()
-        bit_dt = datetime.strptime(bit[:10], '%Y-%m-%d').date() if bit else None
-        bas_dt = datetime.strptime(bas[:10], '%Y-%m-%d').date()
-        cakisan = []
-        for r in rows:
-            r_bas = r['enj_plan_baslangic']
-            r_bit = r['enj_plan_bitis']
+        from modules.planlama.enj_kapasite_motor import _check_conflicts, _parse_dt
+        try:
+            bas_dt = _parse_dt(bas)
+            bit_dt = _parse_dt(bit) if bit else bas_dt
+        except ValueError as e:
+            return jsonify({'ok': False, 'mesaj': str(e)}), 400
+        conflicts = _check_conflicts(
+            con, int(makine_id), slot, istasyonlar, bas_dt, bit_dt,
+            haric_plan_id=hariç_plan_id,
+        )
+        detail = None
+        if conflicts:
+            from modules.planlama.enj_plan_availability_service import enrich_conflict_payload
+            detail = enrich_conflict_payload(
+                con, int(makine_id), slot, istasyonlar, conflicts,
+                calisma_modu=(body.get('calisma_modu') or 'GUNDUZ_GECE').upper(),
+                hafta_sonu=(body.get('hafta_sonu_calisma') or 'HAYIR').upper(),
+                hs_vardiya=body.get('hafta_sonu_vardiya'),
+                from_dt=bas_dt,
+            )
+        return jsonify({
+            'ok': True,
+            'cakisma': len(conflicts) > 0,
+            'cakisan_planlar': conflicts,
+            'conflict_detail': detail,
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/plan/on-check', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def api_plan_on_check():
+    """Adım 3 — tarih seçenekleri doluluk + dönem önerisi."""
+    body = request.get_json(silent=True) or {}
+    sip_no = body.get('sip_no')
+    sip_harinx = body.get('sip_harinx')
+    mamul_skod = body.get('mamul_skod')
+    rkod = body.get('rkod', 0)
+    tarihler = body.get('tarihler') or []
+    if not sip_no or not mamul_skod:
+        return jsonify({'ok': False, 'mesaj': 'sip_no ve mamul_skod gerekli'}), 400
+    con = get_conn()
+    try:
+        ref = date.today()
+        secenekler = []
+        for t in tarihler:
+            tstr = str(t)[:10]
             try:
-                rb = datetime.strptime(r_bas[:10], '%Y-%m-%d').date()
-                re = datetime.strptime(r_bit[:10], '%Y-%m-%d').date() if r_bit else rb
-                sorgu_bit = bit_dt if bit_dt else bas_dt
-                if not (sorgu_bit < rb or bas_dt > re):
-                    cakisan.append(dict(r))
-            except (ValueError, TypeError):
+                td = datetime.strptime(tstr, '%Y-%m-%d').date()
+            except ValueError:
                 continue
-        return jsonify({'ok': True, 'cakisma': len(cakisan) > 0, 'cakisan_planlar': cakisan})
+            oneri_donem = repo.donem_for_date(td, ref)
+            dup = repo.check_plan_duplicate(
+                con, int(sip_no), int(sip_harinx or 0),
+                mamul_skod, int(rkod or 0), oneri_donem,
+            )
+            secenekler.append({
+                'tarih': tstr,
+                'oneri_donem': oneri_donem,
+                'dolu': dup.get('dolu', False),
+                'mesaj': dup.get('mesaj') if dup.get('dolu') else None,
+                'plan_id': dup.get('plan_id'),
+            })
+        return jsonify({'ok': True, 'secenekler': secenekler})
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/ilk-uygun', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_ilk_uygun():
+    """Seçili istasyonlar için ilk uygun başlangıç — makine bazlı."""
+    body = request.get_json(silent=True) or {}
+    slot = (body.get('slot') or body.get('taraf') or '').upper()
+    istasyonlar = sorted({int(x) for x in (body.get('istasyonlar') or []) if x is not None})
+    calisma = (body.get('calisma_modu') or 'GUNDUZ_GECE').upper()
+    hs = (body.get('hafta_sonu_calisma') or 'HAYIR').upper()
+    hs_v = body.get('hafta_sonu_vardiya')
+    if hs == 'HAYIR':
+        hs_v = None
+    elif hs_v:
+        hs_v = str(hs_v).upper()
+    makine_ids = body.get('makine_ids') or []
+    if body.get('makine_id') and not makine_ids:
+        makine_ids = [body.get('makine_id')]
+    makine_ids = [int(x) for x in makine_ids if x is not None]
+    if not istasyonlar or slot not in ('A', 'B'):
+        return jsonify({'ok': False, 'mesaj': 'slot ve istasyonlar gerekli'}), 400
+    con = get_conn()
+    try:
+        from modules.planlama.enj_kapasite_motor import find_first_available_start
+        results = []
+        onerilen = None
+        selected_mid = body.get('selected_makine_id')
+        for mid in makine_ids:
+            mk = con.execute(
+                'SELECT id, kod FROM enj_makine WHERE id=? AND aktif=1', (int(mid),),
+            ).fetchone()
+            if not mk:
+                continue
+            try:
+                dt = find_first_available_start(
+                    con, int(mk['id']), slot, istasyonlar,
+                    calisma_modu=calisma, hafta_sonu=hs, hs_vardiya=hs_v,
+                )
+                fmt = dt.strftime('%Y-%m-%d %H:%M:%S')
+                entry = {
+                    'makine_id': int(mk['id']),
+                    'makine_kod': mk['kod'],
+                    'ilk_uygun': fmt,
+                    'ilk_uygun_gosterim': dt.strftime('%d.%m.%Y %H:%M'),
+                }
+                results.append(entry)
+                if selected_mid and int(selected_mid) == int(mk['id']):
+                    onerilen = fmt
+            except RuntimeError:
+                results.append({
+                    'makine_id': int(mk['id']),
+                    'makine_kod': mk['kod'],
+                    'ilk_uygun': None,
+                    'ilk_uygun_gosterim': '—',
+                })
+        if not onerilen and results:
+            sel = next((r for r in results if r.get('ilk_uygun')), None)
+            onerilen = sel['ilk_uygun'] if sel else None
+        return jsonify({'ok': True, 'onerilen': onerilen, 'makineler': results})
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/son-hafta-hiz', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_son_hafta_hiz():
+    """Son 7 takvim günü gerçek çalışan vardiya tur hızı — READ-ONLY referans bilgisi.
+
+    0-tur / üretim yok / çalışılmamış vardiyalar ortalamaya dahil edilmez.
+    Değer hesap motoru girdisi değildir; planlamacı için görsel referanstır.
+    """
+    days = request.args.get('days', default=7, type=int)
+    days = max(1, min(days, 30))
+    # gunduz: 10h canonical, gece: 14h canonical (enj_kapasite_read_service ile uyumlu)
+    CANON_SAAT = {'gunduz': 10, 'gece': 14}
+    # En az 1 aktif saat olan vardiyalar dahil edilir (gürültü filtresi)
+    MIN_ACTIVE_SAAT = 1
+    con = get_conn()
+    try:
+        makineler_rows = con.execute(
+            'SELECT id, kod FROM enj_makine WHERE aktif = 1 ORDER BY sira, kod'
+        ).fetchall()
+        sonuc = {}
+        for mk in makineler_rows:
+            mid = int(mk['id'])
+            mkod = mk['kod']
+            makine_veri = {}
+            for slot_col, vd in [('cevrim_a', 'gunduz'), ('cevrim_a', 'gunduz'),
+                                  ('cevrim_b', 'gunduz'), ('cevrim_a', 'gece'),
+                                  ('cevrim_b', 'gece')]:
+                pass  # aşağıda döngü ile
+            for vd in ('gunduz', 'gece'):
+                for slot_col, slot_lbl in (('cevrim_a', 'A'), ('cevrim_b', 'B')):
+                    rows = con.execute(f"""
+                        SELECT r.tarih,
+                               SUM(h.{slot_col})                              AS shift_tur,
+                               SUM(CASE WHEN h.{slot_col} > 0 THEN 1 ELSE 0 END) AS active_saat
+                        FROM enj_gunluk_rapor r
+                        JOIN enj_saatlik_kayit h ON h.rapor_id = r.id
+                        WHERE r.makine_id = ?
+                          AND r.vardiya   = ?
+                          AND r.tarih    >= date('now', ?)
+                        GROUP BY r.id
+                        HAVING shift_tur > 0 AND active_saat >= ?
+                        ORDER BY r.tarih
+                    """, (mid, vd, f'-{days} day', MIN_ACTIVE_SAAT)).fetchall()
+
+                    if not rows:
+                        makine_veri.setdefault(vd, {})[slot_lbl] = {
+                            'median': None,
+                            'avg': None,
+                            'min': None,
+                            'max': None,
+                            'sample': 0,
+                            'calisan_vardiya': 0,
+                            'calismadi': True,
+                        }
+                        continue
+
+                    canon = CANON_SAAT[vd]
+                    norm_vals = [
+                        round(r['shift_tur'] / r['active_saat'] * canon, 1)
+                        for r in rows
+                    ]
+                    n = len(norm_vals)
+                    sorted_v = sorted(norm_vals)
+                    if n % 2 == 1:
+                        med = sorted_v[n // 2]
+                    else:
+                        med = round((sorted_v[n // 2 - 1] + sorted_v[n // 2]) / 2, 1)
+
+                    makine_veri.setdefault(vd, {})[slot_lbl] = {
+                        'median': med,
+                        'avg': round(sum(norm_vals) / n, 1),
+                        'min': min(norm_vals),
+                        'max': max(norm_vals),
+                        'sample': n,
+                        'calisan_vardiya': n,
+                        'calismadi': False,
+                    }
+
+            sonuc[mkod] = makine_veri
+
+        return jsonify({'ok': True, 'days': days, 'makineler': sonuc})
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/makine-plan-ozet', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_makine_plan_ozet():
+    """Makine kartları — gelecek plan rezervasyon özeti (READ)."""
+    days = request.args.get('days', default=7, type=int)
+    anchor_s = (request.args.get('anchor') or '').strip()
+    calisma = (request.args.get('calisma_modu') or 'GUNDUZ_GECE').upper()
+    hs = (request.args.get('hafta_sonu_calisma') or 'HAYIR').upper()
+    hs_v = request.args.get('hafta_sonu_vardiya')
+    if hs == 'HAYIR':
+        hs_v = None
+    con = get_conn()
+    try:
+        from modules.planlama.enj_kapasite_motor import _parse_dt
+        from modules.planlama.enj_plan_availability_service import build_makine_plan_ozet
+        anchor = None
+        if anchor_s:
+            try:
+                anchor = _parse_dt(anchor_s + ' 07:00:00' if len(anchor_s) <= 10 else anchor_s)
+            except ValueError:
+                anchor = None
+        makineler = build_makine_plan_ozet(
+            con, days=days, anchor=anchor,
+            calisma_modu=calisma, hafta_sonu=hs, hs_vardiya=hs_v,
+        )
+        return jsonify({'ok': True, 'makineler': makineler, 'days': days})
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/istasyon-plan-durum', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_istasyon_plan_durum():
+    """Seçilen başlangıç anında istasyon plan durumu."""
+    body = request.get_json(silent=True) or {}
+    makine_id = body.get('makine_id')
+    slot = (body.get('slot') or '').upper()
+    istasyonlar = sorted({int(x) for x in (body.get('istasyonlar') or []) if x is not None})
+    at_dt = body.get('plan_baslangic') or body.get('at')
+    if not makine_id or not istasyonlar or slot not in ('A', 'B') or not at_dt:
+        return jsonify({'ok': False, 'mesaj': 'makine_id, slot, istasyonlar, plan_baslangic gerekli'}), 400
+    con = get_conn()
+    try:
+        from modules.planlama.enj_plan_availability_service import build_istasyon_plan_durum
+        rows = build_istasyon_plan_durum(
+            con, int(makine_id), slot, istasyonlar, str(at_dt),
+            haric_plan_id=body.get('haric_plan_id'),
+        )
+        return jsonify({'ok': True, 'istasyonlar': rows})
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
     finally:
