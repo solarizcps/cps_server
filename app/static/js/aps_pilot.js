@@ -1366,7 +1366,7 @@
     gantt.config.fit_tasks = false;
     gantt.config.row_height = 40;
     gantt.config.bar_height = 30;
-    gantt.config.indent = 18;
+    gantt.config.indent = 28;
     gantt.config.scale_height = 46;
     gantt.config.autosize = false;
     gantt.config.autoscroll = dragFlags.autoscroll;
@@ -1384,9 +1384,9 @@
     gantt.config.end_date = view.end;
 
     gantt.config.columns = [
-      { name: 'text', label: 'PROSES / KAYNAK', width: 140, tree: true, resize: true },
+      { name: 'text', label: 'PROSES / KAYNAK', width: 160, tree: true, resize: true },
     ];
-    gantt.config.grid_width = 148;
+    gantt.config.grid_width = 168;
 
     gantt.templates.grid_row_class = function (start, end, task) {
       if (task.$split_subtask || task.aps_type === 'enj_plan') return 'gantt_split_subtask';

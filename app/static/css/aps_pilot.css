@@ -481,8 +481,15 @@
   border-left: 3px solid #7c3aed;
 }
 
-/* P5.1 hierarchy indent — DHTMLX native indent handles level offset;
-   we let padding-left: 0 on the cell so tree_indent spans drive the visual depth. */
+/* P5.1 hierarchy indent — DHTMLX native indent (gantt.config.indent=28) drives depth.
+   Each gantt_tree_indent span = 28px per level, enforced via min-width.
+   Level 1 (machine): 1 × 28 = 28px indent from process label start.
+   Level 2 (slot):    2 × 28 = 56px indent from process label start. */
+.gantt_cell .gantt_tree_indent {
+  min-width: 28px !important;
+  display: inline-block;
+}
+
 .aps-machine-grid-row .gantt_cell {
   font-weight: 600;
   font-size: 0.72rem;
