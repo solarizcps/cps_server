@@ -1,75 +1,123 @@
 {% extends "base.html" %}
-
 {% set active = 'planlama' %}
-
-{% block title %}Genel Planlama · Planlama · Solariz CPS{% endblock %}
+{% block title %}Genel Planlama · Solariz CPS{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/genel_plan.css') }}?v=1">
+<link rel="stylesheet" href="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.css" type="text/css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/aps_pilot.css') }}?v=18">
 {% endblock %}
 
 {% block content %}
-<div class="gp-wrap">
-
-  <div class="gp-toolbar">
-    <div class="gp-toolbar-left">
-      <h1 class="gp-title">GENEL PLANLAMA</h1>
-      <p class="gp-sub">Üretim planlarının makine ve zaman eksenindeki görünümü</p>
-    </div>
-    <div class="gp-toolbar-right">
-      <span class="gp-badge">Read-Only</span>
-      <button type="button" class="gp-btn gp-btn-ghost" id="gpYenileBtn">↻ Yenile</button>
+<div class="aps-wrap aps-wrap-wide" id="apsWrap">
+  <div class="aps-page-header aps-page-header-compact">
+    <div class="aps-page-header-left">
+      <h1>GENEL PLANLAMA</h1>
+      <p>Üretim planının proses, kaynak ve zaman eksenindeki görünümü</p>
     </div>
   </div>
 
-  <!-- Makine filtresi -->
-  <div class="gp-filters" id="gpFilters">
-    <div class="gp-filter-group" id="gpMachines" role="tablist" aria-label="Makine seçimi">
-      <button type="button" class="gp-mach-btn" data-mak="" id="gpMakTumu">TÜM MAKİNELER</button>
-      <button type="button" class="gp-mach-btn" data-mak="1" id="gpMak1">M1</button>
-      <button type="button" class="gp-mach-btn" data-mak="2" id="gpMak2">M2</button>
-      <button type="button" class="gp-mach-btn" data-mak="3" id="gpMak3">M3</button>
-      <button type="button" class="gp-mach-btn" data-mak="4" id="gpMak4">M4</button>
+  <div class="aps-workspace" id="apsWorkspace">
+    <div class="aps-gantt-toolbar aps-gantt-toolbar-single" id="apsGanttToolbar">
+      <button type="button" class="aps-btn aps-btn-icon" id="apsNavStart" title="Başa git">&#171;</button>
+      <button type="button" class="aps-btn aps-btn-icon" id="apsNavPrev" title="Önceki gün">&#8249;</button>
+      <input type="date" class="aps-date-input" id="apsDatePicker" value="2026-08-16">
+      <div class="aps-search-wrap">
+        <input type="text" class="aps-search-input" id="apsSearchInput"
+               placeholder="Sipariş numarasına göre ara..." autocomplete="off">
+        <span class="aps-search-icon" aria-hidden="true">&#128269;</span>
+      </div>
+      <div class="aps-toolbar-spacer"></div>
+      <button type="button" class="aps-btn aps-btn-icon aps-btn-mag" id="apsZoomOut" title="Uzaklaştır">&#128269;&#8722;</button>
+      <button type="button" class="aps-btn aps-btn-icon aps-btn-mag" id="apsZoomIn" title="Yakınlaştır">&#128269;+</button>
+      <div class="aps-zoom-group" id="apsZoomGroup">
+        <button type="button" class="aps-btn" data-zoom="10m">10 dk</button>
+        <button type="button" class="aps-btn" data-zoom="30m">30 dk</button>
+        <button type="button" class="aps-btn active" data-zoom="1h">1 saat</button>
+        <button type="button" class="aps-btn" data-zoom="1d">1 gün</button>
+        <button type="button" class="aps-btn" data-zoom="1w">1 hafta</button>
+        <button type="button" class="aps-btn" data-zoom="2m">2 ay</button>
+        <button type="button" class="aps-btn" data-zoom="3m">3 ay</button>
+        <button type="button" class="aps-btn" data-zoom="6m">6 ay</button>
+        <button type="button" class="aps-btn" data-zoom="1y">1 yıl</button>
+      </div>
+      <span class="aps-date-range" id="apsDateRange">—</span>
+      <button type="button" class="aps-btn aps-btn-icon" id="apsNavNext" title="Sonraki gün">&#8250;</button>
+      <button type="button" class="aps-btn aps-btn-icon" id="apsNavEnd" title="Sona git">&#187;</button>
     </div>
-    <div class="gp-filter-sep"></div>
-    <div class="gp-filter-group" id="gpPeriods" role="tablist" aria-label="Dönem">
-      <button type="button" class="gp-period-btn" data-period="bu_hafta">BU HAFTA</button>
-      <button type="button" class="gp-period-btn" data-period="bu_ay">BU AY</button>
-      <button type="button" class="gp-period-btn" data-period="3_ay">3 AY</button>
+
+    <div class="aps-gantt-shell" id="apsGanttShell">
+      <div id="apsGanttEnj" class="aps-gantt"></div>
+      <div class="aps-float-zoom" id="apsFloatZoom">
+        <button type="button" class="aps-btn aps-btn-icon aps-float-zoom-btn" id="apsFloatZoomIn" title="Yakınlaştır">+</button>
+        <button type="button" class="aps-btn aps-btn-icon aps-float-zoom-btn" id="apsFloatZoomOut" title="Uzaklaştır">−</button>
+      </div>
+    </div>
+
+    <div class="aps-legend aps-legend-compact" id="apsLegend">
+      <div class="aps-legend-items">
+        <span class="aps-legend-item"><i class="aps-legend-swatch aps-swatch-enj"></i> Enjeksiyon</span>
+        <span class="aps-legend-item"><i class="aps-legend-swatch aps-swatch-working"></i> Çalışma Zamanı</span>
+        <span class="aps-legend-item"><i class="aps-legend-swatch aps-swatch-weekend"></i> Kapalı</span>
+        <span class="aps-legend-item"><i class="aps-legend-now"></i> Şimdi</span>
+      </div>
     </div>
   </div>
-
-  <!-- Period nav bar -->
-  <div class="gp-period-nav" id="gpPeriodNav">
-    <button type="button" class="gp-nav-btn" id="gpNavPrev">‹</button>
-    <span class="gp-nav-label" id="gpNavLabel">—</span>
-    <button type="button" class="gp-nav-btn" id="gpNavNext">›</button>
-  </div>
-
-  <!-- Error / loading -->
-  <div id="gpError" class="gp-error" style="display:none;"></div>
-  <div id="gpLoading" class="gp-loading">Yükleniyor…</div>
-
-  <!-- Timeline layout -->
-  <div id="gpTimeline" class="gp-timeline" style="display:none;">
-    <!-- Column headers -->
-    <div class="gp-timeline-head">
-      <div class="gp-res-col gp-res-header">Resource</div>
-      <div class="gp-time-col" id="gpTimeHeader"></div>
-    </div>
-    <!-- Resource rows -->
-    <div class="gp-timeline-body" id="gpTimelineBody"></div>
-  </div>
-
-  <div id="gpEmpty" class="gp-empty" style="display:none;">Bu dönemde yayınlanmış enjeksiyon planı bulunamadı.</div>
-
 </div>
 
-<!-- Plan detay tooltip -->
-<div id="gpTooltip" class="gp-tooltip" style="display:none;" role="tooltip"></div>
+<!-- Plan detail drawer -->
+<div class="aps-drawer-backdrop" id="apsDrawerBackdrop" style="display:none;" aria-hidden="true"></div>
+<aside class="aps-drawer" id="apsPlanDrawer" aria-hidden="true">
+  <div class="aps-drawer-header">
+    <h3>PLAN DETAYI</h3>
+    <button type="button" class="aps-drawer-close" id="apsDrawerClose" aria-label="Kapat">&times;</button>
+  </div>
+  <div class="aps-drawer-body" id="apsDetailPanel"></div>
+</aside>
 
+<!-- Staging action bar -->
+<div class="aps-staging-bar" id="apsStagingBar" style="display:none;">
+  <div class="aps-staging-bar-inner">
+    <span class="aps-staging-count" id="apsStagingCount">0 PLAN DEĞİŞİKLİĞİ BEKLİYOR</span>
+    <span class="aps-staging-conflict" id="apsStagingConflict" style="display:none;">ÇAKIŞMA VAR</span>
+    <div class="aps-staging-actions">
+      <button type="button" class="aps-btn" id="apsStagingDiscard">VAZGEÇ / DISCARD</button>
+      <button type="button" class="aps-btn aps-btn-primary" id="apsStagingApply">&#10003; UYGULA</button>
+    </div>
+  </div>
+</div>
+
+<!-- Apply preview modal (no DB write) -->
+<div class="aps-modal-backdrop" id="apsApplyModal" style="display:none;" role="dialog" aria-modal="true">
+  <div class="aps-modal aps-modal-apply">
+    <h2>PLAN DEĞİŞİKLİKLERİ</h2>
+    <div class="aps-modal-body" id="apsApplyBody"></div>
+    <div class="aps-modal-actions">
+      <button type="button" class="aps-btn aps-btn-primary" id="apsApplyClose">ÖNİZLEMEYİ KAPAT</button>
+    </div>
+    <p class="aps-demo-tag aps-modal-demo">DEMO — KAYDEDİLMEZ</p>
+  </div>
+</div>
+
+<div class="aps-modal-backdrop" id="apsConflictModal" style="display:none;" role="dialog" aria-modal="true">
+  <div class="aps-modal aps-modal-conflict">
+    <h2>PLAN ÇAKIŞMASI</h2>
+    <p id="apsConflictMsg" class="aps-conflict-msg"></p>
+    <div class="aps-modal-actions">
+      <button type="button" class="aps-btn aps-btn-primary" id="apsConflictOk">TAMAM</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/genel_plan.js') }}?v=1"></script>
+<script src="https://cdn.dhtmlx.com/gantt/edge/dhtmlxgantt.js"></script>
+<script>
+  window.APS_PILOT = {
+    timelineUrl: {{ url_for('genel_plan_bp.api_enj_timeline') | tojson }},
+    viewStart: '2026-08-17',
+    viewEnd: '2026-08-21',
+    phase: 'P4A.5.2',
+  };
+</script>
+<script src="{{ url_for('static', filename='js/aps_pilot.js') }}?v=18"></script>
 {% endblock %}

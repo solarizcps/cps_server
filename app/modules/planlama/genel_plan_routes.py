@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Planlama > Genel Planlama C1 — READ-ONLY canonical timeline ekranı."""
+"""Planlama > Genel Planlama — APS master UI adapter (C1-R)."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, render_template, request
 
 from db import get_conn
 from modules.auth import yetki_gerekli
+from modules.planlama.aps_enj_timeline_service import load_enj_timeline_payload
 
 genel_plan_bp = Blueprint(
     'genel_plan_bp',
@@ -273,7 +274,7 @@ def _day_columns(win_bas: datetime, win_bit: datetime, view: str) -> list[dict]:
 @genel_plan_bp.route('/')
 @yetki_gerekli('planlama', 'can_view')
 def genel_plan_sayfa():
-    return render_template('planlama/genel_plan.html')
+    return render_template('planlama/genel_plan.html', pilot_sip=33917, pilot_model='CRX-71024-KRK')
 
 
 @genel_plan_bp.route('/api/timeline')
@@ -361,6 +362,21 @@ def api_timeline():
             'plans': all_plans,
             'plan_count': len(all_plans),
         })
+    except Exception as e:
+        return jsonify({'ok': False, 'hata': str(e)[:300]}), 500
+    finally:
+        con.close()
+
+
+@genel_plan_bp.route('/api/enj-timeline', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_timeline():
+    """APS ENJ timeline — same data contract as aps_pilot_bp, under genel-plan URL prefix."""
+    con = get_conn()
+    demo_multi = request.args.get('demo_multi', '').lower() in ('1', 'true', 'yes')
+    try:
+        payload = load_enj_timeline_payload(con, demo_multi=demo_multi)
+        return jsonify({'ok': True, **payload})
     except Exception as e:
         return jsonify({'ok': False, 'hata': str(e)[:300]}), 500
     finally:
