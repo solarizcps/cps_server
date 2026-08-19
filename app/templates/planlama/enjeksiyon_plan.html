@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% set active = 'planlama' %}
+
+{% block title %}Enjeksiyon Planı · Planlama · Solariz CPS{% endblock %}
+
+
+
+{% block head %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/enjeksiyon_plan.css') }}?v=8">
+
+{% endblock %}
+
+
+
+{% block content %}
+
+<div class="ep-wrap">
+
+  <div class="ep-toolbar">
+
+    <div class="ep-toolbar-left">
+
+      <h1>ENJEKSİYON PLANI</h1>
+
+      <p>Makine kapasite / istasyon doluluğu — planlama ajandası</p>
+
+    </div>
+
+    <div class="ep-toolbar-right">
+
+      <button type="button" class="ep-btn ep-btn-ghost" id="epBuguneDon" title="Bugüne dön" style="display:none;">Bugüne Dön</button>
+
+      <button type="button" class="ep-btn ep-btn-ghost" id="epYenileBtn" title="Yenile">↻ Yenile</button>
+
+      <span class="ep-badge" id="epKaynak">Read-Only</span>
+
+    </div>
+
+  </div>
+
+
+
+  <div class="ep-machines" id="epMachines" role="tablist" aria-label="Makine seçimi">
+
+    <button type="button" class="ep-mach active" data-kod="M1">M1</button>
+
+    <button type="button" class="ep-mach" data-kod="M2">M2</button>
+
+    <button type="button" class="ep-mach" data-kod="M3">M3</button>
+
+    <button type="button" class="ep-mach" data-kod="M4">M4</button>
+
+  </div>
+
+
+
+  <div class="ep-periods" id="epPeriods" role="tablist" aria-label="Dönem">
+
+    <button type="button" class="ep-period active" data-period="bugun">BUGÜN</button>
+
+    <button type="button" class="ep-period" data-period="bu_hafta">BU HAFTA</button>
+
+    <button type="button" class="ep-period" data-period="bu_ay">BU AY</button>
+
+    <button type="button" class="ep-period" data-period="3_ay">3 AY</button>
+
+  </div>
+
+
+
+  <div id="epError" class="ep-error" style="display:none;"></div>
+
+  <div id="epLoading" class="ep-loading">Yükleniyor…</div>
+
+
+
+  <!-- BUGÜN — mevcut V1 snapshot -->
+
+  <div id="epBugunView" style="display:none;">
+
+    <div class="ep-summary" id="epSummary"></div>
+
+    <div class="ep-grid-wrap ep-bugun-grid-wrap">
+      <table class="ep-grid ep-bugun-grid" id="epGrid">
+        <thead>
+          <tr>
+            <th class="ep-col-ist">İST</th>
+            <th class="ep-col-side ep-col-side-a">A TARAFI</th>
+            <th class="ep-col-side ep-col-side-b">B TARAFI</th>
+          </tr>
+        </thead>
+        <tbody id="epGridBody"></tbody>
+      </table>
+    </div>
+
+    <details class="ep-refs ep-refs-collapsed" id="epRefs">
+      <summary>Geçmiş Referans — 90 Gün</summary>
+      <p class="ep-refs-note">Kesin kapasite değildir. sample_count görünür tutulur.</p>
+      <div id="epRefsBody"></div>
+    </details>
+    <div class="ep-plans" id="epPlans">
+
+      <h2>Sıradaki Planlar</h2>
+
+      <div id="epPlansBody" class="ep-plan-empty">Henüz yayınlanmış enjeksiyon planı yok.</div>
+
+    </div>
+
+  </div>
+
+
+
+  <!-- TAKVİM görünümleri -->
+  <div id="epCalendarView" style="display:none;" class="ep-cal-layout">
+    <div class="ep-cal-top-panel" id="epCalSidebar">
+      <div class="ep-cal-topbar">
+        <div class="ep-cal-topbar-mach" id="epCalSidebarSummary"></div>
+        <div class="ep-cal-topbar-sep" aria-hidden="true"></div>
+        <div class="ep-cal-legend ep-cal-legend-inline">
+          <span class="ep-leg-inline"><span class="ep-leg-swatch ep-leg-a-plan"></span>A Plan</span>
+          <span class="ep-leg-inline"><span class="ep-leg-swatch ep-leg-a-live"></span>A Tahmin</span>
+          <span class="ep-leg-inline"><span class="ep-leg-swatch ep-leg-b-plan"></span>B Plan</span>
+          <span class="ep-leg-inline"><span class="ep-leg-swatch ep-leg-b-live"></span>B Tahmin</span>
+          <span class="ep-leg-inline"><span class="ep-leg-swatch ep-leg-empty"></span>Boş</span>
+          <span class="ep-leg-inline"><span class="ep-leg-swatch ep-leg-off"></span>Çalışma Yok</span>
+        </div>
+        <div class="ep-cal-topbar-sep" aria-hidden="true"></div>
+        <div class="ep-cal-topbar-sel" id="epCalSelected">
+          <span class="ep-cal-sel-label">SEÇİLİ PLAN:</span>
+          <span class="ep-cal-sel-value" id="epCalSelValue">—</span>
+        </div>
+      </div>
+      <div class="ep-cal-detail-expand" id="epCalDetailExpand" style="display:none;"></div>
+    </div>
+    <div class="ep-cal-main">
+      <div class="ep-cal-nav">
+        <button type="button" class="ep-cal-nav-btn" id="epCalPrev">‹</button>
+        <span class="ep-cal-nav-label" id="epCalLabel">—</span>
+        <button type="button" class="ep-cal-nav-btn" id="epCalNext">›</button>
+      </div>
+      <div class="ep-cal-wrap" id="epCalWrap">
+        <div class="ep-cal-grid" id="epCalGrid"></div>
+      </div>
+      <div id="epCalEmpty" class="ep-plan-empty" style="display:none;"></div>
+      <div id="epCalTooltip" class="ep-cal-tooltip" style="display:none;"></div>
+    </div>
+  </div>
+
+</div>
+
+
+
+<div id="epDrawer" class="ep-drawer" aria-hidden="true">
+
+  <div class="ep-drawer-backdrop" id="epDrawerBackdrop"></div>
+
+  <div class="ep-drawer-panel">
+
+    <div class="ep-drawer-head">
+
+      <h3>Plan Detayı</h3>
+
+      <button type="button" class="ep-drawer-close" id="epDrawerClose">×</button>
+
+    </div>
+
+    <div class="ep-drawer-body" id="epDrawerBody"></div>
+
+  </div>
+
+</div>
+
+{% endblock %}
+
+
+
+{% block scripts %}
+
+<script src="{{ url_for('static', filename='js/enjeksiyon_plan.js') }}?v=8"></script>
+
+{% endblock %}
+
