@@ -1986,12 +1986,46 @@ def numune_popup_mtt_onaya_gonder(
     from datetime import datetime as _dt
 
     p = payload or {}
-    try:
-        cari_id = int(p.get('cari_id') or 0)
-    except (TypeError, ValueError):
-        cari_id = 0
-    if not cari_id:
-        raise MusteriTemsilcisiTalepError('cari_id zorunlu.', 400)
+
+    # --- Müşteri kimliği XOR çözümü ---
+    musteri_tipi = (p.get('musteri_tipi') or 'MEVCUT').strip().upper()
+    if musteri_tipi not in ('MEVCUT', 'ADAY'):
+        raise MusteriTemsilcisiTalepError(
+            'musteri_tipi MEVCUT veya ADAY olmalı.', 400,
+        )
+
+    cari_id: int | None = None
+    musteri_aday_id: int | None = None
+
+    if musteri_tipi == 'MEVCUT':
+        try:
+            cari_id = int(p.get('cari_id') or 0) or None
+        except (TypeError, ValueError):
+            cari_id = None
+        if not cari_id:
+            raise MusteriTemsilcisiTalepError('Kayıtlı müşteri için cari_id zorunlu.', 400)
+    else:
+        # ADAY yolu: mevcut nexgen_musteri_aday kaydı kullanılır
+        try:
+            musteri_aday_id = int(p.get('musteri_aday_id') or 0) or None
+        except (TypeError, ValueError):
+            musteri_aday_id = None
+        if not musteri_aday_id:
+            raise MusteriTemsilcisiTalepError(
+                'Yeni müşteri için musteri_aday_id zorunlu. '
+                'Önce adayı kayıt edin.', 400,
+            )
+        # Aday kaydının varlığını doğrula — canonical lifecycle: durum='ADAY'
+        if _tablo_var(con, 'nexgen_musteri_aday'):
+            row = con.execute(
+                "SELECT id, firma_adi FROM nexgen_musteri_aday WHERE id=? AND durum != 'DONUSTURULDU'",
+                (musteri_aday_id,),
+            ).fetchone()
+            if not row:
+                raise MusteriTemsilcisiTalepError(
+                    'Belirtilen aday kaydı bulunamadı veya cariye dönüştürülmüş.', 404,
+                )
+
 
     idem = (p.get('idempotency_key') or '').strip()
     if not idem:
@@ -2067,14 +2101,28 @@ def numune_popup_mtt_onaya_gonder(
         ).fetchone()
         if not grow or int(grow['aktif'] or 0) != 1:
             raise MusteriTemsilcisiTalepError('Bağlı görüşme bulunamadı.', 404)
-        if int(grow['cari_id'] or 0) != cari_id:
+        # Kimlik tutarlılığı: görüşme ile XOR eşleşmesi
+        gcols = {r[1] for r in con.execute('PRAGMA table_info(musteri_operasyon_gorusme)').fetchall()}
+        g_cari = int(grow['cari_id'] or 0) or None
+        _grow_aday_raw = None
+        if 'musteri_aday_id' in gcols:
+            _grow_full = con.execute(
+                'SELECT musteri_aday_id FROM musteri_operasyon_gorusme WHERE id=?',
+                (gorusme_id,),
+            ).fetchone()
+            _grow_aday_raw = _grow_full['musteri_aday_id'] if _grow_full else None
+        g_aday = int(_grow_aday_raw or 0) or None
+        if musteri_tipi == 'MEVCUT' and g_cari != cari_id:
             raise MusteriTemsilcisiTalepError('Görüşme cari ile uyuşmuyor.', 409)
+        if musteri_tipi == 'ADAY' and g_aday != musteri_aday_id:
+            raise MusteriTemsilcisiTalepError('Görüşme adayı ile uyuşmuyor.', 409)
         t_out = talep_olustur(
             con,
             {
                 **talep_block,
                 'gorusme_id': gorusme_id,
                 'cari_id': cari_id,
+                'musteri_aday_id': musteri_aday_id,
                 'idempotency_key': idem,
             },
             kullanici_id,
@@ -2101,8 +2149,8 @@ def numune_popup_mtt_onaya_gonder(
             ),
         }
 
-    g_payload = {
-        'cari_id': cari_id,
+    # Yeni görüşme + MTT yolu — kimlik XOR
+    g_payload: dict[str, Any] = {
         'gorusme_tipi': (p.get('gorusme_tipi') or 'Telefon').strip() or 'Telefon',
         'sonuc_tipi': 'Numune İstedi',
         'kisa_not': musteri_talebi[:500],
@@ -2112,6 +2160,10 @@ def numune_popup_mtt_onaya_gonder(
         'idempotency_key': idem,
         'talep': talep_block,
     }
+    if musteri_tipi == 'MEVCUT':
+        g_payload['cari_id'] = cari_id
+    else:
+        g_payload['musteri_aday_id'] = musteri_aday_id
     out = kaydet_gorusme_opsiyonel_talep(con, g_payload, kullanici_id, yk)
     if not out.get('talep_olusturuldu') or not out.get('onay_id'):
         raise MusteriTemsilcisiTalepError(
@@ -2129,6 +2181,7 @@ def numune_popup_mtt_onaya_gonder(
         'onay_durum': out.get('onay_durum'),
         'onay_turu': out.get('onay_turu'),
         'idempotent': bool(out.get('idempotent')),
+        'musteri_tipi': musteri_tipi,
         'mesaj': out.get('mesaj') or (
             f"Numune talebi {out.get('talep_no')} numarasıyla "
             f"yönetim onayına gönderildi."
