@@ -912,6 +912,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
                     odeme_referansi=s.get('odeme_referansi') or None,
                     banka_adi=s.get('banka_adi') or None,
                 ))
+            tahsilat_tipi = (payload.get('tahsilat_tipi') or '').strip().upper() or None
             con = db_fn()
             try:
                 con.row_factory = __import__('sqlite3').Row
@@ -925,6 +926,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
                     onaylanan_vade_gun=payload.get('onaylanan_vade_gun'),
                     sevk_tarihi=payload.get('sevk_tarihi') or None,
                     con=con,
+                    tahsilat_tipi=tahsilat_tipi,
                 )
             finally:
                 con.close()

@@ -27,6 +27,9 @@ from modules.nexgen.mo_tahsilat_config import (
     PLAN_DURUM_MUHASEBE_BEKLIYOR,
     PLAN_DURUM_TAMAMLANDI,
     TAHSILAT_EDILEN_DURUMLARI,
+    TAHSILAT_TIPI_NORMAL,
+    TAHSILAT_TIPI_AVANS,
+    TAHSILAT_TIPLERI,
 )
 from modules.nexgen.mo_tahsilat_plan_service import beklenen_tutar_hesapla
 
@@ -78,6 +81,15 @@ def _kolon_var(con: sqlite3.Connection, tablo: str, kolon: str) -> bool:
 
 def _sevk_tahsilat_kolonlari_var(con: sqlite3.Connection) -> bool:
     return _kolon_var(con, 'mo_tahsilat_kayit', 'sevkiyat_id')
+
+
+def _tahsilat_tipi_kolon_var(con: sqlite3.Connection) -> bool:
+    return _kolon_var(con, 'mo_tahsilat_kayit', 'tahsilat_tipi')
+
+
+def _is_avans_norm(norm: dict[str, Any]) -> bool:
+    """norm dict'inde AVANS tipi seçilmiş mi?"""
+    return (norm.get('tahsilat_tipi') or '').upper() == TAHSILAT_TIPI_AVANS
 
 
 def _tcmb_snapshot_kolonlari_var(con: sqlite3.Connection) -> bool:
@@ -529,10 +541,16 @@ def _validate_payload(payload: dict, *, zorunlu_gonder: bool = False) -> dict[st
         kalan_f = round(max(beklenen_f - alinan_f, 0), 2)
         kismi = kalan_f > 0.009
 
+    # tahsilat_tipi: NORMAL veya AVANS discriminator (Migration 164) — CEK validation'dan önce okunur
+    raw_tip = (payload.get('tahsilat_tipi') or '').strip().upper()
+    if raw_tip not in TAHSILAT_TIPLERI:
+        raw_tip = TAHSILAT_TIPI_NORMAL
+
     if odeme == 'CEK':
         if not siparis_id:
             raise MoTahsilatError('Çek tahsilatında bağlı sipariş zorunludur.', 400)
-        if zorunlu_gonder and paket_hedef_f is None:
+        # AVANS modunda paket hedef tutarı zorunlu değil (gerçek sevkiyat yok, hedef belirsiz)
+        if zorunlu_gonder and paket_hedef_f is None and raw_tip != TAHSILAT_TIPI_AVANS:
             raise MoTahsilatError('Çek paketi için hedef tutar zorunludur.', 400)
 
     manuel_kur_raw = payload.get('tcmb_satis_kur_snapshot')
@@ -559,6 +577,7 @@ def _validate_payload(payload: dict, *, zorunlu_gonder: bool = False) -> dict[st
         'planlanan_tahsilat_tarihi': (payload.get('planlanan_tahsilat_tarihi') or '')[:10] or None,
         'tcmb_satis_kur_snapshot': manuel_kur_f,
         'manuel_fx_kur': manuel_kur_f,
+        'tahsilat_tipi': raw_tip,
     }
 
 
@@ -649,7 +668,10 @@ def taslak_kaydet(
         norm.pop('sevk_hedef_tutar_snapshot', None)
         norm.pop('sevk_para_birimi_snapshot', None)
         norm.pop('sevk_kalan_fx_snapshot', None)
-        norm.pop('tcmb_satis_kur_snapshot', None)
+        # AVANS modunda manuel kur kullanıcı tarafından girilmişse koru;
+        # normal kayıtta sevkiyat yokken bu alan zaten boştur.
+        if not _is_avans_norm(norm):
+            norm.pop('tcmb_satis_kur_snapshot', None)
         norm.pop('kur_tarihi_snapshot', None)
 
     now = _now()
@@ -664,11 +686,14 @@ def taslak_kaydet(
             raise MoTahsilatError('Bu durumda düzenleme yapılamaz.', 409)
         if int(row['olusturan_id'] or 0) != kullanici_id:
             raise MoTahsilatError('Yalnız kendi kaydınızı düzenleyebilirsiniz.', 403)
+        tahsilat_tipi_kolon = _tahsilat_tipi_kolon_var(con)
         if sevk_kolon:
             tcmb_kolon = _tcmb_snapshot_kolonlari_var(con)
             if tcmb_kolon:
+                _tt_set = ", tahsilat_tipi=?" if tahsilat_tipi_kolon else ""
+                _tt_val = (norm.get('tahsilat_tipi'),) if tahsilat_tipi_kolon else ()
                 con.execute(
-                    """
+                    f"""
                     UPDATE mo_tahsilat_kayit SET
                         cari_id=?, siparis_id=?, sevkiyat_id=?, beklenen_tutar=?, beklenen_tahmini=?,
                         paket_hedef_tutar=?, alinan_tutar=?, kalan_tutar=?,
@@ -676,7 +701,7 @@ def taslak_kaydet(
                         sevk_kalan_fx_snapshot=?, tcmb_satis_kur_snapshot=?, kur_tarihi_snapshot=?,
                         para_birimi=?,
                         planlanan_tahsilat_tarihi=?, alinan_tarih=?, odeme_tipi=?, odeme_referansi=?,
-                        kismi_mi=?, aciklama=?, dosya_ref=?, onay_notu=?, guncelleme_tarihi=?
+                        kismi_mi=?, aciklama=?, dosya_ref=?, onay_notu=?, guncelleme_tarihi=?{_tt_set}
                     WHERE id=?
                     """,
                     (
@@ -688,18 +713,20 @@ def taslak_kaydet(
                         norm.get('kur_tarihi_snapshot'), norm.get('para_birimi'),
                         norm['planlanan_tahsilat_tarihi'], norm['alinan_tarih'], norm['odeme_tipi'],
                         norm['odeme_referansi'], norm['kismi_mi'], norm['aciklama'], norm['dosya_ref'],
-                        norm['onay_notu'], now, kayit_id,
+                        norm['onay_notu'], now, *_tt_val, kayit_id,
                     ),
                 )
             else:
+                _tt_set = ", tahsilat_tipi=?" if tahsilat_tipi_kolon else ""
+                _tt_val = (norm.get('tahsilat_tipi'),) if tahsilat_tipi_kolon else ()
                 con.execute(
-                    """
+                    f"""
                     UPDATE mo_tahsilat_kayit SET
                         cari_id=?, siparis_id=?, sevkiyat_id=?, beklenen_tutar=?, beklenen_tahmini=?,
                         paket_hedef_tutar=?, alinan_tutar=?, kalan_tutar=?,
                         sevk_hedef_tutar_snapshot=?, sevk_para_birimi_snapshot=?, para_birimi=?,
                         planlanan_tahsilat_tarihi=?, alinan_tarih=?, odeme_tipi=?, odeme_referansi=?,
-                        kismi_mi=?, aciklama=?, dosya_ref=?, onay_notu=?, guncelleme_tarihi=?
+                        kismi_mi=?, aciklama=?, dosya_ref=?, onay_notu=?, guncelleme_tarihi=?{_tt_set}
                     WHERE id=?
                     """,
                     (
@@ -710,32 +737,38 @@ def taslak_kaydet(
                         norm.get('para_birimi'),
                         norm['planlanan_tahsilat_tarihi'], norm['alinan_tarih'], norm['odeme_tipi'],
                         norm['odeme_referansi'], norm['kismi_mi'], norm['aciklama'], norm['dosya_ref'],
-                        norm['onay_notu'], now, kayit_id,
+                        norm['onay_notu'], now, *_tt_val, kayit_id,
                     ),
                 )
         else:
+            _tt_set = ", tahsilat_tipi=?" if tahsilat_tipi_kolon else ""
+            _tt_val = (norm.get('tahsilat_tipi'),) if tahsilat_tipi_kolon else ()
             con.execute(
-                """
+                f"""
                 UPDATE mo_tahsilat_kayit SET
                     cari_id=?, siparis_id=?, beklenen_tutar=?, paket_hedef_tutar=?, alinan_tutar=?, kalan_tutar=?,
                     planlanan_tahsilat_tarihi=?, alinan_tarih=?, odeme_tipi=?, odeme_referansi=?,
-                    kismi_mi=?, aciklama=?, dosya_ref=?, onay_notu=?, guncelleme_tarihi=?
+                    kismi_mi=?, aciklama=?, dosya_ref=?, onay_notu=?, guncelleme_tarihi=?{_tt_set}
                 WHERE id=?
                 """,
                 (
                     norm['cari_id'], norm['siparis_id'], norm['beklenen_tutar'], norm['paket_hedef_tutar'],
                     norm['alinan_tutar'], norm['kalan_tutar'], norm['planlanan_tahsilat_tarihi'],
                     norm['alinan_tarih'], norm['odeme_tipi'], norm['odeme_referansi'], norm['kismi_mi'],
-                    norm['aciklama'], norm['dosya_ref'], norm['onay_notu'], now, kayit_id,
+                    norm['aciklama'], norm['dosya_ref'], norm['onay_notu'], now, *_tt_val, kayit_id,
                 ),
             )
         kid = kayit_id
     else:
+        tahsilat_tipi_kolon = _tahsilat_tipi_kolon_var(con)
+        _tt_col = ", tahsilat_tipi" if tahsilat_tipi_kolon else ""
+        _tt_ph = ", ?" if tahsilat_tipi_kolon else ""
+        _tt_val_ins = (norm.get('tahsilat_tipi'),) if tahsilat_tipi_kolon else ()
         if sevk_kolon:
             tcmb_kolon = _tcmb_snapshot_kolonlari_var(con)
             if tcmb_kolon:
                 cur = con.execute(
-                    """
+                    f"""
                     INSERT INTO mo_tahsilat_kayit
                         (kayit_kodu, cari_id, siparis_id, sevkiyat_id, kaynak_modul, beklenen_tutar, beklenen_tahmini,
                          paket_hedef_tutar, alinan_tutar, kalan_tutar,
@@ -744,8 +777,8 @@ def taslak_kaydet(
                          para_birimi,
                          planlanan_tahsilat_tarihi, alinan_tarih, odeme_tipi, odeme_referansi, kismi_mi,
                          aciklama, dosya_ref, onay_notu, durum, cari_entegrasyon_durumu,
-                         idempotency_key, olusturan_id, olusturma_tarihi, guncelleme_tarihi)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                         idempotency_key, olusturan_id, olusturma_tarihi, guncelleme_tarihi{_tt_col})
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?{_tt_ph})
                     """,
                     (
                         _kayit_kodu_uret(con), norm['cari_id'], norm['siparis_id'], norm.get('sevkiyat_id'),
@@ -757,20 +790,20 @@ def taslak_kaydet(
                         norm['planlanan_tahsilat_tarihi'], norm['alinan_tarih'], norm['odeme_tipi'],
                         norm['odeme_referansi'], norm['kismi_mi'], norm['aciklama'], norm['dosya_ref'],
                         norm['onay_notu'], KAYIT_DURUM_TASLAK, 'BEKLIYOR', norm['idempotency_key'],
-                        kullanici_id, now, now,
+                        kullanici_id, now, now, *_tt_val_ins,
                     ),
                 )
             else:
                 cur = con.execute(
-                    """
+                    f"""
                     INSERT INTO mo_tahsilat_kayit
                         (kayit_kodu, cari_id, siparis_id, sevkiyat_id, kaynak_modul, beklenen_tutar, beklenen_tahmini,
                          paket_hedef_tutar, alinan_tutar, kalan_tutar,
                          sevk_hedef_tutar_snapshot, sevk_para_birimi_snapshot, para_birimi,
                          planlanan_tahsilat_tarihi, alinan_tarih, odeme_tipi, odeme_referansi, kismi_mi,
                          aciklama, dosya_ref, onay_notu, durum, cari_entegrasyon_durumu,
-                         idempotency_key, olusturan_id, olusturma_tarihi, guncelleme_tarihi)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                         idempotency_key, olusturan_id, olusturma_tarihi, guncelleme_tarihi{_tt_col})
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?{_tt_ph})
                     """,
                     (
                         _kayit_kodu_uret(con), norm['cari_id'], norm['siparis_id'], norm.get('sevkiyat_id'),
@@ -781,18 +814,18 @@ def taslak_kaydet(
                         norm['planlanan_tahsilat_tarihi'], norm['alinan_tarih'], norm['odeme_tipi'],
                         norm['odeme_referansi'], norm['kismi_mi'], norm['aciklama'], norm['dosya_ref'],
                         norm['onay_notu'], KAYIT_DURUM_TASLAK, 'BEKLIYOR', norm['idempotency_key'],
-                        kullanici_id, now, now,
+                        kullanici_id, now, now, *_tt_val_ins,
                     ),
                 )
         else:
             cur = con.execute(
-                """
+                f"""
                 INSERT INTO mo_tahsilat_kayit
                     (kayit_kodu, cari_id, siparis_id, kaynak_modul, beklenen_tutar, beklenen_tahmini,
                      paket_hedef_tutar, alinan_tutar, kalan_tutar, planlanan_tahsilat_tarihi, alinan_tarih,
                      odeme_tipi, odeme_referansi, kismi_mi, aciklama, dosya_ref, onay_notu, durum,
-                     cari_entegrasyon_durumu, idempotency_key, olusturan_id, olusturma_tarihi, guncelleme_tarihi)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     cari_entegrasyon_durumu, idempotency_key, olusturan_id, olusturma_tarihi, guncelleme_tarihi{_tt_col})
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?{_tt_ph})
                 """,
                 (
                     _kayit_kodu_uret(con), norm['cari_id'], norm['siparis_id'], KAYNAK_MUSTERI_OPERASYONU,
@@ -800,7 +833,7 @@ def taslak_kaydet(
                     norm['alinan_tutar'], norm['kalan_tutar'], norm['planlanan_tahsilat_tarihi'],
                     norm['alinan_tarih'], norm['odeme_tipi'], norm['odeme_referansi'], norm['kismi_mi'],
                     norm['aciklama'], norm['dosya_ref'], norm['onay_notu'], KAYIT_DURUM_TASLAK, 'BEKLIYOR',
-                    norm['idempotency_key'], kullanici_id, now, now,
+                    norm['idempotency_key'], kullanici_id, now, now, *_tt_val_ins,
                 ),
             )
         kid = int(cur.lastrowid)
@@ -826,17 +859,23 @@ def _freeze_cek_snapshots(con: sqlite3.Connection, kayit_id: int, siparis_id: in
     """
     CEK paketi için parent snapshot kolonlarını doldur.
     Öncelik: mevcut snapshot dolu ise değiştirme (idempotent).
+    AVANS: gercek_sevk_tarihi ve hedef_vade_tarihi hesaplanmaz (sevkiyat yok).
     """
     from modules.nexgen.mo_sevkiyat_service import gercek_sevk_tarihi
     from datetime import date, timedelta
 
+    tt_col = _tahsilat_tipi_kolon_var(con)
+    tt_select = ', tahsilat_tipi' if tt_col else ''
     row = con.execute(
-        'SELECT para_birimi, onaylanan_vade_gun_snapshot, gercek_sevk_tarihi_snapshot, '
-        '       hedef_vade_tarihi, paket_hedef_tutar, beklenen_tutar '
+        f'SELECT para_birimi, onaylanan_vade_gun_snapshot, gercek_sevk_tarihi_snapshot, '
+        f'       hedef_vade_tarihi, paket_hedef_tutar, beklenen_tutar{tt_select} '
         'FROM mo_tahsilat_kayit WHERE id=?', (kayit_id,)
     ).fetchone()
     if not row:
         return
+
+    # AVANS kaydında sevk tarihine dayalı hesaplar yapılmaz
+    is_avans = tt_col and (row['tahsilat_tipi'] or '').upper() == TAHSILAT_TIPI_AVANS
 
     sip = con.execute(
         'SELECT vade_gun, anlasma_para_birimi FROM nexgen_planlama_siparis WHERE id=?',
@@ -860,16 +899,16 @@ def _freeze_cek_snapshots(con: sqlite3.Connection, kayit_id: int, siparis_id: in
         updates.append('onaylanan_vade_gun_snapshot=?')
         vals.append(int(sip['vade_gun']))
 
-    # gercek_sevk_tarihi_snapshot
+    # gercek_sevk_tarihi_snapshot — AVANS'ta atla (sevkiyat henüz yok)
     sevk = row['gercek_sevk_tarihi_snapshot']
-    if not sevk:
+    if not sevk and not is_avans:
         sevk = gercek_sevk_tarihi(con, siparis_id)
         if sevk:
             updates.append('gercek_sevk_tarihi_snapshot=?')
             vals.append(sevk)
 
-    # hedef_vade_tarihi
-    if not row['hedef_vade_tarihi'] and sevk:
+    # hedef_vade_tarihi — AVANS'ta hesaplanamaz (sevk tarihi bilinmiyor)
+    if not row['hedef_vade_tarihi'] and sevk and not is_avans:
         vade_gun = row['onaylanan_vade_gun_snapshot'] or (sip['vade_gun'] if sip['vade_gun'] else None)
         if vade_gun:
             try:
@@ -922,19 +961,38 @@ def sync_cek_parent_tutarlar(con: sqlite3.Connection, kayit_id: int) -> None:
     )
 
 
-def _cek_onay_validate(con: sqlite3.Connection, kayit_id: int) -> None:
-    """CEK paketini onaya göndermeden önce: sipariş, hedef, en az 1 aktif çek."""
+def _cek_onay_validate(
+    con: sqlite3.Connection,
+    kayit_id: int,
+    tahsilat_tipi_override: Optional[str] = None,
+) -> None:
+    """CEK paketini onaya göndermeden önce: sipariş, hedef, en az 1 aktif çek.
+
+    tahsilat_tipi_override: DB'de kolon yoksa (migration 164 uygulanmamış) payload'dan gelen
+    değeri parametre olarak al. DB'de kolon varsa DB değeri tercih edilir.
+    """
     from modules.nexgen.mo_tahsilat_cek_service import cek_listele
+    # tahsilat_tipi kolonunu backward-compat okuma: kolon yoksa NORMAL varsay
+    tt_kolon = _tahsilat_tipi_kolon_var(con)
+    select_cols = 'odeme_tipi, siparis_id, paket_hedef_tutar'
+    if tt_kolon:
+        select_cols += ', tahsilat_tipi'
     row = con.execute(
-        'SELECT odeme_tipi, siparis_id, paket_hedef_tutar FROM mo_tahsilat_kayit WHERE id=?',
+        f'SELECT {select_cols} FROM mo_tahsilat_kayit WHERE id=?',
         (kayit_id,),
     ).fetchone()
     if not row or (row['odeme_tipi'] or '').upper() != 'CEK':
         return
     if not row['siparis_id']:
         raise MoTahsilatError('Çek tahsilatında bağlı sipariş zorunludur.', 400)
-    if row['paket_hedef_tutar'] is None or float(row['paket_hedef_tutar'] or 0) <= 0:
-        raise MoTahsilatError('Çek paketi için hedef tutar zorunludur.', 400)
+    # AVANS modunda paket_hedef_tutar zorunlu değil — gerçek sevkiyat henüz yok
+    # DB'de kolon varsa DB'yi tercih et; yoksa override (payload) değerini al
+    _db_tipi = (row['tahsilat_tipi'] if tt_kolon else None)
+    kayit_tipi = (_db_tipi or tahsilat_tipi_override or TAHSILAT_TIPI_NORMAL).upper()
+    is_avans = kayit_tipi == TAHSILAT_TIPI_AVANS
+    if not is_avans:
+        if row['paket_hedef_tutar'] is None or float(row['paket_hedef_tutar'] or 0) <= 0:
+            raise MoTahsilatError('Çek paketi için hedef tutar zorunludur.', 400)
     cekler = cek_listele(con, kayit_id)
     if not cekler:
         raise MoTahsilatError('CEK paketi onaylanabilir için en az 1 aktif çek satırı gerekli.', 400)
@@ -960,9 +1018,9 @@ def onaya_gonder(
     from modules.nexgen.onay_tahsilat_adapter import tahsilat_onaya_gonder
     from modules.nexgen.mo_vade_kontrol_service import hesapla as vade_hesapla, DURUM_FAZLA_VADE
 
-    if payload:
-        _validate_payload({**payload, 'idempotency_key': payload.get('idempotency_key') or f'tahsilat-send-{kayit_id}'}, zorunlu_gonder=True)
-        taslak_kaydet(con, {**payload, 'idempotency_key': payload.get('idempotency_key') or f'tahsilat-{kayit_id}-send'}, kullanici_id, yk, kayit_id=kayit_id)
+    # payload artık yalnızca tahsilat_tipi ve vade_asim_aciklamasi taşır;
+    # tam _validate_payload / taslak_kaydet çağrısı yapılmaz —
+    # kayıt zaten önceki adımda taslak olarak DB'ye yazıldı.
 
     row = con.execute(
         'SELECT id, durum, olusturan_id, cari_id FROM mo_tahsilat_kayit WHERE id=? AND aktif=1',
@@ -977,26 +1035,41 @@ def onaya_gonder(
     if can_muhasebe_onay(yk):
         raise MoTahsilatError('Onay yetkisi olan kullanıcı tahsilat kaydı açamaz.', 403)
 
-    _cek_onay_validate(con, kayit_id)
-
+    tt_kolon_ok = _tahsilat_tipi_kolon_var(con)
+    _sip_cols = 'odeme_tipi, siparis_id'
+    if tt_kolon_ok:
+        _sip_cols += ', tahsilat_tipi'
     sip_row = con.execute(
-        'SELECT odeme_tipi, siparis_id FROM mo_tahsilat_kayit WHERE id=?', (kayit_id,),
+        f'SELECT {_sip_cols} FROM mo_tahsilat_kayit WHERE id=?', (kayit_id,),
     ).fetchone()
     is_cek = sip_row and (sip_row['odeme_tipi'] or '').upper() == 'CEK'
+    # tahsilat_tipi: DB'den oku (migration varsa), yoksa payload'dan al, yoksa NORMAL
+    _db_tipi = (sip_row['tahsilat_tipi'] if (sip_row and tt_kolon_ok) else None)
+    _payload_tipi = ((payload or {}).get('tahsilat_tipi') or '').strip().upper() if payload else ''
+    kayit_tahsilat_tipi = (_db_tipi or _payload_tipi or TAHSILAT_TIPI_NORMAL).upper()
+    is_avans_kayit = kayit_tahsilat_tipi == TAHSILAT_TIPI_AVANS
+
+    _cek_onay_validate(con, kayit_id, tahsilat_tipi_override=kayit_tahsilat_tipi)
+
     if is_cek and sip_row['siparis_id']:
         sync_cek_parent_tutarlar(con, kayit_id)
-        _freeze_cek_snapshots(con, kayit_id, int(sip_row['siparis_id']))
+        if not is_avans_kayit:
+            _freeze_cek_snapshots(con, kayit_id, int(sip_row['siparis_id']))
 
     _sevk_onay_kontrol(con, kayit_id)
 
     # --- Vade kontrol: backend bağımsız hesap ---
     vade_sonuc = None
     istisna_path = False
-    if is_cek:
+    if is_cek and not is_avans_kayit:
         try:
             old_rf = con.row_factory
             con.row_factory = __import__('sqlite3').Row
-            vade_sonuc = vade_hesapla(tahsilat_kayit_id=kayit_id, con=con)
+            vade_sonuc = vade_hesapla(
+                tahsilat_kayit_id=kayit_id,
+                con=con,
+                tahsilat_tipi=kayit_tahsilat_tipi,
+            )
             con.row_factory = old_rf
             if vade_sonuc and vade_sonuc.durum_kodu == DURUM_FAZLA_VADE:
                 istisna_path = True

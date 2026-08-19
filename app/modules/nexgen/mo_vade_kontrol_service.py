@@ -149,6 +149,8 @@ def _durum_etiket(kod: str, sapma: Optional[int]) -> str:
         return "Çek Girilmedi"
     if kod == DURUM_NAKIT_PAKET:
         return "Nakit Paket"
+    if kod == "AVANS_CEK":
+        return "Avans Çeki"
     return kod
 
 
@@ -294,6 +296,7 @@ def hesapla(
     sevk_tarihi: Optional[str] = None,
     aylik_finansman_orani: Optional[Decimal] = None,
     con: Optional[sqlite3.Connection] = None,
+    tahsilat_tipi: Optional[str] = None,
 ) -> VadeKontrolSonuc:
     """
     Canonical vade hesabı.
@@ -305,9 +308,16 @@ def hesapla(
       onaylanan_vade_gun → param > parent snapshot > sipariş vade_gun
       sevk_tarihi        → param > parent snapshot > DB sorgu
       cek_satirlari      → param > DB aktif çekler
+
+    AVANS modu (tahsilat_tipi='AVANS'):
+      Sevkiyat olmasa da çek vade analizi yapılır.
+      Vade referans = çekin cek_alim_tarihi (yoksa vade_tarihi − onaylanan_vade_gun).
+      sevkiyata bağlı finansman etkisi hesaplanmaz.
+      Durum = AVANS_CEK (sevkiyat bağımsız).
     """
     oran = aylik_finansman_orani if aylik_finansman_orani is not None else FINANSMAN_AYLIK_ORAN
     uyarilar: list[str] = []
+    is_avans = (tahsilat_tipi or '').strip().upper() == 'AVANS'
 
     # --- NAKIT kontrolü (parent'tan veya parametre) ---
     efektif_odeme_tipi = odeme_tipi
@@ -392,8 +402,8 @@ def hesapla(
             uyarilar=[],
         )
 
-    # SEVK BEKLIYOR — erken çıkış
-    if not _resolved_sevk:
+    # SEVK BEKLIYOR — erken çıkış (AVANS modunda bypass: çek vade analizi sevkten bağımsız)
+    if not _resolved_sevk and not is_avans:
         return VadeKontrolSonuc(
             siparis_id=_resolved_siparis_id,
             tahsilat_kayit_id=tahsilat_kayit_id,
@@ -421,7 +431,9 @@ def hesapla(
             uyarilar=[],
         )
 
-    sevk_d = _parse_date(_resolved_sevk, "sevk_tarihi")
+    # AVANS: sevk tarihi yok — çek bazlı vade alim_tarihi referansla hesaplanır
+    # Normal: sevk_d vade hesabının referans noktasıdır
+    sevk_d = _parse_date(_resolved_sevk, "sevk_tarihi") if _resolved_sevk else None
 
     # Çek satırları: parametre yoksa DB'den
     satir_listesi: list[CekSatiriInput] = []
@@ -488,15 +500,25 @@ def hesapla(
 
     for s in satir_listesi:
         vade_d = _parse_date(s.gercek_cek_vade_tarihi, "gercek_cek_vade_tarihi")
-        gercek_vade_gun = (vade_d - sevk_d).days
+
+        if is_avans:
+            # AVANS: vade gün = vade_tarihi - alim_tarihi (kendi çek vadesi)
+            if s.cek_alim_tarihi:
+                ref_d = _parse_date(s.cek_alim_tarihi, "cek_alim_tarihi")
+            else:
+                # alim tarihi yoksa vade günü = 0 (aynı gün varsayımı)
+                ref_d = vade_d
+            gercek_vade_gun = max((vade_d - ref_d).days, 0)
+        else:
+            gercek_vade_gun = (vade_d - sevk_d).days  # type: ignore[operator]
 
         agirlikli_toplam += s.tutar * Decimal(str(gercek_vade_gun))
         toplam_tutar += s.tutar
 
-        # Çek bazlı finansman
+        # Çek bazlı finansman — AVANS'ta sevkiyat olmadığı için finansman hesaplanmaz
         sapma_gun_raw: Optional[Decimal] = None
         cek_finansman: Optional[Decimal] = None
-        if _resolved_onaylanan is not None:
+        if not is_avans and _resolved_onaylanan is not None:
             sapma_d = Decimal(str(gercek_vade_gun)) - Decimal(str(_resolved_onaylanan))
             sapma_gun_raw = sapma_d
             cek_finansman = s.tutar * oran * (sapma_d / Decimal("30"))
@@ -516,13 +538,34 @@ def hesapla(
     # Ağırlıklı ortalama
     ort_raw: Decimal = agirlikli_toplam / toplam_tutar
     ort_gosterim: int = _half_up(ort_raw)
-    ort_vade_tarihi: Optional[str] = (sevk_d + timedelta(days=ort_gosterim)).isoformat()
 
-    # Sapma
+    # Ortalama vade tarihi referansı:
+    # Normal: sevk_d + ort_gosterim
+    # AVANS: ilk çekin alım tarihi + ort_gosterim (ya da vade_tarihi olarak direkt)
+    if is_avans:
+        # AVANS için ort. vade tarihi = ilk çekin alım tarihi + ağırlıklı ort. vade gün
+        _alim_ref = None
+        if satir_listesi and satir_listesi[0].cek_alim_tarihi:
+            try:
+                _alim_ref = _parse_date(satir_listesi[0].cek_alim_tarihi, "alim_ref")
+            except VadeKontrolError:
+                pass
+        if _alim_ref is None:
+            # Fallback: son çekin vade tarihi
+            _alim_ref = _parse_date(satir_listesi[-1].gercek_cek_vade_tarihi, "vade_ref")
+        ort_vade_tarihi: Optional[str] = (_alim_ref + timedelta(days=ort_gosterim)).isoformat()
+    else:
+        ort_vade_tarihi = (sevk_d + timedelta(days=ort_gosterim)).isoformat()  # type: ignore[operator]
+
+    # Sapma — AVANS'ta sevkiyata göre sapma hesaplanamaz
     sapma_raw: Optional[Decimal] = None
     sapma_gosterim: Optional[int] = None
     durum_kodu: str
-    if _resolved_onaylanan is not None:
+    if is_avans:
+        # AVANS: sevk olmadan FAZLA_VADE/AVANTAJ karşılaştırması yapılmaz
+        # Onaylanan vade ile kıyaslama AVANS'ta anlamsız; durum = AVANS_CEK
+        durum_kodu = "AVANS_CEK"
+    elif _resolved_onaylanan is not None:
         sapma_raw = ort_raw - Decimal(str(_resolved_onaylanan))
         sapma_gosterim = _half_up(sapma_raw)
         if sapma_gosterim > 0:
@@ -555,6 +598,9 @@ def hesapla(
     if durum_kodu == DURUM_FAZLA_VADE:
         uyarilar.append(f"Fazla vade: +{sapma_gosterim} gün")
 
+    # AVANS: finansman sevkiyat olmadığı için hesaplanamaz
+    finansman_net_result = None if is_avans else (_float2(finansman_net) if _resolved_onaylanan is not None else None)
+
     return VadeKontrolSonuc(
         siparis_id=_resolved_siparis_id,
         tahsilat_kayit_id=tahsilat_kayit_id,
@@ -577,7 +623,7 @@ def hesapla(
         durum_kodu=durum_kodu,
         durum_etiket=_durum_etiket(durum_kodu, sapma_gosterim),
         finansman_aylik_oran=float(oran),
-        finansman_net=_float2(finansman_net) if _resolved_onaylanan is not None else None,
+        finansman_net=finansman_net_result,
         cek_detaylari=[
             {
                 "id": c.id,

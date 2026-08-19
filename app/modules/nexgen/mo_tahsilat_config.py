@@ -87,3 +87,17 @@ SEVK_TAHSILAT_DURUMLARI = frozenset({
 })
 
 CARI_ENTEGRASYON_AKTIF = False
+
+# ---------------------------------------------------------------------------
+# Tahsilat Tipi — AVANS vs NORMAL discriminator (Migration 164)
+# ---------------------------------------------------------------------------
+TAHSILAT_TIPI_NORMAL = "NORMAL"
+TAHSILAT_TIPI_AVANS = "AVANS"
+TAHSILAT_TIPLERI = frozenset({TAHSILAT_TIPI_NORMAL, TAHSILAT_TIPI_AVANS})
+
+# NULL (mevcut kayıtlar) → NORMAL davranışı
+TAHSILAT_TIPI_ETIKET = {
+    TAHSILAT_TIPI_NORMAL: "Normal Tahsilat",
+    TAHSILAT_TIPI_AVANS: "Avans",
+    None: "Normal Tahsilat",  # backward-compat
+}

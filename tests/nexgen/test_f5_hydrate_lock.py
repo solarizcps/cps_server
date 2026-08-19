@@ -123,7 +123,7 @@ class TestF5HydrateTemplateLock(unittest.TestCase):
 
         hyd_start = HTML.find('function hydrateTahsilatDraft(')
         self.assertGreater(hyd_start, 0, 'hydrateTahsilatDraft bulunamadı')
-        hyd_body = HTML[hyd_start:hyd_start + 4500]
+        hyd_body = HTML[hyd_start:hyd_start + 5000]
         self.assertIn('skipPreview: true, skipBaglam: true', hyd_body)
         self.assertIn('updateTahsilatCekUi(uiOpts)', hyd_body)
         self.assertIn('function runFinalHydratePreview', hyd_body)

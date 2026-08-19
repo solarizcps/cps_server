@@ -1198,9 +1198,11 @@
           <span hidden id="mp-t-sip-vade"></span>
           <span hidden id="mp-t-sip-hedef-vade"></span>
         </div>
-        <div id="mp-t-sevk-yok-uyari" hidden style="margin-top:8px;padding:10px 14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#c2410c;font-size:12px;font-weight:600;">
-          Sevk bekleniyor — tahsilat oluşturulamaz.
+        <div id="mp-t-sevk-yok-uyari" hidden style="margin-top:8px;padding:10px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;color:#0369a1;font-size:12px;font-weight:600;">
+          AVANS — Henüz sevkiyat yapılmadı. Alınan ödeme avans olarak kaydedilecektir.
         </div>
+        {# AVANS tipi hidden input — JS tarafından set edilir #}
+        <input type="hidden" id="mp-t-tahsilat-tipi" name="tahsilat_tipi" value="NORMAL">
       </div>
 
       {# ===== BÖLÜM 2 — ÖDEME ===== #}
@@ -1239,6 +1241,10 @@
             <div style="color:#0369a1;font-size:11px;font-weight:600;margin-bottom:4px;">Tahsilat Hedefi</div>
             <div style="font-size:22px;font-weight:800;color:#0f172a;" id="mp-t-hedef-display">—</div>
             <div style="font-size:11px;color:#64748b;margin-top:2px;" id="mp-t-hedef-formula"></div>
+            {# AVANS modunda tahsilat hedefi mesajı #}
+            <div id="mp-t-avans-hedef-mesaj" hidden style="font-size:11px;color:#0369a1;margin-top:4px;font-style:italic;">
+              Gerçek sevkiyat sonrası tahsilat hedefi hesaplanacaktır.
+            </div>
             {# hidden input — form submit için #}
             <input type="hidden" name="beklenen_tutar" id="mp-t-beklenen">
             <label id="mp-t-hedef-label" hidden></label>
@@ -4312,21 +4318,32 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     }
   }
 
-  // Sevkiyat yoksa submit/onay düğmelerini devre dışı bırak
+  // Sevkiyat yoksa AVANS modunu aktif et (eski blokaj kaldırıldı)
   function _setSevkYokGuard(aktif) {
     var submitBtn = document.querySelector('#mp-tahsilat-form [type="submit"]');
     var onayBtn = document.getElementById('mp-t-onaya-gonder');
     var hedefEl = document.getElementById('mp-t-beklenen');
+    var tipEl = document.getElementById('mp-t-tahsilat-tipi');
+    var hedefWrap = hedefEl ? hedefEl.closest('.mp-t-bolum, div[style]') : null;
+    var avansHedefEl = document.getElementById('mp-t-avans-hedef-mesaj');
     if (aktif) {
-      if (submitBtn) { submitBtn.disabled = true; submitBtn.title = 'Sevk bekleniyor — tahsilat oluşturulamaz.'; }
-      if (onayBtn) { onayBtn.disabled = true; onayBtn.title = 'Sevk bekleniyor — tahsilat oluşturulamaz.'; }
-      if (hedefEl && !tahsilatSevkBound) {
-        setMoneyInput(hedefEl, '', false);
-        updateTahsilatKalan();
-      }
-    } else {
+      // AVANS modu: butonlar açık kalır, tahsilat_tipi=AVANS set edilir
       if (submitBtn) { submitBtn.disabled = false; submitBtn.title = ''; }
       if (onayBtn) { onayBtn.disabled = false; onayBtn.title = ''; }
+      if (tipEl) tipEl.value = 'AVANS';
+      // Tahsilat Hedefi: AVANS mesajı göster, input'u gizle
+      if (hedefEl) { hedefEl.style.display = 'none'; }
+      if (avansHedefEl) { avansHedefEl.hidden = false; }
+      // Kalan: AVANS'ta '—' göster
+      var kalanEl = document.getElementById('mp-t-kalan');
+      if (kalanEl) { setMoneyInput(kalanEl, '', false); }
+    } else {
+      // Normal mod: tahsilat_tipi=NORMAL, butonlar normal, hedef input görünür
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.title = ''; }
+      if (onayBtn) { onayBtn.disabled = false; onayBtn.title = ''; }
+      if (tipEl) tipEl.value = 'NORMAL';
+      if (hedefEl) { hedefEl.style.display = ''; }
+      if (avansHedefEl) { avansHedefEl.hidden = true; }
     }
   }
 
@@ -4983,6 +5000,9 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
 
     function afterSevkHydrate(k) {
       var uiOpts = { skipPreview: true, skipBaglam: true };
+      // tahsilat_tipi hydrate: AVANS/NORMAL hidden input restore
+      var tipEl = document.getElementById('mp-t-tahsilat-tipi');
+      if (tipEl && k.tahsilat_tipi) tipEl.value = k.tahsilat_tipi;
       if (k.tcmb_satis_kur_snapshot != null && k.tcmb_satis_kur_snapshot !== '') {
         tahsilatSevkFxKalan = k.sevk_kalan_fx_snapshot;
         applyTcmbTryFromKayit(k);
@@ -5201,10 +5221,15 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       toast('Çek tahsilatında bağlı sipariş seçilmelidir.');
       return false;
     }
-    var hedef = getMoneyInput(document.getElementById('mp-t-beklenen'));
-    if (!(hedef > 0)) {
-      toast('Paket hedef tutarı girilmelidir.');
-      return false;
+    var tipEl = document.getElementById('mp-t-tahsilat-tipi');
+    var isAvansMode = tipEl && tipEl.value === 'AVANS';
+    // AVANS modunda paket hedef tutarı zorunlu değil — gerçek sevkiyat olmadığı için hedef belli değil
+    if (!isAvansMode) {
+      var hedef = getMoneyInput(document.getElementById('mp-t-beklenen'));
+      if (!(hedef > 0)) {
+        toast('Paket hedef tutarı girilmelidir.');
+        return false;
+      }
     }
     if (typeof window.mpSaveCekSatirlar === 'function') {
       var rows = document.querySelectorAll('#mp-cek-tbody tr[data-idx]');
@@ -5343,24 +5368,30 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     var sevkEl = document.getElementById('mp-t-sevkiyat');
     var sevkId = sevkEl && sevkEl.value ? parseInt(sevkEl.value, 10) : null;
     var cariEl = document.getElementById('mp-t-cari');
+    // tahsilat_tipi: AVANS veya NORMAL — hidden input'dan gelir
+    var tipEl = document.getElementById('mp-t-tahsilat-tipi');
+    var tahsilatTipi = tipEl ? (tipEl.value || 'NORMAL') : 'NORMAL';
     // Manuel kur: USD/EUR için
     var kurInp = document.getElementById('mp-t-manuel-kur');
     var manuelKurRaw = kurInp ? kurInp.value.replace(',', '.').trim() : '';
     var manuelKurF = parseFloat(manuelKurRaw);
     var manuelKur = (manuelKurRaw && !isNaN(manuelKurF) && isFinite(manuelKurF) && manuelKurF > 0) ? manuelKurF : null;
+    // AVANS modunda kalan ve hedef hesaplanmaz
+    var isAvans = tahsilatTipi === 'AVANS';
     return {
       idempotency_key: tahsilatIdemKey,
       kayit_id: tahsilatKayitId,
       cari_id: (cariEl && cariEl.value) ? cariEl.value : fd.get('cari_id'),
       siparis_id: fd.get('siparis_id') || null,
       sevkiyat_id: sevkId || null,
-      beklenen_tutar: cek ? null : hedef,
-      paket_hedef_tutar: cek ? hedef : null,
+      tahsilat_tipi: tahsilatTipi,
+      beklenen_tutar: isAvans ? null : (cek ? null : hedef),
+      paket_hedef_tutar: isAvans ? null : (cek ? hedef : null),
       alinan_tutar: getMoneyInput(document.getElementById('mp-t-alinan')) || null,
       alinan_tarih: fd.get('alinan_tarih') || null,
       odeme_tipi: fd.get('odeme_tipi'),
-      kismi_mi: (fd.get('kismi_mi') || '0') === '1',
-      kalan_tutar: getMoneyInput(document.getElementById('mp-t-kalan')) || null,
+      kismi_mi: isAvans ? false : ((fd.get('kismi_mi') || '0') === '1'),
+      kalan_tutar: isAvans ? null : (getMoneyInput(document.getElementById('mp-t-kalan')) || null),
       odeme_referansi: fd.get('odeme_referansi') || null,
       aciklama: fd.get('aciklama') || null,
       onay_notu: fd.get('onay_notu') || null,
@@ -5460,10 +5491,13 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
           toast(tahsilatApiMesaj({d: cekRes}, 'Çek kaydı hatası'));
           return null;
         }
+        var _tipEl = document.getElementById('mp-t-tahsilat-tipi');
+        var _onayPayload = {tahsilat_tipi: _tipEl ? (_tipEl.value || 'NORMAL') : 'NORMAL'};
+        if (istisnaAciklama) _onayPayload.vade_asim_aciklamasi = istisnaAciklama;
         return fetch('/nexgen/api/musteri-pazarlama/tahsilat-kayit/' + tahsilatKayitId + '/onaya-gonder', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(istisnaAciklama ? {vade_asim_aciklamasi: istisnaAciklama} : {})
+          body: JSON.stringify(_onayPayload)
         }).then(function(r){ return r.json().then(function(d){ return {ok: r.ok, d: d}; }); });
       });
     }).then(function(res2){
@@ -5699,11 +5733,14 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
       var hedef = getMoneyInput(document.getElementById('mp-t-beklenen'));
       var pb = 'TRY';
       var baglam = cekPreviewContext();
+      var tipEl = document.getElementById('mp-t-tahsilat-tipi');
+      var tahsilatTipi = tipEl ? (tipEl.value || 'NORMAL') : 'NORMAL';
       var payload = {
         siparis_id: sipId,
         tahsilat_kayit_id: tahsilatKayitId || null,
         para_birimi: pb,
         cek_satirlari: collectCekSatirlar(),
+        tahsilat_tipi: tahsilatTipi,
       };
       if (hedef > 0) payload.paket_hedef_tutar = hedef;
       if (baglam.sevk_tarihi) payload.sevk_tarihi = baglam.sevk_tarihi;
@@ -5759,14 +5796,14 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
           hedefAsimEl.textContent = '';
         }
       }
-      document.getElementById('mp-cek-oz-onaylanan').textContent = s.onaylanan_vade_gun != null ? s.onaylanan_vade_gun + ' gün' : '—';
+      document.getElementById('mp-cek-oz-onaylanan').textContent = isAvans ? '—' : (s.onaylanan_vade_gun != null ? s.onaylanan_vade_gun + ' gün' : '—');
       document.getElementById('mp-cek-oz-vade').textContent = s.agirlikli_ortalama_vade_gun_gosterim != null ? s.agirlikli_ortalama_vade_gun_gosterim + ' gün' : '—';
       document.getElementById('mp-cek-oz-vade-tarih').textContent = fmtTrDate(s.agirlikli_ortalama_vade_tarihi);
       var sapmaEl = document.getElementById('mp-cek-oz-sapma');
-      var sapma = s.vade_sapma_gun_gosterim;
+      var sapma = isAvans ? null : s.vade_sapma_gun_gosterim;
       sapmaEl.textContent = sapma != null ? ((sapma > 0 ? '+' : '') + sapma + ' gün') : '—';
       sapmaEl.style.color = sapma > 0 ? '#dc2626' : (sapma < 0 ? '#16a34a' : '#374151');
-      document.getElementById('mp-cek-oz-finansman').textContent = s.finansman_net != null ? fmtMoney(s.finansman_net) : '—';
+      document.getElementById('mp-cek-oz-finansman').textContent = (isAvans || s.finansman_net == null) ? '—' : fmtMoney(s.finansman_net);
 
       // Finansman detay: oran + formül
       var finDetay = document.getElementById('mp-cek-oz-finansman-detay');
@@ -5789,10 +5826,11 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
 
       var durumEl = document.getElementById('mp-cek-oz-durum');
       durumEl.textContent = s.durum_etiket || s.durum_kodu || '—';
-      var durumRenk = {'VADE_UYGUN':'#16a34a','FAZLA_VADE':'#dc2626','AVANTAJ':'#16a34a','SEVK_BEKLIYOR':'#d97706','CEK_YOK':'#6b7280','NAKIT_PAKET':'#6b7280'};
+      var durumRenk = {'VADE_UYGUN':'#16a34a','FAZLA_VADE':'#dc2626','AVANTAJ':'#16a34a','SEVK_BEKLIYOR':'#d97706','CEK_YOK':'#6b7280','NAKIT_PAKET':'#6b7280','AVANS_CEK':'#0369a1'};
       durumEl.style.color = durumRenk[s.durum_kodu] || '#374151';
-      cekOzet.style.background = s.durum_kodu === 'FAZLA_VADE' ? '#fff1f2' : s.durum_kodu === 'VADE_UYGUN' || s.durum_kodu === 'AVANTAJ' ? '#f0fdf4' : '#fffbeb';
-      cekOzet.style.borderColor = s.durum_kodu === 'FAZLA_VADE' ? '#fecaca' : s.durum_kodu === 'VADE_UYGUN' || s.durum_kodu === 'AVANTAJ' ? '#bbf7d0' : '#fde68a';
+      var isAvans = s.durum_kodu === 'AVANS_CEK';
+      cekOzet.style.background = s.durum_kodu === 'FAZLA_VADE' ? '#fff1f2' : (s.durum_kodu === 'VADE_UYGUN' || s.durum_kodu === 'AVANTAJ') ? '#f0fdf4' : isAvans ? '#f0f9ff' : '#fffbeb';
+      cekOzet.style.borderColor = s.durum_kodu === 'FAZLA_VADE' ? '#fecaca' : (s.durum_kodu === 'VADE_UYGUN' || s.durum_kodu === 'AVANTAJ') ? '#bbf7d0' : isAvans ? '#bae6fd' : '#fde68a';
 
       // Fazla vade mesajı
       var fazlaMesajEl = document.getElementById('mp-cek-oz-fazla-vade-mesaj');
