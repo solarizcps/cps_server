@@ -1526,9 +1526,10 @@ def api_kredi_taksit(anlasma_id):
 @finans_bp.route('/odeme-plani')
 def finans_odeme_plani():
     """
-    Ödeme Planı ana sayfası — P1.
+    Ödeme Planı ana sayfası — P3A.3.
     Yetki: finans.odeme_plani.write:can_view (canonical, P1.1).
-    Veri: KorgunFinanceAdapter → CariBakiye + cek_Kart (READ-ONLY).
+    Veri: KorgunFinanceAdapter → kg_fn CROSS APPLY (READ-ONLY, 45s TTL cache).
+    ?refresh=1 ile cache invalidate ve Korgün yeniden okunur.
     """
     from flask import render_template, request, abort
 
@@ -1542,20 +1543,53 @@ def finans_odeme_plani():
 
     try:
         from modules.finans.services.odeme_plani_service import odeme_plani_sayfa_verisi_safe
+        from modules.finans.services.korgun_finance_adapter import (
+            cache_invalidate_balances, _parse_location_filter_raw,
+        )
     except ImportError:
         from app.modules.finans.services.odeme_plani_service import odeme_plani_sayfa_verisi_safe
+        from app.modules.finans.services.korgun_finance_adapter import (
+            cache_invalidate_balances, _parse_location_filter_raw,
+        )
 
     sirket = (request.args.get('sirket') or '').strip()
     sekme = (request.args.get('sekme') or '').strip()
+    do_refresh = request.args.get('refresh', '').strip() == '1'
+    zero_raw = request.args.get('zero', '').strip()
+    aktif_raw = request.args.get('aktif', '').strip()
+
+    # P3A.10 — cari görünüm: daily (default) | active | zero
+    # zero=1 + aktif=1 → zero kazanır (belirsiz state yok)
+    if zero_raw == '1':
+        cari_view = 'zero'
+        aktif_filter = None
+    elif aktif_raw == '1':
+        cari_view = 'active'
+        aktif_filter = True
+    else:
+        cari_view = 'daily'
+        aktif_filter = None
+
+    if do_refresh:
+        # Sadece ilgili location scope'u invalidate et
+        locs = _parse_location_filter_raw(sirket or None)
+        cache_invalidate_balances(locs)
+
     data = odeme_plani_sayfa_verisi_safe(
         location_filter=sirket or None,
         active_tab=sekme or None,
+        aktif_takip_filter=aktif_filter,
+        cari_view=cari_view,
     )
     try:
         from modules.finans.services.odeme_plani_yetki import can_odeme_plani_write
     except ImportError:
         from app.modules.finans.services.odeme_plani_yetki import can_odeme_plani_write
     data['can_write'] = can_odeme_plani_write(session.get('kullanici'))
+    data['cache_refreshed'] = do_refresh
+    data['cari_view'] = cari_view
+    data['aktif_filter_active'] = (cari_view == 'active')
+    data['zero_filter_active'] = (cari_view == 'zero')
     return render_template('finans/odeme_plani.html', **data)
 
 
@@ -1667,3 +1701,98 @@ def finans_odeme_plani_iletisim_create():
     except Exception as exc:
         return jsonify(ok=False, error=str(exc), code='ERROR'), 500
 # [ODEME_PLANI_P1 SON]
+
+
+# [ODEME_PLANI_P3A2 BAS] Cari Hareketleri drill-down + canlı bakiye
+@finans_bp.route('/odeme-plani/api/cari-hareketleri')
+def finans_odeme_plani_cari_hareketleri():
+    """
+    Cari hareketleri drill-down — READ-ONLY.
+    Query: ?location=SA001&cari_kod=320.01.056
+    Kaynak: kg_fn_CariHesToplam (canlı bakiye) + Fatura/C_Fis/Banka/cek hareketleri.
+    INSERT/UPDATE/DELETE YOK.
+    """
+    from flask import abort, jsonify, request
+
+    try:
+        from modules.finans.services.odeme_plani_yetki import can_odeme_plani_view
+        from modules.finans.services.korgun_finance_adapter import KorgunFinanceAdapter, COMPANY_LOCATIONS
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_yetki import can_odeme_plani_view
+        from app.modules.finans.services.korgun_finance_adapter import KorgunFinanceAdapter, COMPANY_LOCATIONS
+
+    if not can_odeme_plani_view(session.get('kullanici')):
+        abort(403)
+
+    location = (request.args.get('location') or '').strip().upper()
+    cari_kod = (request.args.get('cari_kod') or '').strip()
+
+    if not location or location not in COMPANY_LOCATIONS:
+        return jsonify(ok=False, error='Geçersiz location.'), 400
+    if not cari_kod or not cari_kod.startswith('320.'):
+        return jsonify(ok=False, error='Geçersiz cari_kod.'), 400
+
+    try:
+        adapter = KorgunFinanceAdapter()
+        # Canlı bakiye
+        balances = adapter.fetch_supplier_balances(locations=[location], positive_only=False)
+        cari_info = next(
+            (b for b in balances if b.cari_kod == cari_kod),
+            None,
+        )
+        live = adapter.fetch_cari_live_balance(location, cari_kod)
+        # Hareketler
+        har = adapter.fetch_cari_hareketleri(location, cari_kod)
+        if cari_info:
+            har['cari_adi'] = cari_info.cari_adi
+        elif live:
+            har['cari_adi'] = live.get('cari_adi', cari_kod)
+        har['live_balance'] = live
+        return jsonify(har)
+    except Exception as exc:
+        return jsonify(ok=False, error=str(exc)), 500
+# [ODEME_PLANI_P3A2 SON]
+
+
+# [ODEME_PLANI_P3A5 BAS] Aktif Takip toggle
+@finans_bp.route('/odeme-plani/api/takip', methods=['POST'])
+def finans_odeme_plani_takip_toggle():
+    """
+    P3A.5 — Aktif Takip flag toggle.
+    Admin WRITE: aktif_takip true/false.
+    Korgün write: KESİNLİKLE 0.
+    İbrahim: VIEW var, WRITE BLOCK.
+    """
+    try:
+        from modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from modules.finans.services.odeme_takip_service import set_aktif_takip, TakipError
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from app.modules.finans.services.odeme_takip_service import set_aktif_takip, TakipError
+
+    if not can_odeme_plani_view(session.get('kullanici')):
+        return jsonify(ok=False, error='Yetkisiz erişim.', code='FORBIDDEN'), 403
+    if not can_odeme_plani_write(session.get('kullanici')):
+        return jsonify(ok=False, error='Write yetkisi yok.', code='FORBIDDEN'), 403
+
+    kullanici = session.get('kullanici') or {}
+    kadi = kullanici.get('KullaniciAdi') or 'sistem'
+
+    payload = request.get_json(silent=True) or {}
+    location = (payload.get('location') or '').strip().upper()
+    cari_kod = (payload.get('cari_kod') or '').strip()
+    aktif = bool(payload.get('aktif', True))
+    cari_adi = (payload.get('cari_adi') or '').strip()
+
+    try:
+        result = set_aktif_takip(location, cari_kod, aktif, kadi, cari_adi)
+        return jsonify(result)
+    except TakipError as exc:
+        return jsonify(ok=False, error=str(exc), code='VALIDATION_ERROR'), 400
+    except Exception as exc:
+        return jsonify(ok=False, error=str(exc)), 500
+# [ODEME_PLANI_P3A5 SON]

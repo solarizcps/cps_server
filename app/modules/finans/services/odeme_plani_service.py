@@ -1,18 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-Ödeme Planı Service — P2 read-only sekmeler + Korgün verisi.
+Ödeme Planı Service — P3A.2 canonical canlı borç.
 
 KPI semantiği:
-  - toplam_acik_borc → CariBakiye.Tutar > 0 (tedarikçi açık borç)
+  - toplam_acik_borc → kg_fn_CariHesToplam CROSS APPLY (canlı muhasebe net borcu)
   - vade bucket KPI → yalnız cek_Kart (vadesi bilinen çek yükümlülükleri)
   Cari bakiye toplamı vade bucket'larına DAĞITILMAZ.
+  CariBakiye stale snapshot artık ana borç kaynağı değildir.
 """
 from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import asdict
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from decimal import Decimal
+from typing import Any, Dict, List, Literal, Optional
 
 try:
     from modules.finans.services.odeme_plani_ops_service import (
@@ -32,9 +34,15 @@ except ImportError:
     )
 
 try:
+    from modules.finans.services.odeme_takip_service import fetch_aktif_takip_map
+except ImportError:
+    from app.modules.finans.services.odeme_takip_service import fetch_aktif_takip_map
+
+try:
     from modules.finans.services.korgun_finance_adapter import (
         CANONICAL_LOCATION_CODES,
         COMPANY_LOCATIONS,
+        DEBT_NET_TOLERANCE,
         KorgunFinanceAdapter,
         SupplierBalanceDTO,
     )
@@ -42,6 +50,7 @@ except ImportError:
     from app.modules.finans.services.korgun_finance_adapter import (
         CANONICAL_LOCATION_CODES,
         COMPANY_LOCATIONS,
+        DEBT_NET_TOLERANCE,
         KorgunFinanceAdapter,
         SupplierBalanceDTO,
     )
@@ -148,6 +157,23 @@ def _kpi_from_currency(
     }
 
 
+def _net_is_zero(net: float) -> bool:
+    """P3A.10 — kg_fn net exact zero (Decimal, no JS tolerance)."""
+    return Decimal(str(net)) == Decimal('0')
+
+
+CariViewMode = Literal['daily', 'active', 'zero']
+
+
+def _bakiye_durumu(net: float) -> tuple[str, str]:
+    """P3A.9 — canonical net → cari satır durumu."""
+    if net > DEBT_NET_TOLERANCE:
+        return 'Açık Borç', 'op-st-open'
+    if net < -DEBT_NET_TOLERANCE:
+        return 'Alacaklıyız', 'op-st-credit'
+    return 'Bakiye Yok', 'op-st-neutral'
+
+
 def _build_yukumluluk_rows(balances: List[SupplierBalanceDTO]) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for b in balances:
@@ -158,7 +184,7 @@ def _build_yukumluluk_rows(balances: List[SupplierBalanceDTO]) -> List[Dict[str,
             'location_label': b.location_label,
             'cari_kod': b.cari_kod,
             'cari_adi': b.cari_adi,
-            'belge_aciklama': 'Cari Bakiye (Korgün CariBakiye)',
+            'belge_aciklama': 'Canlı Muhasebe Net Borcu (Korgün kg_fn)',
             'tur': 'Bakiye',
             'para_birimi': b.para_birimi,
             'toplam_tutar': b.bakiye,
@@ -175,13 +201,36 @@ def _build_cari_rows(
     balances: List[SupplierBalanceDTO],
     soz_map: Optional[Dict[str, Dict[str, Any]]] = None,
     iletisim_map: Optional[Dict[str, Dict[str, Any]]] = None,
+    takip_map: Optional[Dict[str, bool]] = None,
+    cari_view: CariViewMode = 'daily',
 ) -> List[Dict[str, Any]]:
-    """Cariler/Tedarikçiler — Korgün bakiye + CPS son kayıtlar."""
+    """Cariler/Tedarikçiler — Korgün bakiye + CPS son kayıtlar + aktif takip flag.
+
+    takip_map: canonical_key → bool  (fetch_aktif_takip_map tek queryde yükler, N+1 YOK)
+    cari_view:
+      daily  — net != 0 (günlük liste, 0 bakiye gizli)
+      active — aktif_takip=true (0 bakiye dahil)
+      zero   — yalnız net == 0
+    """
     soz_map = soz_map or {}
     iletisim_map = iletisim_map or {}
+    takip_map = takip_map or {}
     rows: List[Dict[str, Any]] = []
     for b in balances:
         key = b.canonical_key
+        aktif_takip = takip_map.get(key, False)
+        is_zero = _net_is_zero(b.bakiye)
+
+        if cari_view == 'zero':
+            if not is_zero:
+                continue
+        elif cari_view == 'active':
+            if not aktif_takip:
+                continue
+        else:  # daily — default günlük görünüm
+            if is_zero:
+                continue
+        durum_label, durum_class = _bakiye_durumu(b.bakiye)
         rows.append({
             'location': b.location,
             'location_label': b.location_label,
@@ -189,11 +238,15 @@ def _build_cari_rows(
             'cari_adi': b.cari_adi,
             'para_birimi': b.para_birimi,
             'acik_bakiye': b.bakiye,
-            'kritik': 'Normal',
+            'bakiye_durumu': durum_label,
+            'bakiye_durum_class': durum_class,
+            'kritik': durum_label,
+            'kritik_class': durum_class,
             'anlasma_durumu': 'Anlaşma girilmedi',
             'son_odeme_sozu': format_son_odeme_sozu(soz_map.get(key)),
             'son_gorusme': format_son_gorusme(iletisim_map.get(key)),
             'canonical_key': key,
+            'aktif_takip': aktif_takip,
         })
     rows.sort(key=lambda r: (r['location'], r['cari_adi'], r['para_birimi']))
     return rows
@@ -216,6 +269,8 @@ def _empty_state(tab: str) -> Dict[str, Any]:
 def odeme_plani_sayfa_verisi(
     location_filter: Optional[str] = None,
     active_tab: Optional[str] = None,
+    aktif_takip_filter: Optional[bool] = None,
+    cari_view: CariViewMode = 'daily',
 ) -> Dict[str, Any]:
     """P2 ana sayfa — sekmeler + global şirket filtresi."""
     adapter = KorgunFinanceAdapter()
@@ -224,18 +279,20 @@ def odeme_plani_sayfa_verisi(
     tab = _parse_tab(active_tab)
 
     verification = adapter.verify_supplier_rule()
-    balances = adapter.fetch_supplier_balances(locations=locations, positive_only=True)
+    # P3A.9: supplier master (tüm 320.*) ≠ açık borç (net > 0)
+    supplier_master = adapter.fetch_supplier_master_balances(locations=locations)
+    debt_balances = adapter.fetch_supplier_balances(locations=locations, positive_only=True)
     checks = adapter.fetch_open_checks(locations=locations)
-    supplier_counts = adapter.count_suppliers_by_location(locations=locations)
+    supplier_counts = adapter.count_suppliers_by_location(locations=locations, balances=debt_balances)
 
-    currency_totals = _aggregate_currency(balances)
+    currency_totals = _aggregate_currency(debt_balances)
     vade_summary = _build_vade_summary(checks, today)
 
     kpi = {
         'toplam_acik_borc': _kpi_from_currency(
             currency_totals,
-            source='CariBakiye',
-            semantic='Tedarikçi açık borç (Tutar > 0)',
+            source='kg_fn',
+            semantic='Canlı muhasebe net borcu (kg_fn_CariHesToplam)',
         ),
         'vadesi_gecmis': _kpi_from_currency(
             vade_summary.get('vadesi_gecmis', {}),
@@ -277,10 +334,19 @@ def odeme_plani_sayfa_verisi(
 
     soz_map, iletisim_map = get_cari_parity_maps(locations)
 
+    # P3A.5: aktif takip map — tek query, N+1 yok
+    takip_map = fetch_aktif_takip_map(locations)
+
+    # P3A.10: cari_view UI filtresi (master dataset aynı, yeni kg_fn yok)
+    if cari_view not in ('daily', 'active', 'zero'):
+        cari_view = 'daily'
+
     if tab == 'yukumlulukler':
-        table_rows = _build_yukumluluk_rows(balances)
+        table_rows = _build_yukumluluk_rows(debt_balances)
     elif tab == 'cariler':
-        cari_rows = _build_cari_rows(balances, soz_map, iletisim_map)
+        cari_rows = _build_cari_rows(
+            supplier_master, soz_map, iletisim_map, takip_map, cari_view,
+        )
     elif tab == 'odeme_sozleri':
         soz_rows = build_soz_list_rows(locations)
         if not soz_rows:
@@ -310,6 +376,8 @@ def odeme_plani_sayfa_verisi(
         'active_tab': tab,
         'tabs': [{'id': t, 'label': TAB_LABELS[t]} for t in VALID_TABS],
         'location_filter': location_filter or '',
+        'aktif_takip_filter': aktif_takip_filter,
+        'cari_view': cari_view,
         'companies': [
             {'code': '', 'label': 'Tüm Şirketler'},
         ] + [
@@ -335,12 +403,16 @@ def odeme_plani_sayfa_verisi(
 def odeme_plani_sayfa_verisi_safe(
     location_filter: Optional[str] = None,
     active_tab: Optional[str] = None,
+    aktif_takip_filter: Optional[bool] = None,
+    cari_view: CariViewMode = 'daily',
 ) -> Dict[str, Any]:
     """Fail-safe wrapper."""
     try:
         return odeme_plani_sayfa_verisi(
             location_filter=location_filter,
             active_tab=active_tab,
+            aktif_takip_filter=aktif_takip_filter,
+            cari_view=cari_view,
         )
     except Exception as exc:
         tab = _parse_tab(active_tab)
@@ -351,6 +423,8 @@ def odeme_plani_sayfa_verisi_safe(
             'active_tab': tab,
             'tabs': [{'id': t, 'label': TAB_LABELS[t]} for t in VALID_TABS],
             'location_filter': location_filter or '',
+            'aktif_takip_filter': aktif_takip_filter,
+            'cari_view': cari_view if cari_view in ('daily', 'active', 'zero') else 'daily',
             'companies': [
                 {'code': '', 'label': 'Tüm Şirketler'},
                 {'code': 'YN001', 'label': 'NexGen'},
