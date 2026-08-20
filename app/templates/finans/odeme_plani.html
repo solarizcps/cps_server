@@ -1,0 +1,615 @@
+{% extends "base.html" %}
+
+{% block title %}Ödeme Planı - Finans{% endblock %}
+
+{% set active = 'finans' %}
+
+{% block content %}
+<div class="op-wrap">
+
+  <nav class="op-breadcrumb">Finans &gt; Ödeme Planı</nav>
+
+  <div class="page-header op-header">
+    <div class="page-header-baslik">
+      <h1 class="page-title op-title">
+        <span class="op-title-icon" aria-hidden="true">📋</span>
+        Ödeme Planı
+      </h1>
+      <div class="page-subtitle op-subtitle">
+        Açık yükümlülüklerinizi, vade tarihlerini ve ödeme planınızı tek ekranda yönetin.
+      </div>
+    </div>
+    <div class="op-header-actions">
+      {% if can_write %}
+      <button type="button" class="op-btn-primary" id="opBtnYeniSoz">+ Yeni Ödeme Sözü</button>
+      {% else %}
+      <button type="button" class="op-btn-primary" disabled title="Write yetkisi gerekli">+ Yeni Ödeme Sözü</button>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if hata %}
+  <div class="op-alert op-alert-error">
+    Korgün bağlantı hatası: {{ hata }}
+  </div>
+  {% endif %}
+
+  <!-- KPI KARTLARI -->
+  <div class="op-kpi-grid">
+    {% set cards = [
+      ('toplam_acik_borc', 'Toplam Açık Borç', 'op-kpi-total', '💼'),
+      ('vadesi_gecmis', 'Vadesi Geçmiş', 'op-kpi-overdue', '⏰'),
+      ('7_gun', '7 Gün İçinde', 'op-kpi-7d', '📅'),
+      ('30_gun', '30 Gün İçinde', 'op-kpi-30d', '📅'),
+      ('31_60_gun', '31–60 Gün', 'op-kpi-60d', '📅'),
+      ('61_90_gun', '61–90 Gün', 'op-kpi-90d', '📅'),
+    ] %}
+    {% for key, label, cls, icon in cards %}
+    {% set k = kpi.get(key, {}) %}
+    <div class="op-kpi-card {{ cls }}">
+      <div class="op-kpi-top">
+        <span class="op-kpi-label">{{ label }}</span>
+        <span class="op-kpi-icon">{{ icon }}</span>
+      </div>
+      {% if k.has_data %}
+      <div class="op-kpi-value">
+        {% if k.para_birimi == 'TRY' %}₺{% elif k.para_birimi == 'USD' %}${% elif k.para_birimi == 'EUR' %}€{% endif %}
+        {{ '{:,.0f}'.format(k.tutar or 0).replace(',', '.') }}
+      </div>
+      <div class="op-kpi-meta">{{ k.kalem or 0 }} kalem{% if k.source %} · {{ k.source }}{% endif %}</div>
+      {% if k.diger_pb %}
+      <div class="op-kpi-alt">
+        {% for pb, info in k.diger_pb.items() %}
+        {{ pb }}: {{ '{:,.0f}'.format(info.tutar).replace(',', '.') }} ({{ info.kalem }}){% if not loop.last %} · {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% else %}
+      <div class="op-kpi-value op-kpi-empty">—</div>
+      <div class="op-kpi-meta">veri yok</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- FİLTRE + SEKMELER -->
+  <div class="op-toolbar">
+    <div class="op-tabs">
+      {% for t in tabs %}
+      <a href="/finans/odeme-plani?sekme={{ t.id }}{% if location_filter %}&amp;sirket={{ location_filter }}{% endif %}"
+         class="op-tab {% if active_tab == t.id %}op-tab-active{% endif %}">{{ t.label }}</a>
+      {% endfor %}
+    </div>
+    <div class="op-toolbar-right">
+      <form method="get" action="/finans/odeme-plani" class="op-filter-form">
+        <input type="hidden" name="sekme" value="{{ active_tab }}">
+        <select name="sirket" class="op-select" onchange="this.form.submit()">
+          {% for c in companies %}
+          <option value="{{ c.code }}" {% if location_filter == c.code %}selected{% endif %}>{{ c.label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="op-btn-secondary">Filtrele</button>
+      </form>
+      <button type="button" class="op-btn-secondary" disabled>Excel</button>
+    </div>
+  </div>
+
+  {% if active_tab == 'yukumlulukler' %}
+  <!-- ALT SEKME FİLTRELERİ (P2: yalnız Yükümlülükler sekmesinde, pasif) -->
+  <div class="op-subtabs">
+    <span class="op-subtab op-subtab-active">Tümü</span>
+    <span class="op-subtab op-subtab-disabled">Vadesi Geçmiş</span>
+    <span class="op-subtab op-subtab-disabled">Bugün</span>
+    <span class="op-subtab op-subtab-disabled">7 Gün</span>
+    <span class="op-subtab op-subtab-disabled">30 Gün</span>
+    <span class="op-subtab op-subtab-disabled">31–60 Gün</span>
+    <span class="op-subtab op-subtab-disabled">61–90 Gün</span>
+    <span class="op-subtab op-subtab-disabled">Ödendi</span>
+    <span class="op-subtab op-subtab-disabled">Planlanan</span>
+  </div>
+  {% endif %}
+
+  <!-- TABLO / İÇERİK -->
+  <div class="op-table-wrap">
+    {% if active_tab == 'yukumlulukler' %}
+    <table class="op-table">
+      <thead>
+        <tr>
+          <th>Vade Tarihi</th>
+          <th>Şirket</th>
+          <th>Cari / Tedarikçi</th>
+          <th>Belge / Açıklama</th>
+          <th>Tür</th>
+          <th>Para Birimi</th>
+          <th>Toplam Tutar</th>
+          <th>Kalan / Planlanan</th>
+          <th>Durum</th>
+          <th>Ödendi</th>
+          <th>İşlemler</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if table_rows %}
+        {% for row in table_rows %}
+        <tr>
+          <td class="{% if row.durum_class == 'op-st-overdue' %}op-vade-overdue{% endif %}">{{ row.vade_label }}</td>
+          <td>{{ row.location_label }}</td>
+          <td>
+            <div class="op-cari-name">{{ row.cari_adi }}</div>
+            <div class="op-cari-kod">{{ row.cari_kod }}</div>
+          </td>
+          <td>{{ row.belge_aciklama }}</td>
+          <td><span class="op-tur-badge">{{ row.tur }}</span></td>
+          <td>{{ row.para_birimi }}</td>
+          <td class="op-num">{{ '{:,.2f}'.format(row.toplam_tutar).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+          <td class="op-num op-kalan">{{ '{:,.2f}'.format(row.kalan_tutar).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+          <td><span class="op-status {{ row.durum_class }}">{{ row.durum }}</span></td>
+          <td>{{ row.odendi }}</td>
+          <td>
+            <button type="button" class="op-action-btn" disabled title="P3+">⋯</button>
+          </td>
+        </tr>
+        {% endfor %}
+        {% else %}
+        <tr>
+          <td colspan="11" class="op-empty">Kayıt bulunamadı.</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+    {% elif active_tab == 'cariler' %}
+    <table class="op-table">
+      <thead>
+        <tr>
+          <th>Şirket</th>
+          <th>Cari Kod</th>
+          <th>Cari Adı</th>
+          <th>Para Birimi</th>
+          <th>Açık Bakiye</th>
+          <th>Kritik / Normal</th>
+          <th>Anlaşma Durumu</th>
+          <th>Son Ödeme Sözü</th>
+          <th>Son Görüşme</th>
+          {% if can_write %}<th>İşlemler</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% if cari_rows %}
+        {% for row in cari_rows %}
+        <tr>
+          <td>{{ row.location_label }}</td>
+          <td class="op-cari-kod">{{ row.cari_kod }}</td>
+          <td>
+            <div class="op-cari-name">{{ row.cari_adi }}</div>
+          </td>
+          <td>{{ row.para_birimi }}</td>
+          <td class="op-num op-kalan">{{ '{:,.2f}'.format(row.acik_bakiye).replace(',', 'X').replace('.', ',').replace('X', '.') }}</td>
+          <td><span class="op-status op-st-open">{{ row.kritik }}</span></td>
+          <td>{{ row.anlasma_durumu }}</td>
+          <td>{{ row.son_odeme_sozu }}</td>
+          <td>{{ row.son_gorusme }}</td>
+          {% if can_write %}
+          <td class="op-actions-cell">
+            <button type="button" class="op-link-btn op-btn-soz"
+                    data-location="{{ row.location }}"
+                    data-cari-kod="{{ row.cari_kod }}"
+                    data-cari-adi="{{ row.cari_adi }}">Ödeme Sözü</button>
+            <button type="button" class="op-link-btn op-btn-arama"
+                    data-location="{{ row.location }}"
+                    data-cari-kod="{{ row.cari_kod }}"
+                    data-cari-adi="{{ row.cari_adi }}">Aradı / Ödeme Sordu</button>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+        {% else %}
+        <tr>
+          <td colspan="{% if can_write %}10{% else %}9{% endif %}" class="op-empty">Kayıt bulunamadı.</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+    {% elif active_tab == 'odeme_sozleri' and soz_rows %}
+    <table class="op-table">
+      <thead>
+        <tr>
+          <th>Şirket</th>
+          <th>Tedarikçi</th>
+          <th>Söz Tarihi</th>
+          <th>Tutar</th>
+          <th>PB</th>
+          <th>Durum</th>
+          <th>Not</th>
+          <th>Sözü Veren</th>
+          {% if can_write %}<th>İşlem</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in soz_rows %}
+        <tr>
+          <td>{{ row.location_label }}</td>
+          <td>
+            <div class="op-cari-name">{{ row.cari_adi }}</div>
+            <div class="op-cari-kod">{{ row.cari_kod }}</div>
+          </td>
+          <td>{{ row.promise_date_label }}</td>
+          <td class="op-num">{{ row.amount_label }}</td>
+          <td>{{ row.currency }}</td>
+          <td><span class="op-status op-st-open">{{ row.status_label }}</span></td>
+          <td>{{ row.note }}</td>
+          <td>{{ row.created_by }}</td>
+          {% if can_write %}
+          <td>
+            {% if row.status == 'ACIK' %}
+            <select class="op-status-select" data-soz-id="{{ row.id }}">
+              <option value="">Durum…</option>
+              <option value="GERCEKLESTI">Gerçekleşti</option>
+              <option value="ERTELENDI">Ertelendi</option>
+              <option value="IPTAL">İptal</option>
+            </select>
+            {% else %}—{% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% elif active_tab == 'arama' and arama_rows %}
+    <table class="op-table">
+      <thead>
+        <tr>
+          <th>Tarih</th>
+          <th>Şirket</th>
+          <th>Tedarikçi</th>
+          <th>Arayan</th>
+          <th>Tutar</th>
+          <th>Not</th>
+          <th>Tekrar Ara</th>
+          <th>Kaydeden</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in arama_rows %}
+        <tr>
+          <td>{{ row.contact_at_label }}</td>
+          <td>{{ row.location_label }}</td>
+          <td>
+            <div class="op-cari-name">{{ row.cari_adi }}</div>
+            <div class="op-cari-kod">{{ row.cari_kod }}</div>
+          </td>
+          <td>{{ row.contact_person }}</td>
+          <td class="op-num">{{ row.amount_label }}</td>
+          <td>{{ row.note }}</td>
+          <td>{{ row.callback_date_label }}</td>
+          <td>{{ row.created_by }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% elif tab_empty %}
+    <div class="op-empty-state">
+      <div class="op-empty-state-icon">📋</div>
+      <div class="op-empty-state-msg">{{ tab_empty.message }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="op-footer">
+    <div class="op-footer-left">Toplam <strong>{{ total_kayit }}</strong> kayıt</div>
+    <div class="op-footer-right">
+      {% if total_kalan_by_pb %}
+      Toplam Kalan Tutar:
+      {% for pb, info in total_kalan_by_pb.items() %}
+      <strong>{% if pb == 'TRY' %}₺{% elif pb == 'USD' %}${% elif pb == 'EUR' %}€{% endif %} {{ '{:,.0f}'.format(info.tutar).replace(',', '.') }}</strong>{% if not loop.last %} · {% endif %}
+      {% endfor %}
+      {% else %}
+      Toplam Kalan Tutar: <strong>—</strong>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="op-meta-bar">
+    Kaynak: Toplam Açık Borç → CariBakiye (Tutar&gt;0) · Vade KPI → cek_Kart (vadesi bilinen çek) · READ-ONLY ·
+    Tedarikçi: CKod 320.* ·
+    Şirket: YN001 / SA001 / YP001 ·
+    Tedarikçi sayısı:
+    NexGen {{ supplier_counts.get('YN001', 0) }},
+    Şahin Taban {{ supplier_counts.get('SA001', 0) }},
+    Pera AŞ {{ supplier_counts.get('YP001', 0) }}
+    (toplam {{ supplier_counts_total }})
+  </div>
+
+</div>
+
+<!-- MODAL: Ödeme Sözü -->
+<div class="op-modal-backdrop" id="opModalSoz" hidden>
+  <div class="op-modal">
+    <div class="op-modal-header">
+      <h3>Yeni Ödeme Sözü</h3>
+      <button type="button" class="op-modal-close" data-close="opModalSoz">&times;</button>
+    </div>
+    <form id="opFormSoz" class="op-modal-body">
+      <div class="op-form-row">
+        <label>Şirket</label>
+        <select name="location" required>
+          <option value="">Seçin…</option>
+          <option value="YN001" {% if location_filter == 'YN001' %}selected{% endif %}>NexGen</option>
+          <option value="SA001" {% if location_filter == 'SA001' %}selected{% endif %}>Şahin Taban</option>
+          <option value="YP001" {% if location_filter == 'YP001' %}selected{% endif %}>Pera AŞ</option>
+        </select>
+      </div>
+      <div class="op-form-row">
+        <label>Cari Kod</label>
+        <input type="text" name="cari_kod" required placeholder="320.01.058">
+      </div>
+      <div class="op-form-row">
+        <label>Cari Adı (snapshot)</label>
+        <input type="text" name="cari_adi_snapshot" placeholder="Otomatik doldurulur">
+      </div>
+      <div class="op-form-row">
+        <label>Söz Tarihi</label>
+        <input type="date" name="promise_date" required>
+      </div>
+      <div class="op-form-row op-form-row-2">
+        <div><label>Tutar</label><input type="number" name="amount" min="0.01" step="0.01" required></div>
+        <div><label>PB</label>
+          <select name="currency"><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
+        </div>
+      </div>
+      <div class="op-form-row">
+        <label>Not</label>
+        <textarea name="note" rows="2"></textarea>
+      </div>
+      <div class="op-modal-footer">
+        <button type="button" class="op-btn-secondary" data-close="opModalSoz">İptal</button>
+        <button type="submit" class="op-btn-primary">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Aradı / Ödeme Sordu -->
+<div class="op-modal-backdrop" id="opModalArama" hidden>
+  <div class="op-modal">
+    <div class="op-modal-header">
+      <h3>Aradı / Ödeme Sordu</h3>
+      <button type="button" class="op-modal-close" data-close="opModalArama">&times;</button>
+    </div>
+    <form id="opFormArama" class="op-modal-body">
+      <div class="op-form-row">
+        <label>Şirket</label>
+        <select name="location" required>
+          <option value="">Seçin…</option>
+          <option value="YN001" {% if location_filter == 'YN001' %}selected{% endif %}>NexGen</option>
+          <option value="SA001" {% if location_filter == 'SA001' %}selected{% endif %}>Şahin Taban</option>
+          <option value="YP001" {% if location_filter == 'YP001' %}selected{% endif %}>Pera AŞ</option>
+        </select>
+      </div>
+      <div class="op-form-row">
+        <label>Cari Kod</label>
+        <input type="text" name="cari_kod" required>
+      </div>
+      <div class="op-form-row">
+        <label>Cari Adı (snapshot)</label>
+        <input type="text" name="cari_adi_snapshot">
+      </div>
+      <div class="op-form-row">
+        <label>Tarih</label>
+        <input type="date" name="contact_at" required>
+      </div>
+      <div class="op-form-row op-form-row-2">
+        <div><label>Arayan</label><input type="text" name="contact_person"></div>
+        <div><label>Telefon</label><input type="text" name="phone"></div>
+      </div>
+      <div class="op-form-row op-form-row-2">
+        <div><label>Talep Tutarı</label><input type="number" name="requested_amount" min="0" step="0.01"></div>
+        <div><label>PB</label>
+          <select name="currency"><option value="">—</option><option value="TRY">TRY</option><option value="USD">USD</option><option value="EUR">EUR</option></select>
+        </div>
+      </div>
+      <div class="op-form-row">
+        <label>Not</label>
+        <textarea name="note" rows="2" placeholder="Örn: Ödeme tarihini sordu"></textarea>
+      </div>
+      <div class="op-form-row">
+        <label>Tekrar Ara</label>
+        <input type="date" name="callback_date">
+      </div>
+      <div class="op-modal-footer">
+        <button type="button" class="op-btn-secondary" data-close="opModalArama">İptal</button>
+        <button type="submit" class="op-btn-primary">Kaydet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="opToast" class="op-toast" hidden></div>
+
+<style>
+.op-wrap { padding: 0; max-width: 100%; }
+.op-breadcrumb { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+.op-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+.op-title { display: flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 700; color: #1a1d2e; margin: 0; }
+.op-title-icon { font-size: 24px; }
+.op-subtitle { color: #6b7280; margin-top: 6px; max-width: 640px; line-height: 1.5; }
+.op-p1-badge { display: inline-block; font-size: 10px; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-weight: 700; margin-left: 8px; vertical-align: middle; }
+.op-btn-primary { background: #f59e0b; color: #fff; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; }
+.op-btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+.op-btn-secondary { background: #fff; color: #374151; border: 1px solid #d1d5db; padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.op-btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+.op-alert { padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 13px; }
+.op-alert-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.op-alert-info { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+
+.op-kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 18px; }
+@media (max-width: 1400px) { .op-kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 768px) { .op-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+.op-kpi-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.op-kpi-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.op-kpi-label { font-size: 12px; color: #6b7280; font-weight: 600; }
+.op-kpi-icon { font-size: 16px; opacity: 0.7; }
+.op-kpi-value { font-size: 22px; font-weight: 700; color: #1a1d2e; line-height: 1.2; }
+.op-kpi-empty { color: #9ca3af; font-size: 20px; }
+.op-kpi-meta { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+.op-kpi-alt { font-size: 10px; color: #6b7280; margin-top: 4px; }
+.op-kpi-overdue { border-left: 4px solid #ef4444; }
+.op-kpi-7d { border-left: 4px solid #f97316; }
+.op-kpi-30d { border-left: 4px solid #22c55e; }
+.op-kpi-60d { border-left: 4px solid #3b82f6; }
+.op-kpi-90d { border-left: 4px solid #8b5cf6; }
+.op-kpi-total { border-left: 4px solid #f59e0b; }
+
+.op-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+.op-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.op-tab { background: transparent; border: none; padding: 8px 14px; font-size: 13px; color: #6b7280; border-radius: 6px; cursor: pointer; font-weight: 500; text-decoration: none; display: inline-block; }
+.op-tab:hover { background: #f9fafb; color: #374151; }
+.op-tab-active { background: #fff7ed; color: #c2410c; font-weight: 700; border: 1px solid #fed7aa; }
+.op-tab-disabled { opacity: 0.45; cursor: not-allowed; }
+.op-toolbar-right { display: flex; align-items: center; gap: 8px; }
+.op-select { border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 12px; font-size: 13px; min-width: 160px; }
+.op-filter-form { display: flex; gap: 8px; align-items: center; }
+
+.op-subtabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.op-subtab { font-size: 12px; padding: 6px 12px; border-radius: 20px; background: #f3f4f6; color: #6b7280; }
+.op-subtab-active { background: #f59e0b; color: #fff; font-weight: 600; }
+.op-subtab-disabled { opacity: 0.45; }
+
+.op-table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: auto; }
+.op-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.op-table th { text-align: left; padding: 12px 14px; background: #f9fafb; color: #6b7280; font-weight: 600; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
+.op-table td { padding: 11px 14px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+.op-table tbody tr:hover { background: #fffbeb; }
+.op-cari-name { font-weight: 600; color: #1a1d2e; }
+.op-cari-kod { font-size: 11px; color: #9ca3af; }
+.op-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.op-kalan { font-weight: 600; color: #c2410c; }
+.op-vade-overdue { color: #dc2626; font-weight: 600; }
+.op-tur-badge { background: #f3f4f6; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+.op-status { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.op-st-open { background: #fef3c7; color: #92400e; }
+.op-st-overdue { background: #fee2e2; color: #b91c1c; }
+.op-st-7d { background: #ffedd5; color: #c2410c; }
+.op-st-30d { background: #dcfce7; color: #15803d; }
+.op-st-60d { background: #dbeafe; color: #1d4ed8; }
+.op-st-90d { background: #ede9fe; color: #6d28d9; }
+.op-st-planned { background: #e0f2fe; color: #0369a1; }
+.op-st-today { background: #fce7f3; color: #be185d; }
+.op-action-btn { background: none; border: none; font-size: 18px; color: #9ca3af; cursor: pointer; padding: 4px 8px; }
+.op-empty { text-align: center; color: #9ca3af; padding: 40px !important; }
+.op-empty-state { text-align: center; padding: 60px 24px; color: #6b7280; }
+.op-empty-state-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.6; }
+.op-empty-state-msg { font-size: 15px; font-weight: 500; }
+.op-footer { display: flex; justify-content: space-between; align-items: center; padding: 14px 4px; font-size: 13px; color: #6b7280; flex-wrap: wrap; gap: 8px; }
+.op-meta-bar { font-size: 11px; color: #9ca3af; padding: 8px 0 20px; border-top: 1px solid #f3f4f6; }
+.op-link-btn { background: none; border: none; color: #c2410c; font-size: 12px; cursor: pointer; padding: 2px 6px; text-decoration: underline; }
+.op-actions-cell { white-space: nowrap; }
+.op-status-select { font-size: 12px; padding: 4px 8px; border-radius: 6px; border: 1px solid #d1d5db; }
+.op-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.op-modal-backdrop[hidden] { display: none !important; }
+.op-modal { background: #fff; border-radius: 12px; width: 100%; max-width: 480px; box-shadow: 0 20px 40px rgba(0,0,0,0.15); }
+.op-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e5e7eb; }
+.op-modal-header h3 { margin: 0; font-size: 18px; }
+.op-modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; }
+.op-modal-body { padding: 16px 20px; }
+.op-form-row { margin-bottom: 12px; }
+.op-form-row label { display: block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 4px; }
+.op-form-row input, .op-form-row select, .op-form-row textarea { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; box-sizing: border-box; }
+.op-form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.op-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 8px; }
+.op-toast { position: fixed; bottom: 24px; right: 24px; background: #1a1d2e; color: #fff; padding: 12px 18px; border-radius: 8px; font-size: 13px; z-index: 9999; }
+.op-toast[hidden] { display: none !important; }
+</style>
+<script>
+(function() {
+  var CAN_WRITE = {{ 'true' if can_write else 'false' }};
+  if (!CAN_WRITE) return;
+
+  function showModal(id) { document.getElementById(id).hidden = false; }
+  function hideModal(id) { document.getElementById(id).hidden = true; }
+  function toast(msg) {
+    var el = document.getElementById('opToast');
+    el.textContent = msg; el.hidden = false;
+    setTimeout(function() { el.hidden = true; }, 3000);
+  }
+  function formData(form) {
+    var fd = new FormData(form), o = {};
+    fd.forEach(function(v, k) { if (v !== '') o[k] = v; });
+    return o;
+  }
+  function reloadKeepFilter() {
+    var params = new URLSearchParams(window.location.search);
+    window.location.reload();
+  }
+
+  document.querySelectorAll('[data-close]').forEach(function(btn) {
+    btn.addEventListener('click', function() { hideModal(btn.getAttribute('data-close')); });
+  });
+  document.querySelectorAll('.op-modal-backdrop').forEach(function(bg) {
+    bg.addEventListener('click', function(e) { if (e.target === bg) bg.hidden = true; });
+  });
+
+  var btnYeni = document.getElementById('opBtnYeniSoz');
+  if (btnYeni) btnYeni.addEventListener('click', function() { showModal('opModalSoz'); });
+
+  document.querySelectorAll('.op-btn-soz').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var f = document.getElementById('opFormSoz');
+      f.location.value = btn.dataset.location || '';
+      f.cari_kod.value = btn.dataset.cariKod || '';
+      f.cari_adi_snapshot.value = btn.dataset.cariAdi || '';
+      showModal('opModalSoz');
+    });
+  });
+  document.querySelectorAll('.op-btn-arama').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var f = document.getElementById('opFormArama');
+      f.location.value = btn.dataset.location || '';
+      f.cari_kod.value = btn.dataset.cariKod || '';
+      f.cari_adi_snapshot.value = btn.dataset.cariAdi || '';
+      if (!f.contact_at.value) f.contact_at.value = new Date().toISOString().slice(0, 10);
+      showModal('opModalArama');
+    });
+  });
+
+  document.getElementById('opFormSoz').addEventListener('submit', function(e) {
+    e.preventDefault();
+    fetch('/finans/odeme-plani/api/soz', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(formData(e.target))
+    }).then(function(r) { return r.json().then(function(j) { return {ok: r.ok, j: j}; }); })
+      .then(function(res) {
+        if (res.ok && res.j.ok) { hideModal('opModalSoz'); toast('Ödeme sözü kaydedildi'); reloadKeepFilter(); }
+        else toast(res.j.error || 'Hata');
+      }).catch(function() { toast('Bağlantı hatası'); });
+  });
+
+  document.getElementById('opFormArama').addEventListener('submit', function(e) {
+    e.preventDefault();
+    fetch('/finans/odeme-plani/api/iletisim', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(formData(e.target))
+    }).then(function(r) { return r.json().then(function(j) { return {ok: r.ok, j: j}; }); })
+      .then(function(res) {
+        if (res.ok && res.j.ok) { hideModal('opModalArama'); toast('Kayıt oluşturuldu'); reloadKeepFilter(); }
+        else toast(res.j.error || 'Hata');
+      }).catch(function() { toast('Bağlantı hatası'); });
+  });
+
+  document.querySelectorAll('.op-status-select').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+      var st = sel.value; if (!st) return;
+      var id = sel.dataset.sozId;
+      fetch('/finans/odeme-plani/api/soz/' + id + '/status', {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: st})
+      }).then(function(r) { return r.json(); })
+        .then(function(j) { if (j.ok) { toast('Durum güncellendi'); reloadKeepFilter(); } else toast(j.error || 'Hata'); });
+    });
+  });
+})();
+</script>
+{% endblock %}

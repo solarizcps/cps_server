@@ -36,6 +36,18 @@ def _finans_native_allowed_user(g_user):
 def _finans_modul_guard():
     if not session.get('kullanici'):
         return redirect(url_for('auth.login', next=request.path))
+
+    # [ODEME_PLANI_P1.1 BAS] Ödeme Planı — canonical yetki guard (hardcoded isim YOK)
+    if request.path.startswith('/finans/odeme-plani'):
+        try:
+            from modules.finans.services.odeme_plani_yetki import can_odeme_plani_view
+        except ImportError:
+            from app.modules.finans.services.odeme_plani_yetki import can_odeme_plani_view
+        if not can_odeme_plani_view(session.get('kullanici')):
+            abort(403)
+        return None
+    # [ODEME_PLANI_P1.1 SON]
+
     u = session['kullanici']
     kadi = (u.get('KullaniciAdi') or '').strip().lower()
     adsoyad = (u.get('AdSoyad') or '').strip().lower()
@@ -1508,3 +1520,150 @@ def api_kredi_taksit(anlasma_id):
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 # [AB4_KREDI_TAKSIT_API SON]
+
+
+# [ODEME_PLANI_P1 BAS] Ödeme Planı — Korgün READ-ONLY P1
+@finans_bp.route('/odeme-plani')
+def finans_odeme_plani():
+    """
+    Ödeme Planı ana sayfası — P1.
+    Yetki: finans.odeme_plani.write:can_view (canonical, P1.1).
+    Veri: KorgunFinanceAdapter → CariBakiye + cek_Kart (READ-ONLY).
+    """
+    from flask import render_template, request, abort
+
+    try:
+        from modules.finans.services.odeme_plani_yetki import can_odeme_plani_view
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_yetki import can_odeme_plani_view
+
+    if not can_odeme_plani_view(session.get('kullanici')):
+        abort(403)
+
+    try:
+        from modules.finans.services.odeme_plani_service import odeme_plani_sayfa_verisi_safe
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_service import odeme_plani_sayfa_verisi_safe
+
+    sirket = (request.args.get('sirket') or '').strip()
+    sekme = (request.args.get('sekme') or '').strip()
+    data = odeme_plani_sayfa_verisi_safe(
+        location_filter=sirket or None,
+        active_tab=sekme or None,
+    )
+    try:
+        from modules.finans.services.odeme_plani_yetki import can_odeme_plani_write
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_yetki import can_odeme_plani_write
+    data['can_write'] = can_odeme_plani_write(session.get('kullanici'))
+    return render_template('finans/odeme_plani.html', **data)
+
+
+@finans_bp.route('/odeme-plani/api/soz', methods=['POST'])
+def finans_odeme_plani_soz_create():
+    """P3A — Ödeme sözü oluştur."""
+    from flask import abort, jsonify
+
+    try:
+        from modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from modules.finans.services.odeme_plani_ops_service import (
+            OdemePlaniOpsError, create_soz,
+        )
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from app.modules.finans.services.odeme_plani_ops_service import (
+            OdemePlaniOpsError, create_soz,
+        )
+
+    if not can_odeme_plani_view(session.get('kullanici')):
+        abort(403)
+    if not can_odeme_plani_write(session.get('kullanici')):
+        return jsonify(ok=False, error='Write yetkisi yok.', code='FORBIDDEN'), 403
+
+    kullanici = session.get('kullanici') or {}
+    kadi = kullanici.get('KullaniciAdi') or 'sistem'
+    try:
+        result = create_soz(request.get_json(silent=True) or {}, kadi)
+        return jsonify(result)
+    except OdemePlaniOpsError as exc:
+        return jsonify(ok=False, error=str(exc), code=exc.code), 400
+    except Exception as exc:
+        return jsonify(ok=False, error=str(exc), code='ERROR'), 500
+
+
+@finans_bp.route('/odeme-plani/api/soz/<int:soz_id>/status', methods=['PUT'])
+def finans_odeme_plani_soz_status(soz_id: int):
+    """P3A — Ödeme sözü durum güncelle (soft — fiziksel silme yok)."""
+    from flask import abort, jsonify
+
+    try:
+        from modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from modules.finans.services.odeme_plani_ops_service import (
+            OdemePlaniOpsError, update_soz_status,
+        )
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from app.modules.finans.services.odeme_plani_ops_service import (
+            OdemePlaniOpsError, update_soz_status,
+        )
+
+    if not can_odeme_plani_view(session.get('kullanici')):
+        abort(403)
+    if not can_odeme_plani_write(session.get('kullanici')):
+        return jsonify(ok=False, error='Write yetkisi yok.', code='FORBIDDEN'), 403
+
+    payload = request.get_json(silent=True) or {}
+    kullanici = session.get('kullanici') or {}
+    kadi = kullanici.get('KullaniciAdi') or 'sistem'
+    try:
+        result = update_soz_status(soz_id, payload.get('status'), kadi)
+        return jsonify(result)
+    except OdemePlaniOpsError as exc:
+        return jsonify(ok=False, error=str(exc), code=exc.code), 400
+    except Exception as exc:
+        return jsonify(ok=False, error=str(exc), code='ERROR'), 500
+
+
+@finans_bp.route('/odeme-plani/api/iletisim', methods=['POST'])
+def finans_odeme_plani_iletisim_create():
+    """P3A — Aradı / Ödeme Sordu kaydı."""
+    from flask import abort, jsonify
+
+    try:
+        from modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from modules.finans.services.odeme_plani_ops_service import (
+            OdemePlaniOpsError, create_iletisim,
+        )
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from app.modules.finans.services.odeme_plani_ops_service import (
+            OdemePlaniOpsError, create_iletisim,
+        )
+
+    if not can_odeme_plani_view(session.get('kullanici')):
+        abort(403)
+    if not can_odeme_plani_write(session.get('kullanici')):
+        return jsonify(ok=False, error='Write yetkisi yok.', code='FORBIDDEN'), 403
+
+    kullanici = session.get('kullanici') or {}
+    kadi = kullanici.get('KullaniciAdi') or 'sistem'
+    try:
+        result = create_iletisim(request.get_json(silent=True) or {}, kadi)
+        return jsonify(result)
+    except OdemePlaniOpsError as exc:
+        return jsonify(ok=False, error=str(exc), code=exc.code), 400
+    except Exception as exc:
+        return jsonify(ok=False, error=str(exc), code='ERROR'), 500
+# [ODEME_PLANI_P1 SON]
