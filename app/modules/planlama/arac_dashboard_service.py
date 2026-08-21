@@ -25,6 +25,44 @@ def _date_label(d: date) -> str:
     return f'{d.day} {_TR_AY[d.month]} {d.year} {_TR_GUN[d.weekday()]}'
 
 
+def _build_plan_map_dto(tasks: List[dict], base_row: dict | None) -> dict:
+    from modules.planlama.arac_location_resolver import resolve_base_location
+
+    base = resolve_base_location(base_row)
+    stops = []
+    for t in sorted(tasks, key=lambda x: x.get('order_no') or 0):
+        stops.append({
+            'id': t.get('id'),
+            'plan_item_id': t.get('plan_item_id'),
+            'is_talebi_id': t.get('is_talebi_id'),
+            'order_no': t.get('order_no'),
+            'company_name': t.get('company_name'),
+            'job_title': t.get('job_title'),
+            'planned_time': t.get('planned_time'),
+            'address_text': t.get('address_text'),
+            'priority_label': t.get('priority_label'),
+            'latitude': t.get('latitude'),
+            'longitude': t.get('longitude'),
+            'location_status': t.get('location_status'),
+            'location_source': t.get('location_source'),
+            'location_source_label': t.get('location_source_label'),
+            'has_coordinates': bool(t.get('has_coordinates')),
+            'kayitli_yer_id': t.get('kayitli_yer_id'),
+        })
+    ready = sum(1 for s in stops if s['has_coordinates'])
+    missing = len(stops) - ready
+    return {
+        'base': base,
+        'stops': stops,
+        'completeness': {
+            'total_stops': len(stops),
+            'ready': ready,
+            'missing': missing,
+            'base_configured': base.get('has_coordinates', False),
+        },
+    }
+
+
 def _default_tasks() -> List[dict]:
     return [
         {
@@ -169,6 +207,16 @@ def get_arac_dashboard_dto(
     d = plan_date or date.today()
     canonical = tables_ready()
     tasks = daily_tasks if daily_tasks is not None else ([] if canonical else _default_tasks())
+    base_row = None
+    if canonical:
+        from modules.planlama.arac_operasyon_ayar_repo import get_active_base, operasyon_ayar_ready
+        if operasyon_ayar_ready():
+            base_row = get_active_base()
+    plan_map = _build_plan_map_dto(tasks, base_row) if canonical else {
+        'base': {'configured': False, 'has_coordinates': False},
+        'stops': [],
+        'completeness': {'total_stops': 0, 'ready': 0, 'missing': 0, 'base_configured': False},
+    }
     drivers_raw = search_cps_users('', limit=40) if canonical else []
     drivers = [
         {'id': str(u['id']), 'ad': u['display_name']}
@@ -234,9 +282,12 @@ def get_arac_dashboard_dto(
             'fuel_saving': {'liters': 4.2, 'try_amount': 60.5},
         },
         'map_pins': [
-            {'order': i + 1, 'lat': t.get('latitude'), 'lng': t.get('longitude'), 'label': t.get('company_name')}
-            for i, t in enumerate(tasks) if t.get('latitude') is not None
+            {'order': t.get('order_no'), 'lat': t.get('latitude'), 'lng': t.get('longitude'), 'label': t.get('company_name')}
+            for t in tasks if t.get('has_coordinates')
         ],
+        'plan_map': plan_map,
+        'base_location': plan_map.get('base'),
+        'location_completeness': plan_map.get('completeness'),
         'meta': {
             'planned_km': total_km_plan if not canonical else None,
             'actual_km': None,

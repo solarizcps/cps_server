@@ -594,6 +594,13 @@ MANIFEST: tuple[MigEntry, ...] = (
             "arac_gunluk_plan_is",
         ),
     ),
+    MigEntry(
+        177, "177_arac_operasyon_ayar",
+        "177_arac_operasyon_ayar.py",
+        "Araç Takip V1.4A — canonical başlangıç noktası ayarı",
+        dependencies=(176,),
+        required_tables=("arac_operasyon_ayar",),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}

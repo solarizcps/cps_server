@@ -52,12 +52,25 @@
 .atp-sort-btns button:hover { background: #e4e7ec; }
 .atp-map-box { min-height: 320px; position: relative; }
 .atp-map-box.atp-map-plan { background: #f8fafc; border-top: 1px solid #eef2f6; }
-.atp-map-box.atp-map-plan svg { width: 100%; height: 100%; min-height: 320px; display: block; }
-.atp-plan-map-inner { min-height: 320px; position: relative; display: flex; align-items: center; justify-content: center; }
-.atp-plan-empty { text-align: center; padding: 32px 24px; max-width: 360px; }
+.atp-plan-leaflet { width: 100%; height: 320px; display: none; }
+.atp-wrap #atpPlanLeafletMap.leaflet-container { width: 100% !important; height: 320px !important; }
+.atp-plan-map-inner { min-height: 320px; position: relative; }
+.atp-plan-empty { position: absolute; inset: 0; z-index: 401; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px 24px; max-width: 100%; background: #f8fafc; }
 .atp-plan-empty-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.85; }
 .atp-plan-empty-title { font-size: 0.92rem; font-weight: 700; color: #344054; margin-bottom: 6px; }
 .atp-plan-empty-sub { font-size: 0.78rem; color: #667085; line-height: 1.45; }
+.atp-plan-completeness { padding: 8px 14px; font-size: 0.78rem; color: #475467; border-top: 1px solid #eef2f6; background: #fff; }
+.atp-plan-base-warn { color: #b54708; font-weight: 600; }
+.atp-link-btn { border: none; background: none; color: #1d4ed8; cursor: pointer; font-size: inherit; text-decoration: underline; padding: 0; }
+.atp-badge.atp-loc-missing { background: #fef3f2; color: #b42318; border: 1px solid #fecdca; margin-left: 4px; font-size: 0.65rem; }
+.atp-btn-xs { padding: 2px 6px; font-size: 0.65rem; margin-left: 4px; vertical-align: middle; }
+.atp-form-err { color: #b42318; font-size: 0.78rem; min-height: 1.2em; margin: 4px 0; }
+.atp-readonly-val { font-weight: 600; color: #344054; padding: 6px 0; }
+.atp-radio-row { display: block; margin: 6px 0; font-size: 0.82rem; cursor: pointer; }
+.atp-plan-pin { background: transparent; border: none; }
+#atpLocModalBackdrop.open { display: flex; }
+#atpLocModalBackdrop .atp-modal[hidden] { display: none !important; }
+#atpLocModalBackdrop .atp-modal:not([hidden]) { display: block; }
 .atp-map-live { background: #eef2f6; padding: 0; overflow: hidden; height: 320px; }
 .atp-wrap #atpLeafletMap.leaflet-container { width: 100% !important; height: 320px !important; }
 .atp-leaflet-pin { background: transparent; border: none; }

@@ -35,20 +35,29 @@
   }
 
   function updatePlanMap() {
-    var pins = (dashboard.map_pins || []).filter(function (p) {
-      return p.lat != null && p.lng != null;
-    });
-    var emptyEl = document.getElementById('atpPlanMapEmpty');
-    var svg = document.getElementById('atpMapSvg');
-    if (!pins.length) {
-      if (emptyEl) emptyEl.style.display = '';
-      if (svg) { svg.style.display = 'none'; svg.innerHTML = ''; }
-      return;
+    var planMapData = dashboard.plan_map || { base: {}, stops: [], completeness: {} };
+    if (window.AtpPlanMap) {
+      window.AtpPlanMap.renderPlanMap(planMapData);
     }
-    if (emptyEl) emptyEl.style.display = 'none';
-    if (svg) svg.style.display = 'block';
-    window.AtpMap.renderPins(pins);
   }
+
+  function applyDashboardUpdate(dto) {
+    if (!dto) return;
+    dashboard = dto;
+    var dashEl = document.getElementById('atpDashboardJson');
+    if (dashEl) dashEl.textContent = JSON.stringify(dashboard);
+    if (dto.daily_tasks) renderTable(dto.daily_tasks);
+    else updatePlanMap();
+  }
+
+  window.applyAtpDashboard = function (partial) {
+    if (partial.base_location) {
+      dashboard.base_location = partial.base_location;
+      if (dashboard.plan_map) dashboard.plan_map.base = partial.base_location;
+    }
+    if (partial.plan_map) dashboard.plan_map = partial.plan_map;
+    applyDashboardUpdate(dashboard);
+  };
 
   function updateTabLayout(tab) {
     currentTab = tab;
@@ -88,6 +97,7 @@
       if (vid) window.AtpLiveMap.focusVehicle(vid);
     }
     if (isGunluk) {
+      if (window.AtpPlanMap) window.AtpPlanMap.onPlanTabShown();
       updatePlanMap();
       updatePlanSidebar();
     }
@@ -124,11 +134,18 @@
     var tbody = document.getElementById('atpTaskBody');
     if (!tbody) return;
     tbody.innerHTML = tasks.map(function (t) {
-      var priCls = t.priority === 'YUKSEK' ? 'yuksek' : (t.priority === 'DUSUK' ? 'dusuk' : 'normal');
+      var priCls = t.priority === 'YUKSEK' || t.priority === 'ACIL' ? 'yuksek' : (t.priority === 'DUSUK' ? 'dusuk' : 'normal');
       var stCls = t.status === 'BEKLIYOR' ? 'bekliyor' : (t.status === 'BASLANGIC' ? 'baslangic' : 'planlandi');
-      return '<tr data-task-id="' + t.id + '">' +
+      var locBadge = '';
+      if (!t.has_coordinates) {
+        locBadge = ' <span class="atp-badge atp-loc-missing">Konum Eksik</span>';
+      }
+      var konumBtn = !t.has_coordinates
+        ? ' <button type="button" class="atp-btn atp-btn-xs atp-btn-konum-ekle" data-talep-id="' + t.is_talebi_id + '">Konum Ekle</button>'
+        : '';
+      return '<tr data-task-id="' + t.id + '" data-talep-id="' + t.is_talebi_id + '">' +
         '<td>' + t.order_no + '</td><td>' + t.planned_time + '</td>' +
-        '<td><strong>' + (t.job_title || '') + '</strong><br><small>' + (t.company_name || '') + '</small></td>' +
+        '<td><strong>' + (t.job_title || '') + '</strong><br><small>' + (t.company_name || '') + '</small>' + locBadge + konumBtn + '</td>' +
         '<td>' + (t.address_text || '') + '</td>' +
         '<td><span class="atp-badge atp-pri-' + priCls + '">' + (t.priority_label || '') + '</span></td>' +
         '<td>' + fmtDist(t.distance_km) + '</td>' +
@@ -136,9 +153,48 @@
         '<td><div class="atp-sort-btns"><button type="button" data-dir="up">▲</button><button type="button" data-dir="down">▼</button></div></td></tr>';
     }).join('');
     bindSortButtons();
+    bindKonumButtons(tasks);
     dashboard.daily_tasks = tasks;
+    if (dashboard.plan_map) {
+      dashboard.plan_map.stops = tasks.map(function (t) {
+        return {
+          id: t.id, plan_item_id: t.plan_item_id, is_talebi_id: t.is_talebi_id,
+          order_no: t.order_no, company_name: t.company_name, job_title: t.job_title,
+          planned_time: t.planned_time, address_text: t.address_text,
+          priority_label: t.priority_label, latitude: t.latitude, longitude: t.longitude,
+          location_status: t.location_status, location_source: t.location_source,
+          location_source_label: t.location_source_label, has_coordinates: t.has_coordinates,
+          kayitli_yer_id: t.kayitli_yer_id
+        };
+      });
+      var ready = tasks.filter(function (t) { return t.has_coordinates; }).length;
+      dashboard.plan_map.completeness = {
+        total_stops: tasks.length,
+        ready: ready,
+        missing: tasks.length - ready,
+        base_configured: dashboard.plan_map.base && dashboard.plan_map.base.has_coordinates
+      };
+      dashboard.location_completeness = dashboard.plan_map.completeness;
+    }
     updatePlanSidebar();
     updatePlanMap();
+  }
+
+  function bindKonumButtons(tasks) {
+    var byTalep = {};
+    (tasks || []).forEach(function (t) { byTalep[t.is_talebi_id] = t; });
+    document.querySelectorAll('.atp-btn-konum-ekle').forEach(function (btn) {
+      btn.onclick = function () {
+        var tid = btn.getAttribute('data-talep-id');
+        var task = byTalep[tid];
+        if (task && window.AtpLocationModals) {
+          window.AtpLocationModals.openKonumModal(task, function (j) {
+            if (j.dashboard) applyDashboardUpdate(j.dashboard);
+            else if (j.daily_tasks) renderTable(j.daily_tasks);
+          });
+        }
+      };
+    });
   }
 
   function fmtDist(km) {
@@ -172,6 +228,7 @@
     });
   }
   bindSortButtons();
+  bindKonumButtons(dashboard.daily_tasks || []);
 
   var sortBtn = document.getElementById('atpBtnSortSuggest');
   if (sortBtn) sortBtn.addEventListener('click', function () {
@@ -234,35 +291,6 @@
   buildCalendar('atpCalendar');
   buildCalendar('atpCalendarLive');
 
-  window.AtpMap = {
-    renderPins: function (pins) {
-      var svg = document.getElementById('atpMapSvg');
-      if (!svg || !pins || !pins.length) return;
-      var coords = pins.filter(function (p) { return p.lat != null && p.lng != null; });
-      if (!coords.length) return;
-      var minLat = Math.min.apply(null, coords.map(function (p) { return p.lat; }));
-      var maxLat = Math.max.apply(null, coords.map(function (p) { return p.lat; }));
-      var minLng = Math.min.apply(null, coords.map(function (p) { return p.lng; }));
-      var maxLng = Math.max.apply(null, coords.map(function (p) { return p.lng; }));
-      function px(lat, lng) {
-        var x = 40 + ((lng - minLng) / (maxLng - minLng || 1)) * 320;
-        var y = 280 - ((lat - minLat) / (maxLat - minLat || 1)) * 240;
-        return { x: x, y: y };
-      }
-      var pathD = coords.map(function (p, i) {
-        var pt = px(p.lat, p.lng);
-        return (i === 0 ? 'M' : 'L') + pt.x + ' ' + pt.y;
-      }).join(' ');
-      var inner = '<path d="' + pathD + '" fill="none" stroke="#2563eb" stroke-width="3" stroke-dasharray="6 4"/>';
-      coords.forEach(function (p) {
-        var pt = px(p.lat, p.lng);
-        inner += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="14" fill="#c8922a" stroke="#fff" stroke-width="2"/>';
-        inner += '<text x="' + pt.x + '" y="' + (pt.y + 4) + '" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">' + p.order + '</text>';
-      });
-      svg.innerHTML = inner;
-    },
-    init: function () { updatePlanMap(); }
-  };
   if (initTab === 'gunluk') updatePlanMap();
 
   document.getElementById('atpHistFilter').addEventListener('click', function () {

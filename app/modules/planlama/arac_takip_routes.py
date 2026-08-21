@@ -218,3 +218,89 @@ def arac_takip_api_araclar():
     result = get_live_vehicles()
     status = 200 if result.get('ok') else 503
     return jsonify(result), status
+
+
+@arac_takip_bp.route('/api/operasyon/base', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_base_get():
+    from modules.planlama.arac_operasyon_ayar_repo import get_active_base, operasyon_ayar_ready
+    from modules.planlama.arac_location_resolver import resolve_base_location
+    if not operasyon_ayar_ready():
+        return jsonify({'ok': True, 'base': resolve_base_location(None)})
+    return jsonify({'ok': True, 'base': resolve_base_location(get_active_base())})
+
+
+@arac_takip_bp.route('/api/operasyon/base', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_base_save():
+    if not _planlama_duzenle():
+        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    from modules.planlama.arac_operasyon_ayar_repo import save_base_location, operasyon_ayar_ready
+    from modules.planlama.arac_location_resolver import resolve_base_location
+    if not operasyon_ayar_ready():
+        return jsonify({'ok': False, 'error': 'Migration 177 gerekli'}), 503
+    body = request.get_json(silent=True) or {}
+    try:
+        result = save_base_location(_uid(), body)
+        result['base'] = resolve_base_location(result.get('base'))
+        return jsonify(result)
+    except ValueError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+
+
+@arac_takip_bp.route('/api/plan-items/konum', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_item_konum():
+    if not _planlama_duzenle():
+        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    from modules.planlama.arac_lokasyon_service import parse_maps_coords
+    from modules.planlama.arac_takip_repo import (
+        tables_ready,
+        update_kayitli_yer_coordinates,
+        update_talep_coordinates,
+    )
+    if not tables_ready():
+        return jsonify({'ok': False, 'error': 'Tablolar hazır değil'}), 503
+    body = request.get_json(silent=True) or {}
+    try:
+        talep_id = int(body['is_talebi_id'])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'ok': False, 'error': 'is_talebi_id gerekli'}), 400
+    scope = (body.get('scope') or 'request_only').strip()
+    maps_url = (body.get('maps_url') or body.get('konum_linki') or '').strip()
+    lat = body.get('latitude')
+    lng = body.get('longitude')
+    if lat in ('', None) or lng in ('', None):
+        parsed_lat, parsed_lng = parse_maps_coords(maps_url)
+        if lat in ('', None):
+            lat = parsed_lat
+        if lng in ('', None):
+            lng = parsed_lng
+    try:
+        lat = float(lat) if lat not in (None, '') else None
+        lng = float(lng) if lng not in (None, '') else None
+    except (TypeError, ValueError):
+        lat, lng = None, None
+    if lat is None or lng is None:
+        return jsonify({'ok': False, 'error': 'Bu bağlantıdan koordinat okunamadı.'}), 400
+    try:
+        if scope == 'master':
+            yer_id = body.get('kayitli_yer_id')
+            if not yer_id:
+                return jsonify({'ok': False, 'error': 'kayitli_yer_id gerekli'}), 400
+            result = update_kayitli_yer_coordinates(_uid(), int(yer_id), lat, lng, maps_url or None)
+        else:
+            result = update_talep_coordinates(_uid(), talep_id, lat, lng, maps_url or None)
+        plan_date = _parse_date(body.get('date') or request.args.get('date'))
+        vehicle_id = body.get('vehicle_id') or request.args.get('vehicle_id')
+        tasks = get_tasks_for_session(_uid(), plan_date.isoformat(), vehicle_id)
+        dto = get_arac_dashboard_dto(
+            plan_date=plan_date, vehicle_id=vehicle_id, daily_tasks=tasks,
+        )
+        return jsonify({'ok': True, **result, 'daily_tasks': tasks, 'dashboard': dto})
+    except ValueError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400

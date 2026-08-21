@@ -414,10 +414,14 @@ def get_talep_by_id(talep_id: int) -> dict | None:
         con.close()
 
 
-def _plan_task_dto(row: sqlite3.Row, talep: sqlite3.Row) -> dict:
+def _plan_task_dto(row: sqlite3.Row, talep: sqlite3.Row, master: sqlite3.Row | None = None) -> dict:
+    from modules.planlama.arac_location_resolver import resolve_item_location
+
     t = _row_dict(talep) or {}
+    m = _row_dict(master) or {}
     pri = t.get('oncelik', 'NORMAL')
     st = row['durum']
+    loc = resolve_item_location(t, m if m else None)
     return {
         'id': f'pi-{row["id"]}',
         'plan_item_id': row['id'],
@@ -429,8 +433,13 @@ def _plan_task_dto(row: sqlite3.Row, talep: sqlite3.Row) -> dict:
         'address_text': t.get('adres') or '',
         'phone': t.get('telefon') or '',
         'location_url': t.get('konum_linki') or '',
-        'latitude': t.get('latitude'),
-        'longitude': t.get('longitude'),
+        'latitude': loc['latitude'],
+        'longitude': loc['longitude'],
+        'location_status': loc['location_status'],
+        'location_source': loc['location_source'],
+        'location_source_label': loc['location_source_label'],
+        'has_coordinates': loc['has_coordinates'],
+        'kayitli_yer_id': t.get('kayitli_yer_id'),
         'priority': pri,
         'priority_label': PRIORITY_LABEL.get(pri, pri),
         'distance_km': None,
@@ -463,9 +472,77 @@ def list_plan_tasks(plan_date: str, arac_external_id: str) -> list[dict]:
             talep = con.execute(
                 'SELECT * FROM arac_is_talebi WHERE id=?', (item['is_talebi_id'],),
             ).fetchone()
-            if talep:
-                result.append(_plan_task_dto(item, talep))
+            if not talep:
+                continue
+            master = None
+            if talep['kayitli_yer_id']:
+                master = con.execute(
+                    'SELECT * FROM arac_kayitli_yer WHERE id=?',
+                    (talep['kayitli_yer_id'],),
+                ).fetchone()
+            result.append(_plan_task_dto(item, talep, master))
         return result
+    finally:
+        con.close()
+
+
+def update_talep_coordinates(
+    session_user_id: int,
+    talep_id: int,
+    latitude: float,
+    longitude: float,
+    konum_linki: str | None = None,
+) -> dict:
+    if not tables_ready():
+        raise RuntimeError('arac_takip tabloları hazır değil')
+    now = _now_iso()
+    con = get_conn()
+    try:
+        row = con.execute('SELECT id FROM arac_is_talebi WHERE id=?', (int(talep_id),)).fetchone()
+        if not row:
+            raise ValueError('Talep bulunamadı')
+        con.execute(
+            """
+            UPDATE arac_is_talebi
+            SET latitude=?, longitude=?, konum_linki=COALESCE(?, konum_linki),
+                updated_at=?, updated_by=?
+            WHERE id=?
+            """,
+            (float(latitude), float(longitude), konum_linki, now, session_user_id, int(talep_id)),
+        )
+        con.commit()
+        updated = con.execute('SELECT * FROM arac_is_talebi WHERE id=?', (int(talep_id),)).fetchone()
+        return {'ok': True, 'talep': _talep_dto(updated)}
+    finally:
+        con.close()
+
+
+def update_kayitli_yer_coordinates(
+    session_user_id: int,
+    yer_id: int,
+    latitude: float,
+    longitude: float,
+    konum_linki: str | None = None,
+) -> dict:
+    if not tables_ready():
+        raise RuntimeError('arac_takip tabloları hazır değil')
+    now = _now_iso()
+    con = get_conn()
+    try:
+        row = con.execute('SELECT id FROM arac_kayitli_yer WHERE id=?', (int(yer_id),)).fetchone()
+        if not row:
+            raise ValueError('Kayıtlı yer bulunamadı')
+        con.execute(
+            """
+            UPDATE arac_kayitli_yer
+            SET latitude=?, longitude=?, konum_linki=COALESCE(?, konum_linki)
+            WHERE id=?
+            """,
+            (float(latitude), float(longitude), konum_linki, int(yer_id)),
+        )
+        con.commit()
+        updated = con.execute('SELECT * FROM arac_kayitli_yer WHERE id=?', (int(yer_id),)).fetchone()
+        return {'ok': True, 'location': _location_dto(updated)}
     finally:
         con.close()
 
