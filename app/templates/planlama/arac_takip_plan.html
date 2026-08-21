@@ -1,0 +1,428 @@
+{% extends "base.html" %}
+{% set active = 'planlama' %}
+{% block title %}Araç Takip &amp; Plan · Planlama · Solariz CPS{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=9">
+{% endblock %}
+
+{% block content %}
+<div class="atp-wrap" id="atpRoot" data-source="{{ dashboard.data_source }}" data-date="{{ dashboard.date }}">
+  <div class="atp-hdr">
+    <div class="atp-hdr-left">
+      <h1>🚚 Araç Takip &amp; Plan</h1>
+      <p>Araçlarınızı takip edin, günlük iş planlarını yönetin.</p>
+    </div>
+    <div class="atp-hdr-actions">
+      <button type="button" class="atp-btn atp-btn-wa" id="atpBtnWhatsapp">WhatsApp Plan Gönder</button>
+      <button type="button" class="atp-btn atp-btn-primary" id="atpBtnNewRequest">+ Yeni İş Talebi</button>
+    </div>
+  </div>
+
+  <div class="atp-tabs" role="tablist">
+    {% for t, lbl in [('canli','Canlı Takip'),('gunluk','Günlük Plan'),('haftalik','Haftalık Plan'),('gecmis','Geçmiş Planlar')] %}
+    <button type="button" class="atp-tab{% if active_tab == t %} active{% endif %}" data-tab="{{ t }}" role="tab">{{ lbl }}</button>
+    {% endfor %}
+  </div>
+
+  <div class="atp-kpi-row" id="atpKpiRow">
+    {% set k = dashboard.kpi %}
+    <div class="atp-kpi" data-kpi-live="aktif"><div class="atp-kpi-lbl">Aktif Araç <small class="atp-kpi-src">Filom</small></div><div class="atp-kpi-val" id="atpKpiAktif">…</div><div class="atp-kpi-sub" id="atpKpiAktifSub">yükleniyor</div></div>
+    <div class="atp-kpi" data-kpi-live="hareket"><div class="atp-kpi-lbl">Hareket Halinde <small class="atp-kpi-src">Filom</small></div><div class="atp-kpi-val" id="atpKpiHareket">…</div><div class="atp-kpi-sub" id="atpKpiHareketSub">yükleniyor</div></div>
+    <div class="atp-kpi" data-kpi-mock="1"><div class="atp-kpi-lbl">Toplam KM (Bugün)</div><div class="atp-kpi-val">{{ k.toplam_km_label }}</div><div class="atp-kpi-sub">Tahmini · Plan</div></div>
+    <div class="atp-kpi" data-kpi-mock="1"><div class="atp-kpi-lbl">Toplam İş</div><div class="atp-kpi-val">{{ k.toplam_is }}</div><div class="atp-kpi-sub">Planlanan</div></div>
+    <div class="atp-kpi" data-kpi-mock="1"><div class="atp-kpi-lbl">Tamamlanan</div><div class="atp-kpi-val">{{ k.tamamlanan }}</div><div class="atp-kpi-sub">%{{ k.tamamlanan_pct }}</div></div>
+    <div class="atp-kpi" data-kpi-mock="1"><div class="atp-kpi-lbl">Yakıt Tüketimi</div><div class="atp-kpi-val">{{ k.yakit_label }}</div><div class="atp-kpi-sub">Tahmini · Plan</div></div>
+  </div>
+
+  {# —— GÜNLÜK + CANLI ortak layout —— #}
+  <div id="atpPanelGunluk" class="{% if active_tab not in ['gunluk','canli'] %}atp-panel-hidden{% endif %}{% if active_tab == 'canli' %} atp-mode-canli{% elif active_tab == 'gunluk' %} atp-mode-gunluk{% endif %}">
+    <div class="atp-grid-main" id="atpGridMain">
+      <div class="atp-card" id="atpDailyBlock">
+        <div class="atp-card-hdr">
+          <span>GÜNLÜK PLAN — {{ dashboard.date_label }}</span>
+        </div>
+        {% if dashboard.bekleyen_count is defined %}
+        <div class="atp-pool-wrap" id="atpPoolWrap">
+          <button type="button" class="atp-pool-toggle" id="atpPoolToggle" aria-expanded="true">
+            <span class="atp-pool-toggle-lbl">BEKLEYEN İŞ TALEPLERİ</span>
+            <span class="atp-pool-toggle-right">
+              <span class="atp-pool-badge" id="atpPoolBadge">{{ dashboard.bekleyen_count or 0 }}</span>
+              <span class="atp-pool-collapse-lbl" id="atpPoolCollapseLbl">Daralt</span>
+            </span>
+          </button>
+          <div class="atp-pool-body" id="atpPoolBody">
+            <div class="atp-tbl-wrap atp-pool-scroll">
+              <table class="atp-tbl atp-pool-tbl" id="atpPoolTable">
+                <thead>
+                  <tr>
+                    <th>Talep No</th><th>Eden</th><th>Tarih</th><th>Firma</th>
+                    <th>İş</th><th>Önc.</th><th>Saat</th><th>İşlem</th>
+                  </tr>
+                </thead>
+                <tbody id="atpPoolBodyRows">
+                  {% for t in dashboard.bekleyen_talepler or [] %}
+                  <tr data-talep-id="{{ t.id }}">
+                    <td class="atp-pool-no">{{ t.talep_no or ('#' ~ t.id) }}</td>
+                    <td>{{ t.talep_eden_adi }}</td>
+                    <td>{{ t.tarih }}</td>
+                    <td>{{ t.firma }}</td>
+                    <td>{{ t.is }}</td>
+                    <td><span class="atp-badge atp-pri-{% if t.oncelik == 'YUKSEK' %}yuksek{% elif t.oncelik == 'DUSUK' %}dusuk{% else %}normal{% endif %}">{{ t.oncelik_label }}</span></td>
+                    <td>{{ t.istenen_saat or '—' }}</td>
+                    <td><button type="button" class="atp-btn atp-btn-sm atp-btn-plana-al" data-talep-id="{{ t.id }}">Plana Al</button></td>
+                  </tr>
+                  {% else %}
+                  <tr class="atp-pool-empty"><td colspan="8">Bekleyen talep yok.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        <div class="atp-daily-toolbar">
+          <button type="button" class="atp-btn atp-btn-sm" id="atpBtnSortSuggest">Sırala (Önerilen)</button>
+        </div>
+        <div class="atp-tbl-wrap atp-task-scroll">
+          <table class="atp-tbl" id="atpTaskTable">
+            <thead>
+              <tr>
+                <th>Sıra</th><th>Saat</th><th>İş / Firma</th><th>Adres</th>
+                <th>Öncelik</th><th>Mesafe</th><th>Durum</th><th>İşlemler</th>
+              </tr>
+            </thead>
+            <tbody id="atpTaskBody">
+              {% for t in dashboard.daily_tasks %}
+              <tr data-task-id="{{ t.id }}">
+                <td>{{ t.order_no }}</td>
+                <td>{{ t.planned_time }}</td>
+                <td><strong>{{ t.job_title }}</strong><br><small>{{ t.company_name }}</small></td>
+                <td>{{ t.address_text }}</td>
+                <td><span class="atp-badge atp-pri-{% if t.priority == 'YUKSEK' %}yuksek{% elif t.priority == 'DUSUK' %}dusuk{% else %}normal{% endif %}">{{ t.priority_label }}</span></td>
+                <td>{% if t.distance_km is not none and t.distance_km != '—' %}{{ t.distance_km }} km{% else %}—{% endif %}</td>
+                <td class="atp-st-{% if t.status == 'BEKLIYOR' %}bekliyor{% elif t.status == 'BASLANGIC' %}baslangic{% else %}planlandi{% endif %}">{{ t.status_label }}</td>
+                <td>
+                  <div class="atp-sort-btns">
+                    <button type="button" data-dir="up" title="Yukarı">▲</button>
+                    <button type="button" data-dir="down" title="Aşağı">▼</button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="atp-foot-total">
+          Toplam Mesafe: {{ dashboard.daily_totals.distance_km }} km · Tahmini Süre: {{ dashboard.daily_totals.duration_label }}
+        </div>
+      </div>
+
+      <div class="atp-card" id="atpMapCard">
+        <div class="atp-card-hdr">
+          <span id="atpMapTitle">{% if active_tab == 'gunluk' %}PLAN HARİTASI{% else %}CANLI HARİTA{% endif %}</span>
+          <div class="atp-map-hdr-actions" id="atpMapHdrLive"{% if active_tab != 'canli' %} style="display:none"{% else %} style="display:flex"{% endif %}>
+            <span class="atp-map-last-upd" id="atpMapLastUpdate">Son güncelleme: —</span>
+            <button type="button" class="atp-btn atp-btn-sm" id="atpBtnFitAll">Tüm Araçlar</button>
+          </div>
+          <div class="atp-map-hdr-actions" id="atpMapHdrPlan"{% if active_tab != 'gunluk' %} style="display:none"{% else %} style="display:flex"{% endif %}>
+            <span class="atp-map-plan-note" title="V2.4">Trafik · V2.4</span>
+          </div>
+        </div>
+        <div class="atp-map-box atp-map-live" id="atp-live-map-container"{% if active_tab != 'canli' %} style="display:none"{% endif %}>
+          <div id="atpMapWarn" class="atp-map-warn" style="display:none"></div>
+          <div id="atpLeafletMap"></div>
+          <div id="atpMapEmpty" class="atp-map-empty" style="display:none">Canlı konum bulunamadı.</div>
+        </div>
+        <div class="atp-map-box atp-map-plan" id="atp-plan-map-container"{% if active_tab != 'gunluk' %} style="display:none"{% endif %}>
+          <div class="atp-plan-map-inner" id="atpPlanMapInner">
+            <div class="atp-plan-empty" id="atpPlanMapEmpty">
+              <div class="atp-plan-empty-icon">🗺️</div>
+              <div class="atp-plan-empty-title">Plan rotası sonraki fazda oluşturulacak.</div>
+              <div class="atp-plan-empty-sub">Seçili günlük plandaki işlerin koordinatları hazır olduğunda burada gösterilecek.</div>
+            </div>
+            <svg id="atpMapSvg" viewBox="0 0 400 320" preserveAspectRatio="xMidYMid meet" style="display:none"></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="atp-side-col" id="atpSideCol">
+        <div id="atpSideLive"{% if active_tab != 'canli' %} class="atp-side-hidden"{% endif %}>
+          <div class="atp-card atp-side-card">
+            <div class="atp-card-hdr">CANLI ARAÇLAR</div>
+            <ul class="atp-side-list atp-live-list" id="atpVehicleList">
+              <li class="atp-live-loading">Canlı araç verisi yükleniyor…</li>
+            </ul>
+          </div>
+          <div class="atp-card atp-side-card">
+            <div class="atp-card-hdr">TAKVİM</div>
+            <div class="atp-cal" id="atpCalendarLive"></div>
+          </div>
+          <div class="atp-card atp-side-card">
+            <div class="atp-card-hdr">SON AKTİVİTELER</div>
+            {% for a in dashboard.activities %}
+            <div class="atp-act"><time>{{ a.created_at }}</time>{{ a.message }}</div>
+            {% else %}
+            <div class="atp-act atp-act-empty">Henüz aktivite yok.</div>
+            {% endfor %}
+          </div>
+        </div>
+        <div id="atpSidePlan"{% if active_tab != 'gunluk' %} class="atp-side-hidden"{% endif %}>
+          <div class="atp-card atp-side-card">
+            <div class="atp-card-hdr">SEÇİLİ PLAN</div>
+            <div class="atp-plan-side-body" id="atpPlanSideBody">
+              <div class="atp-plan-side-row"><span>Araç</span><select class="atp-select atp-select-compact" id="atpSelVehicle" title="Araç"><option value="">—</option></select></div>
+              <div class="atp-plan-side-row"><span>Şoför</span><strong id="atpPlanSideDriver">{{ dashboard.selected_driver_name or '—' }}</strong></div>
+              <div class="atp-plan-side-row"><span>Tarih</span><strong id="atpPlanSideDate">{{ dashboard.date_label }}</strong></div>
+              <div class="atp-plan-side-row"><span>İş</span><strong id="atpPlanSideJobCount">{{ dashboard.daily_tasks|length }}</strong></div>
+            </div>
+          </div>
+          <div class="atp-card atp-side-card">
+            <div class="atp-card-hdr">TAKVİM</div>
+            <div class="atp-cal" id="atpCalendar"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="atp-route atp-card">
+      <div class="atp-card-hdr">ÖNERİLEN ROTA ANALİZİ</div>
+      <div class="atp-route-grid" style="padding:14px">
+        {% set ra = dashboard.route_analysis %}
+        <div class="atp-route-card">
+          <h4>Mevcut Plan</h4>
+          <div class="val">{{ ra.current.km }} km</div>
+          <div>{{ ra.current.duration_label }}</div>
+        </div>
+        <div class="atp-route-card rec">
+          <h4>Önerilen Plan ★</h4>
+          <div class="val">{{ ra.recommended.km }} km</div>
+          <div>{{ ra.recommended.duration_label }}</div>
+        </div>
+        <div class="atp-route-card">
+          <h4>Kazanç</h4>
+          <div class="val">{{ ra.gain.km }} km</div>
+          <div>%{{ ra.gain.pct }} daha az</div>
+        </div>
+        <div class="atp-route-card">
+          <h4>Tahmini Yakıt Tasarrufu</h4>
+          <div class="val">{{ ra.fuel_saving.liters }} L</div>
+          <div>~{{ ra.fuel_saving.try_amount }} TL</div>
+        </div>
+        <button type="button" class="atp-btn atp-btn-primary" id="atpBtnApplyRoute">Önerilen Rotayı Uygula</button>
+      </div>
+    </div>
+  </div>
+
+  {# —— HAFTALIK —— #}
+  <div id="atpPanelHaftalik" class="{% if active_tab != 'haftalik' %}atp-panel-hidden{% endif %}">
+    <div class="atp-week-grid">
+      {% for w in dashboard.weekly_summary %}
+      <div class="atp-week-day" data-date="{{ w.day_key }}">
+        <h3>{{ w.label }}</h3>
+        <p>{{ w.date_label }}</p>
+        <p><strong>{{ w.task_count }}</strong> iş</p>
+        <p>{{ w.vehicle_count }} araç</p>
+        <p>{{ w.total_km }} km</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# —— GEÇMİŞ —— #}
+  <div id="atpPanelGecmis" class="{% if active_tab != 'gecmis' %}atp-panel-hidden{% endif %}">
+    <div class="atp-filtre">
+      <input type="date" class="atp-inp" id="atpHistStart" title="Başlangıç">
+      <input type="date" class="atp-inp" id="atpHistEnd" title="Bitiş">
+      <select class="atp-select" id="atpHistVehicle"><option value="">Tüm Araçlar</option>{% for v in dashboard.vehicles %}<option value="{{ v.id }}">{{ v.plaka }}</option>{% endfor %}</select>
+      <select class="atp-select" id="atpHistDriver"><option value="">Tüm Şoförler</option>{% for d in dashboard.drivers %}<option value="{{ d.id }}">{{ d.ad }}</option>{% endfor %}</select>
+      <button type="button" class="atp-btn" id="atpHistFilter">Filtrele</button>
+    </div>
+    <div class="atp-card">
+      <div class="atp-tbl-wrap">
+        <table class="atp-tbl">
+          <thead>
+            <tr>
+              <th>Tarih</th><th>Araç</th><th>Şoför</th><th>Toplam İş</th><th>Tamamlanan</th>
+              <th>Toplam KM</th><th>Planlanan KM</th><th>Fark</th><th>Durum</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for h in dashboard.history_rows %}
+            <tr>
+              <td>{{ h.date }}</td><td>{{ h.vehicle }}</td><td>{{ h.driver }}</td>
+              <td>{{ h.total_jobs }}</td><td>{{ h.completed }}</td>
+              <td>{{ h.total_km }}</td><td>{{ h.planned_km }}</td>
+              <td>{{ h.km_diff }}</td><td>{{ h.status_label }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="atp-modal-backdrop" id="atpModalBackdrop" aria-hidden="true">
+<div class="atp-modal" id="atpRequestModal" role="dialog" aria-labelledby="atpModalTitle" aria-hidden="true">
+  <div class="atp-modal-hdr">
+    <strong id="atpModalTitle">Yeni İş Talebi</strong>
+    <button type="button" class="atp-btn atp-modal-close" id="atpModalClose" aria-label="Kapat">✕</button>
+  </div>
+  <form id="atpRequestForm" class="atp-modal-body" autocomplete="off">
+    <div class="atp-modal-row atp-modal-row-top">
+      <div class="atp-field atp-field-eden">
+        <label>Talep Eden</label>
+        <input class="atp-inp atp-inp-readonly" id="atpReqTalepEden" value="{{ current_user.display_name }}" readonly>
+        <input type="hidden" id="atpReqTalepEdenUserId" value="{{ current_user.id }}">
+      </div>
+      <div class="atp-field atp-field-mode">
+        <div class="atp-req-mode" role="group" aria-label="Talep sahibi">
+          <button type="button" class="atp-req-mode-btn active" data-mode="own">Kendi İşim</button>
+          <button type="button" class="atp-req-mode-btn" data-mode="other">Başka Kullanıcı İçin</button>
+        </div>
+        <div class="atp-user-search-wrap" id="atpOtherUserWrap" hidden>
+          <input class="atp-inp" id="atpOtherUserSearch" placeholder="Kullanıcı ara…" autocomplete="off">
+          <div class="atp-user-dropdown" id="atpUserDropdown" hidden></div>
+        </div>
+      </div>
+      <div class="atp-field atp-field-date">
+        <label>Tarih</label>
+        <input type="date" class="atp-inp" name="tarih" id="atpReqTarih" required>
+      </div>
+      <div class="atp-field atp-field-time">
+        <label>Saat</label>
+        <div class="atp-time-picker" id="atpTimePicker">
+          <button type="button" class="atp-inp atp-time-trigger" id="atpTimeTrigger" aria-haspopup="listbox" aria-expanded="false">
+            <span class="atp-time-display" id="atpTimeDisplay">Saat seç</span>
+            <span class="atp-time-caret" aria-hidden="true">▼</span>
+          </button>
+          <input type="hidden" name="istenen_saat" id="atpReqSaat" value="">
+          <div class="atp-time-dropdown" id="atpTimeDropdown" hidden role="listbox" aria-label="Saat seçimi">
+            <div class="atp-time-slots" id="atpTimeSlots"></div>
+            <button type="button" class="atp-time-opt atp-time-custom-btn" id="atpTimeCustomBtn">Özel saat…</button>
+            <div class="atp-time-custom" id="atpTimeCustomPanel" hidden>
+              <input type="text" class="atp-inp" id="atpTimeCustomInput" placeholder="HH:MM" maxlength="5" autocomplete="off" inputmode="numeric">
+              <button type="button" class="atp-btn atp-btn-sm" id="atpTimeCustomApply">Uygula</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="atp-field atp-loc-search-wrap">
+      <label for="atpLocSearch">Firma / Kayıtlı Yer Ara</label>
+      <input class="atp-inp" id="atpLocSearch" placeholder="Firma, kişi, telefon veya adres…" autocomplete="off">
+      <div class="atp-loc-dropdown" id="atpLocDropdown" hidden></div>
+    </div>
+
+    <div class="atp-loc-card" id="atpLocCard" hidden>
+      <div class="atp-loc-card-title" id="atpLocCardFirma"></div>
+      <div class="atp-loc-card-line" id="atpLocCardKisiTel"></div>
+      <div class="atp-loc-card-line" id="atpLocCardAdres"></div>
+      <div class="atp-loc-card-meta" id="atpLocCardKonum"></div>
+      <div class="atp-loc-card-actions">
+        <button type="button" class="atp-btn atp-btn-sm" id="atpBtnOpenMap" disabled>Konumu Aç</button>
+        <button type="button" class="atp-btn atp-btn-sm" id="atpBtnEditLoc">Bilgileri Değiştir</button>
+      </div>
+    </div>
+
+    <div class="atp-loc-new" id="atpLocNewPanel" hidden>
+      <div class="atp-loc-new-hdr">Yeni Firma / Konum</div>
+      <div class="atp-modal-row atp-modal-row-2">
+        <div class="atp-field"><label>Firma *</label><input class="atp-inp" id="atpNewFirma" name="firma"></div>
+        <div class="atp-field"><label>Kişi</label><input class="atp-inp" id="atpNewKisi" name="kisi"></div>
+      </div>
+      <div class="atp-modal-row atp-modal-row-2">
+        <div class="atp-field"><label>Telefon</label><input class="atp-inp" id="atpNewTelefon" name="telefon"></div>
+        <div class="atp-field"><label>Adres *</label><input class="atp-inp" id="atpNewAdres" name="adres"></div>
+      </div>
+      <div class="atp-field">
+        <label>Konum Linki</label>
+        <input class="atp-inp" id="atpNewMaps" name="maps_url" placeholder="Google Maps paylaşım linki">
+      </div>
+      <label class="atp-check-row">
+        <input type="checkbox" id="atpSaveToMaster" checked>
+        <span>Bu firma / kişi / konumu sonraki işler için kaydet</span>
+      </label>
+    </div>
+
+    <div class="atp-modal-row atp-modal-row-2">
+      <div class="atp-field"><label>Yapılacak İş</label><input class="atp-inp" name="is" id="atpReqIs" required></div>
+      <div class="atp-field">
+        <label>Öncelik</label>
+        <select class="atp-select" name="oncelik" id="atpReqOncelik">
+          <option value="NORMAL">Normal</option>
+          <option value="YUKSEK">Yüksek</option>
+          <option value="DUSUK">Düşük</option>
+          <option value="ACIL">Acil</option>
+        </select>
+      </div>
+    </div>
+    <div class="atp-field">
+      <label>Not</label>
+      <textarea class="atp-inp atp-ta-compact" name="not" id="atpReqNot" rows="2"></textarea>
+    </div>
+
+    <input type="hidden" id="atpLocMasterId" name="location_master_id" value="">
+    <input type="hidden" id="atpLocLat" name="latitude" value="">
+    <input type="hidden" id="atpLocLng" name="longitude" value="">
+
+    <div class="atp-modal-footer">
+      <button type="button" class="atp-btn" id="atpModalCancel">İptal</button>
+      <button type="submit" class="atp-btn atp-btn-primary" id="atpModalSubmit">Talebi Oluştur</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<div class="atp-modal-backdrop" id="atpPlanModalBackdrop" aria-hidden="true">
+<div class="atp-modal atp-plan-modal" id="atpPlanModal" role="dialog" aria-hidden="true">
+  <div class="atp-modal-hdr">
+    <strong>İşi Günlük Plana Al</strong>
+    <button type="button" class="atp-btn atp-modal-close" id="atpPlanModalClose">✕</button>
+  </div>
+  <form id="atpPlanForm" class="atp-modal-body" autocomplete="off">
+    <div class="atp-plan-summary" id="atpPlanSummary"></div>
+    <div class="atp-modal-row atp-modal-row-2">
+      <div class="atp-field"><label>Tarih</label><input type="date" class="atp-inp" id="atpPlanTarih" required></div>
+      <div class="atp-field"><label>Sıra</label><input type="number" class="atp-inp" id="atpPlanSira" min="1" placeholder="Otomatik"></div>
+    </div>
+    <div class="atp-modal-row atp-modal-row-2">
+      <div class="atp-field"><label>Araç (Filom)</label><select class="atp-select" id="atpPlanArac" required></select></div>
+      <div class="atp-field"><label>Şoför</label><select class="atp-select" id="atpPlanSofor"></select></div>
+    </div>
+    <div class="atp-field atp-field-time">
+      <label>Saat</label>
+      <div class="atp-time-picker" id="atpPlanTimePicker">
+        <button type="button" class="atp-inp atp-time-trigger" id="atpPlanTimeTrigger">
+          <span class="atp-time-display is-placeholder" id="atpPlanTimeDisplay">Saat seç</span>
+          <span class="atp-time-caret">▼</span>
+        </button>
+        <input type="hidden" id="atpPlanSaat" value="">
+        <div class="atp-time-dropdown" id="atpPlanTimeDropdown" hidden></div>
+      </div>
+    </div>
+    <input type="hidden" id="atpPlanTalepId" value="">
+    <div class="atp-modal-footer">
+      <button type="button" class="atp-btn" id="atpPlanCancel">İptal</button>
+      <button type="submit" class="atp-btn atp-btn-primary">Plana Al</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<div class="atp-toast" id="atpToast"></div>
+
+<script type="application/json" id="atpCurrentUserJson">{{ current_user | tojson }}</script>
+<script type="application/json" id="atpDashboardJson">{{ dashboard | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_map.js') }}?v=5"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=8"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_request.js') }}?v=4"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_pool.js') }}?v=2"></script>
+{% endblock %}

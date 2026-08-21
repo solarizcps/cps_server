@@ -582,6 +582,18 @@ MANIFEST: tuple[MigEntry, ...] = (
             ("finans_odeme_tedarikci_ayar", "working_term_basis"),
         ),
     ),
+    MigEntry(
+        176, "176_arac_takip_v13",
+        "176_arac_takip_v13.py",
+        "Araç Takip V1.3 — iş talebi, kayıtlı yer, günlük plan",
+        dependencies=(175,),
+        required_tables=(
+            "arac_kayitli_yer",
+            "arac_is_talebi",
+            "arac_gunluk_plan",
+            "arac_gunluk_plan_is",
+        ),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}

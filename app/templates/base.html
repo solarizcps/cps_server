@@ -48,6 +48,7 @@ window.__cpsRootMap = function(pathname) {
   if (_h('/alt-proses'))       return {key:'/planlama',title:'Planlama',      href:'/planlama/'};
   if (_h('/planlama/uretim-plan')) return {key:'/planlama',title:'Planlama', href:'/planlama/uretim-plan/'};
   if (_h('/planlama/genel-plan')) return {key:'/planlama',title:'Planlama', href:'/planlama/genel-plan/'};
+  if (_h('/planlama/arac-takip')) return {key:'/planlama',title:'Planlama', href:'/planlama/arac-takip/'};
   {# P5.9-PILOT-01: enjeksiyon-plan route preserved; breadcrumb → genel-plan #}
   if (_h('/planlama/enjeksiyon-plan')) return {key:'/planlama',title:'Planlama', href:'/planlama/genel-plan/'};
   if (_h('/planlama'))         return {key:'/planlama',title:'Planlama',      href:'/planlama/'};
@@ -1236,6 +1237,11 @@ window.__cpsRootMap = function(pathname) {
         <a href="/planlama/genel-plan/" class="si {% if '/planlama/genel-plan' in rp %}active{% endif %}" title="Genel Planlama">
           <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M6 8h2"/><path d="M6 11h2"/><path d="M11 8h7"/><path d="M11 11h5"/></svg></span>
           <span class="sl">Genel Planlama</span>
+        </a>
+
+        <a href="/planlama/arac-takip/" class="si {% if '/planlama/arac-takip' in rp %}active{% endif %}" title="Araç Takip &amp; Plan">
+          <span class="si-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="6" width="15" height="10" rx="1"/><path d="M16 10h3l2 3v3h-5"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg></span>
+          <span class="sl">Araç Takip &amp; Plan</span>
         </a>
 
         {# P5.9-PILOT-01: Enjeksiyon Planı sidebar hidden — route/backend preserved #}
