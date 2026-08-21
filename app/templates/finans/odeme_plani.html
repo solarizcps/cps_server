@@ -517,6 +517,19 @@
             <tbody id="opHarTbody">
               <tr><td colspan="8" class="op-empty">Yükleniyor…</td></tr>
             </tbody>
+            <tfoot id="opHarTfoot" style="display:none">
+              <tr class="op-har-total-row">
+                <td colspan="5" style="text-align:right;font-weight:600">Toplam</td>
+                <td class="op-num" id="opHarTotBorc">—</td>
+                <td class="op-num" id="opHarTotAlacak">—</td>
+                <td id="opHarTotPb">—</td>
+              </tr>
+              <tr class="op-har-total-row">
+                <td colspan="5" style="text-align:right;font-weight:600">Net</td>
+                <td colspan="2" class="op-num" id="opHarTotNet">—</td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -710,13 +723,15 @@ function cpsParaFmt(val, pb) {
 
       // Hareket tablosu
       var hareketler = d.hareketler || [];
+      var tfoot = document.getElementById('opHarTfoot');
       if (hareketler.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="op-empty">Hareket bulunamadı.</td></tr>';
+        tfoot.style.display = 'none';
       } else {
         tbody.innerHTML = hareketler.map(function(h) {
           return '<tr>' +
             '<td>' + (h.tarih || '—') + '</td>' +
-            '<td><span class="op-tur-badge">' + (h.tur || '') + '</span></td>' +
+            '<td><span class="op-tur-badge">' + (h.tur || h.movement_type || '') + '</span></td>' +
             '<td>' + (h.belge_no || '') + '</td>' +
             '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">' + (h.aciklama || '') + '</td>' +
             '<td>' + (h.vade || '') + '</td>' +
@@ -725,6 +740,11 @@ function cpsParaFmt(val, pb) {
             '<td>' + (h.pb || pb) + '</td>' +
             '</tr>';
         }).join('');
+        tfoot.style.display = '';
+        document.getElementById('opHarTotBorc').textContent = cpsParaFmt(d.har_borc, pb);
+        document.getElementById('opHarTotAlacak').textContent = cpsParaFmt(d.har_alacak, pb);
+        document.getElementById('opHarTotNet').textContent = cpsParaFmt(d.har_net, pb);
+        document.getElementById('opHarTotPb').textContent = pb;
       }
 
       // Verilen çekler

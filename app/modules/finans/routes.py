@@ -1734,17 +1734,11 @@ def finans_odeme_plani_cari_hareketleri():
 
     try:
         adapter = KorgunFinanceAdapter()
-        # Canlı bakiye
-        balances = adapter.fetch_supplier_balances(locations=[location], positive_only=False)
-        cari_info = next(
-            (b for b in balances if b.cari_kod == cari_kod),
-            None,
-        )
         live = adapter.fetch_cari_live_balance(location, cari_kod)
-        # Hareketler
         har = adapter.fetch_cari_hareketleri(location, cari_kod)
+        cari_info = adapter.get_supplier_info(location, cari_kod)
         if cari_info:
-            har['cari_adi'] = cari_info.cari_adi
+            har['cari_adi'] = cari_info['cari_adi']
         elif live:
             har['cari_adi'] = live.get('cari_adi', cari_kod)
         har['live_balance'] = live

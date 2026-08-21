@@ -393,6 +393,119 @@ def main() -> int:
     except ops.OdemePlaniOpsError as e:
         record('LOCK-FIN-ODEME-neg-amount', e.code == 'INVALID_AMOUNT', str(e))
 
+    # LOCK-FIN-ODEME-P0 — Cari Hareketleri canonical ledger parity (2026-08-21)
+    from modules.finans.services.cari_hareket_ledger_service import build_cari_hareket_ledger
+    from modules.finans.services.korgun_finance_adapter import (
+        DEBT_NET_TOLERANCE,
+        get_finance_location_scope,
+    )
+
+    _TOL = DEBT_NET_TOLERANCE
+
+    def _near(a: float, b: float) -> bool:
+        return abs(float(a) - float(b)) <= _TOL
+
+    _P0_PILOTS = (
+        ('LOCK-FIN-ODEME-P0-sed', 'SA001', '320.02.065',
+         12197092.02, 12230827.03, -33735.01),
+        ('LOCK-FIN-ODEME-P0-alt', 'SA001', '320.01.056',
+         1192628.71, 1150731.09, 41897.62),
+        ('LOCK-FIN-ODEME-P0-avel', 'SA001', '320.10.044',
+         2862271.06, 3247988.66, -385717.60),
+        ('LOCK-FIN-ODEME-P0-bes', 'SA001', '320.01.035',
+         10140129.06, 11404348.34, -1264219.28),
+        ('LOCK-FIN-ODEME-P0-cek', 'SA001', '320.01.111',
+         77565432.71, 65801715.55, 11763717.16),
+    )
+    for lock_id, ploc, pck, exp_b, exp_a, exp_n in _P0_PILOTS:
+        led = build_cari_hareket_ledger(ploc, pck)
+        ok_p = (
+            led.get('ok')
+            and led.get('parity_ok')
+            and _near(led.get('fn_borc', 0), exp_b)
+            and _near(led.get('fn_alacak', 0), exp_a)
+            and _near(led.get('fn_net', 0), exp_n)
+            and _near(led.get('har_borc', 0), exp_b)
+            and _near(led.get('har_alacak', 0), exp_a)
+            and _near(led.get('har_net', 0), exp_n)
+        )
+        record(
+            lock_id,
+            ok_p,
+            f"fn={led.get('fn_net')} har={led.get('har_net')} exp={exp_n}",
+        )
+
+    # F — ledger toplamı vs fetch_cari_live_balance
+    _live = adapter.fetch_cari_live_balance('SA001', '320.02.065')
+    _har = build_cari_hareket_ledger('SA001', '320.02.065')
+    record(
+        'LOCK-FIN-ODEME-P0-live-parity',
+        _near(_live.get('borc', 0), _har.get('har_borc', 0))
+        and _near(_live.get('alacak', 0), _har.get('har_alacak', 0))
+        and _near(_live.get('net', 0), _har.get('har_net', 0)),
+        f"live={_live.get('net')} har={_har.get('har_net')}",
+    )
+
+    # G — movement DTO gerçek tutarlar
+    _mov_ok = any(
+        (h.get('borc') or 0) > 0 or (h.get('alacak') or 0) > 0
+        for h in _har.get('hareketler', [])
+    )
+    record('LOCK-FIN-ODEME-P0-movement-amounts', _mov_ok, f"rows={len(_har.get('hareketler', []))}")
+
+    # H — popup footer contract (template)
+    _tpl_path = os.path.join(APP_DIR, 'templates', 'finans', 'odeme_plani.html')
+    with open(_tpl_path, encoding='utf-8') as _tf:
+        _tpl = _tf.read()
+    record(
+        'LOCK-FIN-ODEME-P0-footer-contract',
+        all(x in _tpl for x in ('opHarTotBorc', 'opHarTotAlacak', 'opHarTotNet', 'har_borc', 'har_alacak', 'har_net')),
+        'footer ids + js bind',
+    )
+
+    # I — verilen çek paneli ledger netine ikinci kez eklenmemeli
+    _cek_sum = sum(float(c.get('tutar') or 0) for c in _har.get('cekler', []))
+    _ledger_only = round(
+        sum(h.get('borc') or 0 for h in _har.get('hareketler', []))
+        - sum(h.get('alacak') or 0 for h in _har.get('hareketler', [])),
+        2,
+    )
+    record(
+        'LOCK-FIN-ODEME-P0-cek-no-double',
+        _near(_har.get('har_net', 0), _ledger_only)
+        and _cek_sum >= 0,
+        f"har_net={_har.get('har_net')} ledger={_ledger_only} cek_panel={_cek_sum}",
+    )
+
+    # J — hareket route 890 supplier master fetch yapmamalı
+    _route_path = os.path.join(APP_DIR, 'modules', 'finans', 'routes.py')
+    with open(_route_path, encoding='utf-8') as _rf:
+        _route_src = _rf.read()
+    _hareket_block = _route_src.split('def finans_odeme_plani_cari_hareketleri', 1)[-1]
+    _hareket_block = _hareket_block.split('# [ODEME_PLANI_P3A2 SON]', 1)[0]
+    record(
+        'LOCK-FIN-ODEME-P0-route-no-master-fetch',
+        'fetch_supplier_balances' not in _hareket_block
+        and 'get_supplier_info' in _hareket_block,
+        'no bulk balance fetch',
+    )
+
+    # K — consolidated location
+    record(
+        'LOCK-FIN-ODEME-P0-consolidated-scope',
+        get_finance_location_scope('SA001') == 'SA001,SB001,SH001,SU001,SD002',
+        get_finance_location_scope('SA001'),
+    )
+
+    # L — ledger service Korgün DML yok
+    _led_path = os.path.join(APP_DIR, 'modules', 'finans', 'services', 'cari_hareket_ledger_service.py')
+    with open(_led_path, encoding='utf-8') as _lf:
+        _led_src = _lf.read()
+    _led_no_doc = re.sub(r'/\*.*?\*/', '', _led_src, flags=re.S)
+    _led_no_doc = re.sub(r'#.*', '', _led_no_doc)
+    _led_writes = len(re.findall(r'\b(INSERT|UPDATE|DELETE|TRUNCATE)\b', _led_no_doc, re.I))
+    record('LOCK-FIN-ODEME-P0-ledger-readonly', _led_writes == 0, f'ledger_writes={_led_writes}')
+
     con.close()
     shutil.rmtree(temp_dir, ignore_errors=True)
 
