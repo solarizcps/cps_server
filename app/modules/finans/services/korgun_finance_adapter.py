@@ -82,9 +82,12 @@ COMPANY_LOCATIONS: Dict[str, Dict[str, str]] = {
 CANONICAL_LOCATION_CODES: Tuple[str, ...] = tuple(COMPANY_LOCATIONS.keys())
 
 # P3A.8 — consolidated muhasebe kapsamı (şirket UI kodu → kg_fn Location listesi)
-# YN001 / YP001: kanıt yok — tek location (değişmedi)
+# SA001: P3A.8 forensic ile kanıtlandı (5 physical location)
+# YN001: P1.2F forensic ile kanıtlandı — ödeme/çek YN001, alış faturaları YN002
+# YP001: kanıt yok — tek location (değişmedi)
 COMPANY_FINANCE_LOCATION_MAP: Dict[str, Tuple[str, ...]] = {
     'SA001': ('SA001', 'SB001', 'SH001', 'SU001', 'SD002'),
+    'YN001': ('YN001', 'YN002'),
 }
 
 # Tedarikçi filtresi — bkz. verify_supplier_rule()
@@ -252,7 +255,7 @@ class KorgunFinanceAdapter:
         """Tek şirket için kg_fn bakiye listesi.
 
         debt_filter=False → supplier master (net filtresi yok, Tutar>0 yok)
-        debt_filter=True  → yalnız net > 0 (legacy; prefer master + Python filter)
+        debt_filter=True  → yalnız net < 0 (açık borç evreni; P1.2B)
         """
         company_code = company_code.strip().upper()
         if company_code not in COMPANY_LOCATIONS:
@@ -260,9 +263,9 @@ class KorgunFinanceAdapter:
 
         finance_scope = get_finance_location_scope(company_code)
         is_consolidated = company_code in COMPANY_FINANCE_LOCATION_MAP
-        cb_filter = 'AND Tutar > 0' if debt_filter else ''
+        cb_filter = ''  # P1.2B: debt universe kg_fn net<0 ile belirlenir
         net_sql = (
-            'AND CAST(ISNULL(ht.Borc, 0) - ISNULL(ht.Alacak, 0) AS FLOAT) > 0'
+            'AND CAST(ISNULL(ht.Borc, 0) - ISNULL(ht.Alacak, 0) AS FLOAT) < 0'
             if debt_filter else ''
         )
 
@@ -315,7 +318,7 @@ class KorgunFinanceAdapter:
                        NULL, NULL, NULL, dbo.kg_fn_CariDefPc(cb.CKod),
                        '0', NULL, '', '', '', '')
                 ) ht
-                {('WHERE CAST(ISNULL(ht.Borc,0)-ISNULL(ht.Alacak,0) AS FLOAT) > 0' if debt_filter else '')}
+                {('WHERE CAST(ISNULL(ht.Borc,0)-ISNULL(ht.Alacak,0) AS FLOAT) < 0' if debt_filter else '')}
                 ORDER BY LTRIM(RTRIM(ISNULL(ck.CName, ''))), dbo.kg_fn_CariDefPc(cb.CKod)
             """, (company_code,))
 
@@ -382,7 +385,7 @@ class KorgunFinanceAdapter:
         locations: Optional[Sequence[str]] = None,
         force_refresh: bool = False,
     ) -> List[SupplierBalanceDTO]:
-        """P3A.8 açık borç evreni — CariBakiye Tutar>0 + kg_fn net>0 (KPI/Yükümlülükler)."""
+        """P1.2B açık borç evreni — kg_fn net < 0 (KPI/Yükümlülükler)."""
         _, loc_params = _location_filter_sql(locations)
         locs_validated = list(loc_params)
         cache_key = _cache_key(locs_validated, debt=True)
@@ -403,6 +406,19 @@ class KorgunFinanceAdapter:
         finally:
             con.close()
 
+    def fetch_supplier_balances_bundle(
+        self,
+        locations: Optional[Sequence[str]] = None,
+        force_refresh: bool = False,
+    ) -> Tuple[List[SupplierBalanceDTO], List[SupplierBalanceDTO]]:
+        """Tek kg_fn taraması → master + açık borç projeksiyonu (PERF-01)."""
+        master = self.fetch_supplier_master_balances(
+            locations=locations,
+            force_refresh=force_refresh,
+        )
+        debt = [b for b in master if b.bakiye < -DEBT_NET_TOLERANCE]
+        return master, debt
+
     def fetch_supplier_balances(
         self,
         locations: Optional[Sequence[str]] = None,
@@ -410,7 +426,7 @@ class KorgunFinanceAdapter:
         force_refresh: bool = False,
     ) -> List[SupplierBalanceDTO]:
         """
-        Açık borç evreni — P3A.8 SQL (Tutar>0 + net>0). Master'dan türetilmez.
+        Açık borç evreni — P1.2B SQL (net < 0). Master'dan türetilmez.
 
         P3A.9: Cariler sekmesi fetch_supplier_master_balances kullanmalı.
         KPI / Yükümlülükler bu metodu positive_only=True ile kullanır.
@@ -429,8 +445,18 @@ class KorgunFinanceAdapter:
         self,
         locations: Optional[Sequence[str]] = None,
     ) -> List[Dict[str, Any]]:
-        """Açık çekler — vade bilgisi için P1 read-only (mycek=K)."""
-        loc_sql, loc_params = _location_filter_sql(locations)
+        """Açık çekler — vade bilgisi için P1 read-only (mycek=K).
+
+        P1.3 FAZ2: company_physical_locations — consolidated YN001+YN002 / SA001 scope.
+        """
+        try:
+            from modules.finans.services.odeme_karar_read_service import company_physical_locations
+        except ImportError:
+            from app.modules.finans.services.odeme_karar_read_service import company_physical_locations
+        physical = company_physical_locations(locations)
+        placeholders = ','.join(['%s'] * len(physical))
+        loc_sql = f' IN ({placeholders}) '
+        loc_params = physical
         con = _baglan()
         try:
             cur = con.cursor()
@@ -615,11 +641,11 @@ class KorgunFinanceAdapter:
             return {'ok': False, 'error': 'Geçersiz lokasyon veya cari kodu.', 'hareketler': [], 'cekler': []}
 
         try:
-            from modules.finans.services.cari_hareket_ledger_service import build_cari_hareket_ledger
+            from modules.finans.services.cari_hareket_popup_service import build_cari_hareket_popup
         except ImportError:
-            from app.modules.finans.services.cari_hareket_ledger_service import build_cari_hareket_ledger
+            from app.modules.finans.services.cari_hareket_popup_service import build_cari_hareket_popup
 
-        result = build_cari_hareket_ledger(loc, ck)
+        result = build_cari_hareket_popup(loc, ck)
         result['location_label'] = COMPANY_LOCATIONS.get(loc, {}).get('label', loc)
         result.setdefault('cari_adi', '')
         return result

@@ -1557,6 +1557,20 @@ def finans_odeme_plani():
     do_refresh = request.args.get('refresh', '').strip() == '1'
     zero_raw = request.args.get('zero', '').strip()
     aktif_raw = request.args.get('aktif', '').strip()
+    page_raw = request.args.get('page', '1')
+    page_size_raw = request.args.get('sayfa_boyutu')
+    cari_filters = {
+        'qf': request.args.get('qf', 'tumu'),
+        'fh_tedarikci': request.args.get('fh_tedarikci', ''),
+        'fh_bakiye': request.args.get('fh_bakiye', ''),
+        'fh_karar': request.args.get('fh_karar', ''),
+        'fh_vade': request.args.get('fh_vade', ''),
+        'fh_odeme': request.args.get('fh_odeme', ''),
+        'fh_alim': request.args.get('fh_alim', ''),
+        'fh_temas': request.args.get('fh_temas', ''),
+        'fh_soz': request.args.get('fh_soz', ''),
+        'fh_takip': request.args.get('fh_takip', ''),
+    }
 
     # P3A.10 — cari görünüm: daily (default) | active | zero
     # zero=1 + aktif=1 → zero kazanır (belirsiz state yok)
@@ -1580,6 +1594,10 @@ def finans_odeme_plani():
         active_tab=sekme or None,
         aktif_takip_filter=aktif_filter,
         cari_view=cari_view,
+        page=int(page_raw) if page_raw.isdigit() else 1,
+        page_size=int(page_size_raw) if page_size_raw and page_size_raw.isdigit() else 50,
+        cari_filters=cari_filters,
+        force_refresh=do_refresh,
     )
     try:
         from modules.finans.services.odeme_plani_yetki import can_odeme_plani_write
@@ -1743,6 +1761,40 @@ def finans_odeme_plani_cari_hareketleri():
             har['cari_adi'] = live.get('cari_adi', cari_kod)
         har['live_balance'] = live
         return jsonify(har)
+    except Exception as exc:
+        return jsonify(ok=False, error=str(exc)), 500
+
+
+@finans_bp.route('/odeme-plani/api/cari-hareketleri/tab')
+def finans_odeme_plani_cari_hareket_tab():
+    """P1.2C — Lazy tab (nakit / cekler / alis). READ-ONLY."""
+    from flask import abort, jsonify, request
+
+    try:
+        from modules.finans.services.odeme_plani_yetki import can_odeme_plani_view
+        from modules.finans.services.korgun_finance_adapter import COMPANY_LOCATIONS
+        from modules.finans.services.cari_hareket_popup_service import fetch_popup_tab
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_yetki import can_odeme_plani_view
+        from app.modules.finans.services.korgun_finance_adapter import COMPANY_LOCATIONS
+        from app.modules.finans.services.cari_hareket_popup_service import fetch_popup_tab
+
+    if not can_odeme_plani_view(session.get('kullanici')):
+        abort(403)
+
+    location = (request.args.get('location') or '').strip().upper()
+    cari_kod = (request.args.get('cari_kod') or '').strip()
+    tab = (request.args.get('tab') or '').strip().lower()
+
+    if not location or location not in COMPANY_LOCATIONS:
+        return jsonify(ok=False, error='Geçersiz location.'), 400
+    if not cari_kod or not cari_kod.startswith('320.'):
+        return jsonify(ok=False, error='Geçersiz cari_kod.'), 400
+    if tab not in ('nakit', 'cekler', 'alis'):
+        return jsonify(ok=False, error='Geçersiz tab.'), 400
+
+    try:
+        return jsonify(fetch_popup_tab(location, cari_kod, tab))
     except Exception as exc:
         return jsonify(ok=False, error=str(exc)), 500
 # [ODEME_PLANI_P3A2 SON]

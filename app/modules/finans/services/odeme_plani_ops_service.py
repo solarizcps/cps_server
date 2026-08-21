@@ -202,9 +202,20 @@ def build_iletisim_list_rows(
 def get_cari_parity_maps(
     locations: Optional[Sequence[str]] = None,
 ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+    """Backward-compat — FAZ4: active promise + last contact."""
+    try:
+        from modules.finans.services.odeme_plani_enrichment_service import (
+            fetch_active_promise_map,
+            fetch_last_contact_map,
+        )
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_enrichment_service import (
+            fetch_active_promise_map,
+            fetch_last_contact_map,
+        )
     return (
-        repo.latest_soz_by_canonical(locations),
-        repo.latest_iletisim_by_canonical(locations),
+        fetch_active_promise_map(locations),
+        fetch_last_contact_map(locations),
     )
 
 
