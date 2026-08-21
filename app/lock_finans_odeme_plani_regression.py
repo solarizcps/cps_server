@@ -2311,10 +2311,17 @@ def main() -> int:
     )
 
     # ── P1.3 FAZ5 data parity + UX closure ───────────────────────────────────
-    from modules.finans.services.cari_hareket_popup_service import build_cari_hareket_popup
+    from modules.finans.services.cari_hareket_popup_service import (
+        build_cari_hareket_popup,
+        _baglan,
+        _fetch_alis_faturalari,
+        _fetch_last_purchase,
+        _company_locs,
+    )
     from modules.finans.services.odeme_karar_read_service import (
         normalize_cari_display_name,
         fetch_last_payment_map,
+        fetch_last_purchase_map,
     )
 
     from modules.finans.services.odeme_plani_service import _parse_page_size
@@ -2338,14 +2345,51 @@ def main() -> int:
         and bool(_f5_avel_pop.get('son_odeme')),
         f"borc={_f5_avel_pop.get('canli_borc')} son={_f5_avel_pop.get('son_odeme')}",
     )
-    _f5_atak_row = _kar('320.01.008')
-    _f5_atak_pop = build_cari_hareket_popup('SA001', '320.01.008').get('summary', {})
+    _f5_atak_ck = '320.01.008'
+    _f5_atak_loc = 'SA001'
+    _f5_atak_locs = _company_locs(_f5_atak_loc)
+    _f5_atak_con = _baglan()
+    try:
+        _f5_atak_cur = _f5_atak_con.cursor()
+        _f5_atak_alis = _fetch_alis_faturalari(_f5_atak_cur, _f5_atak_ck, _f5_atak_locs)
+        _f5_atak_rows = _f5_atak_alis.get('rows') or []
+        _f5_atak_purchase_total = sum(float(r.get('tutar') or 0) for r in _f5_atak_rows)
+        _f5_atak_latest_src = _fetch_last_purchase(_f5_atak_cur, _f5_atak_ck, _f5_atak_locs)
+    finally:
+        _f5_atak_con.close()
+    _f5_atak_row = _kar(_f5_atak_ck)
+    _f5_atak_pop = build_cari_hareket_popup(_f5_atak_loc, _f5_atak_ck).get('summary', {})
+    _f5_atak_pop_latest = _f5_atak_pop.get('son_alim')
+    _f5_atak_list_latest = fetch_last_purchase_map(
+        locations=[_f5_atak_loc], force_refresh=True,
+    ).get(_f5_atak_ck)
+    if _f5_atak_latest_src is None:
+        _f5_atak_latest_ok = _f5_atak_pop_latest is None and _f5_atak_list_latest is None
+    else:
+        _f5_atak_latest_ok = (
+            bool(_f5_atak_pop_latest)
+            and abs(float(_f5_atak_pop_latest.get('tutar') or 0) - float(_f5_atak_latest_src['tutar'])) <= 0.01
+            and (_f5_atak_pop_latest.get('tarih') or '') == (_f5_atak_latest_src.get('tarih') or '')
+            and bool(_f5_atak_list_latest)
+            and abs(float(_f5_atak_list_latest.tutar) - float(_f5_atak_latest_src['tutar'])) <= 0.01
+            and (_f5_atak_list_latest.tarih or '') == (_f5_atak_latest_src.get('tarih') or '')
+        )
+    if len(_f5_atak_rows) >= 2:
+        _f5_atak_total_semantic_ok = (
+            abs(_f5_atak_purchase_total - float(_f5_atak_latest_src['tutar'])) > 0.01
+        )
+    elif len(_f5_atak_rows) == 1:
+        _f5_atak_total_semantic_ok = (
+            abs(_f5_atak_purchase_total - float(_f5_atak_latest_src['tutar'])) <= 0.01
+        )
+    else:
+        _f5_atak_total_semantic_ok = _f5_atak_purchase_total == 0
     record(
         'LOCK-FIN-ODEME-DATA5-04-atak-purchase-total-vs-latest',
-        bool(_f5_atak_pop)
-        and abs(float(_f5_atak_pop.get('canli_alacak') or 0) - 13200) <= 1
-        and abs(float(_f5_atak_pop.get('son_alim', {}).get('tutar') or 0) - 10200) <= 1,
-        f"total={_f5_atak_pop.get('canli_alacak')} latest={(_f5_atak_pop.get('son_alim') or {}).get('tutar')}",
+        _f5_atak_latest_ok and _f5_atak_total_semantic_ok,
+        f"rows={len(_f5_atak_rows)} total={_f5_atak_purchase_total} "
+        f"latest={(_f5_atak_pop_latest or {}).get('tutar')} "
+        f"canli_alacak={_f5_atak_pop.get('canli_alacak')}",
     )
     record(
         'LOCK-FIN-ODEME-DATA5-05-latest-financial-action-semantic',

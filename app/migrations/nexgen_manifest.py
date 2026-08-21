@@ -478,14 +478,50 @@ MANIFEST: tuple[MigEntry, ...] = (
         "151_musteri_operasyon_ajanda.py",
         "MO Ajanda V1 — planlanmis gorusmeler",
         dependencies=(149,),
+        required_tables=("musteri_operasyon_ajanda",),
+    ),
     MigEntry(
-        156, "156_musteri_operasyon_ajanda_aday",
-        "156_musteri_operasyon_ajanda_aday.py",
-        "Ajanda aday destegi: musteri_aday_id + firma_adi_gorunum + XOR check",
-        dependencies=(151, 142),
+        152, "152_mo_tahsilat_cek_vade_kontrol",
+        "152_mo_tahsilat_cek_vade_kontrol.py",
+        "Vade Kontrol V1 — mo_tahsilat_cek child table + parent snapshot columns",
+        dependencies=(151,),
+        required_tables=("mo_tahsilat_cek",),
         required_columns=(
-            ("musteri_operasyon_ajanda", "musteri_aday_id"),
-            ("musteri_operasyon_ajanda", "firma_adi_gorunum"),
+            ("mo_tahsilat_kayit", "paket_hedef_tutar"),
+            ("mo_tahsilat_kayit", "onaylanan_vade_gun_snapshot"),
+        ),
+    ),
+    MigEntry(
+        153, "153_mo_sevkiyat_kalem_fiyat_snapshot",
+        "153_mo_sevkiyat_kalem_fiyat_snapshot.py",
+        "Sevkiyat kalem birim_fiyat/PB snapshot (yeni sevkler)",
+        dependencies=(127,),
+        required_columns=(
+            ("mo_musteri_sevkiyat_kalem", "birim_fiyat_snapshot"),
+            ("mo_musteri_sevkiyat_kalem", "para_birimi_snapshot"),
+            ("mo_musteri_sevkiyat_kalem", "fiyat_kaynagi"),
+        ),
+    ),
+    MigEntry(
+        154, "154_mo_tahsilat_sevkiyat_bagi",
+        "154_mo_tahsilat_sevkiyat_bagi.py",
+        "Tahsilat kaydı sevkiyat bağlantısı (sevkiyat_id + snapshot kolonlar)",
+        dependencies=(126, 127),
+        required_columns=(
+            ("mo_tahsilat_kayit", "sevkiyat_id"),
+            ("mo_tahsilat_kayit", "sevk_hedef_tutar_snapshot"),
+            ("mo_tahsilat_kayit", "sevk_para_birimi_snapshot"),
+        ),
+    ),
+    MigEntry(
+        155, "155_mo_tahsilat_tcmb_snapshot",
+        "155_mo_tahsilat_tcmb_snapshot.py",
+        "Tahsilat TCMB snapshot (FX kalan + Satis kur + kur tarihi)",
+        dependencies=(154,),
+        required_columns=(
+            ("mo_tahsilat_kayit", "sevk_kalan_fx_snapshot"),
+            ("mo_tahsilat_kayit", "tcmb_satis_kur_snapshot"),
+            ("mo_tahsilat_kayit", "kur_tarihi_snapshot"),
         ),
     ),
     MigEntry(
@@ -498,7 +534,53 @@ MANIFEST: tuple[MigEntry, ...] = (
             ("musteri_operasyon_ajanda", "plan_telefon"),
             ("musteri_operasyon_ajanda", "plan_sehir"),
         ),
-        required_tables=("musteri_operasyon_ajanda",),
+    ),
+    # ---- FAZ 6B: finans ödeme planı deploy chain (170–172) ----
+    MigEntry(
+        170, "170_odeme_plani_ibrahim_view",
+        "170_odeme_plani_ibrahim_view.py",
+        "İbrahim Ödeme Planı VIEW override (finans.odeme_plani.write:can_view)",
+        dependencies=(120,),
+        risk="permission",
+    ),
+    MigEntry(
+        171, "171_odeme_plani_p3a_ops",
+        "171_odeme_plani_p3a_ops.py",
+        "Ödeme sözü + iletişim CPS tabloları",
+        dependencies=(170,),
+        required_tables=("finans_odeme_plani_sozu", "finans_odeme_plani_iletisim"),
+    ),
+    MigEntry(
+        172, "172_odeme_tedarikci_takip",
+        "172_odeme_tedarikci_takip.py",
+        "Aktif takip master (finans_odeme_tedarikci_takip)",
+        dependencies=(171,),
+        required_tables=("finans_odeme_tedarikci_takip",),
+    ),
+    # ---- FAZ 6C: tedarikçi kategori + çalışma ayarı ----
+    MigEntry(
+        173, "173_finans_tedarikci_kategori",
+        "173_finans_tedarikci_kategori.py",
+        "Tedarikçi kategori referans + seed",
+        dependencies=(172,),
+        required_tables=("finans_tedarikci_kategori",),
+    ),
+    MigEntry(
+        174, "174_finans_odeme_tedarikci_ayar",
+        "174_finans_odeme_tedarikci_ayar.py",
+        "Tedarikçi çalışma ayarı (location+cari_kod)",
+        dependencies=(173,),
+        required_tables=("finans_odeme_tedarikci_ayar",),
+    ),
+    MigEntry(
+        175, "175_finans_tedarikci_calisma_vadesi",
+        "175_finans_tedarikci_calisma_vadesi.py",
+        "CPS çalışma vadesi (working_term_days + working_term_basis)",
+        dependencies=(174,),
+        required_columns=(
+            ("finans_odeme_tedarikci_ayar", "working_term_days"),
+            ("finans_odeme_tedarikci_ayar", "working_term_basis"),
+        ),
     ),
 )
 
@@ -506,6 +588,8 @@ BY_VERSION = {m.version: m for m in MANIFEST}
 EXPECTED_VERSIONS = tuple(m.version for m in MANIFEST)
 
 MEHMET_KADI = 'mehmet'
+IBRAHIM_USER_ID = 36
+YETKI_ODEME_PLANI_WRITE = 'finans.odeme_plani.write'
 # (Kod, can_view, can_create, can_update, can_delete, can_approve, can_report, can_manage)
 MEHMET_OVERRIDE_SPECS: tuple[tuple[str, int, int, int, int, int, int, int], ...] = (
     ('nexgen.view', 1, 0, 0, 0, 0, 1, 0),
@@ -545,6 +629,37 @@ def _override_flags_ok(row, spec: tuple[str, int, int, int, int, int, int, int])
         else:
             vals.append(int(row[i] or 0))
     return vals == [cv, cc, cu, cd, ca, cr, cm]
+
+
+def ibrahim_odeme_plani_view_ok(cur) -> bool:
+    """Migration 170 — İbrahim VIEW-only override (user_id=36)."""
+    if not tablo_var(cur, 'user_permission_override') or not tablo_var(cur, 'sistem_yetki'):
+        return False
+    user = cur.execute(
+        "SELECT Id FROM sistem_kullanici WHERE Id=? AND Aktif=1",
+        (IBRAHIM_USER_ID,),
+    ).fetchone()
+    if not user:
+        return False
+    row = cur.execute(
+        """
+        SELECT upo.can_view, upo.can_create, upo.can_update, upo.can_delete,
+               upo.can_approve, upo.can_report, upo.can_manage
+        FROM user_permission_override upo
+        JOIN sistem_yetki y ON y.Id = upo.YetkiId
+        WHERE upo.KullaniciId=? AND y.Kod=?
+        """,
+        (IBRAHIM_USER_ID, YETKI_ODEME_PLANI_WRITE),
+    ).fetchone()
+    if not row:
+        return False
+    return (
+        int(row['can_view'] or 0) == 1
+        and all(int(row[k] or 0) == 0 for k in (
+            'can_create', 'can_update', 'can_delete',
+            'can_approve', 'can_report', 'can_manage',
+        ))
+    )
 
 
 def mehmet_nexgen_overrides_ok(cur) -> bool:
@@ -631,6 +746,8 @@ def schema_satisfies(cur, entry: MigEntry) -> bool:
         return mehmet_nexgen_overrides_ok(cur)
     if entry.version == 130:
         return finans_yetkileri_ok(cur)
+    if entry.version == 170:
+        return ibrahim_odeme_plani_view_ok(cur)
     # 108 permission: schema marker yok — version kaydı veya yetki satırı
     if entry.version == 108:
         row = cur.execute(
@@ -642,14 +759,14 @@ def schema_satisfies(cur, entry: MigEntry) -> bool:
         ).fetchone()
         return bool(row)
     # 96, 105: soft yoksa version kaydı ile yetin (aşağıda)
-    if not entry.required_tables and not entry.required_columns and entry.version not in (108, 130):
+    if not entry.required_tables and not entry.required_columns and entry.version not in (108, 130, 170):
         return True  # index/view — version kaydı yeterli; verify ayrı
     return True
 
 
 def detect_applied_by_schema(cur, entry: MigEntry) -> bool:
     """Migration kaydı olmasa bile şemadan uygulanmış mı?"""
-    if entry.version in (108, 112, 130):
+    if entry.version in (108, 112, 130, 170):
         return schema_satisfies(cur, entry)
     if entry.required_tables or entry.required_columns:
         for t in entry.required_tables:

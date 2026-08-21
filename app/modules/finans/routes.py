@@ -48,6 +48,17 @@ def _finans_modul_guard():
         return None
     # [ODEME_PLANI_P1.1 SON]
 
+    # [TEDARIKCI_AYAR_FAZ6D BAS] Tedarikçi Ayarları — ödeme planı yetki ailesi
+    if request.path.startswith('/finans/tedarikci-ayarlari'):
+        try:
+            from modules.finans.services.odeme_plani_yetki import can_odeme_plani_view
+        except ImportError:
+            from app.modules.finans.services.odeme_plani_yetki import can_odeme_plani_view
+        if not can_odeme_plani_view(session.get('kullanici')):
+            abort(403)
+        return None
+    # [TEDARIKCI_AYAR_FAZ6D SON]
+
     u = session['kullanici']
     kadi = (u.get('KullaniciAdi') or '').strip().lower()
     adsoyad = (u.get('AdSoyad') or '').strip().lower()
@@ -1842,3 +1853,130 @@ def finans_odeme_plani_takip_toggle():
     except Exception as exc:
         return jsonify(ok=False, error=str(exc)), 500
 # [ODEME_PLANI_P3A5 SON]
+
+
+# [TEDARIKCI_AYAR_FAZ6D BAS] Tedarikçi Ayarları sayfası + CRUD API
+@finans_bp.route('/tedarikci-ayarlari')
+def finans_tedarikci_ayarlari():
+    from flask import render_template, request, abort
+
+    try:
+        from modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from modules.finans.services.tedarikci_ayar_page_service import (
+            tedarikci_ayarlari_sayfa_verisi_safe,
+        )
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from app.modules.finans.services.tedarikci_ayar_page_service import (
+            tedarikci_ayarlari_sayfa_verisi_safe,
+        )
+
+    if not can_odeme_plani_view(session.get('kullanici')):
+        abort(403)
+
+    sirket = (request.args.get('sirket') or 'SA001').strip()
+    page_raw = request.args.get('page', '1')
+    page_size_raw = request.args.get('sayfa_boyutu', '50')
+    data = tedarikci_ayarlari_sayfa_verisi_safe(
+        location_filter=sirket,
+        ff=(request.args.get('ff') or 'tumu').strip(),
+        kategori=(request.args.get('kategori') or '').strip() or None,
+        oncelik=(request.args.get('oncelik') or '').strip() or None,
+        aktif_ayar=(request.args.get('aktif_ayar') or '').strip() or None,
+        search_q=(request.args.get('q') or '').strip() or None,
+        page=int(page_raw) if page_raw.isdigit() else 1,
+        page_size=int(page_size_raw) if page_size_raw.isdigit() else 50,
+        force_refresh=request.args.get('refresh', '').strip() == '1',
+    )
+    data['can_write'] = can_odeme_plani_write(session.get('kullanici'))
+    pg = data.get('pagination') or {}
+    data['pg_page'] = pg.get('page', 1)
+    data['pg_total_pages'] = pg.get('total_pages', 1)
+    data['pg_total'] = pg.get('total', 0)
+    data['pg_page_size'] = pg.get('page_size', 50)
+    return render_template('finans/tedarikci_ayarlari.html', **data)
+
+
+@finans_bp.route('/tedarikci-ayarlari/api/ayar', methods=['POST'])
+def finans_tedarikci_ayar_save():
+    from flask import abort, jsonify
+
+    try:
+        from modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from modules.finans.services.tedarikci_ayar_service import (
+            TedarikciAyarError, save_setting,
+        )
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from app.modules.finans.services.tedarikci_ayar_service import (
+            TedarikciAyarError, save_setting,
+        )
+
+    if not can_odeme_plani_view(session.get('kullanici')):
+        abort(403)
+    if not can_odeme_plani_write(session.get('kullanici')):
+        return jsonify(ok=False, error='Write yetkisi yok.', code='FORBIDDEN'), 403
+
+    kullanici = session.get('kullanici') or {}
+    kadi = kullanici.get('KullaniciAdi') or 'sistem'
+    payload = request.get_json(silent=True) or {}
+    payload['created_by'] = kadi
+    payload['updated_by'] = kadi
+
+    try:
+        result = save_setting(payload)
+        return jsonify(ok=True, setting=result)
+    except TedarikciAyarError as exc:
+        code = exc.code if exc.code in ('DUPLICATE', 'INVALID_CARI', 'FORBIDDEN') else 'VALIDATION'
+        status = 409 if exc.code == 'DUPLICATE' else 400
+        return jsonify(ok=False, error=str(exc), code=code), status
+    except Exception as exc:
+        return jsonify(ok=False, error=str(exc)), 500
+
+
+@finans_bp.route('/tedarikci-ayarlari/api/deactivate', methods=['POST'])
+def finans_tedarikci_ayar_deactivate():
+    from flask import abort, jsonify
+
+    try:
+        from modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from modules.finans.services.tedarikci_ayar_service import (
+            TedarikciAyarError, deactivate_setting,
+        )
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_yetki import (
+            can_odeme_plani_view, can_odeme_plani_write,
+        )
+        from app.modules.finans.services.tedarikci_ayar_service import (
+            TedarikciAyarError, deactivate_setting,
+        )
+
+    if not can_odeme_plani_view(session.get('kullanici')):
+        abort(403)
+    if not can_odeme_plani_write(session.get('kullanici')):
+        return jsonify(ok=False, error='Write yetkisi yok.', code='FORBIDDEN'), 403
+
+    kadi = (session.get('kullanici') or {}).get('KullaniciAdi') or 'sistem'
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = deactivate_setting(
+            payload.get('location', ''),
+            payload.get('cari_kod', ''),
+            kadi,
+        )
+        return jsonify(ok=True, setting=result)
+    except TedarikciAyarError as exc:
+        return jsonify(ok=False, error=str(exc), code=exc.code), 400
+    except Exception as exc:
+        return jsonify(ok=False, error=str(exc)), 500
+# [TEDARIKCI_AYAR_FAZ6D SON]

@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+{% block title %}Tedarikçi Ayarları - Finans{% endblock %}
+{% set active = 'finans' %}
+{% block head %}
+<style>{% include 'finans/_tedarikci_ayarlari_styles.inc.html' %}</style>
+{% endblock %}
+{% block content %}
+<div class="ta-wrap">
+  <nav class="ta-breadcrumb">
+    <a href="/finans/odeme-plani?sirket={{ location_filter or 'SA001' }}">Finans &gt; Ödeme Planı</a>
+    &gt; Tedarikçi Ayarları
+  </nav>
+
+  <div class="page-header ta-header">
+    <div class="page-header-baslik">
+      <h1 class="page-title ta-title">Tedarikçi Ayarları</h1>
+      <div class="page-subtitle ta-subtitle">
+        Tedarikçilerin çalışma şekli, ödeme periyodu ve operasyonel önceliklerini yönetin.
+      </div>
+    </div>
+  </div>
+
+  {% if hata %}
+  <div class="op-alert op-alert-error">Veri hatası: {{ hata }}</div>
+  {% endif %}
+
+  <div class="ta-kpi-grid">
+    <div class="ta-kpi-card"><div class="ta-kpi-label">Toplam Tedarikçi</div><div class="ta-kpi-value">{{ kpi.toplam }}</div></div>
+    <div class="ta-kpi-card"><div class="ta-kpi-label">Ayarı Olan</div><div class="ta-kpi-value">{{ kpi.ayari_olan }}</div></div>
+    <div class="ta-kpi-card"><div class="ta-kpi-label">Ayarı Olmayan</div><div class="ta-kpi-value">{{ kpi.ayari_olmayan }}</div></div>
+    <div class="ta-kpi-card"><div class="ta-kpi-label">Kritik</div><div class="ta-kpi-value">{{ kpi.kritik }}</div></div>
+    <div class="ta-kpi-card"><div class="ta-kpi-label">Düzenli Ödeme</div><div class="ta-kpi-value">{{ kpi.duzenli_odeme }}</div></div>
+  </div>
+
+  <form method="get" action="/finans/tedarikci-ayarlari" class="ta-toolbar" id="taFilterForm">
+    <select name="sirket" class="ta-select" onchange="this.form.submit()">
+      {% for c in companies %}
+      <option value="{{ c.code }}" {% if location_filter == c.code %}selected{% endif %}>{{ c.label }}</option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="ff" value="{{ filters.ff }}">
+    <input type="hidden" name="kategori" value="{{ filters.kategori }}">
+    <input type="hidden" name="oncelik" value="{{ filters.oncelik }}">
+    <input type="hidden" name="aktif_ayar" value="{{ filters.aktif_ayar }}">
+    <input type="search" name="q" class="ta-input" placeholder="Cari ara (ad / CKod)" value="{{ filters.q }}">
+    <button type="submit" class="op-btn-secondary">Ara</button>
+    <select name="sayfa_boyutu" class="ta-select" onchange="this.form.submit()">
+      {% for sz in pagination.valid_sizes %}
+      <option value="{{ sz }}" {% if pg_page_size == sz %}selected{% endif %}>{{ sz }} / sayfa</option>
+      {% endfor %}
+    </select>
+  </form>
+
+  <div class="ta-toolbar" style="padding-top:0;border:none;background:transparent;">
+    <div class="ta-filter-chips">
+      {% set chip_base = '/finans/tedarikci-ayarlari?sirket=' ~ (location_filter or 'SA001') ~ '&q=' ~ (filters.q|urlencode) ~ '&kategori=' ~ (filters.kategori|urlencode) ~ '&oncelik=' ~ (filters.oncelik|urlencode) ~ '&aktif_ayar=' ~ (filters.aktif_ayar|urlencode) ~ '&sayfa_boyutu=' ~ pg_page_size %}
+      <a class="ta-chip {% if filters.ff == 'tumu' %}active{% endif %}" href="{{ chip_base }}&ff=tumu">Tümü</a>
+      <a class="ta-chip {% if filters.ff == 'ayari_olmayan' %}active{% endif %}" href="{{ chip_base }}&ff=ayari_olmayan">Ayarı Olmayanlar</a>
+      <a class="ta-chip {% if filters.ff == 'kritik' %}active{% endif %}" href="{{ chip_base }}&ff=kritik">Kritik</a>
+      <a class="ta-chip {% if filters.ff == 'duzenli_odeme' %}active{% endif %}" href="{{ chip_base }}&ff=duzenli_odeme">Düzenli Ödeme</a>
+    </div>
+    <select class="ta-select" form="taFilterForm" name="kategori" onchange="document.getElementById('taFilterForm').ff.value='{{ filters.ff }}'; this.form.submit();">
+      <option value="">Kategori (tümü)</option>
+      {% for cat in categories %}
+      <option value="{{ cat.code }}" {% if filters.kategori == cat.code %}selected{% endif %}>{{ cat.label_tr }}</option>
+      {% endfor %}
+    </select>
+    <select class="ta-select" form="taFilterForm" name="oncelik" onchange="this.form.submit();">
+      <option value="">Öncelik (tümü)</option>
+      {% for p in priorities %}
+      <option value="{{ p.code }}" {% if filters.oncelik == p.code %}selected{% endif %}>{{ p.label }}</option>
+      {% endfor %}
+    </select>
+    <select class="ta-select" form="taFilterForm" name="aktif_ayar" onchange="this.form.submit();">
+      <option value="">Aktif/Pasif (tümü)</option>
+      <option value="1" {% if filters.aktif_ayar == '1' %}selected{% endif %}>Aktif Ayar</option>
+      <option value="0" {% if filters.aktif_ayar == '0' %}selected{% endif %}>Pasif Ayar</option>
+    </select>
+  </div>
+
+  <div class="ta-table-wrap">
+    <table class="ta-table">
+      <thead>
+        <tr>
+          <th>Tedarikçi</th>
+          <th>Kategori</th>
+          <th>Çalışma Şekli</th>
+          <th>Periyot</th>
+          <th>Korgün Vade</th>
+          <th>Öncelik</th>
+          <th>Kritik</th>
+          <th>Sorumlu</th>
+          <th>Ayar Durumu</th>
+          <th>İşlem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr data-row='{{ r|tojson }}'>
+          <td>
+            <div class="ta-supplier-name">{{ r.cari_adi }}</div>
+            <div class="ta-supplier-sub">{{ r.cari_sub }}</div>
+          </td>
+          <td>{{ r.category_display }}</td>
+          <td>{{ r.payment_mode_display }}</td>
+          <td class="ta-period-cell">{{ r.payment_period_display }}</td>
+          <td>
+            {{ r.korgun_vade_display }}
+            <span class="ta-vade-src">Kaynak: {{ r.korgun_vade_source }}</span>
+          </td>
+          <td>{{ r.priority_display }}</td>
+          <td>{{ r.critical_display }}</td>
+          <td>{{ r.responsible_display }}</td>
+          <td><span class="{{ r.ayar_durumu_class }}">{{ r.ayar_durumu }}</span></td>
+          <td>
+            {% if can_write %}
+            <button type="button" class="ta-btn-edit" data-ta-edit="1">Düzenle</button>
+            {% else %}
+            <button type="button" class="ta-btn-edit" disabled title="Write yetkisi gerekli">Düzenle</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" style="text-align:center;color:#6b7280;padding:24px;">Kayıt bulunamadı.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% macro ta_pg_url(p) -%}
+  /finans/tedarikci-ayarlari?sirket={{ location_filter or 'SA001' }}&ff={{ filters.ff }}&kategori={{ filters.kategori|urlencode }}&oncelik={{ filters.oncelik|urlencode }}&aktif_ayar={{ filters.aktif_ayar|urlencode }}&q={{ filters.q|urlencode }}&sayfa_boyutu={{ pg_page_size }}&page={{ p }}
+  {%- endmacro %}
+  <div class="ta-pagination">
+    <a class="ta-pg-btn {% if pg_page <= 1 %}ta-pg-disabled{% endif %}" href="{{ ta_pg_url(pg_page - 1 if pg_page > 1 else 1) }}">‹</a>
+    <span style="font-size:13px;color:#6b7280;">{{ pg_page }} / {{ pg_total_pages }} · {{ pg_total }} kayıt</span>
+    <a class="ta-pg-btn {% if pg_page >= pg_total_pages %}ta-pg-disabled{% endif %}" href="{{ ta_pg_url(pg_page + 1 if pg_page < pg_total_pages else pg_total_pages) }}">›</a>
+  </div>
+</div>
+
+<div class="ta-drawer-backdrop" id="taDrawerBackdrop"></div>
+<aside class="ta-drawer" id="taDrawer" aria-hidden="true">
+  <div class="ta-drawer-header">
+    <div>
+      <h2 class="ta-drawer-title">Tedarikçi Çalışma Ayarı</h2>
+      <div class="ta-drawer-id" id="taDrawerIdentity"></div>
+    </div>
+    <button type="button" class="ta-drawer-close" id="taDrawerClose" aria-label="Kapat">&times;</button>
+  </div>
+  <div class="ta-drawer-body">
+    <div class="ta-msg" id="taDrawerMsg"></div>
+    <div class="ta-form-group">
+      <label>Korgün Vade (salt okunur)</label>
+      <div class="ta-readonly-box" id="taKorgunVade">—</div>
+    </div>
+    <div class="ta-form-group">
+      <label>Kategori</label>
+      <select id="taCategory">
+        {% for cat in categories %}
+        <option value="{{ cat.code }}">{{ cat.label_tr }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ta-form-group">
+      <label>Çalışma Şekli</label>
+      <select id="taPaymentMode">
+        {% for m in payment_modes %}
+        <option value="{{ m.code }}">{{ m.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ta-form-group">
+      <label>Ödeme Periyodu</label>
+      <select id="taPaymentPeriod">
+        <option value="">—</option>
+        {% for p in payment_periods %}
+        <option value="{{ p.code }}">{{ p.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ta-form-group" id="taPaymentDayGroup">
+      <label>Ödeme Günü</label>
+      <select id="taPaymentDaySelect" style="margin-bottom:6px;">
+        <option value="">Seçiniz</option>
+        <option value="Pazartesi">Pazartesi</option>
+        <option value="Salı">Salı</option>
+        <option value="Çarşamba">Çarşamba</option>
+        <option value="Perşembe">Perşembe</option>
+        <option value="Cuma">Cuma</option>
+        <option value="Ayın 1'i">Ayın 1'i</option>
+        <option value="Ayın 5'i">Ayın 5'i</option>
+        <option value="Ayın 10'u">Ayın 10'u</option>
+        <option value="Ayın 15'i">Ayın 15'i</option>
+        <option value="Ayın 20'si">Ayın 20'si</option>
+        <option value="Ayın 25'i">Ayın 25'i</option>
+        <option value="Ay sonu">Ay sonu</option>
+      </select>
+      <input type="text" id="taPaymentDay" placeholder="Özel gün metni (opsiyonel)">
+    </div>
+    <div class="ta-form-section ta-term-section" id="taWorkingTermSection">
+      <div class="ta-form-section-title">Çalışma Vadesi</div>
+      <div class="ta-form-group">
+        <label>Vade Günü</label>
+        <select id="taWorkingTermDaysPreset">
+          <option value="">— Boş bırak —</option>
+          <option value="0">Peşin / 0</option>
+          {% for d in working_term_day_presets %}
+          {% if d > 0 %}
+          <option value="{{ d }}">{{ d }} gün</option>
+          {% endif %}
+          {% endfor %}
+          <option value="__custom__">Özel gün</option>
+        </select>
+        <input type="number" id="taWorkingTermDaysCustom" min="0" max="730" placeholder="Özel gün (0–730)" style="display:none;margin-top:6px;">
+      </div>
+      <div class="ta-form-group">
+        <label>Vade Başlangıcı</label>
+        <select id="taWorkingTermBasis">
+          <option value="">— Seçiniz —</option>
+          {% for b in working_term_bases %}
+          <option value="{{ b.code }}">{{ b.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="ta-form-group">
+      <label>Öncelik</label>
+      <select id="taPriority">
+        {% for p in priorities %}
+        <option value="{{ p.code }}">{{ p.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ta-toggle-row"><input type="checkbox" id="taCritical"><label for="taCritical"><strong>Kritik Tedarikçi</strong><div class="hint">Üretim veya operasyon açısından yüksek önem taşır.</div></label></div>
+    <div class="ta-toggle-row"><input type="checkbox" id="taMustNotStop"><label for="taMustNotStop"><strong>Ödeme Kesilmemeli</strong><div class="hint">Kesintiye uğraması işletmeyi etkileyebilir.</div></label></div>
+    <div class="ta-toggle-row"><input type="checkbox" id="taRecurring"><label for="taRecurring"><strong>Düzenli Ödeme</strong></label></div>
+    <div class="ta-form-row" id="taRecurringFields" style="display:none;">
+      <div class="ta-form-group"><label>Düzenli Tutar</label><input type="number" min="0" step="0.01" id="taRecurringAmount"></div>
+      <div class="ta-form-group"><label>PB</label><select id="taRecurringCurrency"><option value="">—</option>{% for c in currencies %}<option value="{{ c }}">{{ c }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="ta-toggle-row"><input type="checkbox" id="taPartial"><label for="taPartial"><strong>Parçalı Ödeme</strong></label></div>
+    <div class="ta-form-group" id="taMinPayGroup" style="display:none;"><label>Minimum Ödeme Tutarı</label><input type="number" min="0" step="0.01" id="taMinPay"></div>
+    <div class="ta-form-row">
+      <div class="ta-form-group"><label>Sorumlu</label><select id="taResponsible"><option value="">—</option>{% for u in users %}<option value="{{ u.Id }}">{{ u.AdSoyad or u.KullaniciAdi }}</option>{% endfor %}</select></div>
+      <div class="ta-form-group"><label>Departman</label><select id="taDepartment"><option value="">—</option>{% for d in departments %}<option value="{{ d }}">{{ d }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="ta-form-group"><label>Not</label><textarea id="taNote" rows="3"></textarea></div>
+    <div class="ta-form-group"><label>Ayar Durumu</label><select id="taSettingsActive"><option value="1">Aktif</option><option value="0">Pasif</option></select></div>
+  </div>
+  <div class="ta-drawer-footer">
+    {% if can_write %}
+    <button type="button" class="ta-btn-danger" id="taBtnDeactivate" style="margin-right:auto;display:none;">Pasifleştir</button>
+    <button type="button" class="ta-btn-cancel" id="taBtnCancel">İptal</button>
+    <button type="button" class="ta-btn-save" id="taBtnSave">Kaydet</button>
+    {% endif %}
+  </div>
+</aside>
+
+<script>
+(function(){
+  const backdrop = document.getElementById('taDrawerBackdrop');
+  const drawer = document.getElementById('taDrawer');
+  const msg = document.getElementById('taDrawerMsg');
+  let currentRow = null;
+
+  function showMsg(text, ok){
+    msg.textContent = text;
+    msg.className = 'ta-msg ' + (ok ? 'ok' : 'error');
+  }
+  function clearMsg(){ msg.className = 'ta-msg'; msg.textContent = ''; }
+
+  function toggleRecurring(){
+    document.getElementById('taRecurringFields').style.display =
+      document.getElementById('taRecurring').checked ? 'grid' : 'none';
+  }
+  function togglePartial(){
+    document.getElementById('taMinPayGroup').style.display =
+      document.getElementById('taPartial').checked ? 'block' : 'none';
+  }
+  function togglePaymentDay(){
+    const per = document.getElementById('taPaymentPeriod').value;
+    document.getElementById('taPaymentDayGroup').style.display =
+      (per === 'BELIRLI_GUN' || per === 'HAFTALIK' || per === 'AYLIK') ? 'block' : 'none';
+  }
+
+  const TERM_PRESETS = [0, 7, 15, 30, 45, 60, 75, 90, 120, 150, 180];
+
+  function toggleWorkingTermCustom(){
+    const preset = document.getElementById('taWorkingTermDaysPreset').value;
+    const customEl = document.getElementById('taWorkingTermDaysCustom');
+    customEl.style.display = preset === '__custom__' ? 'block' : 'none';
+  }
+
+  function toggleWorkingTermSection(){
+    const mode = document.getElementById('taPaymentMode').value;
+    const per = document.getElementById('taPaymentPeriod').value;
+    const section = document.getElementById('taWorkingTermSection');
+    const show = mode === 'FATURA_BAZLI' || mode === 'SIPARIS_BAZLI' || mode === 'SOZLESME_BAZLI'
+      || per === 'FATURA_VADESINDE';
+    section.style.display = show ? 'block' : 'block';
+    section.classList.toggle('ta-term-highlight', show);
+  }
+
+  function setWorkingTermDaysUI(days){
+    const presetEl = document.getElementById('taWorkingTermDaysPreset');
+    const customEl = document.getElementById('taWorkingTermDaysCustom');
+    if (days === null || days === undefined || days === '') {
+      presetEl.value = '';
+      customEl.value = '';
+      customEl.style.display = 'none';
+      return;
+    }
+    const n = parseInt(days, 10);
+    if (TERM_PRESETS.indexOf(n) >= 0) {
+      presetEl.value = String(n);
+      customEl.style.display = 'none';
+      customEl.value = '';
+    } else {
+      presetEl.value = '__custom__';
+      customEl.value = n;
+      customEl.style.display = 'block';
+    }
+  }
+
+  function readWorkingTermDays(){
+    const preset = document.getElementById('taWorkingTermDaysPreset').value;
+    if (!preset) return null;
+    if (preset === '__custom__') {
+      const v = document.getElementById('taWorkingTermDaysCustom').value;
+      return v === '' ? null : parseInt(v, 10);
+    }
+    return parseInt(preset, 10);
+  }
+
+  document.getElementById('taRecurring').addEventListener('change', toggleRecurring);
+  document.getElementById('taPartial').addEventListener('change', togglePartial);
+  document.getElementById('taPaymentPeriod').addEventListener('change', function(){
+    togglePaymentDay();
+    toggleWorkingTermSection();
+  });
+  document.getElementById('taPaymentMode').addEventListener('change', toggleWorkingTermSection);
+  document.getElementById('taWorkingTermDaysPreset').addEventListener('change', toggleWorkingTermCustom);
+  document.getElementById('taPaymentDaySelect').addEventListener('change', function(){
+    if (this.value) document.getElementById('taPaymentDay').value = this.value;
+  });
+
+  function openDrawer(row){
+    currentRow = row;
+    clearMsg();
+    document.getElementById('taDrawerIdentity').innerHTML =
+      '<strong>' + row.cari_adi + '</strong><br>' + row.cari_sub;
+    document.getElementById('taKorgunVade').textContent =
+      row.korgun_vade_display + ' · Kaynak: ' + row.korgun_vade_source;
+    document.getElementById('taCategory').value = row.category_code || 'TANIMSIZ';
+    document.getElementById('taPaymentMode').value = row.payment_mode || 'MANUEL';
+    document.getElementById('taPaymentPeriod').value = row.payment_period || '';
+    document.getElementById('taPaymentDay').value = row.payment_day || '';
+    setWorkingTermDaysUI(row.working_term_days);
+    document.getElementById('taWorkingTermBasis').value = row.working_term_basis || '';
+    document.getElementById('taPriority').value = row.priority || 'NORMAL';
+    document.getElementById('taCritical').checked = !!row.critical_supplier;
+    document.getElementById('taMustNotStop').checked = !!row.must_not_stop;
+    document.getElementById('taRecurring').checked = !!row.recurring_payment;
+    document.getElementById('taRecurringAmount').value = row.recurring_amount || '';
+    document.getElementById('taRecurringCurrency').value = row.recurring_currency || '';
+    document.getElementById('taPartial').checked = !!row.partial_payment_allowed;
+    document.getElementById('taMinPay').value = row.minimum_payment_amount || '';
+    document.getElementById('taResponsible').value = row.responsible_user_id || '';
+    document.getElementById('taDepartment').value = row.responsible_department || '';
+    document.getElementById('taNote').value = row.payment_working_note || '';
+    document.getElementById('taSettingsActive').value = row.settings_active === false ? '0' : '1';
+    document.getElementById('taBtnDeactivate').style.display = row.has_settings ? 'inline-block' : 'none';
+    toggleRecurring(); togglePartial(); togglePaymentDay(); toggleWorkingTermSection(); toggleWorkingTermCustom();
+    backdrop.classList.add('open');
+    drawer.classList.add('open');
+    drawer.setAttribute('aria-hidden', 'false');
+  }
+  function closeDrawer(){
+    backdrop.classList.remove('open');
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+    currentRow = null;
+  }
+
+  document.querySelectorAll('[data-ta-edit]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const tr = btn.closest('tr');
+      if (!tr) return;
+      openDrawer(JSON.parse(tr.getAttribute('data-row')));
+    });
+  });
+  document.getElementById('taDrawerClose').addEventListener('click', closeDrawer);
+  document.getElementById('taBtnCancel').addEventListener('click', closeDrawer);
+  backdrop.addEventListener('click', closeDrawer);
+
+  function payloadFromForm(){
+    return {
+      location: currentRow.location,
+      cari_kod: currentRow.cari_kod,
+      cari_adi_snapshot: currentRow.cari_adi_raw || currentRow.cari_adi,
+      category_code: document.getElementById('taCategory').value,
+      payment_mode: document.getElementById('taPaymentMode').value,
+      payment_period: document.getElementById('taPaymentPeriod').value || null,
+      payment_day: document.getElementById('taPaymentDay').value || null,
+      working_term_days: readWorkingTermDays(),
+      working_term_basis: document.getElementById('taWorkingTermBasis').value || null,
+      priority: document.getElementById('taPriority').value,
+      critical_supplier: document.getElementById('taCritical').checked ? 1 : 0,
+      must_not_stop: document.getElementById('taMustNotStop').checked ? 1 : 0,
+      recurring_payment: document.getElementById('taRecurring').checked ? 1 : 0,
+      recurring_amount: document.getElementById('taRecurringAmount').value || null,
+      recurring_currency: document.getElementById('taRecurringCurrency').value || null,
+      partial_payment_allowed: document.getElementById('taPartial').checked ? 1 : 0,
+      minimum_payment_amount: document.getElementById('taMinPay').value || null,
+      responsible_user_id: document.getElementById('taResponsible').value || null,
+      responsible_department: document.getElementById('taDepartment').value || null,
+      payment_working_note: document.getElementById('taNote').value || null,
+      settings_active: parseInt(document.getElementById('taSettingsActive').value, 10),
+    };
+  }
+
+  const saveBtn = document.getElementById('taBtnSave');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', function(){
+      if (!currentRow) return;
+      saveBtn.disabled = true;
+      fetch('/finans/tedarikci-ayarlari/api/ayar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payloadFromForm()),
+      }).then(r => r.json()).then(function(res){
+        if (res.ok) { window.location.reload(); return; }
+        showMsg(res.error || 'Kayıt hatası', false);
+      }).catch(function(){ showMsg('Bağlantı hatası', false); })
+      .finally(function(){ saveBtn.disabled = false; });
+    });
+  }
+
+  const deactBtn = document.getElementById('taBtnDeactivate');
+  if (deactBtn) {
+    deactBtn.addEventListener('click', function(){
+      if (!currentRow || !currentRow.has_settings) return;
+      if (!confirm('Ayar pasifleştirilsin mi?')) return;
+      deactBtn.disabled = true;
+      fetch('/finans/tedarikci-ayarlari/api/deactivate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({location: currentRow.location, cari_kod: currentRow.cari_kod}),
+      }).then(r => r.json()).then(function(res){
+        if (res.ok) { window.location.reload(); return; }
+        showMsg(res.error || 'Pasifleştirme hatası', false);
+      }).catch(function(){ showMsg('Bağlantı hatası', false); })
+      .finally(function(){ deactBtn.disabled = false; });
+    });
+  }
+})();
+</script>
+{% endblock %}
