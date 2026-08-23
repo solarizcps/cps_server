@@ -377,6 +377,56 @@ def arac_takip_api_route_apply():
     if not task_ids:
         return jsonify({'ok': False, 'error': 'task_ids gerekli'}), 400
     uid = _uid()
-    tasks = reorder_tasks(uid, plan_date.isoformat(), task_ids, vehicle_id)
+    plan_date_str = plan_date.isoformat()
+
+    from modules.planlama.arac_route_apply_service import (
+        RouteApplyPersistenceError,
+        RouteApplyRouteError,
+        RouteApplySchemaError,
+        RouteApplyValidationError,
+        apply_route_order_and_snapshot,
+        resolve_route_apply_mode,
+    )
+    from modules.planlama.arac_plan_service import reorder_tasks
+
+    mode = resolve_route_apply_mode()
+    if mode == 'schema_error':
+        return jsonify({
+            'ok': False,
+            'error': 'Plan rota snapshot şeması eksik',
+            'code': 'ROUTE_SNAPSHOT_SCHEMA_MISSING',
+        }), 503
+
+    if mode == 'atomic':
+        try:
+            result = apply_route_order_and_snapshot(
+                uid, plan_date_str, str(vehicle_id or ''), task_ids, user_id=uid,
+            )
+        except RouteApplyValidationError as exc:
+            return jsonify({'ok': False, 'error': str(exc)}), 400
+        except RouteApplyRouteError as exc:
+            return jsonify({'ok': False, 'error': str(exc)}), 400
+        except RouteApplySchemaError as exc:
+            return jsonify({'ok': False, 'error': str(exc)}), 503
+        except RouteApplyPersistenceError as exc:
+            return jsonify({'ok': False, 'error': str(exc), 'code': 'ROUTE_APPLY_FAILED'}), 409
+        dto = get_arac_dashboard_dto(
+            plan_date=plan_date, vehicle_id=vehicle_id, daily_tasks=result.tasks,
+        )
+        return jsonify({
+            'ok': True,
+            'applied': True,
+            'daily_tasks': result.tasks,
+            'dashboard': dto,
+            'route_snapshot': result.route_snapshot,
+            'route_version': result.route_version,
+            'deduplicated': result.deduplicated,
+        })
+
+    # Legacy (pre-migration-179 / canonical): reorder only — mevcut 8080 davranışı korunur
+    try:
+        tasks = reorder_tasks(uid, plan_date_str, task_ids, vehicle_id)
+    except ValueError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
     dto = get_arac_dashboard_dto(plan_date=plan_date, vehicle_id=vehicle_id, daily_tasks=tasks)
     return jsonify({'ok': True, 'daily_tasks': tasks, 'dashboard': dto})

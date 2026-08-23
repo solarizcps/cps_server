@@ -676,6 +676,26 @@ def _plan_task_dto(row: sqlite3.Row, talep: sqlite3.Row, master: sqlite3.Row | N
     }
 
 
+def get_active_plan_row(plan_date: str, arac_external_id: str) -> dict | None:
+    """Günün aktif plan satırı — durum=AKTIF, UNIQUE(plan_tarihi, provider, external_id)."""
+    if not tables_ready() or not arac_external_id:
+        return None
+    con = get_conn()
+    con.row_factory = sqlite3.Row
+    try:
+        row = con.execute(
+            """
+            SELECT id, plan_tarihi, arac_external_id, arac_plaka_snapshot, durum
+            FROM arac_gunluk_plan
+            WHERE plan_tarihi=? AND arac_provider=? AND arac_external_id=? AND durum='AKTIF'
+            """,
+            (plan_date, PLAN_PROVIDER_FILOM, str(arac_external_id)),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        con.close()
+
+
 def get_plan_vehicle_meta(plan_date: str, arac_external_id: str) -> dict | None:
     """Plan row vehicle snapshot for URL hydrate (external_id may differ from Filom id)."""
     if not tables_ready() or not arac_external_id:
@@ -1359,34 +1379,8 @@ def reorder_plan_items_bulk(
     con = get_conn()
     try:
         con.execute('BEGIN IMMEDIATE')
-        plan = con.execute(
-            """
-            SELECT id FROM arac_gunluk_plan
-            WHERE plan_tarihi=? AND arac_provider='TURKCELL_FILOM' AND arac_external_id=?
-            """,
-            (plan_date, str(arac_external_id)),
-        ).fetchone()
-        if not plan:
-            con.commit()
-            return []
-        items = con.execute(
-            'SELECT * FROM arac_gunluk_plan_is WHERE plan_id=? ORDER BY sira',
-            (plan['id'],),
-        ).fetchall()
-        by_id = {f"pi-{r['id']}": r for r in items}
-        if set(task_ids) != set(by_id.keys()):
-            raise ValueError('Görev listesi plan ile uyuşmuyor')
-        ordered_rows = [by_id[tid] for tid in task_ids if tid in by_id]
-        if len(ordered_rows) != len(items):
-            raise ValueError('Eksik görev sırası')
-        now = _now_iso()
-        for row in ordered_rows:
-            con.execute('UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?', (-int(row['id']), row['id']))
-        for i, row in enumerate(ordered_rows, start=1):
-            con.execute('UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?', (i, row['id']))
-        con.execute(
-            'UPDATE arac_gunluk_plan SET updated_at=?, updated_by=? WHERE id=?',
-            (now, session_user_id, plan['id']),
+        _reorder_plan_items_bulk_conn(
+            con, session_user_id, plan_date, arac_external_id, task_ids,
         )
         con.commit()
         return list_plan_tasks(plan_date, arac_external_id)
@@ -1395,3 +1389,48 @@ def reorder_plan_items_bulk(
         raise
     finally:
         con.close()
+
+
+def _reorder_plan_items_bulk_conn(
+    con: sqlite3.Connection,
+    session_user_id: int,
+    plan_date: str,
+    arac_external_id: str,
+    task_ids: list[str],
+) -> int:
+    """Apply bulk reorder on open connection — no commit/close. Returns plan_id."""
+    plan = con.execute(
+        """
+        SELECT id FROM arac_gunluk_plan
+        WHERE plan_tarihi=? AND arac_provider='TURKCELL_FILOM' AND arac_external_id=?
+        """,
+        (plan_date, str(arac_external_id)),
+    ).fetchone()
+    if not plan:
+        raise ValueError('Plan bulunamadı')
+    items = con.execute(
+        'SELECT * FROM arac_gunluk_plan_is WHERE plan_id=? ORDER BY sira',
+        (plan['id'],),
+    ).fetchall()
+    by_id = {f"pi-{r['id']}": r for r in items}
+    if set(task_ids) != set(by_id.keys()):
+        raise ValueError('Görev listesi plan ile uyuşmuyor')
+    ordered_rows = [by_id[tid] for tid in task_ids if tid in by_id]
+    if len(ordered_rows) != len(items):
+        raise ValueError('Eksik görev sırası')
+    now = _now_iso()
+    for row in ordered_rows:
+        con.execute(
+            'UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?',
+            (-int(row['id']), row['id']),
+        )
+    for i, row in enumerate(ordered_rows, start=1):
+        con.execute(
+            'UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?',
+            (i, row['id']),
+        )
+    con.execute(
+        'UPDATE arac_gunluk_plan SET updated_at=?, updated_by=? WHERE id=?',
+        (now, session_user_id, plan['id']),
+    )
+    return int(plan['id'])

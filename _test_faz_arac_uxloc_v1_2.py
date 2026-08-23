@@ -43,6 +43,8 @@ print('=' * 72)
 
 with patch('modules.auth.kullanici_yetkileri', return_value=YK), \
      patch('modules.auth.sistem_session_gecerli_mi', return_value=True), \
+     patch('modules.auth.yetki_var', return_value=True), \
+     patch('modules.auth.is_superadmin', return_value=True), \
      patch('modules.planlama.arac_takip_repo.tables_ready', return_value=False):
     from modules.planlama import arac_lokasyon_service as loc_svc
 

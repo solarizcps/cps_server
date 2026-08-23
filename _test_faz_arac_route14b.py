@@ -145,6 +145,20 @@ ok('ROUTE14B-22 suggested geometry preview', len(dto_full['suggested'].get('geom
 ok('ROUTE14B-23 preview DB write = 0', dto_full.get('suggested_preview_only') is True)
 
 # ROUTE14B-24 explicit accept required — API requires POST apply (no auto reorder)
+def _run_migrations_temp(db_path: str) -> None:
+    import importlib.util
+    for mig in (
+        '176_arac_takip_v13.py', '177_arac_operasyon_ayar.py',
+        '178_arac_is_talebi_ux_v2_fields.py', '179_arac_gps_snapshot_p1.py',
+    ):
+        spec = importlib.util.spec_from_file_location(
+            mig, os.path.join(_APP, 'migrations', mig),
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.run(db_path)
+
+
 def _route_test_client():
     import app as flask_app
     flask_app.app.config['TESTING'] = True
@@ -157,9 +171,36 @@ def _route_test_client():
         s['kullanici_tip'] = 'sistem'
     return c
 
-with patch('modules.auth.kullanici_yetkileri', return_value=frozenset({'planlama:can_view', 'planlama:can_update'})), \
+
+import tempfile
+import importlib.util as _ilu
+from contextlib import contextmanager
+
+
+@contextmanager
+def _isolated_route14b_db():
+    """Temp DB + config patch — canonical DB bağımlılığı yok."""
+    tmpdir = tempfile.mkdtemp(prefix='route14b_')
+    db_path = os.path.join(tmpdir, 'route14b.db')
+    _run_migrations_temp(db_path)
+    import config
+    with patch.object(config.Config, 'MOCK_DB_PATH', db_path):
+        yield db_path
+
+
+AUTH_PATCH = {
+    'modules.auth.kullanici_yetkileri': frozenset({'planlama:can_view', 'planlama:can_update'}),
+    'modules.auth.sistem_session_gecerli_mi': True,
+    'modules.auth.yetki_var': True,
+    'modules.auth.is_superadmin': True,
+}
+
+with _isolated_route14b_db(), \
+     patch.dict(os.environ, {'ARAC_ROUTING_PROVIDER': 'mock'}, clear=False), \
+     patch('modules.auth.kullanici_yetkileri', return_value=AUTH_PATCH['modules.auth.kullanici_yetkileri']), \
      patch('modules.auth.sistem_session_gecerli_mi', return_value=True), \
-     patch('modules.auth.yetki_var', return_value=True):
+     patch('modules.auth.yetki_var', return_value=True), \
+     patch('modules.auth.is_superadmin', return_value=True):
     c = _route_test_client()
     r = c.get('/planlama/arac-takip/api/route/plan?date=2026-08-21')
     body = r.get_json() or {}
@@ -168,10 +209,11 @@ with patch('modules.auth.kullanici_yetkileri', return_value=frozenset({'planlama
 
 # ROUTE14B-25 locked two-phase reorder reuse
 from modules.planlama.arac_takip_repo import reorder_plan_items_bulk, tables_ready
-if tables_ready():
-    ok('ROUTE14B-25 bulk reorder fn exists', callable(reorder_plan_items_bulk))
-else:
-    ok('ROUTE14B-25 bulk reorder fn exists', True, 'skip no tables')
+with _isolated_route14b_db():
+    if tables_ready():
+        ok('ROUTE14B-25 bulk reorder fn exists', callable(reorder_plan_items_bulk))
+    else:
+        ok('ROUTE14B-25 bulk reorder fn exists', False, 'tables missing on temp db')
 
 merged = _merge_apply_order(tasks, ['pi-3', 'pi-1'])
 ok('ROUTE14B-26 merge keeps missing slot', 'pi-2' in merged and merged.index('pi-2') == 1)
