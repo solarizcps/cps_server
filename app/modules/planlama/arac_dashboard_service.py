@@ -230,6 +230,12 @@ def get_arac_dashboard_dto(
     sel_vehicle = vehicle_id or ''
     sel_driver = driver_id or (drivers[0]['id'] if drivers else '')
     v_plate = '—'
+    plan_vehicle = None
+    if canonical and sel_vehicle:
+        from modules.planlama.arac_takip_repo import get_plan_vehicle_meta
+        plan_vehicle = get_plan_vehicle_meta(d.isoformat(), sel_vehicle)
+        if plan_vehicle and plan_vehicle.get('plate_snapshot'):
+            v_plate = plan_vehicle['plate_snapshot']
     v_sofor = next((x['ad'] for x in drivers if str(x['id']) == str(sel_driver)), '—')
     total_km_plan = 0 if canonical else sum(t.get('distance_km') or 0 for t in tasks)
     bekleyen = list_bekleyen_talepler() if canonical else []
@@ -242,6 +248,7 @@ def get_arac_dashboard_dto(
         'selected_vehicle_id': sel_vehicle,
         'selected_driver_id': sel_driver,
         'selected_plate': v_plate,
+        'plan_vehicle': plan_vehicle,
         'selected_driver_name': v_sofor,
         'kpi': {
             'aktif_arac': None,

@@ -20,6 +20,15 @@ PLAN_ITEM_STATUS = {
     'PLANLANDI': 'Planlandı', 'BASLADI': 'Başladı',
     'TAMAMLANDI': 'Tamamlandı', 'IPTAL': 'İptal',
 }
+PLAN_ITEM_STATUS_KEYS = ('PLANLANDI', 'BASLADI', 'TAMAMLANDI', 'IPTAL')
+OPERATIONAL_STATUS_KEYS = ('PLANLANDI', 'BASLADI', 'TAMAMLANDI')
+NEXT_ITEM_STATUSES = frozenset({'PLANLANDI', 'BASLADI'})
+PLAN_PROVIDER_FILOM = 'TURKCELL_FILOM'
+IS_TURU_LABEL = {
+    'ALINACAK': 'Alınacak',
+    'GONDERILECEK': 'Gönderilecek',
+    'ZIYARET': 'Ziyaret / Evrak',
+}
 
 _SEED_LOCATIONS = [
     {
@@ -47,6 +56,60 @@ def tables_ready() -> bool:
         tablo_var_mi(t)
         for t in ('arac_kayitli_yer', 'arac_is_talebi', 'arac_gunluk_plan', 'arac_gunluk_plan_is')
     )
+
+
+def ux_v2_columns_ready() -> bool:
+    if not tablo_var_mi('arac_is_talebi'):
+        return False
+    con = get_conn()
+    try:
+        cols = {r[1] for r in con.execute('PRAGMA table_info(arac_is_talebi)').fetchall()}
+        return all(c in cols for c in (
+            'sofor_id', 'sofor_adi_snapshot', 'is_turu', 'urun_malzeme',
+            'miktar', 'miktar_birim', 'ek_not',
+        ))
+    finally:
+        con.close()
+
+
+def _parse_ux_v2_payload(payload: dict) -> dict:
+    from modules.planlama.arac_sofor_service import resolve_sofor_from_payload
+
+    sofor_id, sofor_adi = resolve_sofor_from_payload(payload)
+    is_turu = (payload.get('is_turu') or '').strip().upper() or None
+    if is_turu not in (None, 'ALINACAK', 'GONDERILECEK', 'ZIYARET'):
+        is_turu = None
+    urun_malzeme = (payload.get('urun_malzeme') or '').strip() or None
+    miktar = None
+    miktar_raw = payload.get('miktar')
+    if miktar_raw not in (None, ''):
+        try:
+            miktar = float(miktar_raw)
+        except (TypeError, ValueError):
+            miktar = None
+    miktar_birim = (payload.get('miktar_birim') or '').strip() or None
+    ek_not = (payload.get('ek_not') or '').strip() or None
+    return {
+        'sofor_id': sofor_id,
+        'sofor_adi_snapshot': sofor_adi,
+        'is_turu': is_turu,
+        'urun_malzeme': urun_malzeme,
+        'miktar': miktar,
+        'miktar_birim': miktar_birim,
+        'ek_not': ek_not,
+    }
+
+
+def _product_summary(urun: str | None, miktar: float | None, birim: str | None) -> str | None:
+    parts = []
+    if urun:
+        parts.append(urun)
+    if miktar is not None:
+        qty = str(int(miktar)) if miktar == int(miktar) else str(miktar)
+        parts.append(qty + ((' ' + birim) if birim else ''))
+    elif birim:
+        parts.append(birim)
+    return ' · '.join(parts) if parts else None
 
 
 def _now_iso() -> str:
@@ -251,6 +314,107 @@ def _touch_location(con: sqlite3.Connection, loc_id: int | None) -> None:
     )
 
 
+def _ensure_kayitli_yer(
+    con: sqlite3.Connection,
+    session_user_id: int,
+    firma: str,
+    adres: str,
+    latitude: float,
+    longitude: float,
+    konum_linki: str | None,
+    kisi: str | None = None,
+    telefon: str | None = None,
+    existing_yer_id: int | None = None,
+    now: str | None = None,
+) -> tuple[int, str]:
+    """Create/reuse arac_kayitli_yer; returns (yer_id, master_action)."""
+    now = now or _now_iso()
+    master_action = 'reused'
+    loc_id = None
+    if existing_yer_id:
+        row = con.execute(
+            'SELECT id FROM arac_kayitli_yer WHERE id=? AND aktif=1',
+            (int(existing_yer_id),),
+        ).fetchone()
+        if row:
+            loc_id = int(existing_yer_id)
+            master_action = 'linked_existing'
+    if loc_id is None:
+        dup = find_duplicate_location({
+            'firma_adi': firma,
+            'telefon': telefon,
+            'adres': adres,
+            'latitude': latitude,
+            'longitude': longitude,
+        })
+        if dup:
+            loc_id = int(dup['id'])
+            master_action = 'reused'
+    if loc_id is not None:
+        con.execute(
+            """
+            UPDATE arac_kayitli_yer
+            SET latitude=?, longitude=?, konum_linki=COALESCE(?, konum_linki),
+                kisi_adi=COALESCE(?, kisi_adi), telefon=COALESCE(?, telefon)
+            WHERE id=?
+            """,
+            (float(latitude), float(longitude), konum_linki, kisi, telefon, loc_id),
+        )
+    else:
+        cur = con.execute(
+            """
+            INSERT INTO arac_kayitli_yer (
+                firma_adi, kisi_adi, telefon, adres, konum_linki,
+                latitude, longitude, aktif, kullanim_sayisi, created_at, created_by
+            ) VALUES (?,?,?,?,?,?,?,1,0,?,?)
+            """,
+            (firma, kisi, telefon, adres, konum_linki, float(latitude), float(longitude), now, session_user_id),
+        )
+        loc_id = int(cur.lastrowid)
+        master_action = 'created'
+    _touch_location(con, loc_id)
+    return loc_id, master_action
+
+
+def create_or_resolve_kayitli_yer(session_user_id: int, payload: dict) -> dict:
+    """Resolve maps link → master row (Konum V1 canonical, no talep)."""
+    from modules.planlama.arac_lokasyon_service import MAPS_COORD_USER_ERROR, parse_maps_coords
+
+    if not tables_ready():
+        raise RuntimeError('arac_takip tabloları hazır değil')
+    firma = (payload.get('firma') or '').strip()
+    adres = (payload.get('adres') or '').strip()
+    if not firma:
+        raise ValueError('Firma gerekli')
+    if not adres:
+        raise ValueError('Adres gerekli')
+    maps_url = (payload.get('maps_url') or payload.get('konum_linki') or '').strip()
+    if not maps_url:
+        raise ValueError(MAPS_COORD_USER_ERROR)
+    lat, lng = parse_maps_coords(maps_url)
+    if lat is None or lng is None:
+        raise ValueError(MAPS_COORD_USER_ERROR)
+    kisi = (payload.get('kisi') or '').strip() or None
+    telefon = (payload.get('telefon') or '').strip() or None
+    now = _now_iso()
+    con = get_conn()
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        loc_id, master_action = _ensure_kayitli_yer(
+            con, session_user_id, firma, adres, lat, lng, maps_url, kisi, telefon, None, now,
+        )
+        con.commit()
+        row = con.execute('SELECT * FROM arac_kayitli_yer WHERE id=?', (loc_id,)).fetchone()
+        loc = _location_dto(row)
+        loc['master_action'] = master_action
+        return {'ok': True, 'location': loc, 'master_action': master_action}
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+
+
 def create_is_talebi(session_user_id: int, payload: dict) -> dict:
     if not tables_ready():
         raise RuntimeError('arac_takip tabloları hazır değil')
@@ -274,8 +438,17 @@ def create_is_talebi(session_user_id: int, payload: dict) -> dict:
     telefon = (payload.get('telefon') or '').strip() or None
     adres = (payload.get('adres') or '').strip()
     konum = (payload.get('maps_url') or payload.get('konum_linki') or '').strip() or None
+
+    from modules.planlama.arac_lokasyon_service import parse_maps_coords
     lat = payload.get('latitude')
     lng = payload.get('longitude')
+    explicit_coords = lat not in (None, '') or lng not in (None, '')
+    if konum and not explicit_coords and not loc_id:
+        parsed_lat, parsed_lng = parse_maps_coords(konum)
+        if lat in (None, ''):
+            lat = parsed_lat
+        if lng in (None, ''):
+            lng = parsed_lng
     try:
         lat = float(lat) if lat not in (None, '') else None
     except (TypeError, ValueError):
@@ -289,56 +462,94 @@ def create_is_talebi(session_user_id: int, payload: dict) -> dict:
     try:
         con.execute('BEGIN IMMEDIATE')
         master_action = 'none'
-        if save_master and firma:
-            dup = find_duplicate_location({
-                'firma_adi': firma, 'telefon': telefon, 'adres': adres,
-                'latitude': lat, 'longitude': lng,
-            })
-            if dup:
-                loc_id = int(dup['id'])
-                master_action = 'duplicate_reused'
-            else:
-                cur = con.execute(
-                    """
-                    INSERT INTO arac_kayitli_yer (
-                        firma_adi, kisi_adi, telefon, adres, konum_linki,
-                        latitude, longitude, aktif, kullanim_sayisi, created_at, created_by
-                    ) VALUES (?,?,?,?,?,?,?,1,0,?,?)
-                    """,
-                    (firma, kisi, telefon, adres, konum, lat, lng, now, session_user_id),
-                )
-                loc_id = int(cur.lastrowid)
-                master_action = 'created'
+
+        if loc_id:
+            master_row = con.execute(
+                'SELECT * FROM arac_kayitli_yer WHERE id=? AND aktif=1', (loc_id,),
+            ).fetchone()
+            if master_row:
+                if explicit_coords:
+                    if lat is None and master_row['latitude'] is not None:
+                        lat = float(master_row['latitude'])
+                        lng = float(master_row['longitude'])
+                else:
+                    lat = None
+                    lng = None
+                if not konum and master_row['konum_linki']:
+                    konum = master_row['konum_linki']
+                if not firma:
+                    firma = master_row['firma_adi'] or firma
+                if not adres:
+                    adres = master_row['adres'] or adres
+                master_action = 'linked_existing'
+        elif lat is not None and lng is not None and firma and adres:
+            loc_id, master_action = _ensure_kayitli_yer(
+                con, session_user_id, firma, adres, lat, lng, konum, kisi, telefon, None, now,
+            )
+            save_master = True
+        elif save_master and firma and lat is not None and lng is not None:
+            loc_id, master_action = _ensure_kayitli_yer(
+                con, session_user_id, firma, adres, lat, lng, konum, kisi, telefon, None, now,
+            )
         elif loc_id:
             master_action = 'linked_existing'
 
         if loc_id:
             _touch_location(con, loc_id)
 
+        ux2 = _parse_ux_v2_payload(payload) if ux_v2_columns_ready() else {}
+        not_text = (payload.get('not') or payload.get('not_text') or '').strip() or None
+
         for _ in range(5):
             talep_no = _uret_talep_no(con)
             try:
-                cur = con.execute(
-                    """
-                    INSERT INTO arac_is_talebi (
-                        talep_no, talep_eden_user_id, talep_eden_adi_snapshot,
-                        talep_tarihi, istenen_saat, kayitli_yer_id,
-                        firma_adi, kisi_adi, telefon, adres, konum_linki,
-                        latitude, longitude, yapilacak_is, oncelik, not_text,
-                        durum, save_to_master, created_at, created_by, updated_at, updated_by
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'BEKLIYOR',?,?,?,?,?)
-                    """,
-                    (
-                        talep_no, talep_uid, talep_adi,
-                        payload.get('tarih') or now[:10], istenen_saat, loc_id,
-                        firma, kisi, telefon, adres, konum, lat, lng,
-                        payload.get('is') or payload.get('yapilacak_is') or '',
-                        payload.get('oncelik') or 'NORMAL',
-                        payload.get('not') or payload.get('not_text') or None,
-                        1 if save_master else 0,
-                        now, session_user_id, now, session_user_id,
-                    ),
-                )
+                if ux_v2_columns_ready():
+                    cur = con.execute(
+                        """
+                        INSERT INTO arac_is_talebi (
+                            talep_no, talep_eden_user_id, talep_eden_adi_snapshot,
+                            talep_tarihi, istenen_saat, kayitli_yer_id,
+                            firma_adi, kisi_adi, telefon, adres, konum_linki,
+                            latitude, longitude, yapilacak_is, oncelik, not_text,
+                            sofor_id, sofor_adi_snapshot, is_turu,
+                            urun_malzeme, miktar, miktar_birim, ek_not,
+                            durum, save_to_master, created_at, created_by, updated_at, updated_by
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'BEKLIYOR',?,?,?,?,?)
+                        """,
+                        (
+                            talep_no, talep_uid, talep_adi,
+                            payload.get('tarih') or now[:10], istenen_saat, loc_id,
+                            firma, kisi, telefon, adres, konum, lat, lng,
+                            payload.get('is') or payload.get('yapilacak_is') or '',
+                            payload.get('oncelik') or 'NORMAL', not_text,
+                            ux2.get('sofor_id'), ux2.get('sofor_adi_snapshot'), ux2.get('is_turu'),
+                            ux2.get('urun_malzeme'), ux2.get('miktar'), ux2.get('miktar_birim'),
+                            ux2.get('ek_not'),
+                            1 if save_master else 0,
+                            now, session_user_id, now, session_user_id,
+                        ),
+                    )
+                else:
+                    cur = con.execute(
+                        """
+                        INSERT INTO arac_is_talebi (
+                            talep_no, talep_eden_user_id, talep_eden_adi_snapshot,
+                            talep_tarihi, istenen_saat, kayitli_yer_id,
+                            firma_adi, kisi_adi, telefon, adres, konum_linki,
+                            latitude, longitude, yapilacak_is, oncelik, not_text,
+                            durum, save_to_master, created_at, created_by, updated_at, updated_by
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'BEKLIYOR',?,?,?,?,?)
+                        """,
+                        (
+                            talep_no, talep_uid, talep_adi,
+                            payload.get('tarih') or now[:10], istenen_saat, loc_id,
+                            firma, kisi, telefon, adres, konum, lat, lng,
+                            payload.get('is') or payload.get('yapilacak_is') or '',
+                            payload.get('oncelik') or 'NORMAL', not_text,
+                            1 if save_master else 0,
+                            now, session_user_id, now, session_user_id,
+                        ),
+                    )
                 talep_id = int(cur.lastrowid)
                 con.commit()
                 row = con.execute('SELECT * FROM arac_is_talebi WHERE id=?', (talep_id,)).fetchone()
@@ -359,7 +570,11 @@ def create_is_talebi(session_user_id: int, payload: dict) -> dict:
 
 def _talep_dto(row: sqlite3.Row | dict) -> dict:
     r = _row_dict(row) or {}
-    return {
+    is_turu = r.get('is_turu')
+    urun = r.get('urun_malzeme')
+    miktar = r.get('miktar')
+    birim = r.get('miktar_birim')
+    dto = {
         'id': r['id'],
         'talep_no': r.get('talep_no'),
         'talep_eden_user_id': r.get('talep_eden_user_id'),
@@ -376,12 +591,24 @@ def _talep_dto(row: sqlite3.Row | dict) -> dict:
         'oncelik': r.get('oncelik'),
         'oncelik_label': PRIORITY_LABEL.get(r.get('oncelik', ''), r.get('oncelik', '')),
         'not': r.get('not_text'),
+        'is_detayi': r.get('not_text'),
         'durum': r.get('durum'),
         'durum_label': STATUS_LABEL.get(r.get('durum', ''), r.get('durum', '')),
         'location_master_id': r.get('kayitli_yer_id'),
         'save_to_master': bool(r.get('save_to_master')),
         'created_at': r.get('created_at'),
+        'sofor_id': r.get('sofor_id'),
+        'sofor_adi_snapshot': r.get('sofor_adi_snapshot'),
+        'sofor': r.get('sofor_adi_snapshot'),
+        'is_turu': is_turu,
+        'is_turu_label': IS_TURU_LABEL.get(is_turu, is_turu) if is_turu else None,
+        'urun_malzeme': urun,
+        'miktar': miktar,
+        'miktar_birim': birim,
+        'ek_not': r.get('ek_not'),
+        'urun_ozet': _product_summary(urun, miktar, birim),
     }
+    return dto
 
 
 def list_bekleyen_talepler() -> list[dict]:
@@ -449,6 +676,31 @@ def _plan_task_dto(row: sqlite3.Row, talep: sqlite3.Row, master: sqlite3.Row | N
     }
 
 
+def get_plan_vehicle_meta(plan_date: str, arac_external_id: str) -> dict | None:
+    """Plan row vehicle snapshot for URL hydrate (external_id may differ from Filom id)."""
+    if not tables_ready() or not arac_external_id:
+        return None
+    con = get_conn()
+    try:
+        row = con.execute(
+            """
+            SELECT arac_external_id, arac_plaka_snapshot, arac_provider
+            FROM arac_gunluk_plan
+            WHERE plan_tarihi=? AND arac_provider='TURKCELL_FILOM' AND arac_external_id=?
+            """,
+            (plan_date, str(arac_external_id)),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            'external_id': row['arac_external_id'],
+            'plate_snapshot': row['arac_plaka_snapshot'],
+            'provider': row['arac_provider'],
+        }
+    finally:
+        con.close()
+
+
 def list_plan_tasks(plan_date: str, arac_external_id: str) -> list[dict]:
     if not tables_ready() or not arac_external_id:
         return []
@@ -486,6 +738,259 @@ def list_plan_tasks(plan_date: str, arac_external_id: str) -> list[dict]:
         con.close()
 
 
+def _empty_status_counts() -> dict[str, int]:
+    return {k: 0 for k in PLAN_ITEM_STATUS_KEYS}
+
+
+def _count_task_statuses(tasks: list[dict]) -> dict[str, int]:
+    counts = _empty_status_counts()
+    for task in tasks:
+        st = task.get('status') or 'PLANLANDI'
+        if st in counts:
+            counts[st] += 1
+    return counts
+
+
+def _operational_count(status_counts: dict) -> int:
+    """Operasyonel kalem: IPTAL hariç (PLANLANDI + BASLADI + TAMAMLANDI)."""
+    return sum(int(status_counts.get(k) or 0) for k in OPERATIONAL_STATUS_KEYS)
+
+
+def _pick_next_task(tasks: list[dict]) -> dict | None:
+    """İlk tamamlanmamış/iptal olmayan kalem — mevcut sıra (sira) kuralı."""
+    for task in sorted(tasks, key=lambda x: x.get('order_no') or 0):
+        if task.get('status') in NEXT_ITEM_STATUSES:
+            return task
+    return None
+
+
+def _next_item_summary(task: dict | None) -> dict | None:
+    if not task:
+        return None
+    return {
+        'plan_item_id': task.get('plan_item_id'),
+        'is_talebi_id': task.get('is_talebi_id'),
+        'order_no': task.get('order_no'),
+        'company_name': task.get('company_name'),
+        'job_title': task.get('job_title'),
+        'planned_time': task.get('planned_time'),
+        'has_coordinates': task.get('has_coordinates'),
+        'location_status': task.get('location_status'),
+        'location_source': task.get('location_source'),
+        'location_source_label': task.get('location_source_label'),
+        'kayitli_yer_id': task.get('kayitli_yer_id'),
+        'status': task.get('status'),
+        'status_label': task.get('status_label'),
+    }
+
+
+def _load_taleps_by_ids(con: sqlite3.Connection, talep_ids: list[int]) -> dict[int, sqlite3.Row]:
+    if not talep_ids:
+        return {}
+    placeholders = ','.join('?' * len(talep_ids))
+    rows = con.execute(
+        f'SELECT * FROM arac_is_talebi WHERE id IN ({placeholders})',
+        talep_ids,
+    ).fetchall()
+    return {int(r['id']): r for r in rows}
+
+
+def _load_masters_by_ids(con: sqlite3.Connection, yer_ids: list[int]) -> dict[int, sqlite3.Row]:
+    if not yer_ids:
+        return {}
+    placeholders = ','.join('?' * len(yer_ids))
+    rows = con.execute(
+        f'SELECT * FROM arac_kayitli_yer WHERE id IN ({placeholders})',
+        yer_ids,
+    ).fetchall()
+    return {int(r['id']): r for r in rows}
+
+
+def _assemble_tasks_for_plan_items(
+    items: list[sqlite3.Row],
+    taleps: dict[int, sqlite3.Row],
+    masters: dict[int, sqlite3.Row],
+) -> list[dict]:
+    tasks: list[dict] = []
+    for item in items:
+        talep = taleps.get(int(item['is_talebi_id']))
+        if not talep:
+            continue
+        master = None
+        if talep['kayitli_yer_id']:
+            master = masters.get(int(talep['kayitli_yer_id']))
+        tasks.append(_plan_task_dto(item, talep, master))
+    return tasks
+
+
+def _flat_item_sort_key(item: dict) -> tuple:
+    pt = (item.get('planned_time') or '').strip()
+    pt_sort = '99:99' if not pt or pt == '—' else pt
+    return (
+        pt_sort,
+        item.get('arac_plaka_snapshot') or item.get('arac_external_id') or '',
+        item.get('order_no') or 0,
+        item.get('plan_item_id') or 0,
+    )
+
+
+def _attach_vehicle_context(task: dict, plan: dict) -> dict:
+    out = dict(task)
+    out['plan_id'] = plan['plan_id']
+    out['plan_tarihi'] = plan['plan_tarihi']
+    out['arac_external_id'] = plan['arac_external_id']
+    out['arac_plaka_snapshot'] = plan['arac_plaka_snapshot']
+    out['sofor_id'] = plan.get('sofor_id')
+    out['sofor_adi_snapshot'] = plan.get('sofor_adi_snapshot')
+    return out
+
+
+def _empty_daily_plan_aggregate(plan_date: str) -> dict:
+    counts = _empty_status_counts()
+    return {
+        'plan_date': plan_date,
+        'plan_count': 0,
+        'planned_vehicle_count': 0,
+        'total_item_count': 0,
+        'operational_total_count': 0,
+        'planned_count': 0,
+        'started_count': 0,
+        'completed_count': 0,
+        'canceled_count': 0,
+        'active_item_count': 0,
+        'plans': [],
+        'vehicles': [],
+        'items': [],
+    }
+
+
+def list_plans_for_date(plan_date: str) -> list[dict]:
+    """Seçilen günün tüm araç planları — READ only, canonical SQLite."""
+    if not tables_ready():
+        return []
+    con = get_conn()
+    try:
+        plans = con.execute(
+            """
+            SELECT * FROM arac_gunluk_plan
+            WHERE plan_tarihi=? AND arac_provider=?
+            ORDER BY arac_plaka_snapshot, arac_external_id
+            """,
+            (plan_date, PLAN_PROVIDER_FILOM),
+        ).fetchall()
+        if not plans:
+            return []
+
+        plan_ids = [int(p['id']) for p in plans]
+        placeholders = ','.join('?' * len(plan_ids))
+        all_items = con.execute(
+            f"""
+            SELECT * FROM arac_gunluk_plan_is
+            WHERE plan_id IN ({placeholders})
+            ORDER BY plan_id, sira
+            """,
+            plan_ids,
+        ).fetchall()
+
+        items_by_plan: dict[int, list[sqlite3.Row]] = {pid: [] for pid in plan_ids}
+        talep_ids: set[int] = set()
+        for item in all_items:
+            pid = int(item['plan_id'])
+            items_by_plan.setdefault(pid, []).append(item)
+            talep_ids.add(int(item['is_talebi_id']))
+
+        taleps = _load_taleps_by_ids(con, sorted(talep_ids))
+        yer_ids = sorted({
+            int(t['kayitli_yer_id'])
+            for t in taleps.values()
+            if t['kayitli_yer_id']
+        })
+        masters = _load_masters_by_ids(con, yer_ids)
+
+        result: list[dict] = []
+        for plan in plans:
+            pid = int(plan['id'])
+            plan_items = items_by_plan.get(pid, [])
+            tasks = _assemble_tasks_for_plan_items(plan_items, taleps, masters)
+            status_counts = _count_task_statuses(tasks)
+            next_task = _pick_next_task(tasks)
+            result.append({
+                'plan_id': pid,
+                'plan_tarihi': plan['plan_tarihi'],
+                'arac_provider': plan['arac_provider'],
+                'arac_external_id': plan['arac_external_id'],
+                'arac_plaka_snapshot': plan['arac_plaka_snapshot'],
+                'sofor_id': plan['sofor_id'],
+                'sofor_adi_snapshot': plan['sofor_adi_snapshot'],
+                'plan_durum': plan['durum'],
+                'items': tasks,
+                'item_count': len(tasks),
+                'operational_item_count': _operational_count(status_counts),
+                'status_counts': status_counts,
+                'next_item': _next_item_summary(next_task),
+            })
+        return result
+    finally:
+        con.close()
+
+
+def build_daily_plan_aggregate(plan_date: str) -> dict:
+    """Gün geneli canonical read model — ham durum sayımları + plans/vehicles/items."""
+    plans = list_plans_for_date(plan_date)
+    if not plans:
+        return _empty_daily_plan_aggregate(plan_date)
+
+    totals = _empty_status_counts()
+    flat_items: list[dict] = []
+    vehicles: list[dict] = []
+
+    for plan in plans:
+        sc = plan['status_counts']
+        for key in PLAN_ITEM_STATUS_KEYS:
+            totals[key] += int(sc.get(key) or 0)
+        for task in plan['items']:
+            flat_items.append(_attach_vehicle_context(task, plan))
+        completed = sc.get('TAMAMLANDI', 0)
+        operational = _operational_count(sc)
+        next_item = plan.get('next_item')
+        vehicles.append({
+            'plan_id': plan['plan_id'],
+            'arac_external_id': plan['arac_external_id'],
+            'arac_plaka_snapshot': plan['arac_plaka_snapshot'],
+            'sofor_id': plan.get('sofor_id'),
+            'sofor_adi_snapshot': plan.get('sofor_adi_snapshot'),
+            'status_counts': dict(sc),
+            'item_count': plan['item_count'],
+            'operational_total_count': operational,
+            'completed_count': completed,
+            'progress_completed': completed,
+            'progress_total': operational,
+            'progress_label': f'{completed}/{operational}',
+            'next_item': next_item,
+            'next_time': (next_item or {}).get('planned_time'),
+        })
+
+    flat_items.sort(key=_flat_item_sort_key)
+    total_items = sum(totals.values())
+    operational_total = _operational_count(totals)
+
+    return {
+        'plan_date': plan_date,
+        'plan_count': len(plans),
+        'planned_vehicle_count': len(plans),
+        'total_item_count': total_items,
+        'operational_total_count': operational_total,
+        'planned_count': totals['PLANLANDI'],
+        'started_count': totals['BASLADI'],
+        'completed_count': totals['TAMAMLANDI'],
+        'canceled_count': totals['IPTAL'],
+        'active_item_count': totals['PLANLANDI'] + totals['BASLADI'],
+        'plans': plans,
+        'vehicles': vehicles,
+        'items': flat_items,
+    }
+
+
 def update_talep_coordinates(
     session_user_id: int,
     talep_id: int,
@@ -513,6 +1018,113 @@ def update_talep_coordinates(
         con.commit()
         updated = con.execute('SELECT * FROM arac_is_talebi WHERE id=?', (int(talep_id),)).fetchone()
         return {'ok': True, 'talep': _talep_dto(updated)}
+    finally:
+        con.close()
+
+
+def save_talep_konum_with_master(
+    session_user_id: int,
+    talep_id: int,
+    latitude: float,
+    longitude: float,
+    konum_linki: str | None = None,
+) -> dict:
+    """Save coordinates on talep snapshot and link/create arac_kayitli_yer master."""
+    if not tables_ready():
+        raise RuntimeError('arac_takip tabloları hazır değil')
+    now = _now_iso()
+    con = get_conn()
+    try:
+        talep = con.execute('SELECT * FROM arac_is_talebi WHERE id=?', (int(talep_id),)).fetchone()
+        if not talep:
+            raise ValueError('Talep bulunamadı')
+
+        candidate = {
+            'firma_adi': talep['firma_adi'],
+            'telefon': talep['telefon'],
+            'adres': talep['adres'],
+            'latitude': float(latitude),
+            'longitude': float(longitude),
+        }
+        master_action = 'reused'
+        loc_id = None
+        existing_yer_id = talep['kayitli_yer_id']
+        if existing_yer_id:
+            master_row = con.execute(
+                'SELECT id FROM arac_kayitli_yer WHERE id=? AND aktif=1',
+                (int(existing_yer_id),),
+            ).fetchone()
+            if master_row:
+                loc_id = int(existing_yer_id)
+                master_action = 'linked_existing'
+        if loc_id is None:
+            dup = find_duplicate_location(candidate)
+            if dup:
+                loc_id = int(dup['id'])
+                master_action = 'reused'
+        if loc_id is not None:
+            con.execute(
+                """
+                UPDATE arac_kayitli_yer
+                SET latitude=?, longitude=?, konum_linki=COALESCE(?, konum_linki)
+                WHERE id=?
+                """,
+                (float(latitude), float(longitude), konum_linki, loc_id),
+            )
+        else:
+            cur = con.execute(
+                """
+                INSERT INTO arac_kayitli_yer (
+                    firma_adi, kisi_adi, telefon, adres, konum_linki,
+                    latitude, longitude, aktif, kullanim_sayisi, created_at, created_by
+                ) VALUES (?,?,?,?,?,?,?,1,0,?,?)
+                """,
+                (
+                    talep['firma_adi'],
+                    talep['kisi_adi'],
+                    talep['telefon'],
+                    talep['adres'],
+                    konum_linki,
+                    float(latitude),
+                    float(longitude),
+                    now,
+                    session_user_id,
+                ),
+            )
+            loc_id = int(cur.lastrowid)
+            master_action = 'created'
+
+        _touch_location(con, loc_id)
+        con.execute(
+            """
+            UPDATE arac_is_talebi
+            SET latitude=?, longitude=?, konum_linki=COALESCE(?, konum_linki),
+                kayitli_yer_id=?, updated_at=?, updated_by=?
+            WHERE id=?
+            """,
+            (
+                float(latitude),
+                float(longitude),
+                konum_linki,
+                loc_id,
+                now,
+                session_user_id,
+                int(talep_id),
+            ),
+        )
+        con.commit()
+        updated = con.execute('SELECT * FROM arac_is_talebi WHERE id=?', (int(talep_id),)).fetchone()
+        master = con.execute('SELECT * FROM arac_kayitli_yer WHERE id=?', (loc_id,)).fetchone()
+        return {
+            'ok': True,
+            'talep': _talep_dto(updated),
+            'location': _location_dto(master),
+            'master_action': master_action,
+            'kayitli_yer_id': loc_id,
+        }
+    except Exception:
+        con.rollback()
+        raise
     finally:
         con.close()
 
@@ -722,6 +1334,56 @@ def reorder_plan_items(
                 'UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?',
                 (i, item['id']),
             )
+        con.execute(
+            'UPDATE arac_gunluk_plan SET updated_at=?, updated_by=? WHERE id=?',
+            (now, session_user_id, plan['id']),
+        )
+        con.commit()
+        return list_plan_tasks(plan_date, arac_external_id)
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+
+
+def reorder_plan_items_bulk(
+    session_user_id: int,
+    plan_date: str,
+    arac_external_id: str,
+    task_ids: list[str],
+) -> list[dict]:
+    """Two-phase bulk reorder — V1.3 UNIQUE(plan_id,sira) safe."""
+    if not tables_ready() or not task_ids:
+        return list_plan_tasks(plan_date, arac_external_id)
+    con = get_conn()
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        plan = con.execute(
+            """
+            SELECT id FROM arac_gunluk_plan
+            WHERE plan_tarihi=? AND arac_provider='TURKCELL_FILOM' AND arac_external_id=?
+            """,
+            (plan_date, str(arac_external_id)),
+        ).fetchone()
+        if not plan:
+            con.commit()
+            return []
+        items = con.execute(
+            'SELECT * FROM arac_gunluk_plan_is WHERE plan_id=? ORDER BY sira',
+            (plan['id'],),
+        ).fetchall()
+        by_id = {f"pi-{r['id']}": r for r in items}
+        if set(task_ids) != set(by_id.keys()):
+            raise ValueError('Görev listesi plan ile uyuşmuyor')
+        ordered_rows = [by_id[tid] for tid in task_ids if tid in by_id]
+        if len(ordered_rows) != len(items):
+            raise ValueError('Eksik görev sırası')
+        now = _now_iso()
+        for row in ordered_rows:
+            con.execute('UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?', (-int(row['id']), row['id']))
+        for i, row in enumerate(ordered_rows, start=1):
+            con.execute('UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?', (i, row['id']))
         con.execute(
             'UPDATE arac_gunluk_plan SET updated_at=?, updated_by=? WHERE id=?',
             (now, session_user_id, plan['id']),

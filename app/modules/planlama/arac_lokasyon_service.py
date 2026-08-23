@@ -2,14 +2,45 @@
 """Araç Takip V1.2 — kayıtlı lokasyon master, iş talebi snapshot, arama."""
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
+import socket
 import threading
+import urllib.error
+import urllib.request
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 from uuid import uuid4
+
+MAPS_COORD_USER_ERROR = (
+    'Bu Google Maps bağlantısından konum bulunamadı. '
+    'Google Maps\'te Paylaş > Bağlantıyı kopyala ile tekrar deneyin.'
+)
+
+_GOOGLE_MAPS_HOSTS = frozenset({
+    'maps.google.com',
+    'www.google.com',
+    'google.com',
+    'maps.app.goo.gl',
+    'goo.gl',
+    'www.google.com.tr',
+    'google.com.tr',
+})
+
+_SHORT_LINK_HOSTS = frozenset({'maps.app.goo.gl', 'goo.gl'})
+
+_COORD_PATTERNS = (
+    r'@(-?\d+\.\d+),(-?\d+\.\d+)',
+    r'[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)',
+    r'!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)',
+)
+
+_REDIRECT_TIMEOUT_S = 4.0
+_MAX_REDIRECTS = 8
 
 _STORE_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'arac_takip')
 _STORE_FILE = os.path.join(_STORE_DIR, 'store.json')
@@ -67,18 +98,133 @@ def _short_adres(adres: str, limit: int = 42) -> str:
     return s if len(s) <= limit else s[: limit - 1] + '…'
 
 
-def parse_maps_coords(maps_url: str) -> tuple[float | None, float | None]:
-    """Extract lat/lng from Google Maps URL when explicitly present."""
-    if not maps_url:
+def _host_allowed(host: str | None) -> bool:
+    h = (host or '').lower().rstrip('.')
+    if not h:
+        return False
+    if h in _GOOGLE_MAPS_HOSTS:
+        return True
+    return h.endswith('.google.com') or h.endswith('.goo.gl')
+
+
+def _host_ips_safe(host: str) -> bool:
+    try:
+        for info in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM):
+            ip = info[4][0]
+            try:
+                addr = ipaddress.ip_address(ip)
+            except ValueError:
+                return False
+            if (
+                addr.is_private
+                or addr.is_loopback
+                or addr.is_link_local
+                or addr.is_multicast
+                or addr.is_reserved
+            ):
+                return False
+    except OSError:
+        return False
+    return True
+
+
+def _extract_coords_from_url(url: str) -> tuple[float | None, float | None]:
+    if not url:
         return None, None
-    for pattern in (
-        r'@(-?\d+\.\d+),(-?\d+\.\d+)',
-        r'[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)',
-        r'!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)',
-    ):
-        m = re.search(pattern, maps_url)
+    for pattern in _COORD_PATTERNS:
+        m = re.search(pattern, url)
         if m:
             return float(m.group(1)), float(m.group(2))
+    return None, None
+
+
+def resolve_google_maps_url(maps_url: str, timeout: float = _REDIRECT_TIMEOUT_S) -> str | None:
+    """Follow Google Maps short-link redirects; allowlisted hosts only."""
+    url = (maps_url or '').strip()
+    if not url:
+        return None
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        return None
+    host = (parsed.hostname or '').lower()
+    if not _host_allowed(host):
+        return None
+    if not _host_ips_safe(host):
+        return None
+
+    lat, lng = _extract_coords_from_url(url)
+    if lat is not None and host not in _SHORT_LINK_HOSTS:
+        return url
+
+    current = url
+    for _ in range(_MAX_REDIRECTS):
+        p = urlparse(current)
+        hop_host = (p.hostname or '').lower()
+        if not _host_allowed(hop_host):
+            return None
+        if not _host_ips_safe(hop_host):
+            return None
+
+        req = urllib.request.Request(
+            current,
+            method='GET',
+            headers={'User-Agent': 'CPS-AracTakip/1.0', 'Accept': 'text/html,*/*'},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                final = resp.geturl() or current
+                lat, lng = _extract_coords_from_url(final)
+                if lat is not None:
+                    return final
+                body = resp.read(65536).decode('utf-8', errors='ignore')
+                for pattern in _COORD_PATTERNS:
+                    m = re.search(pattern, body)
+                    if m:
+                        return final
+                return final if hop_host not in _SHORT_LINK_HOSTS else None
+        except urllib.error.HTTPError as exc:
+            if exc.code in (301, 302, 303, 307, 308):
+                loc = exc.headers.get('Location') or exc.headers.get('location')
+                if not loc:
+                    return None
+                current = urllib.request.urljoin(current, loc)
+                lat, lng = _extract_coords_from_url(current)
+                if lat is not None:
+                    return current
+                continue
+            return None
+        except (urllib.error.URLError, TimeoutError, ValueError):
+            return None
+    return None
+
+
+def parse_maps_coords(maps_url: str, *, resolve_redirects: bool = True) -> tuple[float | None, float | None]:
+    """Extract lat/lng from Google Maps URL; optional short-link redirect resolve."""
+    url = (maps_url or '').strip()
+    if not url:
+        return None, None
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        return None, None
+    host = (parsed.hostname or '').lower()
+    if not _host_allowed(host):
+        return None, None
+    if not _host_ips_safe(host):
+        return None, None
+
+    lat, lng = _extract_coords_from_url(url)
+    if lat is not None:
+        return lat, lng
+
+    needs_resolve = resolve_redirects and host in _SHORT_LINK_HOSTS
+    if needs_resolve:
+        resolved = resolve_google_maps_url(url)
+        if resolved:
+            lat, lng = _extract_coords_from_url(resolved)
+            if lat is not None:
+                return lat, lng
+
     return None, None
 
 

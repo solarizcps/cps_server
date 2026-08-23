@@ -7,10 +7,16 @@
   var dashEl = document.getElementById('atpDashboardJson');
   var dashboard = dashEl ? JSON.parse(dashEl.textContent) : {};
   var planDate = root.getAttribute('data-date') || dashboard.date;
+  var urlVehicleId = new URLSearchParams(window.location.search).get('vehicle_id');
+  if (urlVehicleId && !dashboard.selected_vehicle_id) {
+    dashboard.selected_vehicle_id = urlVehicleId;
+  }
   var LIVE_POLL_MS = 30000;
+  var LIVE_FETCH_TIMEOUT_MS = 20000;
   var pollTimer = null;
   var currentTab = 'gunluk';
   var lastVehicles = [];
+  var liveFetchState = 'idle';
 
   function toast(msg) {
     var el = document.getElementById('atpToast');
@@ -46,8 +52,31 @@
     dashboard = dto;
     var dashEl = document.getElementById('atpDashboardJson');
     if (dashEl) dashEl.textContent = JSON.stringify(dashboard);
+    hydrateVehicleSelect(lastVehicles);
     if (dto.daily_tasks) renderTable(dto.daily_tasks);
     else updatePlanMap();
+    updatePlanSidebar();
+    refreshPlanRoute();
+  }
+
+  function vehicleId() {
+    var vid = document.getElementById('atpSelVehicle');
+    if (vid && vid.value) return vid.value;
+    var fromUrl = new URLSearchParams(window.location.search).get('vehicle_id');
+    if (fromUrl) return fromUrl;
+    return dashboard.selected_vehicle_id || null;
+  }
+
+  function refreshPlanRoute() {
+    if (currentTab !== 'gunluk' || !window.AtpRoute) return;
+    window.AtpRoute.fetchPlanRoute(planDate, vehicleId(), function (dto) {
+      if (dto) {
+        dashboard = dto;
+        var dashJson = document.getElementById('atpDashboardJson');
+        if (dashJson) dashJson.textContent = JSON.stringify(dashboard);
+        updatePlanMap();
+      }
+    });
   }
 
   window.applyAtpDashboard = function (partial) {
@@ -91,6 +120,9 @@
     if (poolWrap) poolWrap.style.display = isGunluk ? '' : 'none';
 
     if (isCanli && window.AtpLiveMap) {
+      var list = document.getElementById('atpVehicleList');
+      if (list && list.querySelector('.atp-live-loading')) loadLiveVehicles(false);
+      else if (liveFetchState === 'error') loadLiveVehicles(false);
       if (lastVehicles.length) renderLiveVehicles(lastVehicles);
       window.AtpLiveMap.onLiveTabShown();
       var vid = new URLSearchParams(window.location.search).get('vehicle_id');
@@ -100,6 +132,12 @@
       if (window.AtpPlanMap) window.AtpPlanMap.onPlanTabShown();
       updatePlanMap();
       updatePlanSidebar();
+      if (window.AtpRoute && window.AtpPlanMap) {
+        var lr = window.AtpRoute.getLastRoute();
+        if (lr && lr.current && lr.current.geometry && lr.current.geometry.length) {
+          window.AtpPlanMap.setCurrentRouteGeometry(lr.current.geometry);
+        }
+      }
     }
   }
 
@@ -128,7 +166,12 @@
   });
 
   var initTab = new URLSearchParams(window.location.search).get('tab') || 'gunluk';
-  setTab(initTab);
+  try {
+    setTab(initTab);
+  } catch (initErr) {
+    console.error('ATP tab init:', initErr);
+    currentTab = initTab;
+  }
 
   function renderTable(tasks) {
     var tbody = document.getElementById('atpTaskBody');
@@ -204,14 +247,13 @@
   }
 
   function reorderApi(taskId, direction) {
-    var vid = document.getElementById('atpSelVehicle');
     fetch('/planlama/arac-takip/api/reorder', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         date: planDate, task_id: taskId, direction: direction,
-        vehicle_id: vid && vid.value ? vid.value : null,
+        vehicle_id: vehicleId(),
       })
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (j.ok && j.daily_tasks) renderTable(j.daily_tasks);
@@ -230,20 +272,14 @@
   bindSortButtons();
   bindKonumButtons(dashboard.daily_tasks || []);
 
-  var sortBtn = document.getElementById('atpBtnSortSuggest');
-  if (sortBtn) sortBtn.addEventListener('click', function () {
-    toast('Rota optimizasyonu V2.4\'te aktif olacak.');
-  });
-
-  var applyRouteBtn = document.getElementById('atpBtnApplyRoute');
-  if (applyRouteBtn) applyRouteBtn.addEventListener('click', function () {
-    toast('Önerilen rota V2.4\'te uygulanacak.');
-  });
+  if (window.AtpRoute) {
+    window.AtpRoute.bindRouteUi(planDate, vehicleId, applyDashboardUpdate, renderTable);
+  }
 
   document.getElementById('atpBtnWhatsapp').addEventListener('click', function () {
-    var vid = document.getElementById('atpSelVehicle');
     var q = '?date=' + encodeURIComponent(planDate);
-    if (vid && vid.value) q += '&vehicle_id=' + encodeURIComponent(vid.value);
+    var vid = vehicleId();
+    if (vid) q += '&vehicle_id=' + encodeURIComponent(vid);
     fetch('/planlama/arac-takip/api/whatsapp' + q, { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
@@ -325,7 +361,6 @@
   }
 
   function renderLiveVehicles(vehicles) {
-    if (currentTab !== 'canli') return;
     var list = document.getElementById('atpVehicleList');
     if (!list) return;
     if (!vehicles || !vehicles.length) {
@@ -344,16 +379,59 @@
     bindVehiclePanelClicks();
   }
 
-  function fillVehicleSelect(vehicles) {
+  function planVehicleOption() {
+    var urlId = new URLSearchParams(window.location.search).get('vehicle_id') || '';
+    var id = dashboard.selected_vehicle_id || urlId || '';
+    if (!id) return null;
+    var label = dashboard.selected_plate && dashboard.selected_plate !== '—'
+      ? dashboard.selected_plate
+      : (dashboard.plan_vehicle && dashboard.plan_vehicle.plate_snapshot) || id;
+    return { id: String(id), label: String(label) };
+  }
+
+  function hydrateVehicleSelect(vehicles) {
     var sel = document.getElementById('atpSelVehicle');
-    if (!sel || !vehicles || !vehicles.length) return;
-    var cur = sel.value || dashboard.selected_vehicle_id || new URLSearchParams(window.location.search).get('vehicle_id') || '';
-    sel.innerHTML = '<option value="">— Araç seç —</option>' + vehicles.map(function (v) {
-      return '<option value="' + v.id + '">' + (v.plate_display || v.plate || v.id) + '</option>';
+    if (!sel) return;
+    var planV = planVehicleOption();
+    var filom = vehicles || [];
+    var urlId = new URLSearchParams(window.location.search).get('vehicle_id') || '';
+    var cur = sel.value || dashboard.selected_vehicle_id || urlId || '';
+    var opts = [{ value: '', label: '— Araç seç —' }];
+    var seen = {};
+    if (planV && planV.id) {
+      opts.push({ value: planV.id, label: planV.label });
+      seen[planV.id] = true;
+      cur = cur || planV.id;
+    }
+    filom.forEach(function (v) {
+      if (seen[v.id]) return;
+      seen[v.id] = true;
+      opts.push({ value: String(v.id), label: v.plate_display || v.plate || v.id });
+    });
+    sel.innerHTML = opts.map(function (o) {
+      return '<option value="' + o.value + '">' + o.label + '</option>';
     }).join('');
     if (cur && sel.querySelector('option[value="' + cur + '"]')) sel.value = cur;
-    else if (vehicles.length === 1) sel.value = vehicles[0].id;
+    else if (planV && planV.id) sel.value = planV.id;
+    else if (filom.length === 1) sel.value = filom[0].id;
     updatePlanSidebar();
+  }
+
+  function fillVehicleSelect(vehicles) {
+    lastVehicles = vehicles || lastVehicles;
+    hydrateVehicleSelect(lastVehicles);
+    if (currentTab === 'gunluk' && window.AtpRoute && !window.AtpRoute.getLastRoute()) {
+      refreshPlanRoute();
+    }
+  }
+
+  hydrateVehicleSelect([]);
+
+  if (window.AtpRoute) {
+    refreshPlanRoute();
+    window.addEventListener('load', function () {
+      setTimeout(refreshPlanRoute, 300);
+    });
   }
 
   function updateLiveKpi(kpi, count) {
@@ -370,9 +448,13 @@
   }
 
   function showLiveError(isPoll) {
-    if (currentTab !== 'canli') return;
+    liveFetchState = 'error';
     var list = document.getElementById('atpVehicleList');
     if (!isPoll && list) list.innerHTML = '<li class="atp-live-error">Canlı araç verisi şu anda alınamıyor.</li>';
+    if (currentTab !== 'canli') {
+      if (window.AtpLiveMap) window.AtpLiveMap.refreshLiveVehicles(lastVehicles, { failed: true });
+      return;
+    }
     if (!isPoll) {
       var elA = document.getElementById('atpKpiAktif');
       var elH = document.getElementById('atpKpiHareket');
@@ -388,6 +470,7 @@
 
   function applyLiveData(j, isPoll) {
     if (j.ok && j.vehicles) {
+      liveFetchState = 'ok';
       lastVehicles = j.vehicles;
       renderLiveVehicles(j.vehicles);
       updateLiveKpi(j.kpi, j.count);
@@ -404,10 +487,27 @@
   }
 
   function loadLiveVehicles(isPoll) {
-    fetch('/planlama/arac-takip/api/araclar', { credentials: 'same-origin' })
+    liveFetchState = 'loading';
+    if (!isPoll) {
+      var list = document.getElementById('atpVehicleList');
+      if (list) list.innerHTML = '<li class="atp-live-loading">Canlı araç verisi yükleniyor…</li>';
+    }
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var tid = setTimeout(function () {
+      if (ctrl) ctrl.abort();
+    }, LIVE_FETCH_TIMEOUT_MS);
+    var opts = { credentials: 'same-origin' };
+    if (ctrl) opts.signal = ctrl.signal;
+    fetch('/planlama/arac-takip/api/araclar', opts)
       .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
-      .then(function (res) { applyLiveData(res.body, !!isPoll); })
-      .catch(function () { showLiveError(!!isPoll); });
+      .then(function (res) {
+        clearTimeout(tid);
+        applyLiveData(res.body, !!isPoll);
+      })
+      .catch(function () {
+        clearTimeout(tid);
+        showLiveError(!!isPoll);
+      });
   }
 
   loadLiveVehicles(false);

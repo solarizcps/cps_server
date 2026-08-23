@@ -4,6 +4,8 @@
   var planMap = null;
   var planTileLayer = null;
   var planMarkers = [];
+  var planRouteLayer = null;
+  var planSuggestedLayer = null;
   var planInitCount = 0;
   var lastPlanPayload = null;
 
@@ -73,6 +75,60 @@
     planMarkers = [];
   }
 
+  function clearRouteLayers() {
+    if (!planMap) return;
+    if (planRouteLayer) {
+      planMap.removeLayer(planRouteLayer);
+      planRouteLayer = null;
+    }
+    if (planSuggestedLayer) {
+      planMap.removeLayer(planSuggestedLayer);
+      planSuggestedLayer = null;
+    }
+  }
+
+  function setCurrentRouteGeometry(geometry) {
+    if (!ensurePlanMap()) return;
+    if (planRouteLayer) {
+      if (planMap.hasLayer(planRouteLayer)) planMap.removeLayer(planRouteLayer);
+      planRouteLayer = null;
+    }
+    if (!geometry || !geometry.length) return;
+    var latlngs = geometry.map(function (p) { return [p[0], p[1]]; });
+    planRouteLayer = L.polyline(latlngs, {
+      color: '#1d4ed8',
+      weight: 6,
+      opacity: 0.92,
+      lineJoin: 'round',
+      lineCap: 'round'
+    }).addTo(planMap);
+    if (planRouteLayer.bringToFront) planRouteLayer.bringToFront();
+    fitMapToContent(latlngs);
+  }
+
+  function setSuggestedRouteGeometry(geometry) {
+    if (!ensurePlanMap()) return;
+    if (planSuggestedLayer) {
+      planMap.removeLayer(planSuggestedLayer);
+      planSuggestedLayer = null;
+    }
+    if (!geometry || !geometry.length) return;
+    var latlngs = geometry.map(function (p) { return [p[0], p[1]]; });
+    planSuggestedLayer = L.polyline(latlngs, {
+      color: '#16a34a',
+      weight: 4,
+      opacity: 0.75,
+      dashArray: '8 6',
+      lineJoin: 'round'
+    }).addTo(planMap);
+  }
+
+  function clearSuggestedRouteGeometry() {
+    if (!planMap || !planSuggestedLayer) return;
+    planMap.removeLayer(planSuggestedLayer);
+    planSuggestedLayer = null;
+  }
+
   function syncPlanMapSize(cb) {
     if (!planMap) return;
     planMap.invalidateSize({ animate: false });
@@ -84,12 +140,31 @@
     }
   }
 
+  function fitMapToContent(extraLatLngs) {
+    if (!planMap) return;
+    var bounds = [];
+    planMarkers.forEach(function (mk) { bounds.push(mk.getLatLng()); });
+    (extraLatLngs || []).forEach(function (p) {
+      if (p && p.length >= 2) bounds.push(L.latLng(p[0], p[1]));
+    });
+    if (!bounds.length) return;
+    if (bounds.length === 1) {
+      planMap.setView(bounds[0], 13, { animate: false });
+      return;
+    }
+    planMap.fitBounds(L.latLngBounds(bounds).pad(0.12), { animate: false, maxZoom: 13 });
+  }
+
   function ensurePlanMap() {
     if (planMap) return true;
     if (typeof L === 'undefined') return false;
     if (!isPlanMapVisible()) return false;
     var el = document.getElementById('atpPlanLeafletMap');
     if (!el) return false;
+    if (el._leaflet_id && !planMap) {
+      delete el._leaflet_id;
+      el.innerHTML = '';
+    }
     if (el._leaflet_id) return false;
 
     planMap = L.map(el, {
@@ -165,7 +240,7 @@
       return;
     }
     emptyEl.style.display = 'none';
-    if (mapEl) mapEl.style.display = '';
+    if (mapEl) mapEl.style.display = 'block';
   }
 
   function renderPlanMap(payload) {
@@ -176,14 +251,12 @@
     if (!ensurePlanMap()) return;
     clearPlanMarkers();
 
-    var layers = [];
     var base = lastPlanPayload.base;
     if (base && base.has_coordinates && base.latitude != null && base.longitude != null) {
       var bmk = L.marker([base.latitude, base.longitude], { icon: baseIcon(), zIndexOffset: 1000 });
       bmk.bindPopup(basePopupHtml(base));
       bmk.addTo(planMap);
       planMarkers.push(bmk);
-      layers.push(bmk);
     }
 
     (lastPlanPayload.stops || []).forEach(function (stop) {
@@ -195,13 +268,22 @@
       mk.bindPopup(stopPopupHtml(stop));
       mk.addTo(planMap);
       planMarkers.push(mk);
-      layers.push(mk);
     });
 
-    if (layers.length === 1) {
-      planMap.setView(layers[0].getLatLng(), 13, { animate: false });
-    } else if (layers.length > 1) {
-      planMap.fitBounds(L.featureGroup(layers).getBounds().pad(0.15), { animate: false, maxZoom: 13 });
+    var lastR = global.AtpRoute && global.AtpRoute.getLastRoute && global.AtpRoute.getLastRoute();
+    var routeGeom = (lastR && lastR.current && lastR.current.geometry) || [];
+    if (routeGeom.length) {
+      if (!planRouteLayer || !planMap.hasLayer(planRouteLayer)) setCurrentRouteGeometry(routeGeom);
+      else fitMapToContent(routeGeom);
+    } else {
+      fitMapToContent([]);
+    }
+  }
+
+  function syncRouteFromLast() {
+    var route = global.AtpRoute && global.AtpRoute.getLastRoute && global.AtpRoute.getLastRoute();
+    if (route && route.current && route.current.geometry && route.current.geometry.length) {
+      setCurrentRouteGeometry(route.current.geometry);
     }
   }
 
@@ -210,6 +292,7 @@
     if (!planMap) ensurePlanMap();
     syncPlanMapSize(function () {
       if (lastPlanPayload) renderPlanMap(lastPlanPayload);
+      syncRouteFromLast();
     });
   }
 
@@ -217,8 +300,45 @@
     ensurePlanMap: ensurePlanMap,
     onPlanTabShown: onPlanTabShown,
     renderPlanMap: renderPlanMap,
+    setCurrentRouteGeometry: setCurrentRouteGeometry,
+    setSuggestedRouteGeometry: setSuggestedRouteGeometry,
+    clearSuggestedRouteGeometry: clearSuggestedRouteGeometry,
+    clearRouteLayers: clearRouteLayers,
     mapInstanceCount: function () { return planInitCount; },
     hasInstance: function () { return planMap !== null; },
-    markerCount: function () { return planMarkers.length; }
+    markerCount: function () { return planMarkers.length; },
+    routeLayerCount: function () {
+      var n = 0;
+      if (planRouteLayer) n += 1;
+      if (planSuggestedLayer) n += 1;
+      return n;
+    },
+    hasCurrentRoute: function () { return planRouteLayer !== null; },
+    hasSuggestedRoute: function () { return planSuggestedLayer !== null; },
+    getMarkerRegistry: function () {
+      var base = lastPlanPayload && lastPlanPayload.base;
+      var stops = (lastPlanPayload && lastPlanPayload.stops) || [];
+      var out = [];
+      if (base && base.has_coordinates) {
+        out.push({ kind: 'BASE', lat: base.latitude, lng: base.longitude, onMap: planMarkers.some(function (m) {
+          var ll = m.getLatLng(); return base.latitude === ll.lat && base.longitude === ll.lng;
+        }) });
+      }
+      stops.forEach(function (s) {
+        if (!s.has_coordinates) return;
+        out.push({ kind: 'stop', order_no: s.order_no, lat: s.latitude, lng: s.longitude,
+          onMap: planMarkers.some(function (m) {
+            var ll = m.getLatLng(); return s.latitude === ll.lat && s.longitude === ll.lng;
+          }) });
+      });
+      return out;
+    },
+    getRouteDomPathCount: function () {
+      var pane = document.querySelector('#atpPlanLeafletMap .leaflet-overlay-pane');
+      return pane ? pane.querySelectorAll('path').length : 0;
+    },
+    getCurrentRoutePointCount: function () {
+      return planRouteLayer && planRouteLayer.getLatLngs ? planRouteLayer.getLatLngs().length : 0;
+    }
   };
 })(window);

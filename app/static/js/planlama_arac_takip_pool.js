@@ -42,13 +42,14 @@
       return;
     }
     tbody.innerHTML = rows.map(function (t) {
-      var pri = t.oncelik === 'YUKSEK' ? 'yuksek' : (t.oncelik === 'DUSUK' ? 'dusuk' : 'normal');
+      var pri = t.oncelik === 'YUKSEK' ? 'yuksek' : (t.oncelik === 'ACIL' ? 'acil' : (t.oncelik === 'DUSUK' ? 'dusuk' : 'normal'));
       var no = t.talep_no || ('#' + t.id);
-      return '<tr data-talep-id="' + t.id + '">' +
-        '<td class="atp-pool-no">' + no + '</td><td>' + (t.talep_eden_adi || '—') + '</td><td>' + (t.tarih || '—') + '</td>' +
-        '<td>' + (t.firma || '—') + '</td><td>' + (t.is || '—') + '</td>' +
-        '<td><span class="atp-badge atp-pri-' + pri + '">' + (t.oncelik_label || t.oncelik) + '</span></td>' +
+      return '<tr data-talep-id="' + t.id + '"' + (t.urun_ozet ? ' title="' + t.urun_ozet + '"' : '') + '>' +
+        '<td class="atp-pool-no">' + no + '</td><td>' + (t.firma || '—') + '</td><td>' + (t.is || '—') + '</td>' +
+        '<td>' + (t.sofor || t.sofor_adi_snapshot || '—') + '</td>' +
+        '<td>' + (t.is_turu_label || '—') + '</td>' +
         '<td>' + (t.istenen_saat || '—') + '</td>' +
+        '<td><span class="atp-badge atp-pri-' + pri + '">' + (t.oncelik_label || t.oncelik) + '</span></td>' +
         '<td><button type="button" class="atp-btn atp-btn-sm atp-btn-plana-al" data-talep-id="' + t.id + '">Plana Al</button></td></tr>';
     }).join('');
     bindPlanaAl();

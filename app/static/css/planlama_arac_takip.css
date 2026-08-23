@@ -52,7 +52,7 @@
 .atp-sort-btns button:hover { background: #e4e7ec; }
 .atp-map-box { min-height: 320px; position: relative; }
 .atp-map-box.atp-map-plan { background: #f8fafc; border-top: 1px solid #eef2f6; }
-.atp-plan-leaflet { width: 100%; height: 320px; display: none; }
+.atp-plan-leaflet { width: 100%; height: 320px; }
 .atp-wrap #atpPlanLeafletMap.leaflet-container { width: 100% !important; height: 320px !important; }
 .atp-plan-map-inner { min-height: 320px; position: relative; }
 .atp-plan-empty { position: absolute; inset: 0; z-index: 401; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px 24px; max-width: 100%; background: #f8fafc; }
@@ -66,6 +66,7 @@
 .atp-btn-xs { padding: 2px 6px; font-size: 0.65rem; margin-left: 4px; vertical-align: middle; }
 .atp-form-err { color: #b42318; font-size: 0.78rem; min-height: 1.2em; margin: 4px 0; }
 .atp-readonly-val { font-weight: 600; color: #344054; padding: 6px 0; }
+.atp-field-help { font-size: 0.76rem; color: #667085; margin: 6px 0 0; line-height: 1.45; }
 .atp-radio-row { display: block; margin: 6px 0; font-size: 0.82rem; cursor: pointer; }
 .atp-plan-pin { background: transparent; border: none; }
 #atpLocModalBackdrop.open { display: flex; }
@@ -123,6 +124,23 @@
 .atp-route-card.rec { border-color: #12b76a; background: #f6fef9; }
 .atp-route-card h4 { margin: 0 0 6px; font-size: 0.72rem; color: #667085; text-transform: uppercase; }
 .atp-route-card .val { font-size: 1.1rem; font-weight: 700; }
+.atp-route-orders { grid-column: 1 / -1; font-size: 0.85rem; color: #344054; }
+.atp-route-orders span { color: #667085; margin-right: 6px; }
+.atp-route-legs { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
+.atp-route-leg { display: flex; justify-content: space-between; gap: 12px; font-size: 0.82rem; padding: 6px 10px; background: #f9fafb; border-radius: 6px; }
+.atp-route-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.atp-route-apply-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 9000; display: none; align-items: center; justify-content: center; padding: 16px; }
+.atp-route-apply-modal { position: relative; z-index: 9001; display: block; background: #fff; border-radius: 12px; padding: 22px 24px; max-width: 440px; width: 100%; box-shadow: 0 16px 48px rgba(0,0,0,.18); border: 1px solid #e4e7ec; }
+.atp-route-apply-title { margin: 0 0 14px; font-size: 1rem; font-weight: 700; color: #1a1a2e; letter-spacing: 0.02em; }
+.atp-route-apply-rows { display: grid; gap: 10px; margin-bottom: 12px; }
+.atp-route-apply-row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: baseline; font-size: 0.88rem; }
+.atp-route-apply-row span { color: #667085; font-weight: 600; }
+.atp-route-apply-row strong { color: #1a1a2e; }
+.atp-route-apply-gain strong { color: #027a48; }
+.atp-route-apply-note { margin: 0 0 16px; font-size: 0.82rem; color: #667085; }
+.atp-route-apply-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.atp-route-status-msg { grid-column: 1 / -1; margin: 0; font-size: 0.85rem; color: #b54708; }
+.atp-route-apply-modal { max-width: 420px; }
 .atp-week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
 @media (max-width: 900px) { .atp-week-grid { grid-template-columns: repeat(2, 1fr); } }
 .atp-week-day { background: #fff; border: 1px solid #e4e7ec; border-radius: 10px; padding: 14px; cursor: pointer; }
@@ -186,8 +204,37 @@
 .atp-loc-card-line { font-size: 0.82rem; color: #344054; margin-bottom: 2px; }
 .atp-loc-card-meta { font-size: 0.78rem; color: #667085; margin: 6px 0 8px; }
 .atp-loc-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.atp-req-modal-v2 { width: min(820px, 100%); max-height: min(92vh, 920px); display: flex; flex-direction: column; }
+.atp-req-modal-v2 .atp-modal-body { max-height: calc(92vh - 120px); }
+.atp-inp-wide { width: 100%; }
+.atp-ta-detail { min-height: 88px; resize: vertical; line-height: 1.45; }
+.atp-req-job-row { align-items: end; }
+.atp-field-job { flex: 1; min-width: 0; }
+.atp-field-priority { max-width: 150px; flex-shrink: 0; }
+.atp-req-new-loc-wrap { margin: 4px 0 10px; }
+.atp-btn-ghost { background: transparent; border: 1px dashed #98a2b3; color: #344054; }
+.atp-btn-ghost:hover { background: #f9fafb; }
 .atp-loc-new { background: #fffdf8; border: 1px dashed #e8c878; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.atp-loc-new-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.atp-loc-badge.saved { background: #ecfdf3; color: #027a48; border: 1px solid #abefc6; }
 .atp-loc-new-hdr { font-size: 0.78rem; font-weight: 700; color: #c8922a; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .03em; }
+.atp-req-card-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+.atp-req-card { background: #fafafa; border: 1px solid #e4e7ec; border-radius: 10px; padding: 12px 14px; }
+.atp-req-card-title { font-size: 0.78rem; font-weight: 700; color: #344054; margin-bottom: 8px; }
+.atp-radio-line { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: #344054; margin: 6px 0; cursor: pointer; }
+.atp-radio-line input { accent-color: #c8922a; margin: 0; }
+.atp-sofor-other { margin-top: 8px; }
+.atp-req-product-row { display: grid; grid-template-columns: 1.4fr 0.6fr 0.8fr; gap: 10px; margin-bottom: 12px; align-items: end; }
+.atp-field-qty { max-width: 120px; }
+.atp-field-unit { min-width: 110px; }
+.atp-field-ek-not { margin-bottom: 4px; }
+.atp-lbl-opt { font-weight: 400; color: #667085; font-size: 0.75rem; }
+.atp-badge.atp-pri-acil { background: #fef3f2; color: #b42318; border: 1px solid #fecdca; }
+@media (max-width: 720px) {
+  .atp-req-card-row { grid-template-columns: 1fr; }
+  .atp-req-product-row { grid-template-columns: 1fr; }
+  .atp-field-qty, .atp-field-unit { max-width: none; }
+}
 .atp-check-row { display: flex; align-items: flex-start; gap: 8px; font-size: 0.8rem; color: #344054; margin: 8px 0 4px; cursor: pointer; }
 .atp-check-row input { margin-top: 3px; accent-color: #c8922a; }
 .atp-pool-wrap { border-bottom: 1px solid #e4e7ec; margin-bottom: 0; }

@@ -11,13 +11,11 @@
   var locCard = document.getElementById('atpLocCard');
   var newPanel = document.getElementById('atpLocNewPanel');
   var masterIdEl = document.getElementById('atpLocMasterId');
-  var latEl = document.getElementById('atpLocLat');
-  var lngEl = document.getElementById('atpLocLng');
-  var saveChk = document.getElementById('atpSaveToMaster');
+  var newLocErr = document.getElementById('atpNewLocErr');
   var searchTimer = null;
   var userSearchTimer = null;
   var selectedLoc = null;
-  var editMode = false;
+  var newLocSaved = false;
   var reqMode = 'own';
   var suggestionsCache = { recent: [], frequent: [] };
   var currentUser = { id: 0, display_name: '—' };
@@ -215,15 +213,6 @@
       if (timePickerOpen) closeTimeDropdown();
       else openTimeDropdown();
     });
-    timeTrigger.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        if (timePickerOpen) closeTimeDropdown();
-        else openTimeDropdown();
-      } else if (e.key === 'Escape') {
-        closeTimeDropdown();
-      }
-    });
   }
 
   if (timeCustomBtn) {
@@ -250,22 +239,6 @@
     });
   }
 
-  if (timeCustomInput) {
-    timeCustomInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        timeCustomApply.click();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        closeTimeDropdown();
-      }
-    });
-  }
-
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && timePickerOpen) closeTimeDropdown();
-  });
-
   document.addEventListener('click', function (e) {
     if (!e.target.closest('.atp-time-picker')) closeTimeDropdown();
   });
@@ -274,18 +247,9 @@
     return new Date().toISOString().slice(0, 10);
   }
 
-  function maskPhone(raw) {
-    var d = (raw || '').replace(/\D/g, '');
-    if (d.length === 11 && d[0] === '0') {
-      return d.slice(0, 4) + ' ' + d.slice(4, 7) + ' ' + d.slice(7, 9) + ' ' + d.slice(9);
-    }
-    return raw || '';
-  }
-
   function locBadge(hasLoc) {
-    return hasLoc
-      ? '<span class="atp-loc-badge">Konum mevcut</span>'
-      : '<span class="atp-loc-badge no">Konum yok</span>';
+    if (hasLoc) return '<span class="atp-loc-badge saved">Kayıtlı Konum</span>';
+    return '<span class="atp-loc-badge no">Konum yok</span>';
   }
 
   function showDropdown(html) {
@@ -295,26 +259,10 @@
       btn.addEventListener('click', function (ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        var id = btn.getAttribute('data-loc-id');
-        if (id === '__new__') {
-          openNewLocationPanel(searchInput.value.trim());
-          hideDropdown();
-          return;
-        }
         var payload = btn.getAttribute('data-loc-json');
         if (payload) {
           try { selectLocation(JSON.parse(decodeURIComponent(payload))); return; } catch (e) { /* fallthrough */ }
         }
-        fetch('/planlama/arac-takip/api/locations/search?q=' + encodeURIComponent(searchInput.value || ''), { credentials: 'same-origin' })
-          .then(function (r) { return r.json(); })
-          .then(function (j) {
-            var found = (j.results || []).find(function (x) { return x.id === id; });
-            if (!found) {
-              var all = suggestionsCache.recent.concat(suggestionsCache.frequent);
-              found = all.find(function (x) { return x.id === id; });
-            }
-            if (found) selectLocation(found);
-          });
       });
     });
   }
@@ -324,9 +272,9 @@
     var html = '<div class="atp-loc-dd-section">' + sectionLabel + '</div>';
     items.forEach(function (loc) {
       var enc = encodeURIComponent(JSON.stringify(loc));
-      html += '<button type="button" class="atp-loc-dd-item" data-loc-id="' + loc.id + '" data-loc-json="' + enc + '">' +
+      html += '<button type="button" class="atp-loc-dd-item" data-loc-json="' + enc + '">' +
         '<strong>' + (loc.firma || '—') + '</strong>' +
-        '<small>' + (loc.kisi || '—') + ' · ' + (loc.short_adres || loc.adres || '—') + ' ' + locBadge(loc.has_location) + '</small>' +
+        '<small>' + (loc.short_adres || loc.adres || '—') + ' ' + locBadge(loc.has_location) + '</small>' +
         '</button>';
     });
     return html;
@@ -359,15 +307,11 @@
           var html = renderDropdownItems(suggestionsCache.recent, 'Son Kullanılanlar');
           html += renderDropdownItems(suggestionsCache.frequent, 'Sık Gidilenler');
           html += renderDropdownItems(j.results || [], 'Kayıtlı Yerler');
-          html += '<button type="button" class="atp-loc-dd-item atp-loc-dd-new" data-loc-id="__new__">+ Yeni Firma / Konum</button>';
           showDropdown(html);
         });
       return;
     }
-    var html = renderDropdownItems(suggestionsCache.recent, 'Son Kullanılanlar');
-    html += renderDropdownItems(suggestionsCache.frequent, 'Sık Gidilenler');
-    html += '<button type="button" class="atp-loc-dd-item atp-loc-dd-new" data-loc-id="__new__">+ Yeni Firma / Konum</button>';
-    showDropdown(html);
+    runSearch(q);
   }
 
   function runSearch(q) {
@@ -375,39 +319,14 @@
       .then(function (r) { return r.json(); })
       .then(function (j) {
         var html = renderDropdownItems(j.results || [], 'Arama Sonuçları');
-        html += '<button type="button" class="atp-loc-dd-item atp-loc-dd-new" data-loc-id="__new__">+ Yeni Firma / Konum</button>';
         showDropdown(html);
       });
   }
 
-  function fillNewPanel(loc) {
-    document.getElementById('atpNewFirma').value = loc.firma || '';
-    document.getElementById('atpNewKisi').value = loc.kisi || '';
-    document.getElementById('atpNewTelefon').value = loc.telefon || '';
-    document.getElementById('atpNewAdres').value = loc.adres || '';
-    document.getElementById('atpNewMaps').value = loc.maps_url || '';
-  }
-
-  function readNewPanel() {
-    return {
-      firma: document.getElementById('atpNewFirma').value.trim(),
-      kisi: document.getElementById('atpNewKisi').value.trim(),
-      telefon: document.getElementById('atpNewTelefon').value.trim(),
-      adres: document.getElementById('atpNewAdres').value.trim(),
-      maps_url: document.getElementById('atpNewMaps').value.trim(),
-      latitude: latEl.value || null,
-      longitude: lngEl.value || null,
-    };
-  }
-
   function renderLocCard(loc) {
     document.getElementById('atpLocCardFirma').textContent = loc.firma || '—';
-    var kt = [];
-    if (loc.kisi) kt.push(loc.kisi);
-    if (loc.telefon) kt.push(maskPhone(loc.telefon));
-    document.getElementById('atpLocCardKisiTel').textContent = kt.join(' · ') || '—';
     document.getElementById('atpLocCardAdres').textContent = loc.adres || '—';
-    var hasLoc = loc.latitude != null && loc.longitude != null;
+    var hasLoc = loc.has_location || (loc.latitude != null && loc.longitude != null);
     document.getElementById('atpLocCardKonum').textContent = hasLoc ? '📍 Kayıtlı Konum' : '📍 Konum linki yok';
     var openBtn = document.getElementById('atpBtnOpenMap');
     openBtn.disabled = !(loc.maps_url || hasLoc);
@@ -418,46 +337,66 @@
     locCard.hidden = false;
     locCard.removeAttribute('hidden');
     newPanel.hidden = true;
-    editMode = false;
+    newLocSaved = true;
   }
 
   function selectLocation(loc) {
     selectedLoc = loc;
+    newLocSaved = !!(loc && loc.has_location);
     masterIdEl.value = loc.id || '';
-    latEl.value = loc.latitude != null ? String(loc.latitude) : '';
-    lngEl.value = loc.longitude != null ? String(loc.longitude) : '';
     searchInput.value = loc.firma || '';
-    fillNewPanel(loc);
     renderLocCard(loc);
     hideDropdown();
   }
 
   function openNewLocationPanel(prefill) {
     selectedLoc = null;
+    newLocSaved = false;
     masterIdEl.value = '';
-    latEl.value = '';
-    lngEl.value = '';
     locCard.hidden = true;
     newPanel.hidden = false;
-    editMode = true;
-    if (prefill) {
-      document.getElementById('atpNewFirma').value = prefill;
-    }
-    if (saveChk) saveChk.checked = true;
+    if (newLocErr) newLocErr.textContent = '';
+    if (prefill) document.getElementById('atpNewFirma').value = prefill;
   }
 
   function resetLocationState() {
     selectedLoc = null;
-    editMode = false;
+    newLocSaved = false;
     searchInput.value = '';
     masterIdEl.value = '';
-    latEl.value = '';
-    lngEl.value = '';
     locCard.hidden = true;
     newPanel.hidden = true;
     hideDropdown();
-    fillNewPanel({});
-    if (saveChk) saveChk.checked = true;
+    document.getElementById('atpNewFirma').value = '';
+    document.getElementById('atpNewAdres').value = '';
+    document.getElementById('atpNewMaps').value = '';
+    if (newLocErr) newLocErr.textContent = '';
+  }
+
+  function saveNewLocation(cb) {
+    var firma = document.getElementById('atpNewFirma').value.trim();
+    var adres = document.getElementById('atpNewAdres').value.trim();
+    var maps = document.getElementById('atpNewMaps').value.trim();
+    if (!firma) { if (newLocErr) newLocErr.textContent = 'Firma gerekli.'; return; }
+    if (!adres) { if (newLocErr) newLocErr.textContent = 'Adres gerekli.'; return; }
+    if (!maps) { if (newLocErr) newLocErr.textContent = 'Google Maps bağlantısı gerekli.'; return; }
+    if (newLocErr) newLocErr.textContent = '';
+    fetch('/planlama/arac-takip/api/locations/from-maps', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ firma: firma, adres: adres, maps_url: maps }),
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok || !j.location) {
+        if (newLocErr) newLocErr.textContent = j.error || 'Konum kaydedilemedi';
+        return;
+      }
+      selectLocation(j.location);
+      toast('Konum kaydedildi');
+      if (cb) cb(j.location);
+    }).catch(function () {
+      if (newLocErr) newLocErr.textContent = 'Konum kaydedilemedi';
+    });
   }
 
   function openModal() {
@@ -474,6 +413,19 @@
     setTimeout(function () { searchInput.focus(); }, 120);
   }
 
+  function resetUxV2Fields() {
+    var oktay = form.querySelector('input[name="sofor_secim"][value="OKTAY"]');
+    if (oktay) oktay.checked = true;
+    form.querySelectorAll('input[name="is_turu"]').forEach(function (el) { el.checked = false; });
+    ['atpReqUrun', 'atpReqMiktar', 'atpReqEkNot'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    var birim = document.getElementById('atpReqBirim');
+    if (birim) birim.value = '';
+    syncSoforOther();
+  }
+
   function closeModal() {
     modal.classList.remove('open');
     backdrop.classList.remove('open');
@@ -484,6 +436,7 @@
     setRequesterOwn();
     resetTimePicker();
     resetLocationState();
+    resetUxV2Fields();
   }
 
   document.getElementById('atpBtnNewRequest').addEventListener('click', openModal);
@@ -493,12 +446,31 @@
     if (e.target === backdrop) closeModal();
   });
 
-  document.getElementById('atpBtnEditLoc').addEventListener('click', function () {
-    if (!selectedLoc) return;
-    newPanel.hidden = false;
-    editMode = true;
-    fillNewPanel(selectedLoc);
-  });
+  var newLocToggle = document.getElementById('atpBtnNewLocToggle');
+  if (newLocToggle) {
+    newLocToggle.addEventListener('click', function () {
+      openNewLocationPanel(searchInput.value.trim());
+    });
+  }
+
+  var mapsSearchBtn = document.getElementById('atpBtnMapsSearch');
+  if (mapsSearchBtn) {
+    mapsSearchBtn.addEventListener('click', function () {
+      var firma = document.getElementById('atpNewFirma').value.trim();
+      var adres = document.getElementById('atpNewAdres').value.trim();
+      var q = [firma, adres].filter(Boolean).join(' ');
+      if (!q) {
+        toast('Önce firma ve adres girin');
+        return;
+      }
+      window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q), '_blank');
+    });
+  }
+
+  var saveNewLocBtn = document.getElementById('atpBtnSaveNewLoc');
+  if (saveNewLocBtn) {
+    saveNewLocBtn.addEventListener('click', function () { saveNewLocation(); });
+  }
 
   searchInput.addEventListener('focus', function () {
     loadSuggestions().then(function () {
@@ -520,54 +492,110 @@
     if (!e.target.closest('.atp-loc-search-wrap')) hideDropdown();
   });
 
+  var soforOtherWrap = document.getElementById('atpSoforOtherWrap');
+  var soforOtherName = document.getElementById('atpSoforOtherName');
+
+  function syncSoforOther() {
+    var diger = form.querySelector('input[name="sofor_secim"][value="DIGER"]');
+    var show = diger && diger.checked;
+    if (soforOtherWrap) soforOtherWrap.hidden = !show;
+    if (!show && soforOtherName) soforOtherName.value = '';
+  }
+
+  form.querySelectorAll('input[name="sofor_secim"]').forEach(function (el) {
+    el.addEventListener('change', syncSoforOther);
+  });
+  syncSoforOther();
+
+  function readSoforSecim() {
+    var checked = form.querySelector('input[name="sofor_secim"]:checked');
+    return checked ? checked.value : 'OKTAY';
+  }
+
+  function readIsTuru() {
+    var checked = form.querySelector('input[name="is_turu"]:checked');
+    return checked ? checked.value : null;
+  }
+
+  function appendUxV2Fields(payload) {
+    payload.sofor_secim = readSoforSecim();
+    if (payload.sofor_secim === 'DIGER') {
+      payload.sofor_adi = soforOtherName ? soforOtherName.value.trim() : '';
+    }
+    var isTuru = readIsTuru();
+    if (isTuru) payload.is_turu = isTuru;
+    var urunEl = document.getElementById('atpReqUrun');
+    var miktarEl = document.getElementById('atpReqMiktar');
+    var birimEl = document.getElementById('atpReqBirim');
+    if (urunEl && urunEl.value.trim()) payload.urun_malzeme = urunEl.value.trim();
+    if (miktarEl && miktarEl.value.trim()) payload.miktar = miktarEl.value.trim();
+    if (birimEl && birimEl.value) payload.miktar_birim = birimEl.value;
+    var ekEl = document.getElementById('atpReqEkNot');
+    if (ekEl && ekEl.value.trim()) payload.ek_not = ekEl.value.trim();
+    return payload;
+  }
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    var locData = selectedLoc && !editMode ? selectedLoc : readNewPanel();
-    if (!locData.firma) {
-      toast('Firma / kayıtlı yer seçin veya yeni konum girin');
-      if (newPanel.hidden) openNewLocationPanel(searchInput.value.trim());
-      return;
-    }
-    if (editMode && !locData.adres) {
-      toast('Adres zorunludur');
-      return;
-    }
     if (reqMode === 'other' && !(talepEdenUserIdEl && talepEdenUserIdEl.value)) {
       toast('Lütfen kullanıcı seçin');
       return;
     }
-    var payload = {
-      tarih: document.getElementById('atpReqTarih').value,
-      istenen_saat: timeHidden ? (timeHidden.value || '') : '',
-      is: document.getElementById('atpReqIs').value.trim(),
-      oncelik: document.getElementById('atpReqOncelik').value,
-      not: document.getElementById('atpReqNot').value.trim(),
-      talep_eden_user_id: talepEdenUserIdEl ? talepEdenUserIdEl.value : currentUser.id,
-      talep_eden_adi: talepEdenInput ? talepEdenInput.value.trim() : '',
-      location_master_id: masterIdEl.value || null,
-      save_to_master: editMode ? !!(saveChk && saveChk.checked) : false,
-      firma: locData.firma,
-      kisi: locData.kisi,
-      telefon: locData.telefon,
-      adres: locData.adres,
-      maps_url: locData.maps_url,
-      latitude: locData.latitude,
-      longitude: locData.longitude,
-    };
-    fetch('/planlama/arac-takip/api/request', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).then(function (r) { return r.json(); }).then(function (j) {
-      if (j.ok) {
-        toast('İş talebi oluşturuldu');
-        closeModal();
-        if (window.AtpPool) window.AtpPool.refresh();
-      } else {
-        toast('Kayıt hatası');
+    var isVal = document.getElementById('atpReqIs').value.trim();
+    if (!isVal) {
+      toast('Yapılacak iş gerekli');
+      return;
+    }
+    if (readSoforSecim() === 'DIGER' && !(soforOtherName && soforOtherName.value.trim())) {
+      toast('Şoför adını yazın');
+      return;
+    }
+
+    function submitPayload(loc) {
+      var payload = {
+        tarih: document.getElementById('atpReqTarih').value,
+        istenen_saat: timeHidden ? (timeHidden.value || '') : '',
+        is: isVal,
+        oncelik: document.getElementById('atpReqOncelik').value,
+        not: document.getElementById('atpReqNot').value.trim(),
+        talep_eden_user_id: talepEdenUserIdEl ? talepEdenUserIdEl.value : currentUser.id,
+        talep_eden_adi: talepEdenInput ? talepEdenInput.value.trim() : '',
+        location_master_id: masterIdEl.value || null,
+        firma: loc.firma,
+        adres: loc.adres,
+        kisi: loc.kisi || '',
+        telefon: loc.telefon || '',
+      };
+      appendUxV2Fields(payload);
+      if (!payload.location_master_id && loc.maps_url) {
+        payload.maps_url = loc.maps_url;
       }
-    }).catch(function () { toast('Kayıt hatası'); });
+      fetch('/planlama/arac-takip/api/request', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j.ok) {
+          toast('İş talebi oluşturuldu');
+          closeModal();
+          if (window.AtpPool) window.AtpPool.refresh();
+        } else {
+          toast(j.error || 'Kayıt hatası');
+        }
+      }).catch(function () { toast('Kayıt hatası'); });
+    }
+
+    if (selectedLoc && masterIdEl.value) {
+      submitPayload(selectedLoc);
+      return;
+    }
+    if (!newPanel.hidden) {
+      saveNewLocation(function (loc) { submitPayload(loc); });
+      return;
+    }
+    toast('Firma / kayıtlı yer seçin veya yeni konum kaydedin');
+    openNewLocationPanel(searchInput.value.trim());
   });
 
   window.AtpRequestModal = { open: openModal, close: closeModal };

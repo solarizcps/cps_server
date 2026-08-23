@@ -23,16 +23,27 @@ def get_tasks_for_session(
     return deepcopy(dto['daily_tasks'])
 
 
+def list_plans_for_date(plan_date: str) -> List[dict]:
+    from modules.planlama.arac_takip_repo import list_plans_for_date as _list_plans
+    return _list_plans(plan_date)
+
+
+def get_daily_plan_aggregate(plan_date: str) -> Dict[str, Any]:
+    from modules.planlama.arac_takip_repo import build_daily_plan_aggregate
+    return build_daily_plan_aggregate(plan_date)
+
+
 def reorder_tasks(
     user_id: int,
     plan_date: str,
     task_ids: List[str],
     vehicle_external_id: str | None = None,
 ) -> List[dict]:
-    if vehicle_external_id:
-        from modules.planlama.arac_takip_repo import list_plan_tasks, tables_ready
-        if tables_ready():
-            return list_plan_tasks(plan_date, vehicle_external_id)
+    from modules.planlama.arac_takip_repo import list_plan_tasks, reorder_plan_items_bulk, tables_ready
+    if tables_ready() and vehicle_external_id and task_ids:
+        return reorder_plan_items_bulk(user_id, plan_date, vehicle_external_id, task_ids)
+    if tables_ready() and vehicle_external_id:
+        return list_plan_tasks(plan_date, vehicle_external_id)
     return get_tasks_for_session(user_id, plan_date, vehicle_external_id)
 
 
