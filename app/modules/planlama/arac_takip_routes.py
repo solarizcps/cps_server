@@ -387,6 +387,7 @@ def arac_takip_api_route_apply():
         apply_route_order_and_snapshot,
         resolve_route_apply_mode,
     )
+    from modules.planlama.arac_route_constraints import RouteApplyConflictError
     from modules.planlama.arac_plan_service import reorder_tasks
 
     mode = resolve_route_apply_mode()
@@ -402,6 +403,8 @@ def arac_takip_api_route_apply():
             result = apply_route_order_and_snapshot(
                 uid, plan_date_str, str(vehicle_id or ''), task_ids, user_id=uid,
             )
+        except RouteApplyConflictError as exc:
+            return jsonify(exc.to_dict()), 409
         except RouteApplyValidationError as exc:
             return jsonify({'ok': False, 'error': str(exc)}), 400
         except RouteApplyRouteError as exc:

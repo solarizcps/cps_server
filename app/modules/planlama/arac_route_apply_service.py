@@ -19,6 +19,13 @@ from modules.planlama.arac_route_geometry import (
     latlng_pairs_to_geojson,
     route_content_hash,
 )
+from modules.planlama.arac_route_constraints import (
+    RouteApplyConflictError,
+    active_tasks_sorted,
+    classify_route_tasks,
+    load_visit_states_for_tasks,
+    validate_apply_task_ids,
+)
 from modules.planlama.arac_takip_repo import (
     PLAN_PROVIDER_FILOM,
     _reorder_plan_items_bulk_conn,
@@ -121,7 +128,8 @@ def prepare_route_snapshot_payload(
 
 
 def _reordered_tasks_preview(current_tasks: list[dict], task_ids: list[str]) -> list[dict]:
-    by_id = {t['id']: t for t in current_tasks}
+    active = active_tasks_sorted(current_tasks)
+    by_id = {t['id']: t for t in active}
     if set(task_ids) != set(by_id.keys()):
         raise RouteApplyValidationError('Görev listesi plan ile uyuşmuyor')
     out: list[dict] = []
@@ -166,6 +174,9 @@ def apply_route_order_and_snapshot(
     plan_id = int(plan['id'])
 
     current_tasks = list_plan_tasks(plan_date, arac_external_id)
+    visit_states = load_visit_states_for_tasks(current_tasks)
+    constraints = classify_route_tasks(current_tasks, visit_states)
+    validate_apply_task_ids(current_tasks, task_ids, constraints)
     reordered_tasks = _reordered_tasks_preview(current_tasks, task_ids)
 
     from modules.planlama.arac_operasyon_ayar_repo import get_active_base, operasyon_ayar_ready

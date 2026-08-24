@@ -180,7 +180,7 @@ def _build_alerts(
             alerts.append({
                 'type': 'ROUTE_DEVIATION',
                 'severity': 'warning',
-                'message': f"{v.get('arac_plaka_snapshot')} — {_route_status_label('DEVIATING', v.get('current_deviation_m'))}",
+                'message': f"{v.get('plate') or v.get('arac_plaka_snapshot')} — {_route_status_label('DEVIATING', v.get('current_deviation_m'))}",
                 'vehicle_id': vid,
                 'plan_id': v.get('plan_id'),
                 'action': 'inspect',
@@ -189,7 +189,7 @@ def _build_alerts(
             alerts.append({
                 'type': 'NO_ROUTE',
                 'severity': 'info',
-                'message': f"{v.get('arac_plaka_snapshot')} — rota referansı yok",
+                'message': f"{v.get('plate') or v.get('arac_plaka_snapshot')} — rota referansı yok",
                 'vehicle_id': vid,
                 'plan_id': v.get('plan_id'),
             })
@@ -198,7 +198,7 @@ def _build_alerts(
                 alerts.append({
                     'type': 'GPS_STALE',
                     'severity': 'warning',
-                    'message': f"{v.get('arac_plaka_snapshot')} — GPS verisi eski",
+                    'message': f"{v.get('plate') or v.get('arac_plaka_snapshot')} — GPS verisi eski",
                     'vehicle_id': vid,
                 })
 
@@ -289,19 +289,23 @@ def get_today_vehicle_operations(
 
     aggregate = build_daily_plan_aggregate(plan_date)
     filom_vehicles: list[dict] = []
+    filom_kpi: dict | None = None
     if filom_payload and filom_payload.get('ok'):
         filom_vehicles = filom_payload.get('vehicles') or []
+        filom_kpi = filom_payload.get('kpi')
     elif filom_payload is None:
         try:
             from modules.planlama.arac_operasyonu.services.turkcell_filom_adapter import get_live_vehicles
             live = get_live_vehicles()
             if live.get('ok'):
                 filom_vehicles = live.get('vehicles') or []
+                filom_kpi = live.get('kpi')
         except Exception:
             filom_vehicles = []
+            filom_kpi = None
 
     filom_by_id = {str(v.get('id')): v for v in filom_vehicles if v.get('id')}
-    active_filom = [v for v in filom_vehicles if v.get('status') != 'PASIF']
+    active_filom = [v for v in filom_vehicles if v.get('activity_status') != 'PASIF']
     moving = [v for v in active_filom if v.get('activity_status') in ('HAREKETLI', 'MOVING') or (v.get('speed_kmh') or 0) > 5]
 
     _gps_ready = gps_tables_ready()
@@ -338,7 +342,11 @@ def get_today_vehicle_operations(
                 deviation_started_at = dev.get('deviation_started_at')
 
         physical = '—'
-        if filom:
+        if gps_db and not stale:
+            # Prefer sqlite GPS activity_status (direct from DB, most up-to-date)
+            db_act = gps_db.get('activity_status') if isinstance(gps_db, dict) else None
+            physical = db_act or '—'
+        elif filom:
             physical = filom.get('activity_label') or filom.get('status_label') or filom.get('activity_status') or '—'
         elif gps_row and not stale:
             spd = (gps_row.get('speed_kmh') if isinstance(gps_row, dict) else None) or 0
@@ -397,6 +405,8 @@ def get_today_vehicle_operations(
         items_out.append({
             'id': item.get('id'),
             'plan_item_id': plan_is_id,
+            'is_talebi_id': item.get('is_talebi_id'),
+            'order_no': item.get('order_no'),
             'planned_time': item.get('planned_time'),
             'company_name': item.get('company_name'),
             'job_title': item.get('job_title'),
@@ -442,10 +452,10 @@ def get_today_vehicle_operations(
     problem_count = sum(1 for a in _build_alerts(plan_date, vehicles_out, items_out, filom_by_id) if a.get('severity') in ('warning', 'danger'))
 
     kpi = {
-        'aktif_arac': len(active_filom) if filom_vehicles else None,
-        'aktif_arac_source': 'filom' if filom_vehicles else None,
-        'hareket_halinde': len(moving) if filom_vehicles else None,
-        'hareket_source': 'filom' if filom_vehicles else None,
+        'aktif_arac': (filom_kpi or {}).get('aktif_arac') if filom_kpi else (len(active_filom) if filom_vehicles else None),
+        'aktif_arac_source': 'filom' if filom_kpi or filom_vehicles else None,
+        'hareket_halinde': (filom_kpi or {}).get('hareket_halinde') if filom_kpi else (len(moving) if filom_vehicles else None),
+        'hareket_source': 'filom' if filom_kpi or filom_vehicles else None,
         'toplam_is': aggregate.get('operational_total_count', 0),
         'toplam_is_source': 'canonical',
         'tamamlandi': aggregate.get('completed_count', 0),
