@@ -516,3 +516,162 @@ details[open] .atp-v2-prs-chevron { transform: rotate(180deg); }
 .atp-timeline-desc { font-size: 0.69rem; color: #6b7280; margin-top: 2px; line-height: 1.35; }
 .atp-v2-visit-arrived { color: #1a9e3f; font-weight: 600; }
 .atp-v2-visit-departed { color: #e07400; font-weight: 600; }
+
+/* ─── Canlı Takip V2 parity ─── */
+.atp-kpi-val-sm { font-size: 1rem !important; }
+.atp-tab-canli .atp-kpi-row { grid-template-columns: repeat(5, 1fr); }
+.atp-tab-canli .atp-kpi[data-kpi-plan-only] { display: none !important; }
+.atp-tab-gunluk .atp-kpi[data-kpi-live-only],
+.atp-tab-haftalik .atp-kpi[data-kpi-live-only],
+.atp-tab-gecmis .atp-kpi[data-kpi-live-only] { display: none !important; }
+
+.atp-mode-canli .atp-grid-main.atp-grid-canli {
+  grid-template-columns: 1fr 320px;
+  gap: 14px;
+  padding: 14px 24px;
+  align-items: stretch;
+}
+@media (max-width: 1366px) {
+  .atp-mode-canli .atp-grid-main.atp-grid-canli { grid-template-columns: 1fr 290px; }
+}
+@media (max-width: 1200px) {
+  .atp-mode-canli .atp-grid-main.atp-grid-canli { grid-template-columns: 1fr; padding: 14px 16px; }
+}
+
+.atp-mode-canli #atpMapCard { display: flex; flex-direction: column; min-height: 0; }
+.atp-mode-canli .atp-map-live {
+  flex: 1;
+  height: min(520px, calc(100vh - 280px));
+  min-height: 420px;
+  position: relative;
+}
+.atp-mode-canli #atpLeafletMap.leaflet-container,
+.atp-mode-canli #atpLeafletMap {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 420px;
+}
+
+.atp-live-map-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 450;
+  display: flex;
+  gap: 6px;
+}
+.atp-live-map-controls .atp-btn {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  font-size: 0.72rem;
+  padding: 6px 10px;
+}
+.atp-live-map-controls .atp-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.atp-live-map-controls .atp-btn.atp-btn-active {
+  background: #fffaeb;
+  border-color: #c8922a;
+  color: #b07d20;
+}
+
+.atp-live-refresh {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  z-index: 450;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #e4e7ec;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.72rem;
+  color: #667085;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+.atp-live-refresh-btn {
+  border: none;
+  background: none;
+  color: #c8922a;
+  font-weight: 700;
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 0;
+}
+.atp-live-refresh-btn:hover { text-decoration: underline; }
+
+.atp-mode-canli #atpMapHdrLive .atp-map-last-upd,
+.atp-mode-canli #atpMapHdrLive #atpBtnFitAll { display: none !important; }
+
+.atp-mode-canli .atp-live-activities-card { display: none !important; }
+.atp-mode-canli .atp-side-col { gap: 10px; min-width: 0; }
+.atp-mode-canli .atp-live-vehicles-card .atp-card-hdr { padding: 8px 12px; font-size: 0.72rem; }
+.atp-mode-canli .atp-live-cal-card .atp-card-hdr { padding: 8px 12px; font-size: 0.72rem; }
+
+.atp-live-vehicle-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  max-height: min(360px, calc(100vh - 420px));
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.atp-lvcard {
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.atp-lvcard:hover { border-color: #c8922a; }
+.atp-lvcard.atp-lvcard-selected {
+  border-color: #c8922a;
+  box-shadow: 0 0 0 1px rgba(200, 146, 42, 0.35);
+}
+.atp-lvcard.atp-lvcard-warn { border-left: 3px solid #e07400; }
+.atp-lvcard.atp-lvcard-stale { opacity: 0.72; }
+.atp-lvcard-plate { font-size: 13.5px; font-weight: 800; color: #111827; }
+.atp-lvcard-driver { font-size: 11px; color: #667085; margin-top: 2px; }
+.atp-lvcard-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+.atp-lvcard-speed { font-size: 11px; color: #667085; }
+.atp-lvcard-note { font-size: 10.5px; color: #e07400; margin-top: 3px; line-height: 1.35; }
+.atp-lvcard-note-muted { color: #98a2b3; }
+
+.atp-lv-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.atp-lv-badge-ok { background: #ecfdf3; color: #027a48; }
+.atp-lv-badge-warn { background: #fffaeb; color: #b54708; }
+.atp-lv-badge-neutral { background: #f2f4f7; color: #667085; }
+.atp-lv-badge-stale { background: #f2f4f7; color: #98a2b3; }
+
+.atp-cal-live .atp-cal-grid { padding: 8px 10px 10px; gap: 3px; }
+.atp-cal-live .atp-cal-grid span.today {
+  background: #fffaeb;
+  color: #c8922a;
+  font-weight: 700;
+  border-radius: 4px;
+}
+.atp-cal-live .atp-cal-grid span.sel {
+  background: #c8922a;
+  color: #fff;
+  border-radius: 4px;
+}
+
+.atp-live-loading, .atp-live-empty, .atp-live-error {
+  padding: 12px;
+  font-size: 0.78rem;
+}

@@ -4,7 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=20">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=21">
 {% endblock %}
 
 {% block content %}
@@ -36,19 +36,31 @@
       <div class="atp-kpi-icon">🔄</div>
       <div class="atp-kpi-body"><div class="atp-kpi-lbl">Hareket Halinde <small class="atp-kpi-src">Filom</small></div><div class="atp-kpi-val" id="atpKpiHareket">—</div></div>
     </div>
-    <div class="atp-kpi" data-kpi-plan="1">
+    <div class="atp-kpi atp-kpi-live-only" data-kpi-live-only="1">
+      <div class="atp-kpi-icon">⚠️</div>
+      <div class="atp-kpi-body"><div class="atp-kpi-lbl">Sapma</div><div class="atp-kpi-val" id="atpKpiSapma">—</div></div>
+    </div>
+    <div class="atp-kpi atp-kpi-live-only" data-kpi-live-only="1">
+      <div class="atp-kpi-icon">📡</div>
+      <div class="atp-kpi-body"><div class="atp-kpi-lbl">Son Güncelleme</div><div class="atp-kpi-val atp-kpi-val-sm" id="atpKpiSonGuncelleme">—</div></div>
+    </div>
+    <div class="atp-kpi atp-kpi-live-only" data-kpi-live-only="1">
+      <div class="atp-kpi-icon">📶</div>
+      <div class="atp-kpi-body"><div class="atp-kpi-lbl">GPS Sağlık</div><div class="atp-kpi-val atp-kpi-val-sm" id="atpKpiGpsSaglik">—</div></div>
+    </div>
+    <div class="atp-kpi" data-kpi-plan="1" data-kpi-plan-only="1">
       <div class="atp-kpi-icon">📋</div>
       <div class="atp-kpi-body"><div class="atp-kpi-lbl">Toplam İş</div><div class="atp-kpi-val" id="atpKpiIs">—</div></div>
     </div>
-    <div class="atp-kpi" data-kpi-plan="1">
+    <div class="atp-kpi" data-kpi-plan="1" data-kpi-plan-only="1">
       <div class="atp-kpi-icon">✅</div>
       <div class="atp-kpi-body"><div class="atp-kpi-lbl">Tamamlandı</div><div class="atp-kpi-val" id="atpKpiTamam">—</div></div>
     </div>
-    <div class="atp-kpi" data-kpi-plan="1">
+    <div class="atp-kpi" data-kpi-plan="1" data-kpi-plan-only="1">
       <div class="atp-kpi-icon">⏳</div>
       <div class="atp-kpi-body"><div class="atp-kpi-lbl">Devam Ediyor</div><div class="atp-kpi-val" id="atpKpiDevam">—</div></div>
     </div>
-    <div class="atp-kpi" data-kpi-plan="1">
+    <div class="atp-kpi" data-kpi-plan="1" data-kpi-plan-only="1">
       <div class="atp-kpi-icon">⚠️</div>
       <div class="atp-kpi-body"><div class="atp-kpi-lbl">Sorunlu</div><div class="atp-kpi-val" id="atpKpiSorun">—</div></div>
     </div>
@@ -232,6 +244,14 @@
           <div id="atpMapWarn" class="atp-map-warn" style="display:none"></div>
           <div id="atpLeafletMap"></div>
           <div id="atpMapEmpty" class="atp-map-empty" style="display:none">Canlı konum bulunamadı.</div>
+          <div class="atp-live-map-controls" aria-label="Harita kontrolleri">
+            <button type="button" class="atp-btn atp-btn-sm" id="atpBtnFitAllMap">Tüm Araçlar</button>
+            <button type="button" class="atp-btn atp-btn-sm" id="atpBtnShowRoutes" disabled title="Rota geometrisi yok">Rotaları Göster</button>
+          </div>
+          <div class="atp-live-refresh" id="atpLiveRefreshBar">
+            <span id="atpLiveRefreshText">Son güncelleme: —</span>
+            <button type="button" class="atp-live-refresh-btn" id="atpLiveRefreshBtn">Yenile</button>
+          </div>
         </div>
         <div class="atp-map-box atp-map-plan" id="atp-plan-map-container"{% if active_tab != 'gunluk' %} style="display:none"{% endif %}>
           <div class="atp-plan-map-inner" id="atpPlanMapInner">
@@ -248,17 +268,17 @@
 
       <div class="atp-side-col" id="atpSideCol">
         <div id="atpSideLive"{% if active_tab != 'canli' %} class="atp-side-hidden"{% endif %}>
-          <div class="atp-card atp-side-card">
+          <div class="atp-card atp-side-card atp-live-vehicles-card">
             <div class="atp-card-hdr">CANLI ARAÇLAR</div>
-            <ul class="atp-side-list atp-live-list" id="atpVehicleList">
-              <li class="atp-live-loading">Canlı araç verisi yükleniyor…</li>
-            </ul>
+            <div class="atp-live-vehicle-cards" id="atpVehicleList">
+              <div class="atp-live-loading">Canlı araç verisi yükleniyor…</div>
+            </div>
           </div>
-          <div class="atp-card atp-side-card">
+          <div class="atp-card atp-side-card atp-live-cal-card">
             <div class="atp-card-hdr">TAKVİM</div>
-            <div class="atp-cal" id="atpCalendarLive"></div>
+            <div class="atp-cal atp-cal-live" id="atpCalendarLive"></div>
           </div>
-          <div class="atp-card atp-side-card">
+          <div class="atp-card atp-side-card atp-live-activities-card">
             <div class="atp-card-hdr">SON AKTİVİTELER</div>
             {% for a in dashboard.activities %}
             <div class="atp-act"><time>{{ a.created_at }}</time>{{ a.message }}</div>
@@ -673,7 +693,7 @@
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=8"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=5"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=3"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=20"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=22"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_request.js') }}?v=6"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_pool.js') }}?v=2"></script>
 {% endblock %}

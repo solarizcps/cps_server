@@ -16,7 +16,241 @@
   var pollTimer = null;
   var currentTab = 'gunluk';
   var lastVehicles = [];
+  var liveMergedVehicles = [];
   var liveFetchState = 'idle';
+  var liveOpsCache = null;
+  var liveRouteGeometries = [];
+  var liveRouteLayerGroup = null;
+  var liveRoutesVisible = false;
+  var liveLastPollAt = null;
+  var liveSelectedVehicleId = null;
+  var lastLiveFilomKpi = null;
+  var lastLiveFilomCount = null;
+
+  function normalizeExternalId(id) {
+    if (id === null || id === undefined) return '';
+    return String(id).trim();
+  }
+
+  function buildOpsByExternalId(opsBundle) {
+    var map = {};
+    if (!opsBundle || !opsBundle.vehicles) return map;
+    opsBundle.vehicles.forEach(function (o) {
+      var key = normalizeExternalId(o.arac_external_id);
+      if (key) map[key] = o;
+    });
+    return map;
+  }
+
+  function filomExternalId(filomV) {
+    return normalizeExternalId(filomV.id || filomV.mobile_id || filomV.external_id);
+  }
+
+  function fmtVal(v) {
+    return v === null || v === undefined || v === '' ? '—' : String(v);
+  }
+
+  function fmtTimeStamp(date) {
+    if (!date || isNaN(date.getTime())) return '—';
+    var h = String(date.getHours()).padStart(2, '0');
+    var m = String(date.getMinutes()).padStart(2, '0');
+    var s = String(date.getSeconds()).padStart(2, '0');
+    return h + ':' + m + ':' + s;
+  }
+
+  function fmtGpsAgeShort(ts) {
+    if (!ts) return 'GPS: —';
+    var d = new Date(String(ts).replace(' ', 'T'));
+    if (isNaN(d.getTime())) return fmtVal(ts);
+    var mins = Math.round((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return 'az önce';
+    if (mins < 120) return mins + ' dk önce';
+    return String(ts);
+  }
+
+  function fmtLiveDeviationNote(v) {
+    if (v.deviation_label) return v.deviation_label;
+    if (v.route_state !== 'DEVIATING') return '';
+    var m = v.deviation_m != null ? v.deviation_m : v.current_deviation_m;
+    if (m == null) return 'Rotadan sapıyor';
+    var km = (Number(m) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+    var dur = '';
+    if (v.deviation_started_at) {
+      var dd = new Date(String(v.deviation_started_at).replace(' ', 'T'));
+      if (!isNaN(dd.getTime())) {
+        var dm = Math.max(0, Math.round((Date.now() - dd.getTime()) / 60000));
+        if (dm) dur = ' · ' + dm + ' dk';
+      }
+    }
+    return km + ' km' + dur;
+  }
+
+  function findOpsVehicle(filomV, opsBundle, opsIndex) {
+    var bundle = opsBundle || liveOpsCache;
+    if (!bundle || !bundle.vehicles) return null;
+    var fid = filomExternalId(filomV);
+    if (!fid) return null;
+    if (opsIndex && opsIndex[fid]) return opsIndex[fid];
+    for (var i = 0; i < bundle.vehicles.length; i++) {
+      var o = bundle.vehicles[i];
+      if (normalizeExternalId(o.arac_external_id) === fid) return o;
+    }
+    return null;
+  }
+
+  function mergeLiveVehicle(v, opsBundle, opsIndex) {
+    var ops = findOpsVehicle(v, opsBundle, opsIndex);
+    var merged = Object.assign({}, v);
+    if (ops) {
+      merged.route_state = ops.route_state;
+      merged.route_status_label = ops.route_status_label;
+      merged.deviation_m = ops.deviation_m != null ? ops.deviation_m : ops.current_deviation_m;
+      merged.deviation_started_at = ops.deviation_started_at;
+      merged.deviation_label = ops.deviation_label;
+      merged.gps_last_seen_at = ops.gps_last_seen_at || ops.gps_timestamp || v.last_seen_at;
+      merged.gps_is_stale = !!(v.is_stale_data || ops.gps_is_stale || ops.gps_stale);
+      if (ops.driver) merged.driver_name = ops.driver;
+    } else {
+      merged.gps_is_stale = !!v.is_stale_data;
+      merged.gps_last_seen_at = v.last_seen_at;
+    }
+    return merged;
+  }
+
+  function mergeAllLiveVehicles(filomVehicles, opsBundle) {
+    var bundle = opsBundle && opsBundle.ok ? opsBundle : liveOpsCache;
+    var opsIndex = buildOpsByExternalId(bundle);
+    return (filomVehicles || []).map(function (v) {
+      return mergeLiveVehicle(v, bundle, opsIndex);
+    });
+  }
+
+  function syncLivePollTimestamp(date) {
+    if (!date) return;
+    liveLastPollAt = date instanceof Date ? date : new Date(date);
+    setLiveRefreshBar(liveLastPollAt);
+    if (currentTab !== 'canli') return;
+    var elSon = document.getElementById('atpKpiSonGuncelleme');
+    if (elSon) elSon.textContent = fmtTimeStamp(liveLastPollAt);
+  }
+
+  function countSapma(vehicles) {
+    if (!vehicles || !vehicles.length) return null;
+    return vehicles.filter(function (v) { return v.route_state === 'DEVIATING'; }).length;
+  }
+
+  function computeGpsHealth(vehicles, fallbackCount) {
+    var list = vehicles || [];
+    var total = list.length || (fallbackCount != null ? fallbackCount : 0);
+    if (!total) return null;
+    var fresh = list.filter(function (v) { return !(v.gps_is_stale || v.is_stale_data); }).length;
+    return { fresh: fresh, total: total };
+  }
+
+  function mapMarkerStatus(v) {
+    if (v.gps_is_stale || v.is_stale_data) return 'PASIF';
+    if (v.route_state === 'DEVIATING') return 'ROLANTI';
+    if (v.activity_status === 'HAREKETLI') return 'HAREKETLI';
+    if (v.activity_status === 'DURAN' || v.activity_status === 'ROLANTI') return 'PASIF';
+    return v.activity_status || 'BILINMIYOR';
+  }
+
+  function vehiclesForMap(vehicles) {
+    return (vehicles || []).map(function (v) {
+      var copy = Object.assign({}, v);
+      copy.activity_status = mapMarkerStatus(v);
+      return copy;
+    });
+  }
+
+  function extractRouteGeometries(ops) {
+    if (!ops || !ops.map) return [];
+    var out = [];
+    ['tracks', 'routes'].forEach(function (key) {
+      (ops.map[key] || []).forEach(function (item) {
+        if (item.geometry && item.geometry.length >= 2) out.push(item.geometry);
+        else if (item.points && item.points.length >= 2) out.push(item.points);
+      });
+    });
+    return out;
+  }
+
+  function resolveLiveLeafletMap() {
+    var el = document.getElementById('atpLeafletMap');
+    if (!el || typeof L === 'undefined' || el._leaflet_id == null) return null;
+    if (typeof L.Map.get === 'function') return L.Map.get(el);
+    var key;
+    for (key in el) {
+      if (Object.prototype.hasOwnProperty.call(el, key) && el[key] instanceof L.Map) return el[key];
+    }
+    return null;
+  }
+
+  function updateRouteButtonState() {
+    var btn = document.getElementById('atpBtnShowRoutes');
+    if (!btn) return;
+    var hasRoutes = liveRouteGeometries.length > 0;
+    btn.disabled = !hasRoutes;
+    btn.title = hasRoutes ? 'GPS iz / plan rotasını göster' : 'Rota geometrisi yok';
+    btn.classList.toggle('atp-btn-active', liveRoutesVisible && hasRoutes);
+  }
+
+  function clearLiveRouteLayer() {
+    var map = resolveLiveLeafletMap();
+    if (liveRouteLayerGroup && map) {
+      map.removeLayer(liveRouteLayerGroup);
+    }
+    liveRouteLayerGroup = null;
+    liveRoutesVisible = false;
+    updateRouteButtonState();
+  }
+
+  function drawLiveRouteLayer() {
+    var map = resolveLiveLeafletMap();
+    if (!map || !liveRouteGeometries.length) return false;
+    clearLiveRouteLayer();
+    liveRouteLayerGroup = L.layerGroup();
+    liveRouteGeometries.forEach(function (pts) {
+      if (!pts || pts.length < 2) return;
+      L.polyline(pts, {
+        color: '#1976d2',
+        weight: 3,
+        opacity: 0.85,
+        dashArray: '8, 6'
+      }).addTo(liveRouteLayerGroup);
+    });
+    liveRouteLayerGroup.addTo(map);
+    liveRoutesVisible = true;
+    updateRouteButtonState();
+    return true;
+  }
+
+  function toggleLiveRoutes() {
+    if (!liveRouteGeometries.length) return;
+    if (liveRoutesVisible) {
+      clearLiveRouteLayer();
+      return;
+    }
+    if (window.AtpLiveMap) window.AtpLiveMap.onLiveTabShown();
+    if (!drawLiveRouteLayer()) toast('Rota katmanı haritaya eklenemedi');
+  }
+
+  function setLiveRefreshBar(date) {
+    var el = document.getElementById('atpLiveRefreshText');
+    if (!el) return;
+    if (!date) {
+      el.textContent = 'Son güncelleme: —';
+      return;
+    }
+    el.textContent = 'Son güncelleme: ' + fmtTimeStamp(date);
+  }
+
+  function syncLiveSelectionHighlight() {
+    document.querySelectorAll('#atpVehicleList [data-vehicle-id]').forEach(function (node) {
+      node.classList.toggle('atp-lvcard-selected', liveSelectedVehicleId != null &&
+        node.getAttribute('data-vehicle-id') === String(liveSelectedVehicleId));
+    });
+  }
 
   function toast(msg) {
     var el = document.getElementById('atpToast');
@@ -139,10 +373,17 @@
       var list = document.getElementById('atpVehicleList');
       if (list && list.querySelector('.atp-live-loading')) loadLiveVehicles(false);
       else if (liveFetchState === 'error') loadLiveVehicles(false);
-      if (lastVehicles.length) renderLiveVehicles(lastVehicles);
+      if (liveMergedVehicles.length) renderLiveVehicles(liveMergedVehicles);
+      else if (lastVehicles.length) renderLiveVehicles(mergeAllLiveVehicles(lastVehicles, liveOpsCache));
+      updateLiveKpi(lastLiveFilomKpi, lastLiveFilomCount, liveOpsCache);
+      syncLivePollTimestamp(liveLastPollAt);
       window.AtpLiveMap.onLiveTabShown();
       var vid = new URLSearchParams(window.location.search).get('vehicle_id');
-      if (vid) window.AtpLiveMap.focusVehicle(vid);
+      if (vid) {
+        liveSelectedVehicleId = vid;
+        syncLiveSelectionHighlight();
+        window.AtpLiveMap.focusVehicle(vid);
+      }
     }
     if (isGunluk) {
       if (window.AtpPlanMap) window.AtpPlanMap.onPlanTabShown();
@@ -173,6 +414,11 @@
     var url = new URL(window.location.href);
     url.searchParams.set('tab', tab);
     history.replaceState({}, '', url.pathname + url.search);
+    root.classList.toggle('atp-tab-canli', tab === 'canli');
+    root.classList.toggle('atp-tab-gunluk', tab === 'gunluk');
+    root.classList.toggle('atp-tab-haftalik', tab === 'haftalik');
+    root.classList.toggle('atp-tab-gecmis', tab === 'gecmis');
+    if (tab !== 'canli') clearLiveRouteLayer();
     updateTabLayout(tab);
   }
 
@@ -367,10 +613,20 @@
     return 'gray';
   }
 
+  function liveBadge(v) {
+    if (v.gps_is_stale || v.is_stale_data) return { cls: 'atp-lv-badge-stale', text: 'GPS Eski' };
+    if (v.route_state === 'DEVIATING') return { cls: 'atp-lv-badge-warn', text: '⚠ Sapma' };
+    if (v.route_state === 'ON_ROUTE' || v.activity_status === 'HAREKETLI') return { cls: 'atp-lv-badge-ok', text: '● Yolda' };
+    if (v.activity_status === 'DURAN') return { cls: 'atp-lv-badge-neutral', text: '⏸ Duran' };
+    return { cls: 'atp-lv-badge-neutral', text: fmtVal(v.activity_status_label) };
+  }
+
   function bindVehiclePanelClicks() {
-    document.querySelectorAll('#atpVehicleList li[data-vehicle-id]').forEach(function (li) {
-      li.onclick = function () {
-        var id = li.getAttribute('data-vehicle-id');
+    document.querySelectorAll('#atpVehicleList [data-vehicle-id]').forEach(function (node) {
+      node.onclick = function () {
+        var id = node.getAttribute('data-vehicle-id');
+        liveSelectedVehicleId = id;
+        syncLiveSelectionHighlight();
         if (currentTab !== 'canli') setTab('canli');
         if (window.AtpLiveMap) window.AtpLiveMap.focusVehicle(id);
       };
@@ -381,17 +637,33 @@
     var list = document.getElementById('atpVehicleList');
     if (!list) return;
     if (!vehicles || !vehicles.length) {
-      list.innerHTML = '<li class="atp-live-empty">Filom API\'de araç bulunamadı.</li>';
+      list.innerHTML = '<div class="atp-live-empty">Filom API\'de araç bulunamadı.</div>';
       return;
     }
     list.innerHTML = vehicles.map(function (v) {
-      var driver = v.driver_name || '—';
+      var badge = liveBadge(v);
+      var driver = v.driver_name || v.driver || '—';
       var plate = v.plate_display || v.plate || '—';
-      var stale = v.is_stale_data ? ' <span class="atp-stale-badge">Eski veri</span>' : '';
-      return '<li data-vehicle-id="' + v.id + '" class="atp-veh-row">' +
-        '<span class="atp-dot atp-dot-' + statusDotClass(v.activity_status) + '"></span><div>' +
-        '<strong>' + plate + '</strong>' + stale + ' · ' + driver + '<br>' +
-        '<small>' + (v.speed_kmh != null ? v.speed_kmh : 0) + ' km/s · ' + (v.activity_status_label || '—') + '</small></div></li>';
+      var speed = v.speed_kmh != null ? (v.speed_kmh + ' km/s') : '—';
+      var devNote = fmtLiveDeviationNote(v);
+      var gpsNote = (v.gps_is_stale || v.is_stale_data)
+        ? fmtGpsAgeShort(v.gps_last_seen_at || v.last_seen_at)
+        : '';
+      var cardCls = 'atp-lvcard';
+      if (v.route_state === 'DEVIATING') cardCls += ' atp-lvcard-warn';
+      if (v.gps_is_stale || v.is_stale_data) cardCls += ' atp-lvcard-stale';
+      if (liveSelectedVehicleId != null && String(v.id) === String(liveSelectedVehicleId)) {
+        cardCls += ' atp-lvcard-selected';
+      }
+      return '<div class="' + cardCls + '" data-vehicle-id="' + v.id + '">' +
+        '<div class="atp-lvcard-plate">' + plate + '</div>' +
+        '<div class="atp-lvcard-driver">' + driver + '</div>' +
+        '<div class="atp-lvcard-row">' +
+        '<span class="atp-lv-badge ' + badge.cls + '">' + badge.text + '</span>' +
+        '<span class="atp-lvcard-speed">' + speed + '</span></div>' +
+        (devNote ? '<div class="atp-lvcard-note">' + devNote + '</div>' : '') +
+        (gpsNote ? '<div class="atp-lvcard-note atp-lvcard-note-muted">' + gpsNote + '</div>' : '') +
+        '</div>';
     }).join('');
     bindVehiclePanelClicks();
   }
@@ -475,7 +747,7 @@
     });
   }
 
-  function updateLiveKpi(kpi, count) {
+  function updateLiveKpi(kpi, count, opsData) {
     var isV2 = root.getAttribute('data-mehmet-v2') === '1';
     var isLiveTab = currentTab === 'canli';
     var isDailyTab = currentTab === 'gunluk';
@@ -483,38 +755,71 @@
     var elA = document.getElementById('atpKpiAktif');
     var elH = document.getElementById('atpKpiHareket');
     if (kpi) {
-      if (elA && kpi.aktif_arac != null) elA.textContent = kpi.aktif_arac;
-      if (elH && kpi.hareket_halinde != null) elH.textContent = kpi.hareket_halinde;
+      if (elA && kpi.aktif_arac != null) elA.textContent = String(kpi.aktif_arac);
+      if (elH && kpi.hareket_halinde != null) elH.textContent = String(kpi.hareket_halinde);
+    }
+    if (!isLiveTab) return;
+    var elSapma = document.getElementById('atpKpiSapma');
+    var elSon = document.getElementById('atpKpiSonGuncelleme');
+    var elGps = document.getElementById('atpKpiGpsSaglik');
+    var sapmaN = countSapma(liveMergedVehicles);
+    if (sapmaN === null && opsData && opsData.vehicles) sapmaN = countSapma(opsData.vehicles);
+    if (elSapma) elSapma.textContent = sapmaN !== null ? String(sapmaN) : '—';
+    if (elSon) {
+      elSon.textContent = liveLastPollAt ? fmtTimeStamp(liveLastPollAt) : '—';
+    }
+    if (elGps) {
+      var health = computeGpsHealth(liveMergedVehicles, count);
+      elGps.textContent = health ? (health.fresh + '/' + health.total) : '—';
     }
   }
 
   function showLiveError(isPoll) {
     liveFetchState = 'error';
     var list = document.getElementById('atpVehicleList');
-    if (!isPoll && list) list.innerHTML = '<li class="atp-live-error">Canlı araç verisi şu anda alınamıyor.</li>';
+    if (!isPoll && list) list.innerHTML = '<div class="atp-live-error">Canlı araç verisi şu anda alınamıyor.</div>';
     if (currentTab !== 'canli') {
-      if (window.AtpLiveMap) window.AtpLiveMap.refreshLiveVehicles(lastVehicles, { failed: true });
+      if (window.AtpLiveMap) window.AtpLiveMap.refreshLiveVehicles(vehiclesForMap(liveMergedVehicles.length ? liveMergedVehicles : lastVehicles), { failed: true });
       return;
     }
     if (!isPoll) {
-      var elA = document.getElementById('atpKpiAktif');
-      var elH = document.getElementById('atpKpiHareket');
-      if (elA) elA.textContent = '—';
-      if (elH) elH.textContent = '—';
+      var liveKpiIds = ['atpKpiAktif', 'atpKpiHareket', 'atpKpiSapma', 'atpKpiSonGuncelleme', 'atpKpiGpsSaglik'];
+      liveKpiIds.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = '—';
+      });
+      setLiveRefreshBar(null);
     }
-    if (window.AtpLiveMap) window.AtpLiveMap.refreshLiveVehicles(lastVehicles, { failed: true });
+    if (window.AtpLiveMap) {
+      window.AtpLiveMap.refreshLiveVehicles(vehiclesForMap(liveMergedVehicles.length ? liveMergedVehicles : lastVehicles), { failed: true });
+    }
   }
 
-  function applyLiveData(j, isPoll) {
+  function applyLiveData(j, opsData, isPoll) {
+    if (opsData && opsData.ok) {
+      liveOpsCache = opsData;
+      liveRouteGeometries = extractRouteGeometries(opsData);
+      updateRouteButtonState();
+    }
     if (j.ok && j.vehicles) {
       liveFetchState = 'ok';
+      var opsBundle = opsData && opsData.ok ? opsData : liveOpsCache;
+      lastLiveFilomKpi = j.kpi || null;
+      lastLiveFilomCount = j.count != null ? j.count : j.vehicles.length;
       lastVehicles = j.vehicles;
-      renderLiveVehicles(j.vehicles);
-      updateLiveKpi(j.kpi, j.count);
+      liveMergedVehicles = mergeAllLiveVehicles(j.vehicles, opsBundle);
+      renderLiveVehicles(liveMergedVehicles);
+      syncLivePollTimestamp(new Date());
+      updateLiveKpi(lastLiveFilomKpi, lastLiveFilomCount, opsBundle);
       fillVehicleSelect(j.vehicles);
+      var forMap = vehiclesForMap(liveMergedVehicles);
       if (window.AtpLiveMap) {
-        window.AtpLiveMap.refreshLiveVehicles(j.vehicles, { success: true, silent: isPoll });
+        window.AtpLiveMap.refreshLiveVehicles(forMap, { success: true, silent: isPoll });
         if (currentTab === 'canli') window.AtpLiveMap.onLiveTabShown();
+        syncLivePollTimestamp(liveLastPollAt);
+      }
+      if (liveRoutesVisible && liveRouteGeometries.length) {
+        setTimeout(function () { drawLiveRouteLayer(); }, 120);
       }
     } else if (!isPoll) {
       showLiveError(false);
@@ -527,7 +832,7 @@
     liveFetchState = 'loading';
     if (!isPoll) {
       var list = document.getElementById('atpVehicleList');
-      if (list) list.innerHTML = '<li class="atp-live-loading">Canlı araç verisi yükleniyor…</li>';
+      if (list) list.innerHTML = '<div class="atp-live-loading">Canlı araç verisi yükleniyor…</div>';
     }
     var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var tid = setTimeout(function () {
@@ -535,16 +840,21 @@
     }, LIVE_FETCH_TIMEOUT_MS);
     var opts = { credentials: 'same-origin' };
     if (ctrl) opts.signal = ctrl.signal;
-    fetch('/planlama/arac-takip/api/araclar', opts)
-      .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
-      .then(function (res) {
-        clearTimeout(tid);
-        applyLiveData(res.body, !!isPoll);
-      })
-      .catch(function () {
-        clearTimeout(tid);
-        showLiveError(!!isPoll);
-      });
+    var today = planDate || new Date().toISOString().slice(0, 10);
+    var opsUrl = '/planlama/arac-takip/api/today-operations?date=' + encodeURIComponent(today);
+    Promise.all([
+      fetch('/planlama/arac-takip/api/araclar', opts)
+        .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); }),
+      fetch(opsUrl, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; })
+    ]).then(function (results) {
+      clearTimeout(tid);
+      applyLiveData(results[0].body, results[1], !!isPoll);
+    }).catch(function () {
+      clearTimeout(tid);
+      showLiveError(!!isPoll);
+    });
   }
 
   loadLiveVehicles(false);
@@ -552,6 +862,17 @@
   window.addEventListener('beforeunload', function () {
     if (pollTimer) clearInterval(pollTimer);
   });
+
+  var btnFitMap = document.getElementById('atpBtnFitAllMap');
+  if (btnFitMap) {
+    btnFitMap.addEventListener('click', function () {
+      if (window.AtpLiveMap) window.AtpLiveMap.fitAll();
+    });
+  }
+  var btnShowRoutes = document.getElementById('atpBtnShowRoutes');
+  if (btnShowRoutes) btnShowRoutes.addEventListener('click', toggleLiveRoutes);
+  var btnLiveRefresh = document.getElementById('atpLiveRefreshBtn');
+  if (btnLiveRefresh) btnLiveRefresh.addEventListener('click', function () { loadLiveVehicles(false); });
 
   /* ─── Mehmet V2 — today-operations + Plana İş Ekle ─── */
   if (root.getAttribute('data-mehmet-v2') === '1') {
@@ -590,7 +911,7 @@
     }
 
     function renderKpiV2(kpi) {
-      if (!kpi) return;
+      if (!kpi || currentTab === 'canli') return;
       var map = {
         atpKpiAktif: kpi.aktif_arac,
         atpKpiHareket: kpi.hareket_halinde,
@@ -601,7 +922,9 @@
       };
       Object.keys(map).forEach(function (id) {
         var el = document.getElementById(id);
-        if (el) el.textContent = fmtVal(map[id]);
+        if (!el) return;
+        var val = map[id];
+        el.textContent = val === null || val === undefined || val === '' ? '—' : String(val);
       });
     }
 
