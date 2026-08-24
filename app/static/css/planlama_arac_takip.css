@@ -545,25 +545,37 @@
   background:var(--white);border-radius:var(--radius-lg);
   width:520px;max-width:95vw;box-shadow:var(--shadow-md);
 }
-#atpV2Root .add-modal {
-  background:var(--white);border-radius:var(--radius-lg);
-  width:640px;max-width:96vw;max-height:92vh;overflow:hidden;
-  display:flex;flex-direction:column;box-shadow:var(--shadow-md);
+
+/* ── add-modal: scoped globally for #atpRequestModal which lives outside #atpV2Root ── */
+#atpV2Root .add-modal,
+.add-modal {
+  background:#fff;border-radius:12px;
+  width:640px;max-width:calc(100vw - 32px);max-height:calc(100vh - 40px);overflow:hidden;
+  display:flex;flex-direction:column;
+  box-shadow:0 20px 60px rgba(0,0,0,.22);
+  border:1px solid #e4e7ec;
 }
-#atpV2Root .add-modal .modal-body { overflow-y:auto;flex:1;max-height:calc(92vh - 120px); }
-#atpV2Root .modal-hdr {
-  padding:16px 20px;border-bottom:var(--border);
-  display:flex;align-items:center;justify-content:space-between;
+#atpV2Root .add-modal .modal-body,
+.add-modal .modal-body { overflow-y:auto;flex:1;min-height:0;max-height:calc(100vh - 160px); }
+#atpV2Root .modal-hdr,
+.modal-hdr {
+  padding:16px 20px;border-bottom:1px solid #e4e7ec;
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
 }
-#atpV2Root .modal-hdr h3 { font-size:14px;font-weight:700;color:#111827; }
-#atpV2Root .modal-close {
+#atpV2Root .modal-hdr h3,
+.modal-hdr h3 { font-size:14px;font-weight:700;color:#111827;margin:0; }
+#atpV2Root .modal-close,
+.modal-close {
   background:none;border:none;font-size:18px;cursor:pointer;
-  color:var(--gray);line-height:1;font-family:inherit;
+  color:#667085;line-height:1;font-family:inherit;padding:2px 6px;
 }
-#atpV2Root .modal-close:hover { color:#111827; }
-#atpV2Root .modal-body { padding:16px 20px; }
-#atpV2Root .modal-footer {
-  padding:12px 20px;border-top:var(--border);
+#atpV2Root .modal-close:hover,
+.modal-close:hover { color:#111827; }
+#atpV2Root .modal-body,
+.modal-body { padding:16px 20px; }
+#atpV2Root .modal-footer,
+.modal-footer {
+  padding:12px 20px;border-top:1px solid #e4e7ec;flex-shrink:0;
   display:flex;justify-content:flex-end;gap:8px;
 }
 
@@ -589,53 +601,75 @@
   display:flex;gap:8px;align-items:flex-start;margin-top:14px;
 }
 
-/* ─── Add Job Modal form controls ─── */
-#atpV2Root .form-ctrl { margin-bottom:10px; }
-#atpV2Root .form-ctrl label {
-  display:block;font-size:10.5px;color:var(--gray);text-transform:uppercase;
+/* ─── Add Job Modal form controls (scoped to add-modal for global use) ─── */
+#atpV2Root .form-ctrl,
+.add-modal .form-ctrl { margin-bottom:10px; }
+#atpV2Root .form-ctrl label,
+.add-modal .form-ctrl label {
+  display:block;font-size:10.5px;color:#667085;text-transform:uppercase;
   letter-spacing:.04em;font-weight:600;margin-bottom:4px;
 }
 #atpV2Root .form-ctrl input,
 #atpV2Root .form-ctrl select,
-#atpV2Root .form-ctrl textarea {
-  width:100%;padding:6px 10px;border:var(--border);border-radius:var(--radius);
-  background:var(--white);color:#111827;font-family:inherit;font-size:12.5px;
+#atpV2Root .form-ctrl textarea,
+.add-modal .form-ctrl input,
+.add-modal .form-ctrl select,
+.add-modal .form-ctrl textarea {
+  width:100%;padding:6px 10px;border:1px solid #d0d5dd;border-radius:6px;
+  background:#fff;color:#111827;font-family:inherit;font-size:12.5px;box-sizing:border-box;
 }
 #atpV2Root .form-ctrl input:focus,
 #atpV2Root .form-ctrl select:focus,
-#atpV2Root .form-ctrl textarea:focus { border-color:var(--gold);outline:none; }
-#atpV2Root .form-2col { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
-#atpV2Root .add-section { margin-bottom:14px;padding-bottom:14px;border-bottom:var(--border); }
-#atpV2Root .add-section:last-child { border-bottom:none;margin-bottom:0;padding-bottom:0; }
-#atpV2Root .add-section-title {
+#atpV2Root .form-ctrl textarea:focus,
+.add-modal .form-ctrl input:focus,
+.add-modal .form-ctrl select:focus,
+.add-modal .form-ctrl textarea:focus { border-color:#c8922a;outline:none; }
+#atpV2Root .form-2col,
+.add-modal .form-2col { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+#atpV2Root .add-section,
+.add-modal .add-section { margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #e4e7ec; }
+#atpV2Root .add-section:last-child,
+.add-modal .add-section:last-child { border-bottom:none;margin-bottom:0;padding-bottom:0; }
+#atpV2Root .add-section-title,
+.add-modal .add-section-title {
   font-size:11px;font-weight:700;color:#111827;text-transform:uppercase;
   letter-spacing:.05em;margin-bottom:8px;
 }
-#atpV2Root .add-warn {
-  display:none;background:var(--red-light);border:1px solid var(--red-border);
-  border-radius:var(--radius);padding:8px 10px;font-size:11.5px;color:var(--red-h);margin-bottom:10px;
+#atpV2Root .add-warn,
+.add-modal .add-warn {
+  display:none;background:#fff1f1;border:1px solid #fecdca;
+  border-radius:6px;padding:8px 10px;font-size:11.5px;color:#b42318;margin-bottom:10px;
 }
-#atpV2Root .add-warn.show { display:block; }
+#atpV2Root .add-warn.show,
+.add-modal .add-warn.show { display:block; }
 
 /* ─── Firma/konum panels ─── */
-#atpV2Root .firma-wrap { position:relative; }
-#atpV2Root .firma-dropdown {
+#atpV2Root .firma-wrap,
+.add-modal .firma-wrap { position:relative; }
+#atpV2Root .firma-dropdown,
+.add-modal .firma-dropdown {
   display:none;position:absolute;top:100%;left:0;right:0;
-  background:var(--white);border:var(--border);border-radius:var(--radius);
-  box-shadow:var(--shadow-md);z-index:10;margin-top:2px;max-height:180px;overflow-y:auto;
+  background:#fff;border:1px solid #e4e7ec;border-radius:6px;
+  box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:10020;margin-top:2px;max-height:180px;overflow-y:auto;
 }
-#atpV2Root .firma-dropdown.open { display:block; }
-#atpV2Root .firma-dd-label {
-  font-size:10px;color:var(--gray);padding:6px 10px 4px;
+#atpV2Root .firma-dropdown.open,
+.add-modal .firma-dropdown.open { display:block; }
+#atpV2Root .firma-dd-label,
+.add-modal .firma-dd-label {
+  font-size:10px;color:#667085;padding:6px 10px 4px;
   text-transform:uppercase;letter-spacing:.04em;font-weight:600;
 }
-#atpV2Root .firma-dd-item {
+#atpV2Root .firma-dd-item,
+.add-modal .firma-dd-item {
   padding:8px 10px;font-size:12px;cursor:pointer;
-  border-bottom:1px solid var(--gray-50);
+  border-bottom:1px solid #f2f4f7;
 }
-#atpV2Root .firma-dd-item:hover { background:var(--gold-light); }
-#atpV2Root .firma-dd-item strong { display:block;color:#111827; }
-#atpV2Root .firma-dd-item span { font-size:10.5px;color:var(--gray); }
+#atpV2Root .firma-dd-item:hover,
+.add-modal .firma-dd-item:hover { background:#fffbec; }
+#atpV2Root .firma-dd-item strong,
+.add-modal .firma-dd-item strong { display:block;color:#111827; }
+#atpV2Root .firma-dd-item span,
+.add-modal .firma-dd-item span { font-size:10.5px;color:#667085; }
 #atpV2Root .konum-panel {
   display:none;background:var(--gray-50);border:var(--border);
   border-radius:var(--radius);padding:10px;margin-top:8px;

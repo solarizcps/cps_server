@@ -1255,6 +1255,12 @@
     validateAddForm();
     if (backdrop) { backdrop.classList.add('open'); backdrop.setAttribute('aria-hidden', 'false'); }
     if (modal) modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    /* focus first input */
+    setTimeout(function () {
+      var first = modal && modal.querySelector('input:not([readonly]):not([type=hidden]),select');
+      if (first) first.focus();
+    }, 60);
   }
 
   function closePlanaModal() {
@@ -1262,7 +1268,16 @@
     var modal = qs('atpRequestModal');
     if (backdrop) { backdrop.classList.remove('open'); backdrop.setAttribute('aria-hidden', 'true'); }
     if (modal) modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
   }
+
+  /* Escape key closes modal */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      var backdrop = qs('atpModalBackdrop');
+      if (backdrop && backdrop.classList.contains('open')) closePlanaModal();
+    }
+  });
 
   var btnPlana = qs('atpBtnPlanaIsEkle');
   var btnPlanaPrs = qs('atpBtnPlanaIsEklePrs');
