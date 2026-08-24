@@ -1,23 +1,29 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Start Araç GPS poll worker with bounded log rotation (10 MB x 5).
+  Start Araç GPS poll worker with DPAPI Filom secrets and bounded log rotation.
 
 .PARAMETER PythonExe
   Exact path to real python.exe (WindowsApps alias rejected).
 
 .PARAMETER ValidateOnly
   Preflight checks only — no worker start, no DB writes.
+
+.PARAMETER SecretFile
+  Override DPAPI secret path (testing only).
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [string]$PythonExe,
 
-    [switch]$ValidateOnly
+    [switch]$ValidateOnly,
+
+    [string]$SecretFile = 'C:\ProgramData\Solariz\secrets\arac_gps_worker.dpapi'
 )
 
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Security
 
 $Root = 'C:\Solariz_CPS_SERVER'
 $AppDir = Join-Path $Root 'app'
@@ -27,6 +33,13 @@ $OutLog = Join-Path $LogDir 'arac_gps_worker.out.log'
 $ErrLog = Join-Path $LogDir 'arac_gps_worker.err.log'
 $MaxLogBytes = 10MB
 $MaxLogBackups = 5
+$Script:DpapiEntropy = [System.Text.Encoding]::UTF8.GetBytes('Solariz.CPS.AracGPSWorker.DPAPI.v1')
+$Script:ProductionSecretFile = 'C:\ProgramData\Solariz\secrets\arac_gps_worker.dpapi'
+$Script:FilomFieldNames = @(
+    'TURKCELL_FILOM_BASE_URL',
+    'TURKCELL_FILOM_USERNAME',
+    'TURKCELL_FILOM_PASSWORD'
+)
 
 function Test-WindowsAppsPythonAlias {
     param([string]$Path)
@@ -50,6 +63,126 @@ function Resolve-RealPythonExe {
         throw "Resolved PythonExe is WindowsApps alias: $resolved"
     }
     return $resolved
+}
+
+function Get-SecretFileAclReport {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return [ordered]@{
+            Exists              = $false
+            InheritanceDisabled = $false
+            SystemFullControl   = $false
+            AdminFullControl    = $false
+            OtherAccess         = @()
+        }
+    }
+    $acl = Get-Acl -LiteralPath $Path
+    $systemOk = $false
+    $adminOk = $false
+    $disallowed = @()
+    $ignoredMeta = @('CREATOR OWNER', 'NT AUTHORITY\CREATOR OWNER')
+    foreach ($r in $acl.Access) {
+        if ($r.AccessControlType -ne 'Allow') { continue }
+        $id = $r.IdentityReference.Value
+        $isFull = ($r.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::FullControl) -eq `
+            [System.Security.AccessControl.FileSystemRights]::FullControl
+        if ($id -eq 'NT AUTHORITY\SYSTEM') {
+            if ($isFull) { $systemOk = $true }
+        }
+        elseif ($id -eq 'BUILTIN\Administrators') {
+            if ($isFull) { $adminOk = $true }
+        }
+        elseif ($ignoredMeta -notcontains $id) {
+            $disallowed += $id
+        }
+    }
+    return [ordered]@{
+        Exists              = $true
+        InheritanceDisabled = $acl.AreAccessRulesProtected
+        SystemFullControl   = $systemOk
+        AdminFullControl    = $adminOk
+        OtherAccess         = $disallowed
+    }
+}
+
+function Test-SecretFileAclContract {
+    param(
+        [hashtable]$Report,
+        [string]$Path
+    )
+    if (-not $Report.InheritanceDisabled) {
+        throw 'Secret file ACL: inheritance must be disabled.'
+    }
+    if (-not $Report.SystemFullControl) {
+        throw 'Secret file ACL: SYSTEM FullControl required.'
+    }
+    $isProduction = ($Path -eq $Script:ProductionSecretFile)
+    if ($isProduction) {
+        if (-not $Report.AdminFullControl) {
+            throw 'Secret file ACL: Administrators FullControl required.'
+        }
+        if ($Report.OtherAccess.Count -gt 0) {
+            throw ('Unexpected ACL identities on secret file: {0}' -f ($Report.OtherAccess -join ', '))
+        }
+    }
+    elseif ($Report.OtherAccess.Count -gt 0) {
+        Write-Verbose ('Non-production secret path allows extra ACL identities: {0}' -f ($Report.OtherAccess -join ', '))
+    }
+}
+
+function Unprotect-FilomSecrets {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Secret file missing: $Path"
+    }
+    $acl = Get-SecretFileAclReport -Path $Path
+    Test-SecretFileAclContract -Report $acl -Path $Path
+    $protected = [System.IO.File]::ReadAllBytes($Path)
+    $plainBytes = [System.Security.Cryptography.ProtectedData]::Unprotect(
+        $protected,
+        $Script:DpapiEntropy,
+        [System.Security.Cryptography.DataProtectionScope]::LocalMachine
+    )
+    try {
+        $json = [System.Text.Encoding]::UTF8.GetString($plainBytes)
+        $obj = $json | ConvertFrom-Json
+        return [ordered]@{
+            TURKCELL_FILOM_BASE_URL = [string]$obj.TURKCELL_FILOM_BASE_URL
+            TURKCELL_FILOM_USERNAME = [string]$obj.TURKCELL_FILOM_USERNAME
+            TURKCELL_FILOM_PASSWORD = [string]$obj.TURKCELL_FILOM_PASSWORD
+        }
+    }
+    finally {
+        if ($plainBytes) { [Array]::Clear($plainBytes, 0, $plainBytes.Length) }
+    }
+}
+
+function Test-FilomSecretsReady {
+    param([string]$Path)
+    $secrets = Unprotect-FilomSecrets -Path $Path
+    $missing = @()
+    foreach ($n in $Script:FilomFieldNames) {
+        if (-not $secrets.$n -or [string]::IsNullOrWhiteSpace([string]$secrets.$n)) {
+            $missing += $n
+        }
+    }
+    if ($missing.Count -gt 0) {
+        throw ("Secret payload incomplete: {0}" -f ($missing -join ', '))
+    }
+    return $secrets
+}
+
+function Set-FilomProcessEnv {
+    param($Secrets)
+    $env:TURKCELL_FILOM_BASE_URL = [string]$Secrets.TURKCELL_FILOM_BASE_URL
+    $env:TURKCELL_FILOM_USERNAME = [string]$Secrets.TURKCELL_FILOM_USERNAME
+    $env:TURKCELL_FILOM_PASSWORD = [string]$Secrets.TURKCELL_FILOM_PASSWORD
+}
+
+function Clear-FilomProcessEnv {
+    Remove-Item -Path Env:TURKCELL_FILOM_BASE_URL -ErrorAction SilentlyContinue
+    Remove-Item -Path Env:TURKCELL_FILOM_USERNAME -ErrorAction SilentlyContinue
+    Remove-Item -Path Env:TURKCELL_FILOM_PASSWORD -ErrorAction SilentlyContinue
 }
 
 function Test-PythonExeContract {
@@ -114,18 +247,18 @@ print('SCHEMA_OK')
     }
 }
 
-function Test-FilomEnvPresence {
-    $names = @('TURKCELL_FILOM_BASE_URL', 'TURKCELL_FILOM_USERNAME', 'TURKCELL_FILOM_PASSWORD')
-    $found = @()
-    foreach ($n in $names) {
-        $u = [Environment]::GetEnvironmentVariable($n, 'User')
-        $m = [Environment]::GetEnvironmentVariable($n, 'Machine')
-        $p = [Environment]::GetEnvironmentVariable($n, 'Process')
-        if ($u) { $found += "user:$n" }
-        if ($m) { $found += "machine:$n" }
-        if ($p) { $found += "process:$n" }
+function Test-LogDirectoryWritable {
+    if (-not (Test-Path -LiteralPath $LogDir)) {
+        New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
     }
-    return $found
+    $probe = Join-Path $LogDir ('._write_probe_{0}' -f $PID)
+    try {
+        Set-Content -LiteralPath $probe -Value 'ok' -Encoding ASCII
+        Remove-Item -LiteralPath $probe -Force
+    }
+    catch {
+        throw "Log directory not writable: $LogDir"
+    }
 }
 
 function New-LogSupervisorScript {
@@ -146,7 +279,6 @@ import logging
 import logging.handlers
 import os
 import subprocess
-import sys
 import threading
 
 WORKER = r'$WorkerPath'
@@ -156,6 +288,11 @@ ERR_LOG = r'$ErrPath'
 APP_DIR = r'$AppDir'
 MAX_BYTES = $MaxBytes
 BACKUP_COUNT = $BackupCount
+FILOM_KEYS = (
+    'TURKCELL_FILOM_BASE_URL',
+    'TURKCELL_FILOM_USERNAME',
+    'TURKCELL_FILOM_PASSWORD',
+)
 
 
 def _handler(path: str) -> logging.Handler:
@@ -180,6 +317,9 @@ def main() -> int:
     env['CPS_ARAC_GPS_CANONICAL_WRITE'] = 'YES'
     env['ARAC_GPS_POLL_INTERVAL_SEC'] = '60'
     env.pop('CPS_MOCK_DB_PATH', None)
+    for key in FILOM_KEYS:
+        if key not in env or not env[key]:
+            raise SystemExit('missing_filom_env=' + key)
     out_logger = logging.getLogger('gps_out')
     out_logger.setLevel(logging.INFO)
     out_logger.handlers.clear()
@@ -221,25 +361,40 @@ if (-not (Test-Path -LiteralPath $AppDir -PathType Container)) {
 if (-not (Test-Path -LiteralPath $Worker -PathType Leaf)) {
     throw "Worker missing: $Worker"
 }
-New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 Test-PythonExeContract -ResolvedPython $resolvedPy
 Test-SchemaReadiness -ResolvedPython $resolvedPy
+Test-LogDirectoryWritable
 
-$filomSources = Test-FilomEnvPresence
+$aclReport = Get-SecretFileAclReport -Path $SecretFile
+$secrets = Test-FilomSecretsReady -Path $SecretFile
+
+$fieldStatus = @()
+foreach ($n in $Script:FilomFieldNames) {
+    $fieldStatus += ("{0}=present" -f $n)
+}
+
 $report = [ordered]@{
-    PythonExe         = $resolvedPy
-    AppDir            = $AppDir
-    Worker            = $Worker
-    OutLog            = $OutLog
-    ErrLog            = $ErrLog
-    MaxLogBytes       = $MaxLogBytes
-    MaxLogBackups     = $MaxLogBackups
-    CanonicalWrite    = 'YES (process scope via supervisor env)'
-    PollIntervalSec   = 60
-    MockDbPath        = 'unset'
-    FilomEnvSources   = ($filomSources -join ', ')
-    FilomEnvPresent   = ($filomSources.Count -ge 3)
+    PythonExe           = $resolvedPy
+    AppDir              = $AppDir
+    Worker              = $Worker
+    SecretFile          = $SecretFile
+    SecretFileExists    = $aclReport.Exists
+    SecretAclOk         = ($aclReport.InheritanceDisabled -and $aclReport.SystemFullControl -and (
+        ($SecretFile -eq $Script:ProductionSecretFile -and $aclReport.AdminFullControl -and $aclReport.OtherAccess.Count -eq 0) -or
+        ($SecretFile -ne $Script:ProductionSecretFile)
+    ))
+    FilomSecretSource   = 'DPAPI LocalMachine'
+    FilomFields         = ($fieldStatus -join ', ')
+    OutLog              = $OutLog
+    ErrLog              = $ErrLog
+    MaxLogBytes         = $MaxLogBytes
+    MaxLogBackups       = $MaxLogBackups
+    CanonicalWrite      = 'YES (process scope via supervisor env)'
+    PollIntervalSec     = 60
+    MockDbPath          = 'unset'
+    MachineEnvPersist   = 'none'
+    WorkerSingleLock    = 'arac_gps_poll_worker.lock (worker process)'
 }
 
 foreach ($pair in $report.GetEnumerator()) {
@@ -251,14 +406,17 @@ if ($ValidateOnly) {
     exit 0
 }
 
-if (-not $report.FilomEnvPresent) {
-    Write-Warning 'Filom env vars not visible in User/Machine/Process scope — worker may fail fetch until vars are set for task principal.'
-}
-
 $supervisorPy = New-LogSupervisorScript -ResolvedPython $resolvedPy -WorkerPath $Worker `
     -OutPath $OutLog -ErrPath $ErrLog -MaxBytes $MaxLogBytes -BackupCount $MaxLogBackups
 
-Write-Host "Starting GPS worker supervisor via $resolvedPy"
-Write-Host "Supervisor: $supervisorPy"
-& $resolvedPy $supervisorPy
-exit $LASTEXITCODE
+Set-FilomProcessEnv -Secrets $secrets
+$secrets = $null
+try {
+    Write-Host "Starting GPS worker supervisor via $resolvedPy"
+    Write-Host "Supervisor: $supervisorPy"
+    & $resolvedPy $supervisorPy
+    exit $LASTEXITCODE
+}
+finally {
+    Clear-FilomProcessEnv
+}

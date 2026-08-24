@@ -1,25 +1,25 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Register Solariz CPS Araç GPS Worker scheduled task (created DISABLED).
+  Register Solariz CPS Araç GPS Worker as SYSTEM scheduled task (created DISABLED).
 
 .PARAMETER PythonExe
   Exact real python.exe path — WindowsApps alias rejected.
 
-.PARAMETER RunAsUser
-  Task principal account (default: current user).
-
 .PARAMETER ValidateOnly
   Build and print task contract without creating task.
+
+.PARAMETER SecretFile
+  Override DPAPI secret path (testing only).
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [string]$PythonExe,
 
-    [string]$RunAsUser = $env:USERNAME,
+    [switch]$ValidateOnly,
 
-    [switch]$ValidateOnly
+    [string]$SecretFile = 'C:\ProgramData\Solariz\secrets\arac_gps_worker.dpapi'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,6 +29,20 @@ $TaskName = 'Solariz_CPS_Arac_GPS_Worker'
 $FullTaskName = "$TaskPath$TaskName"
 $Root = 'C:\Solariz_CPS_SERVER'
 $Wrapper = Join-Path $Root 'Start-Arac-GPS-Worker.ps1'
+$PrincipalUserId = 'SYSTEM'
+$Script:ProductionSecretFile = 'C:\ProgramData\Solariz\secrets\arac_gps_worker.dpapi'
+$Script:RequiredSystemPaths = @(
+    'C:\Solariz_CPS_SERVER',
+    'C:\Solariz_CPS_SERVER\app\mock_data.db',
+    'C:\Solariz_CPS_SERVER\logs',
+    'C:\ProgramData\Solariz\secrets'
+)
+
+function Test-Administrator {
+    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $p = New-Object Security.Principal.WindowsPrincipal($id)
+    return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
 
 function Test-WindowsAppsPythonAlias {
     param([string]$Path)
@@ -54,11 +68,74 @@ function Resolve-RealPythonExe {
     return $resolved
 }
 
+function Test-SystemPathAccessContract {
+    $report = @()
+    foreach ($p in $Script:RequiredSystemPaths) {
+        if (-not (Test-Path -LiteralPath $p)) {
+            if ($p -like '*\secrets') {
+                $report += "$p=missing (created by Setup-Arac-GPS-Worker-Secrets.ps1)"
+                continue
+            }
+            throw "Required path missing for SYSTEM access: $p"
+        }
+        $acl = Get-Acl -LiteralPath $p
+        $systemOk = $false
+        foreach ($r in $acl.Access) {
+            if ($r.IdentityReference.Value -eq 'NT AUTHORITY\SYSTEM' -and $r.AccessControlType -eq 'Allow') {
+                $rights = $r.FileSystemRights
+                if (($rights -band 'Modify') -eq 'Modify' -or ($rights -band 'FullControl') -eq 'FullControl') {
+                    $systemOk = $true
+                    break
+                }
+            }
+        }
+        $report += "$p=SYSTEM:$systemOk"
+        if (-not $systemOk) {
+            throw "SYSTEM lacks required access: $p"
+        }
+    }
+    return $report
+}
+
+function Test-SecretFileContract {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Secret file missing: $Path"
+    }
+    $acl = Get-Acl -LiteralPath $Path
+    $systemOk = $false
+    $adminOk = $false
+    $disallowed = @()
+    $ignoredMeta = @('CREATOR OWNER', 'NT AUTHORITY\CREATOR OWNER')
+    foreach ($r in $acl.Access) {
+        if ($r.AccessControlType -ne 'Allow') { continue }
+        $id = $r.IdentityReference.Value
+        $isFull = ($r.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::FullControl) -eq `
+            [System.Security.AccessControl.FileSystemRights]::FullControl
+        if ($id -eq 'NT AUTHORITY\SYSTEM') {
+            if ($isFull) { $systemOk = $true }
+        }
+        elseif ($id -eq 'BUILTIN\Administrators') {
+            if ($isFull) { $adminOk = $true }
+        }
+        elseif ($ignoredMeta -notcontains $id) {
+            $disallowed += $id
+        }
+    }
+    if (-not $acl.AreAccessRulesProtected -or -not $systemOk) {
+        throw 'Secret file ACL contract not satisfied.'
+    }
+    $isProduction = ($Path -eq $Script:ProductionSecretFile)
+    if ($isProduction) {
+        if (-not $adminOk -or $disallowed.Count -gt 0) {
+            throw 'Secret file ACL contract not satisfied.'
+        }
+    }
+    return $true
+}
+
 function Get-TaskContract {
-    param(
-        [string]$ResolvedPython,
-        [string]$PrincipalUser
-    )
+    param([string]$ResolvedPython)
     $wrapperArg = "-NoProfile -ExecutionPolicy Bypass -File `"$Wrapper`" -PythonExe `"$ResolvedPython`""
     return [ordered]@{
         TaskPath            = $TaskPath
@@ -67,13 +144,16 @@ function Get-TaskContract {
         Argument            = $wrapperArg
         WorkingDirectory    = $Root
         Trigger             = 'AtStartup'
+        StartWhenAvailable  = $true
         MultipleInstances   = 'IgnoreNew'
         RestartCount        = 3
         RestartIntervalMin  = 1
         InitialState        = 'Disabled'
-        PrincipalUserId     = $PrincipalUser
-        LogonType           = 'Interactive'
-        RunLevel            = 'Limited'
+        PrincipalUserId     = $PrincipalUserId
+        LogonType           = 'ServiceAccount'
+        RunLevel            = 'Highest'
+        SecretSource        = 'DPAPI LocalMachine file (not in task action)'
+        SecretFile          = $SecretFile
         WrapperScript       = $Wrapper
         PythonExe           = $ResolvedPython
     }
@@ -88,7 +168,7 @@ function Compare-TaskContract {
         $diffs += "Execute: existing=$($action.Execute) expected=$($Expected.Execute)"
     }
     if ($action.Arguments -ne $Expected.Argument) {
-        $diffs += "Arguments differ"
+        $diffs += 'Arguments differ'
         $diffs += "  existing=$($action.Arguments)"
         $diffs += "  expected=$($Expected.Argument)"
     }
@@ -102,6 +182,9 @@ function Compare-TaskContract {
     if ($settings.RestartCount -ne $Expected.RestartCount) {
         $diffs += "RestartCount: existing=$($settings.RestartCount) expected=$($Expected.RestartCount)"
     }
+    if (-not $settings.StartWhenAvailable) {
+        $diffs += 'StartWhenAvailable: existing=false expected=true'
+    }
     $principal = $ExistingTask.Principal
     if ($principal.UserId -ne $Expected.PrincipalUserId) {
         $diffs += "PrincipalUserId: existing=$($principal.UserId) expected=$($Expected.PrincipalUserId)"
@@ -109,50 +192,65 @@ function Compare-TaskContract {
     if ($principal.LogonType -ne $Expected.LogonType) {
         $diffs += "LogonType: existing=$($principal.LogonType) expected=$($Expected.LogonType)"
     }
+    if ($principal.RunLevel -ne $Expected.RunLevel) {
+        $diffs += "RunLevel: existing=$($principal.RunLevel) expected=$($Expected.RunLevel)"
+    }
     return $diffs
 }
 
-# --- Validate wrapper exists ---
 if (-not (Test-Path -LiteralPath $Wrapper -PathType Leaf)) {
     throw "Wrapper script missing: $Wrapper"
 }
 
 $resolvedPy = Resolve-RealPythonExe -Path $PythonExe
-if ([string]::IsNullOrWhiteSpace($RunAsUser)) {
-    throw 'RunAsUser cannot be empty.'
+
+if (-not $ValidateOnly -and -not (Test-Administrator)) {
+    throw 'Administrator privileges required for task registration.'
 }
 
-# Run wrapper ValidateOnly first
-Write-Host "Running wrapper ValidateOnly..."
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Wrapper -PythonExe $resolvedPy -ValidateOnly
+$systemAccess = Test-SystemPathAccessContract
+Write-Host ('VALIDATE SystemPathAccess=' + ($systemAccess -join '; '))
+
+if ($ValidateOnly) {
+    if (Test-Path -LiteralPath $SecretFile) {
+        Test-SecretFileContract -Path $SecretFile | Out-Null
+        Write-Host 'VALIDATE SecretFileContract=pass'
+    }
+    else {
+        Write-Host 'VALIDATE SecretFileContract=missing (run Setup-Arac-GPS-Worker-Secrets.ps1 on server)'
+    }
+}
+else {
+    Test-SecretFileContract -Path $SecretFile | Out-Null
+}
+
+Write-Host 'Running wrapper ValidateOnly...'
+$wrapperArgs = @(
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $Wrapper,
+    '-PythonExe', $resolvedPy, '-ValidateOnly', '-SecretFile', $SecretFile
+)
+& powershell.exe @wrapperArgs
 if ($LASTEXITCODE -ne 0) {
-    throw "Wrapper ValidateOnly failed with exit code $LASTEXITCODE"
+    if ($ValidateOnly -and -not (Test-Path -LiteralPath $SecretFile)) {
+        Write-Warning 'Wrapper ValidateOnly skipped — secret file not present yet.'
+    }
+    else {
+        throw "Wrapper ValidateOnly failed with exit code $LASTEXITCODE"
+    }
 }
 
-$contract = Get-TaskContract -ResolvedPython $resolvedPy -PrincipalUser $RunAsUser
+$contract = Get-TaskContract -ResolvedPython $resolvedPy
 
 Write-Host '=== TASK CONTRACT ==='
 foreach ($pair in $contract.GetEnumerator()) {
     Write-Host ("  {0}={1}" -f $pair.Key, $pair.Value)
 }
 
-# Filom env source report (names/scopes only)
-$filomNames = @('TURKCELL_FILOM_BASE_URL', 'TURKCELL_FILOM_USERNAME', 'TURKCELL_FILOM_PASSWORD')
-$filomReport = @()
-foreach ($n in $filomNames) {
-    foreach ($scope in @('User', 'Machine')) {
-        $val = [Environment]::GetEnvironmentVariable($n, $scope)
-        if ($val) { $filomReport += "$scope`:$n=SET" } else { $filomReport += "$scope`:$n=unset" }
-    }
-}
-Write-Host ('  FilomEnv=' + ($filomReport -join '; '))
-
 if ($ValidateOnly) {
     Write-Host 'VALIDATE_ONLY=PASS'
     exit 0
 }
 
-# Check existing task — refuse silent overwrite if config differs
 $existing = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($existing) {
     $diffs = Compare-TaskContract -ExistingTask $existing -Expected $contract
@@ -174,11 +272,11 @@ $Settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew `
     -RestartCount $contract.RestartCount `
     -RestartInterval (New-TimeSpan -Minutes $contract.RestartIntervalMin)
-$Principal = New-ScheduledTaskPrincipal -UserId $contract.PrincipalUserId -LogonType Interactive -RunLevel Limited
+$Principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 
 Register-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -Action $Action -Trigger $Trigger `
     -Settings $Settings -Principal $Principal `
-    -Description 'Solariz CPS Araç GPS Worker — Filom /mobiles poll 60s (bounded logs)' | Out-Null
+    -Description 'Solariz CPS Araç GPS Worker — SYSTEM / Filom DPAPI / 60s poll (bounded logs)' | Out-Null
 Disable-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName | Out-Null
 
 Write-Host "Task created DISABLED: $FullTaskName"
