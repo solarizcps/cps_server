@@ -22,10 +22,9 @@ CANONICAL = os.path.join(ROOT, 'mock_data.db')
 
 
 def main() -> int:
-    active = os.environ.get('CPS_MOCK_DB_PATH') or CANONICAL
-    if os.path.normcase(os.path.normpath(active)) == os.path.normcase(os.path.normpath(CANONICAL)):
-        print('STOP: CPS_MOCK_DB_PATH required — canonical DB write forbidden')
-        return 2
+    from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed
+    db_path = assert_gps_db_write_allowed()
+    print(f'db_path={db_path}')
 
     from modules.planlama.arac_gps_poll_service import poll_once
     result = poll_once()

@@ -430,3 +430,64 @@ def arac_takip_api_route_apply():
         return jsonify({'ok': False, 'error': str(exc)}), 400
     dto = get_arac_dashboard_dto(plan_date=plan_date, vehicle_id=vehicle_id, daily_tasks=tasks)
     return jsonify({'ok': True, 'daily_tasks': tasks, 'dashboard': dto})
+
+
+@arac_takip_bp.route('/api/today-operations', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_today_operations():
+    from modules.planlama.arac_today_operations_service import get_today_vehicle_operations
+    plan_date = _parse_date(request.args.get('date'))
+    dto = get_today_vehicle_operations(plan_date.isoformat())
+    return jsonify(dto)
+
+
+@arac_takip_bp.route('/api/plan-timeline', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_timeline():
+    from modules.planlama.arac_plan_timeline_service import list_plan_timeline
+    plan_id = request.args.get('plan_id', type=int)
+    plan_is_id = request.args.get('plan_item_id', type=int) or request.args.get('plan_is_id', type=int)
+    plan_date = request.args.get('date')
+    vehicle_id = request.args.get('vehicle_id')
+    if not any([plan_id, plan_is_id, plan_date, vehicle_id]):
+        return jsonify({'ok': False, 'error': 'plan_id, plan_item_id, date veya vehicle_id gerekli'}), 400
+    dto = list_plan_timeline(
+        plan_id=plan_id,
+        plan_is_id=plan_is_id,
+        plan_date=plan_date,
+        vehicle_id=vehicle_id,
+    )
+    return jsonify(dto)
+
+
+@arac_takip_bp.route('/api/plana-is-ekle', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plana_is_ekle():
+    if not _planlama_duzenle():
+        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    from modules.planlama.arac_add_to_plan_service import add_job_to_plan_atomic
+    from modules.planlama.arac_today_operations_service import get_today_vehicle_operations
+    from modules.planlama.arac_takip_repo import tables_ready
+    if not tables_ready():
+        return jsonify({'ok': False, 'error': 'Tablolar hazır değil'}), 503
+    body = request.get_json(silent=True) or {}
+    try:
+        result = add_job_to_plan_atomic(_uid(), body)
+        plan_date = _parse_date(body.get('plan_tarihi') or body.get('tarih'))
+        vehicle_id = body.get('arac_external_id')
+        tasks = get_tasks_for_session(_uid(), plan_date.isoformat(), vehicle_id)
+        dto = get_arac_dashboard_dto(
+            plan_date=plan_date, vehicle_id=vehicle_id, daily_tasks=tasks,
+        )
+        ops = get_today_vehicle_operations(plan_date.isoformat())
+        return jsonify({
+            'ok': True,
+            **result,
+            'daily_tasks': tasks,
+            'dashboard': dto,
+            'today_operations': ops,
+        })
+    except (KeyError, TypeError, ValueError) as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400

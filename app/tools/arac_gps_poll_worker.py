@@ -46,11 +46,9 @@ def _configure_logging() -> None:
     )
 
 
-def _assert_temp_db() -> None:
-    active = os.environ.get('CPS_MOCK_DB_PATH') or CANONICAL
-    if os.path.normcase(os.path.normpath(active)) == os.path.normcase(os.path.normpath(CANONICAL)):
-        log.error('STOP: CPS_MOCK_DB_PATH required — canonical DB write forbidden')
-        raise SystemExit(2)
+def _assert_db_write() -> str:
+    from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed
+    return assert_gps_db_write_allowed(logger=log)
 
 
 class _SingleInstanceLock:
@@ -114,8 +112,10 @@ def run_cycle(backoff_sec: int) -> tuple[bool, int]:
 
 def main() -> int:
     _configure_logging()
-    _assert_temp_db()
+    db_path = _assert_db_write()
     once = '--once' in sys.argv
+    log.info('db_path=%s canonical_write=%s',
+             db_path, os.environ.get('CPS_ARAC_GPS_CANONICAL_WRITE', ''))
     log.info(
         'start interval=%ss pilot=TEMP until Filom rate limit confirmed lock=%s',
         DEFAULT_INTERVAL_SEC, LOCK_PATH,

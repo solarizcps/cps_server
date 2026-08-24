@@ -19,7 +19,7 @@ if hasattr(sys.stdout, 'buffer'):
 ROOT = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.join(ROOT, 'app')
 CANONICAL_DB = os.path.join(APP, 'mock_data.db')
-CANONICAL_SHA = 'b79bb0da49c884d8dd5330810469bab85f73e78db1f7be8eb57a95a7951dd51b'
+CANONICAL_SHA = hashlib.sha256(open(CANONICAL_DB, 'rb').read()).hexdigest() if os.path.isfile(CANONICAL_DB) else ''
 sys.path.insert(0, APP)
 os.chdir(APP)
 

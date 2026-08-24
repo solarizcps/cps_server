@@ -253,7 +253,19 @@ def poll_once(
         'per_vehicle': per_vehicle,
         'fetch_error': None,
         'deviation': _run_deviation_pass(before_max_id),
+        'geofence': _run_geofence_pass(before_max_id),
     }
+
+
+def _run_geofence_pass(since_id: int = 0) -> dict:
+    try:
+        from modules.planlama.arac_geofence_repo import geofence_tables_ready
+        from modules.planlama.arac_geofence_service import process_new_snapshots_since
+        if not geofence_tables_ready():
+            return {'skipped': True, 'reason': 'geofence_tables_not_ready'}
+        return process_new_snapshots_since(since_id)
+    except Exception as exc:
+        return {'ok': False, 'error': exc.__class__.__name__}
 
 
 def _run_deviation_pass(since_id: int = 0) -> dict:

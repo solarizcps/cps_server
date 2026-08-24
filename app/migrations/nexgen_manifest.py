@@ -601,6 +601,41 @@ MANIFEST: tuple[MigEntry, ...] = (
         dependencies=(176,),
         required_tables=("arac_operasyon_ayar",),
     ),
+    MigEntry(
+        178, "178_arac_is_talebi_ux_v2_fields",
+        "178_arac_is_talebi_ux_v2_fields.py",
+        "Araç Takip — Yeni İş Talebi UX V2 alanları",
+        dependencies=(176,),
+        required_tables=("arac_is_talebi",),
+        required_columns=(
+            ("arac_is_talebi", "sofor_id"),
+            ("arac_is_talebi", "sofor_adi_snapshot"),
+            ("arac_is_talebi", "is_turu"),
+            ("arac_is_talebi", "urun_malzeme"),
+            ("arac_is_talebi", "miktar"),
+            ("arac_is_talebi", "miktar_birim"),
+            ("arac_is_talebi", "ek_not"),
+        ),
+    ),
+    MigEntry(
+        179, "179_arac_gps_snapshot_p1",
+        "179_arac_gps_snapshot_p1.py",
+        "Araç Takip GPS P1 — snapshot, rota referansı, olay şeması",
+        dependencies=(178,),
+        required_tables=(
+            "arac_gps_snapshot",
+            "arac_plan_rota_snapshot",
+            "arac_plan_olay",
+            "arac_rota_uyum_durum",
+        ),
+    ),
+    MigEntry(
+        180, "180_arac_plan_ziyaret_durum",
+        "180_arac_plan_ziyaret_durum.py",
+        "GPS P3 — plan kalem ziyaret geofence durumu",
+        dependencies=(179,),
+        required_tables=("arac_plan_is_ziyaret_durum",),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}

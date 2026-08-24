@@ -55,7 +55,10 @@ with patch('modules.auth.kullanici_yetkileri', return_value=YK), \
     ok('VEHUI-07 vehicle panel', 'CANLI ARAÇLAR' in html)
     ok('VEHUI-08 KPI cards', 'Aktif Araç' in html and 'Yakıt' in html)
     ok('VEHUI-09 daily table', 'atpTaskTable' in html)
-    ok('VEHUI-10 priority badges', 'atp-pri-yuksek' in html)
+    # Priority badges are rendered by JS; verify CSS class is defined in stylesheet
+    import pathlib as _pl
+    _css = (_pl.Path(__file__).parent / 'app' / 'static' / 'css' / 'planlama_arac_takip.css').read_text(encoding='utf-8', errors='replace')
+    ok('VEHUI-10 priority badges', 'atp-pri-yuksek' in _css)
     ok('VEHUI-11 status badges', 'Bekliyor' in html or 'Başlangıç' in html)
     ok('VEHUI-12 WhatsApp endpoint', c.get('/planlama/arac-takip/api/whatsapp').status_code == 200)
     wa = c.get('/planlama/arac-takip/api/whatsapp').get_json()

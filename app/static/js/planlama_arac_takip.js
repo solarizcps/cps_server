@@ -79,6 +79,7 @@
     });
   }
 
+  window.applyDashboardUpdate = applyDashboardUpdate;
   window.applyAtpDashboard = function (partial) {
     if (partial.base_location) {
       dashboard.base_location = partial.base_location;
@@ -103,6 +104,18 @@
     var sideLive = document.getElementById('atpSideLive');
     var sidePlan = document.getElementById('atpSidePlan');
     var poolWrap = document.getElementById('atpPoolWrap');
+    var planningSection = document.getElementById('atpPlanningSection');
+    var v2View = document.getElementById('atpV2GunlukView');
+
+    if (v2View) v2View.style.display = isGunluk ? '' : 'none';
+    if (planningSection) {
+      if (isCanli) {
+        planningSection.open = true;
+        planningSection.classList.add('atp-v2-planning-canli');
+      } else if (isGunluk) {
+        planningSection.classList.remove('atp-v2-planning-canli');
+      }
+    }
 
     if (panel) {
       panel.classList.toggle('atp-mode-canli', isCanli);
@@ -117,7 +130,10 @@
     if (routeBlock) routeBlock.style.display = isCanli ? 'none' : '';
     if (sideLive) sideLive.classList.toggle('atp-side-hidden', !isCanli);
     if (sidePlan) sidePlan.classList.toggle('atp-side-hidden', !isGunluk);
-    if (poolWrap) poolWrap.style.display = isGunluk ? '' : 'none';
+    if (poolWrap) {
+      poolWrap.classList.add('atp-v2-pool-hidden');
+      poolWrap.style.display = 'none';
+    }
 
     if (isCanli && window.AtpLiveMap) {
       var list = document.getElementById('atpVehicleList');
@@ -132,6 +148,7 @@
       if (window.AtpPlanMap) window.AtpPlanMap.onPlanTabShown();
       updatePlanMap();
       updatePlanSidebar();
+      if (window.loadAtpTodayOps) window.loadAtpTodayOps();
       if (window.AtpRoute && window.AtpPlanMap) {
         var lr = window.AtpRoute.getLastRoute();
         if (lr && lr.current && lr.current.geometry && lr.current.geometry.length) {
@@ -391,11 +408,12 @@
 
   function hydrateVehicleSelect(vehicles) {
     var sel = document.getElementById('atpSelVehicle');
-    if (!sel) return;
+    var reqSel = document.getElementById('atpReqArac');
+    if (!sel && !reqSel) return;
     var planV = planVehicleOption();
     var filom = vehicles || [];
     var urlId = new URLSearchParams(window.location.search).get('vehicle_id') || '';
-    var cur = sel.value || dashboard.selected_vehicle_id || urlId || '';
+    var cur = (sel && sel.value) || dashboard.selected_vehicle_id || urlId || '';
     var opts = [{ value: '', label: '— Araç seç —' }];
     var seen = {};
     if (planV && planV.id) {
@@ -408,13 +426,36 @@
       seen[v.id] = true;
       opts.push({ value: String(v.id), label: v.plate_display || v.plate || v.id });
     });
-    sel.innerHTML = opts.map(function (o) {
-      return '<option value="' + o.value + '">' + o.label + '</option>';
-    }).join('');
-    if (cur && sel.querySelector('option[value="' + cur + '"]')) sel.value = cur;
-    else if (planV && planV.id) sel.value = planV.id;
-    else if (filom.length === 1) sel.value = filom[0].id;
+    if (sel) {
+      sel.innerHTML = opts.map(function (o) {
+        return '<option value="' + o.value + '">' + o.label + '</option>';
+      }).join('');
+      if (cur && sel.querySelector('option[value="' + cur + '"]')) sel.value = cur;
+      else if (planV && planV.id) sel.value = planV.id;
+      else if (filom.length === 1) sel.value = filom[0].id;
+    }
+    if (reqSel) {
+      reqSel.innerHTML = opts.filter(function (o) { return o.value; }).map(function (o) {
+        return '<option value="' + o.value + '">' + o.label + '</option>';
+      }).join('');
+      if (!reqSel.options.length) {
+        reqSel.innerHTML = '<option value="">— Araç seç —</option>';
+      } else if (cur && reqSel.querySelector('option[value="' + cur + '"]')) {
+        reqSel.value = cur;
+      } else if (filom.length === 1) {
+        reqSel.value = filom[0].id;
+      }
+      syncReqPlanaSofor();
+    }
     updatePlanSidebar();
+  }
+
+  function syncReqPlanaSofor() {
+    var reqSel = document.getElementById('atpReqArac');
+    var lbl = document.getElementById('atpReqPlanaSofor');
+    if (!reqSel || !lbl) return;
+    var v = lastVehicles.find(function (x) { return String(x.id) === String(reqSel.value); });
+    lbl.textContent = (v && v.driver_name) ? v.driver_name : '—';
   }
 
   function fillVehicleSelect(vehicles) {
@@ -435,15 +476,15 @@
   }
 
   function updateLiveKpi(kpi, count) {
+    var isV2 = root.getAttribute('data-mehmet-v2') === '1';
+    var isLiveTab = currentTab === 'canli';
+    var isDailyTab = currentTab === 'gunluk';
+    if (isV2 && !isLiveTab && !isDailyTab) return;
     var elA = document.getElementById('atpKpiAktif');
-    var elAS = document.getElementById('atpKpiAktifSub');
     var elH = document.getElementById('atpKpiHareket');
-    var elHS = document.getElementById('atpKpiHareketSub');
     if (kpi) {
-      if (elA) elA.textContent = kpi.aktif_arac != null ? kpi.aktif_arac : '—';
-      if (elAS) elAS.textContent = 'Toplam ' + (kpi.aktif_arac_toplam != null ? kpi.aktif_arac_toplam : count) + ' araç';
-      if (elH) elH.textContent = kpi.hareket_halinde != null ? kpi.hareket_halinde : '—';
-      if (elHS) elHS.textContent = kpi.hareket_pct != null ? ('%' + kpi.hareket_pct) : '';
+      if (elA && kpi.aktif_arac != null) elA.textContent = kpi.aktif_arac;
+      if (elH && kpi.hareket_halinde != null) elH.textContent = kpi.hareket_halinde;
     }
   }
 
@@ -458,12 +499,8 @@
     if (!isPoll) {
       var elA = document.getElementById('atpKpiAktif');
       var elH = document.getElementById('atpKpiHareket');
-      var elAS = document.getElementById('atpKpiAktifSub');
-      var elHS = document.getElementById('atpKpiHareketSub');
       if (elA) elA.textContent = '—';
       if (elH) elH.textContent = '—';
-      if (elAS) elAS.textContent = 'Filom bağlantı hatası';
-      if (elHS) elHS.textContent = '';
     }
     if (window.AtpLiveMap) window.AtpLiveMap.refreshLiveVehicles(lastVehicles, { failed: true });
   }
@@ -515,4 +552,569 @@
   window.addEventListener('beforeunload', function () {
     if (pollTimer) clearInterval(pollTimer);
   });
+
+  /* ─── Mehmet V2 — today-operations + Plana İş Ekle ─── */
+  if (root.getAttribute('data-mehmet-v2') === '1') {
+    var miniMap = null;
+    var miniLayer = null;
+    var opsTimer = null;
+
+    function fmtVal(v) {
+      return v === null || v === undefined || v === '' ? '—' : String(v);
+    }
+
+    function fmtGpsAge(ts) {
+      if (!ts) return 'Henüz GPS verisi yok';
+      var d = new Date(String(ts).replace(' ', 'T'));
+      if (isNaN(d.getTime())) return fmtVal(ts);
+      var mins = Math.round((Date.now() - d.getTime()) / 60000);
+      if (mins < 1) return 'Son GPS: az önce';
+      if (mins < 120) return 'Son GPS: ' + mins + ' dk önce';
+      return 'Son GPS: ' + ts;
+    }
+
+    function fmtDeviation(v) {
+      if (v.route_state !== 'DEVIATING') return '';
+      var m = v.current_deviation_m;
+      if (m == null) return 'Rotadan sapıyor';
+      var km = (Number(m) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+      var dur = '';
+      if (v.deviation_started_at) {
+        var dd = new Date(String(v.deviation_started_at).replace(' ', 'T'));
+        if (!isNaN(dd.getTime())) {
+          var dm = Math.max(0, Math.round((Date.now() - dd.getTime()) / 60000));
+          dur = dm ? (' · ' + dm + ' dakikadır devam ediyor') : '';
+        }
+      }
+      return 'Rotadan ' + km + ' km saptı' + dur;
+    }
+
+    function renderKpiV2(kpi) {
+      if (!kpi) return;
+      var map = {
+        atpKpiAktif: kpi.aktif_arac,
+        atpKpiHareket: kpi.hareket_halinde,
+        atpKpiIs: kpi.toplam_is,
+        atpKpiTamam: kpi.tamamlandi,
+        atpKpiDevam: kpi.devam_ediyor,
+        atpKpiSorun: kpi.sorunlu,
+      };
+      Object.keys(map).forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = fmtVal(map[id]);
+      });
+    }
+
+    function badgeClass(v) {
+      if (v.gps_stale) return 'atp-v2-badge-warn';
+      if (v.route_state === 'DEVIATING') return 'atp-v2-badge-warn';
+      if (v.route_state === 'ON_ROUTE') return 'atp-v2-badge-ok';
+      return 'atp-v2-badge-neutral';
+    }
+
+    function vehicleCardClass(v) {
+      if (v.route_state === 'DEVIATING' || v.gps_stale) return 'warn';
+      return 'ok';
+    }
+
+    function visitRowClass(state) {
+      if (state === 'ARRIVED') return 'atp-v2-visit-arrived';
+      if (state === 'DEPARTED_PENDING') return 'atp-v2-visit-departed';
+      return 'atp-v2-visit-muted';
+    }
+
+    function renderVehicleCards(vehicles) {
+      var wrap = document.getElementById('atpVehicleCards');
+      if (!wrap) return;
+      if (!vehicles || !vehicles.length) {
+        wrap.innerHTML = '<div class="atp-v2-empty">Henüz planlı araç yok.</div>';
+        return;
+      }
+      wrap.innerHTML = vehicles.map(function (v) {
+        var pct = v.progress_total ? Math.round(100 * v.progress_completed / v.progress_total) : 0;
+        var cardCls = vehicleCardClass(v);
+        var devLine = v.deviation_label || fmtDeviation(v);
+        var gpsLine = v.gps_is_stale || v.gps_stale
+          ? '<span class="atp-v2-stale">⚠ GPS verisi eski</span>'
+          : (v.route_status_label ? fmtVal(v.route_status_label) : '—');
+        var visitLine = v.visit_label ? fmtVal(v.visit_label) : '';
+        var openLabel = v.route_state === 'DEVIATING' ? 'İncele' : 'Planı Aç';
+        var vid = v.arac_external_id || '';
+        var planId = v.plan_id || '';
+
+        var leftBlock =
+          '<div class="atp-v2-vcard-main">' +
+          '<div class="atp-v2-plate">' + fmtVal(v.plate) + '</div>' +
+          '<div class="atp-v2-driver">' + fmtVal(v.driver) + '</div>' +
+          '<div style="margin-top:4px"><span class="atp-v2-badge ' + badgeClass(v) + '">' + fmtVal(v.route_status_label) + '</span></div>' +
+          '<div class="atp-v2-progress" style="margin-top:6px">' +
+          '<div class="atp-v2-progress-track"><div class="atp-v2-progress-fill" style="width:' + pct + '%"></div></div>' +
+          '<span class="atp-v2-progress-lbl">' + fmtVal(v.progress_label) + '</span></div>' +
+          '</div>';
+
+        var midBlock =
+          '<div class="atp-v2-vcard-detail">' +
+          '<div class="atp-v2-detail-row"><span class="atp-v2-detail-icon">📍</span>Sıradaki: <strong>' + fmtVal(v.next_stop) + '</strong></div>' +
+          '<div class="atp-v2-detail-row"><span class="atp-v2-detail-icon">🕐</span>Saat: ' + fmtVal(v.next_time) + '</div>' +
+          (visitLine ? '<div class="atp-v2-detail-row"><span class="atp-v2-detail-icon">🏁</span>' + visitLine + '</div>' : '') +
+          (devLine ? '<div class="atp-v2-detail-row warn"><span class="atp-v2-detail-icon">📏</span>' + devLine + '</div>' : '') +
+          '<div class="atp-v2-detail-row"><span class="atp-v2-detail-icon">📡</span>' + gpsLine +
+          ' <em style="color:#9ca3af;margin-left:4px">' + fmtGpsAge(v.gps_last_seen_at || v.gps_timestamp) + '</em></div>' +
+          '<div class="atp-v2-detail-row"><span class="atp-v2-detail-icon">🚦</span>' + fmtVal(v.physical_status) + '</div>' +
+          '</div>';
+
+        var rightBlock =
+          '<div class="atp-v2-vcard-action">' +
+          '<button type="button" class="atp-btn atp-btn-sm atp-v2-open-plan" data-vid="' + vid + '">' + openLabel + '</button>' +
+          (planId ? '<button type="button" class="atp-btn atp-btn-sm atp-v2-timeline-btn" data-plan-id="' + planId + '" data-vid="' + vid + '">Zaman Çizelgesi</button>' : '') +
+          (v.route_state === 'DEVIATING'
+            ? '<button type="button" class="atp-btn atp-btn-sm atp-v2-open-plan" data-vid="' + vid + '">Planı Aç</button>'
+            : '') +
+          '</div>';
+
+        return '<div class="atp-v2-vehicle-card ' + cardCls + '" data-vid="' + vid + '">' +
+          '<div class="atp-v2-vcard-inner">' + leftBlock + midBlock + rightBlock + '</div></div>';
+      }).join('');
+
+      wrap.querySelectorAll('.atp-v2-open-plan').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var vid = btn.getAttribute('data-vid');
+          var sel = document.getElementById('atpSelVehicle');
+          if (sel && vid) { sel.value = vid; sel.dispatchEvent(new Event('change')); }
+          var det = document.getElementById('atpPlanningSection');
+          if (det) det.open = true;
+        });
+      });
+      wrap.querySelectorAll('.atp-v2-timeline-btn').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          openTimelineModal(btn.getAttribute('data-plan-id'), btn.getAttribute('data-vid'));
+        });
+      });
+    }
+
+    function planBadgeClass(status, visitState) {
+      if (status === 'TAMAMLANDI') return 'atp-v2-badge-ok';
+      if (visitState === 'DEPARTED_PENDING') return 'atp-v2-badge-warn';
+      if (status === 'BASLANGIC') return 'atp-v2-badge-ok';
+      return 'atp-v2-badge-neutral';
+    }
+
+    var _jobsExpanded = false;
+    var _jobsAllItems = [];
+    var JOBS_PREVIEW = 5;
+
+    function _buildJobRow(it) {
+      var visitCls = visitRowClass(it.visit_state);
+      var actionLabel = it.visit_state === 'DEPARTED_PENDING' && it.status !== 'TAMAMLANDI' ? 'Sonuçlandır' : 'Görüntüle';
+      return '<tr data-plan-item="' + (it.plan_item_id || '') + '">' +
+        '<td class="job-time">' + fmtVal(it.planned_time) + '</td>' +
+        '<td><div class="atp-v2-job-title">' + fmtVal(it.job_title) + '</div>' +
+        '<div class="atp-v2-job-sub">' + fmtVal(it.company_name) + '</div></td>' +
+        '<td>' + fmtVal(it.driver) + '</td>' +
+        '<td><span class="atp-v2-badge ' + planBadgeClass(it.status, it.visit_state) + '">' + fmtVal(it.status_label) + '</span></td>' +
+        '<td><span class="' + visitCls + '">' + fmtVal(it.visit_label) + '</span></td>' +
+        '<td><button type="button" class="atp-btn atp-btn-xs atp-v2-inspect" data-vid="' + (it.arac_external_id || '') + '" data-plan-item="' + (it.plan_item_id || '') + '">' + actionLabel + '</button></td></tr>';
+    }
+
+    function _renderJobsWithToggle(items, body) {
+      var show = _jobsExpanded ? items : items.slice(0, JOBS_PREVIEW);
+      var rows = show.map(_buildJobRow).join('');
+      if (items.length > JOBS_PREVIEW) {
+        var label = _jobsExpanded
+          ? 'Daralt'
+          : ('Tümünü Gör (' + items.length + ')');
+        rows += '<tr class="atp-v2-jobs-more-row"><td colspan="6"><button class="atp-v2-jobs-more-btn" id="atpJobsMoreBtn">' + label + '</button></td></tr>';
+      }
+      body.innerHTML = rows;
+      body.querySelectorAll('.atp-v2-inspect').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var vid = btn.getAttribute('data-vid');
+          var sel = document.getElementById('atpSelVehicle');
+          if (sel && vid) { sel.value = vid; sel.dispatchEvent(new Event('change')); }
+          var det = document.getElementById('atpPlanningSection');
+          if (det) det.open = true;
+        });
+      });
+      var moreBtn = document.getElementById('atpJobsMoreBtn');
+      if (moreBtn) {
+        moreBtn.addEventListener('click', function () {
+          _jobsExpanded = !_jobsExpanded;
+          _renderJobsWithToggle(_jobsAllItems, body);
+        });
+      }
+    }
+
+    function renderJobs(items) {
+      /* support both old id and new id */
+      var body = document.getElementById('atpDailyJobsBody') || document.getElementById('atpV2JobsBody');
+      if (!body) return;
+      _jobsAllItems = items || [];
+      if (!_jobsAllItems.length) {
+        body.innerHTML = '<tr><td colspan="6" class="atp-v2-empty">Bugün plan verisi yok.</td></tr>';
+        return;
+      }
+      _renderJobsWithToggle(_jobsAllItems, body);
+    }
+
+    var ALERTS_PREVIEW = 3;
+
+    function renderAlerts(alerts, normalMsg) {
+      var body = document.getElementById('atpAlertsBody');
+      if (!body) return;
+      if (!alerts || !alerts.length) {
+        body.innerHTML = '<p class="atp-v2-normal">' + (normalMsg || 'Bugünkü plan normal ilerliyor') + '</p>';
+        return;
+      }
+      var show = alerts.slice(0, ALERTS_PREVIEW);
+      var html = show.map(function (a) {
+        var sev = a.severity || 'info';
+        var iconMap = { warning: '⚠️', danger: '🔴', info: 'ℹ️' };
+        var icon = iconMap[sev] || 'ℹ️';
+        return '<div class="atp-v2-alert atp-v2-alert-' + sev + '">' +
+          '<span class="atp-v2-alert-icon">' + icon + '</span>' +
+          '<div class="atp-v2-alert-body">' +
+          '<div class="atp-v2-alert-firm">' + fmtVal(a.title || a.firm || '') + '</div>' +
+          '<div class="atp-v2-alert-desc">' + fmtVal(a.message || '') + '</div>' +
+          '</div>' +
+          '<span></span>' +
+          '</div>';
+      }).join('');
+      if (alerts.length > ALERTS_PREVIEW) {
+        html += '<div class="atp-v2-alerts-more"><button class="atp-v2-alerts-more-btn">Tümünü Gör (' + alerts.length + ')</button></div>';
+      }
+      body.innerHTML = html;
+    }
+
+    function renderMiniMap(mapData) {
+      var box = document.getElementById('atpMiniMap');
+      if (!box || !window.L) return;
+      if (!miniMap) {
+        miniMap = L.map(box, { zoomControl: false, attributionControl: false }).setView([41.0, 29.0], 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(miniMap);
+        miniLayer = L.layerGroup().addTo(miniMap);
+      }
+      miniLayer.clearLayers();
+      var pts = [];
+      (mapData && mapData.vehicles || []).forEach(function (v) {
+        if (v.lat == null) return;
+        var m = L.circleMarker([v.lat, v.lng], { radius: 6, color: v.stale ? '#b54708' : '#027a48', fillOpacity: 0.9 });
+        m.bindTooltip(v.plate || v.id);
+        miniLayer.addLayer(m);
+        pts.push([v.lat, v.lng]);
+      });
+      if (pts.length) miniMap.fitBounds(pts, { padding: [20, 20], maxZoom: 12 });
+      setTimeout(function () { if (miniMap) miniMap.invalidateSize(); }, 200);
+    }
+
+    function updatePrsSummaryBand(vehicles) {
+      /* Seçili aracı bul (atpSelVehicle veya ilk araç) */
+      var selEl = document.getElementById('atpSelVehicle');
+      var selVid = selEl ? selEl.value : null;
+      var chosen = null;
+      if (vehicles && vehicles.length) {
+        if (selVid) chosen = vehicles.filter(function (v) { return String(v.arac_external_id) === String(selVid); })[0];
+        if (!chosen) chosen = vehicles[0];
+      }
+      var prsArac  = document.getElementById('atpPrsArac');
+      var prsSofor = document.getElementById('atpPrsSofor');
+      var prsBtnPrs = document.getElementById('atpBtnPlanaIsEklePrs');
+      if (prsArac)  prsArac.textContent  = chosen ? fmtVal(chosen.plate)  : '—';
+      if (prsSofor) prsSofor.textContent = chosen ? fmtVal(chosen.driver) : '—';
+      if (prsBtnPrs) prsBtnPrs.style.display = chosen ? '' : 'none';
+    }
+
+    function timelineDotClass(type) {
+      if (type === 'KONUMA_VARILDI' || type === 'ROTA_GERI_DONDU') return 'green';
+      if (type === 'KONUMDAN_AYRILDI' || type === 'ROTA_SAPMA_BASLADI') return 'orange';
+      if (type === 'AMBIGUOUS_STOP') return 'red';
+      return 'gray';
+    }
+
+    function closeTimelineModal() {
+      var bd = document.getElementById('atpTimelineBackdrop');
+      var md = document.getElementById('atpTimelineModal');
+      if (bd) { bd.classList.remove('open'); bd.setAttribute('aria-hidden', 'true'); }
+      if (md) md.setAttribute('aria-hidden', 'true');
+    }
+
+    function openTimelineModal(planId, vehicleId) {
+      var bd = document.getElementById('atpTimelineBackdrop');
+      var md = document.getElementById('atpTimelineModal');
+      var body = document.getElementById('atpTimelineBody');
+      if (!bd || !md || !body) return;
+      body.innerHTML = '<p class="atp-v2-normal">Yükleniyor…</p>';
+      bd.classList.add('open');
+      bd.setAttribute('aria-hidden', 'false');
+      md.setAttribute('aria-hidden', 'false');
+      var qs = [];
+      if (planId) qs.push('plan_id=' + encodeURIComponent(planId));
+      if (vehicleId) qs.push('vehicle_id=' + encodeURIComponent(vehicleId));
+      if (planDate) qs.push('date=' + encodeURIComponent(planDate));
+      fetch('/planlama/arac-takip/api/plan-timeline?' + qs.join('&'), { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data || !data.ok) {
+            body.innerHTML = '<p class="atp-v2-normal">Olay verisi alınamadı.</p>';
+            return;
+          }
+          if (!data.events || !data.events.length) {
+            body.innerHTML = '<p class="atp-v2-normal">Bu plan için henüz kayıtlı olay yok.</p>';
+            return;
+          }
+          body.innerHTML = '<div class="atp-timeline-list">' + data.events.map(function (ev) {
+            return '<div class="atp-timeline-row">' +
+              '<div class="atp-timeline-time">' + fmtVal(ev.time_display || ev.time) + '</div>' +
+              '<div class="atp-timeline-dot ' + timelineDotClass(ev.type) + '"></div>' +
+              '<div class="atp-timeline-text">' +
+              '<div class="atp-timeline-title">' + fmtVal(ev.title) + '</div>' +
+              '<div class="atp-timeline-desc">' + fmtVal(ev.message) + '</div>' +
+              '</div></div>';
+          }).join('') + '</div>';
+        })
+        .catch(function () {
+          body.innerHTML = '<p class="atp-v2-normal">Olay verisi alınamadı.</p>';
+        });
+    }
+
+    ['atpTimelineClose', 'atpTimelineDismiss'].forEach(function (id) {
+      var btn = document.getElementById(id);
+      if (btn) btn.addEventListener('click', closeTimelineModal);
+    });
+    var tlBackdrop = document.getElementById('atpTimelineBackdrop');
+    if (tlBackdrop) {
+      tlBackdrop.addEventListener('click', function (e) {
+        if (e.target === tlBackdrop) closeTimelineModal();
+      });
+    }
+
+    function _opsShowError(status) {
+      var kpiIds = ['atpKpiAktif','atpKpiHareket','atpKpiIs','atpKpiTamam','atpKpiDevam','atpKpiSorun'];
+      kpiIds.forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = '—'; });
+      var wrap = document.getElementById('atpVehicleCards');
+      var jobWrap = document.getElementById('atpDailyJobsBody');
+      var alertWrap = document.getElementById('atpAlertsList');
+      var msg = '<div class="atp-v2-error-state">' +
+        'Plan verisi şu anda alınamadı. <button type="button" class="atp-v2-retry-btn" onclick="window.loadAtpTodayOps&&window.loadAtpTodayOps()">Yeniden dene</button>' +
+        '</div>';
+      if (wrap) wrap.innerHTML = msg;
+      if (jobWrap) jobWrap.innerHTML = '<tr><td colspan="5" class="atp-v2-empty">Veri yok.</td></tr>';
+      if (alertWrap) alertWrap.innerHTML = '';
+      console.warn('[AracTakipV2] today-operations hata', status || 'network');
+    }
+
+    function loadOps() {
+      if (currentTab !== 'gunluk') return;
+      fetch('/planlama/arac-takip/api/today-operations?date=' + encodeURIComponent(planDate), { credentials: 'same-origin' })
+        .then(function (r) {
+          if (!r.ok) {
+            console.warn('[AracTakipV2] today-operations HTTP', r.status);
+            _opsShowError(r.status);
+            return null;
+          }
+          return r.json();
+        })
+        .then(function (data) {
+          if (!data) return;
+          if (!data.ok) { _opsShowError('nok'); return; }
+          renderKpiV2(data.kpi);
+          renderVehicleCards(data.vehicles);
+          renderJobs(data.items);
+          renderAlerts(data.alerts, data.alerts_normal_message);
+          renderMiniMap(data.map);
+          /* Planlama & Rota özet bant güncelle */
+          updatePrsSummaryBand(data.vehicles);
+          /* İş sayısı güncelle */
+          var prsIs = document.getElementById('atpPrsIsSayisi');
+          if (prsIs) prsIs.textContent = data.items ? data.items.length : '—';
+        })
+        .catch(function (err) {
+          console.warn('[AracTakipV2] today-operations fetch error', err);
+          _opsShowError('network');
+        });
+    }
+
+    window.loadAtpTodayOps = loadOps;
+
+    var btnPlana = document.getElementById('atpBtnPlanaIsEkle');
+    var reqModal = document.getElementById('atpRequestModal');
+    var reqBackdrop = document.getElementById('atpModalBackdrop');
+    var modalTitle = document.getElementById('atpModalTitle');
+    var modalSubmit = document.getElementById('atpModalSubmit');
+
+    function setPlanaModalMode(on) {
+      if (modalTitle) modalTitle.textContent = on ? 'Plana İş Ekle' : 'Yeni İş Talebi';
+      if (modalSubmit) {
+        modalSubmit.textContent = on
+          ? (modalSubmit.getAttribute('data-label-plana') || 'Plana Ekle')
+          : (modalSubmit.getAttribute('data-label-request') || 'Talebi Oluştur');
+      }
+      if (reqModal) {
+        if (on) reqModal.setAttribute('data-plana-mode', '1');
+        else reqModal.removeAttribute('data-plana-mode');
+      }
+      var reqTarih = document.getElementById('atpReqTarih');
+      if (on && reqTarih) reqTarih.value = planDate;
+      if (on) syncReqPlanaSofor();
+    }
+
+    function openPlanaModal() {
+      setPlanaModalMode(true);
+      var hiddenReq = document.getElementById('atpBtnNewRequest');
+      if (hiddenReq) hiddenReq.click();
+    }
+
+    if (btnPlana) btnPlana.addEventListener('click', openPlanaModal);
+
+    var btnPlanaprs = document.getElementById('atpBtnPlanaIsEklePrs');
+    if (btnPlanaprs) btnPlanaprs.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      openPlanaModal();
+    });
+
+    var reqArac = document.getElementById('atpReqArac');
+    if (reqArac) reqArac.addEventListener('change', syncReqPlanaSofor);
+
+    var v2Date = document.getElementById('atpV2DatePicker');
+    if (v2Date) {
+      v2Date.addEventListener('change', function () {
+        var u = new URL(window.location.href);
+        u.searchParams.set('tab', 'gunluk');
+        u.searchParams.set('date', v2Date.value);
+        window.location.href = u.pathname + u.search;
+      });
+    }
+
+    var v2BaseBtn = document.getElementById('atpV2BtnBaseLocation');
+    var baseBtn = document.getElementById('atpBtnBaseLocation');
+    if (v2BaseBtn && baseBtn) {
+      v2BaseBtn.addEventListener('click', function () { baseBtn.click(); });
+    }
+
+    function readSoforFromForm() {
+      var form = document.getElementById('atpRequestForm');
+      if (!form) return null;
+      var checked = form.querySelector('input[name="sofor_secim"]:checked');
+      var code = checked ? checked.value : 'OKTAY';
+      if (code === 'OKTAY') return 'Oktay KAŞIKÇI';
+      if (code === 'SERHAT') return 'Serhat GÜLMEN';
+      var other = document.getElementById('atpSoforOtherName');
+      return other && other.value.trim() ? other.value.trim() : null;
+    }
+
+    function readLocFromDom() {
+      var masterId = document.getElementById('atpLocMasterId');
+      var cardFirma = document.getElementById('atpLocCardFirma');
+      var cardAdres = document.getElementById('atpLocCardAdres');
+      var search = document.getElementById('atpLocSearch');
+      var newFirma = document.getElementById('atpNewFirma');
+      var newAdres = document.getElementById('atpNewAdres');
+      var newMaps = document.getElementById('atpNewMaps');
+      var locCard = document.getElementById('atpLocCard');
+      if (locCard && !locCard.hidden && cardFirma) {
+        return {
+          firma: cardFirma.textContent.trim(),
+          adres: cardAdres ? cardAdres.textContent.trim() : '',
+          location_master_id: masterId ? masterId.value : '',
+          maps_url: '',
+        };
+      }
+      if (newFirma && newFirma.value.trim()) {
+        return {
+          firma: newFirma.value.trim(),
+          adres: newAdres ? newAdres.value.trim() : '',
+          location_master_id: masterId ? masterId.value : '',
+          maps_url: newMaps ? newMaps.value.trim() : '',
+        };
+      }
+      return {
+        firma: search ? search.value.trim() : '',
+        adres: '',
+        location_master_id: masterId ? masterId.value : '',
+        maps_url: '',
+      };
+    }
+
+    function buildPlanaPayload() {
+      var reqSel = document.getElementById('atpReqArac');
+      var sideSel = document.getElementById('atpSelVehicle');
+      var aracId = (reqSel && reqSel.value) || (sideSel && sideSel.value) || '';
+      var loc = readLocFromDom();
+      var payload = {
+        plan_tarihi: planDate,
+        tarih: planDate,
+        arac_external_id: aracId,
+        arac_plaka: reqSel && reqSel.selectedOptions[0] ? reqSel.selectedOptions[0].textContent : '',
+        yapilacak_is: document.getElementById('atpReqIs') && document.getElementById('atpReqIs').value.trim(),
+        is: document.getElementById('atpReqIs') && document.getElementById('atpReqIs').value.trim(),
+        firma: loc.firma,
+        adres: loc.adres,
+        location_master_id: loc.location_master_id || null,
+        kayitli_yer_id: loc.location_master_id || null,
+        maps_url: loc.maps_url || undefined,
+        planlanan_saat: document.getElementById('atpReqSaat') && document.getElementById('atpReqSaat').value,
+        oncelik: document.getElementById('atpReqOncelik') && document.getElementById('atpReqOncelik').value,
+        sofor_adi: readSoforFromForm(),
+        ek_not: document.getElementById('atpReqNot') && document.getElementById('atpReqNot').value.trim(),
+      };
+      var urun = document.getElementById('atpReqUrun');
+      var miktar = document.getElementById('atpReqMiktar');
+      var birim = document.getElementById('atpReqBirim');
+      if (urun && urun.value.trim()) payload.urun_malzeme = urun.value.trim();
+      if (miktar && miktar.value.trim()) payload.miktar = miktar.value.trim();
+      if (birim && birim.value) payload.miktar_birim = birim.value;
+      var isTuru = document.querySelector('#atpRequestForm input[name="is_turu"]:checked');
+      if (isTuru) payload.is_turu = isTuru.value;
+      return payload;
+    }
+
+    var reqForm = document.getElementById('atpRequestForm');
+    if (reqForm) {
+      reqForm.addEventListener('submit', function (ev) {
+        if (reqForm.getAttribute('data-plana-handler')) return;
+        var modal = document.getElementById('atpRequestModal');
+        if (!modal || modal.getAttribute('data-plana-mode') !== '1') return;
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        var payload = buildPlanaPayload();
+        if (!payload.arac_external_id) { toast('Araç seçin'); return; }
+        if (!payload.is) { toast('Yapılacak iş gerekli'); return; }
+        if (!payload.firma && !payload.location_master_id) { toast('Firma veya kayıtlı yer seçin'); return; }
+        fetch('/planlama/arac-takip/api/plana-is-ekle', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).then(function (r) { return r.json(); }).then(function (res) {
+          if (res.ok) {
+            toast('İş plana eklendi');
+            setPlanaModalMode(false);
+            reqBackdrop.classList.remove('open');
+            modal.classList.remove('open');
+            document.body.style.overflow = '';
+            loadOps();
+            if (res.dashboard && window.applyDashboardUpdate) window.applyDashboardUpdate(res.dashboard);
+            else refreshPlanRoute();
+          } else {
+            toast(res.error || 'Plana eklenemedi');
+          }
+        }).catch(function () { toast('Plana eklenemedi'); });
+      }, true);
+      reqForm.setAttribute('data-plana-handler', '1');
+    }
+
+    var modalClose = document.getElementById('atpModalClose');
+    var modalCancel = document.getElementById('atpModalCancel');
+    [modalClose, modalCancel].forEach(function (btn) {
+      if (!btn) return;
+      btn.addEventListener('click', function () { setPlanaModalMode(false); });
+    });
+
+    loadOps();
+    opsTimer = setInterval(loadOps, 60000);
+    window.addEventListener('beforeunload', function () {
+      if (opsTimer) clearInterval(opsTimer);
+    });
+  }
 })();

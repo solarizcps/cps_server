@@ -106,6 +106,37 @@ def get_max_gps_snapshot_id() -> int:
         con.close()
 
 
+def get_gps_snapshot_by_id(snapshot_id: int) -> dict | None:
+    con = get_conn()
+    con.row_factory = sqlite3.Row
+    try:
+        row = con.execute('SELECT * FROM arac_gps_snapshot WHERE id=?', (int(snapshot_id),)).fetchone()
+        return dict(row) if row else None
+    finally:
+        con.close()
+
+
+def get_latest_gps_snapshot(
+    arac_external_id: str,
+    *,
+    provider: str = PLAN_PROVIDER_FILOM,
+) -> dict | None:
+    con = get_conn()
+    con.row_factory = sqlite3.Row
+    try:
+        row = con.execute(
+            """
+            SELECT * FROM arac_gps_snapshot
+            WHERE arac_provider=? AND arac_external_id=?
+            ORDER BY gps_timestamp DESC, id DESC LIMIT 1
+            """,
+            (provider, str(arac_external_id)),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        con.close()
+
+
 def plan_rota_tables_ready() -> bool:
     con = get_conn()
     try:
