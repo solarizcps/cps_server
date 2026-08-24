@@ -212,35 +212,47 @@ print('IMPORT_OK')
     }
 }
 
-function Test-SchemaReadiness {
+function Test-DbPathParity {
     param([string]$ResolvedPython)
+    $canonicalDb = Join-Path $AppDir 'mock_data.db'
     $probe = @"
-import os, sqlite3, sys
+import json, os, sys
 sys.path.insert(0, r'$AppDir')
 os.chdir(r'$AppDir')
-db = os.path.join(r'$AppDir', 'mock_data.db')
-con = sqlite3.connect(db, timeout=10)
-try:
-    integrity = con.execute('PRAGMA integrity_check').fetchone()[0]
-    if integrity != 'ok':
-        raise SystemExit('integrity=' + str(integrity))
-    for t in ('arac_gps_snapshot', 'arac_plan_is_ziyaret_durum'):
-        ok = con.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (t,)
-        ).fetchone()
-        if not ok:
-            raise SystemExit('missing_table=' + t)
-finally:
-    con.close()
-print('SCHEMA_OK')
+os.environ.pop('CPS_MOCK_DB_PATH', None)
+os.environ['CPS_ARAC_GPS_CANONICAL_WRITE'] = 'YES'
+from modules.planlama.arac_gps_canonical_guard import (
+    validate_db_path_parity,
+    assert_gps_db_write_allowed,
+    _forbidden_modules_stub_path,
+    _canonical_path,
+)
+info = validate_db_path_parity()
+forbidden = _forbidden_modules_stub_path()
+expected = _canonical_path()
+if info['parity'] != True:
+    raise SystemExit('db_path_parity=false')
+if os.path.normcase(info['expected_canonical']) != os.path.normcase(r'$canonicalDb'):
+    raise SystemExit('expected_canonical_mismatch')
+if os.path.normcase(info['active_db']) != os.path.normcase(info['config_db']):
+    raise SystemExit('active_config_mismatch')
+if os.path.normcase(forbidden) == os.path.normcase(info['expected_canonical']):
+    raise SystemExit('forbidden_equals_canonical')
+assert_gps_db_write_allowed()
+print('ExpectedCanonicalDb=' + info['expected_canonical'])
+print('ActiveDb=' + info['active_db'])
+print('ConfigDb=' + info['config_db'])
+print('DbPathParity=True')
+print('DB_PARITY_OK')
 "@
-    $tmp = Join-Path $env:TEMP ("arac_gps_schema_probe_{0}.py" -f $PID)
+    $tmp = Join-Path $env:TEMP ("arac_gps_db_parity_probe_{0}.py" -f $PID)
     Set-Content -LiteralPath $tmp -Value $probe -Encoding UTF8
     try {
-        $out = & $ResolvedPython $tmp 2>&1
-        if ($LASTEXITCODE -ne 0 -or ($out -notmatch 'SCHEMA_OK')) {
-            throw "Schema readiness failed: $out"
+        $out = & $ResolvedPython $tmp 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0 -or ($out -notmatch 'DB_PARITY_OK')) {
+            throw "DB path parity check failed: $out"
         }
+        return $out
     }
     finally {
         Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
@@ -363,7 +375,7 @@ if (-not (Test-Path -LiteralPath $Worker -PathType Leaf)) {
 }
 
 Test-PythonExeContract -ResolvedPython $resolvedPy
-Test-SchemaReadiness -ResolvedPython $resolvedPy
+$dbParityOut = Test-DbPathParity -ResolvedPython $resolvedPy
 Test-LogDirectoryWritable
 
 $aclReport = Get-SecretFileAclReport -Path $SecretFile
@@ -374,10 +386,19 @@ foreach ($n in $Script:FilomFieldNames) {
     $fieldStatus += ("{0}=present" -f $n)
 }
 
+$expectedCanonicalDb = ($dbParityOut -split "`n" | Where-Object { $_ -match '^ExpectedCanonicalDb=' } | Select-Object -First 1) -replace '^ExpectedCanonicalDb=', ''
+$activeDb = ($dbParityOut -split "`n" | Where-Object { $_ -match '^ActiveDb=' } | Select-Object -First 1) -replace '^ActiveDb=', ''
+$configDb = ($dbParityOut -split "`n" | Where-Object { $_ -match '^ConfigDb=' } | Select-Object -First 1) -replace '^ConfigDb=', ''
+$dbPathParity = ($dbParityOut -match 'DbPathParity=True')
+
 $report = [ordered]@{
     PythonExe           = $resolvedPy
     AppDir              = $AppDir
     Worker              = $Worker
+    ExpectedCanonicalDb = $expectedCanonicalDb
+    ActiveDb            = $activeDb
+    ConfigDb            = $configDb
+    DbPathParity        = $dbPathParity
     SecretFile          = $SecretFile
     SecretFileExists    = $aclReport.Exists
     SecretAclOk         = ($aclReport.InheritanceDisabled -and $aclReport.SystemFullControl -and (
@@ -402,6 +423,9 @@ foreach ($pair in $report.GetEnumerator()) {
 }
 
 if ($ValidateOnly) {
+    if (-not $dbPathParity) {
+        throw 'ValidateOnly failed: DbPathParity=False'
+    }
     Write-Host 'VALIDATE_ONLY=PASS'
     exit 0
 }

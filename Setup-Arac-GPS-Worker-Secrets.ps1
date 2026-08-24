@@ -21,7 +21,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$BaseUrl = 'https://filom.turkcell.com.tr/api',
+    [string]$BaseUrl = 'https://filom.turkcell.com.tr/mobilws/services',
 
     [switch]$ValidateOnly,
 

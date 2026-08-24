@@ -25,7 +25,11 @@ SETUP_PS1 = os.path.join(ROOT, 'Setup-Arac-GPS-Worker-Secrets.ps1')
 CANON_DB = os.path.join(ROOT, 'app', 'mock_data.db')
 PROD_SECRET = r'C:\ProgramData\Solariz\secrets\arac_gps_worker.dpapi'
 DPAPI_ENTROPY = 'Solariz.CPS.AracGPSWorker.DPAPI.v1'
-CHANGED_FILES = [START_PS1, REGISTER_PS1, SETUP_PS1, __file__]
+APP_DIR = os.path.join(ROOT, 'app')
+GUARD_PY = os.path.join(APP_DIR, 'modules', 'planlama', 'arac_gps_canonical_guard.py')
+WRONG_STUB_DB = os.path.join(APP_DIR, 'modules', 'mock_data.db')
+FILOM_BASE_URL = 'https://filom.turkcell.com.tr/mobilws/services'
+CHANGED_FILES = [START_PS1, REGISTER_PS1, SETUP_PS1, GUARD_PY, __file__]
 
 PASS = FAIL = 0
 TEMP_SECRET: str | None = None
@@ -76,6 +80,132 @@ def canon_counts() -> dict:
         con.close()
 
 
+def run_guard_py(code: str, *, env: dict | None = None) -> tuple[int, str]:
+    env2 = os.environ.copy()
+    env2['PYTHONPATH'] = APP_DIR
+    for key in ('CPS_MOCK_DB_PATH', 'CPS_ARAC_GPS_CANONICAL_WRITE'):
+        env2.pop(key, None)
+    if env:
+        for k, v in env.items():
+            if v is None:
+                env2.pop(k, None)
+            else:
+                env2[k] = v
+    p = subprocess.run(
+        [REAL_PY, '-c', code],
+        capture_output=True,
+        text=True,
+        cwd=APP_DIR,
+        env=env2,
+    )
+    return p.returncode, (p.stdout or '') + (p.stderr or '')
+
+
+def test_canonical_guard_contract() -> None:
+    canon_norm = os.path.normcase(CANON_DB)
+    wrong_norm = os.path.normcase(WRONG_STUB_DB)
+
+    rc, out = run_guard_py(
+        "from modules.planlama.arac_gps_canonical_guard import _canonical_path; print(_canonical_path())"
+    )
+    got = [ln.strip() for ln in out.splitlines() if ln.strip()][-1] if out.strip() else ''
+    ok('canonical_path_exact_app_mock_data') if rc == 0 and os.path.normcase(got) == canon_norm else bad('canonical_path_exact_app_mock_data', got or out[-200:])
+
+    rc, out = run_guard_py(
+        "from modules.planlama.arac_gps_canonical_guard import "
+        "is_canonical_path, _forbidden_modules_stub_path; "
+        "import os; "
+        "stub=_forbidden_modules_stub_path(); "
+        "print('stub_not_canonical' if not is_canonical_path(stub) else 'BAD')"
+    )
+    ok('modules_stub_not_canonical') if rc == 0 and 'stub_not_canonical' in out else bad('modules_stub_not_canonical', out[-200:])
+
+    rc, out = run_guard_py(
+        "from modules.planlama.arac_gps_canonical_guard import validate_db_path_parity; "
+        "info=validate_db_path_parity(); "
+        "import os; "
+        "assert info['parity'] is True; "
+        "assert os.path.normcase(info['active_db'])==os.path.normcase(info['config_db']); "
+        "print('parity_ok')"
+    )
+    ok('active_config_parity_default') if rc == 0 and 'parity_ok' in out else bad('active_config_parity_default', out[-200:])
+
+    rc, _ = run_guard_py(
+        "from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed; "
+        "assert_gps_db_write_allowed()",
+        env={'CPS_ARAC_GPS_CANONICAL_WRITE': None},
+    )
+    ok('canonical_flag_missing_exit2') if rc == 2 else bad('canonical_flag_missing_exit2', f'rc={rc}')
+
+    missing = os.path.join(tempfile.gettempdir(), f'gps_missing_{os.getpid()}.db')
+    if os.path.exists(missing):
+        os.remove(missing)
+    rc, _ = run_guard_py(
+        "from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed; "
+        "assert_gps_db_write_allowed()",
+        env={
+            'CPS_MOCK_DB_PATH': missing,
+            'CPS_ARAC_GPS_CANONICAL_WRITE': 'YES',
+        },
+    )
+    ok('missing_db_exit2') if rc == 2 else bad('missing_db_exit2', f'rc={rc}')
+    ok('missing_db_not_created') if not os.path.exists(missing) else bad('missing_db_not_created')
+
+    zero_byte = os.path.join(tempfile.gettempdir(), f'gps_zero_{os.getpid()}.db')
+    open(zero_byte, 'wb').close()
+    try:
+        rc, _ = run_guard_py(
+            "from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed; "
+            "assert_gps_db_write_allowed()",
+            env={
+                'CPS_MOCK_DB_PATH': zero_byte,
+                'CPS_ARAC_GPS_CANONICAL_WRITE': 'YES',
+            },
+        )
+        ok('zero_byte_db_exit2') if rc == 2 else bad('zero_byte_db_exit2', f'rc={rc}')
+    finally:
+        if os.path.exists(zero_byte):
+            os.remove(zero_byte)
+
+    rc, _ = run_guard_py(
+        "from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed; "
+        "assert_gps_db_write_allowed()",
+        env={
+            'CPS_MOCK_DB_PATH': WRONG_STUB_DB,
+            'CPS_ARAC_GPS_CANONICAL_WRITE': 'YES',
+        },
+    )
+    ok('wrong_modules_stub_rejected') if rc == 2 else bad('wrong_modules_stub_rejected', f'rc={rc}')
+
+    rc, out = run_guard_py(
+        "from modules.planlama.arac_gps_canonical_guard import validate_db_path_parity; "
+        "info=validate_db_path_parity(); "
+        "assert info['explicit_temp_db'] is False; "
+        "assert info['parity'] is True; "
+        "print('no_implicit_temp')"
+    )
+    ok('noncanonical_requires_explicit_env') if rc == 0 and 'no_implicit_temp' in out else bad('noncanonical_requires_explicit_env', out[-200:])
+
+    temp_db = os.path.join(tempfile.gettempdir(), f'gps_temp_ok_{os.getpid()}.db')
+    import shutil
+    shutil.copy2(CANON_DB, temp_db)
+    try:
+        rc, out = run_guard_py(
+            "from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed; "
+            "p=assert_gps_db_write_allowed(); print('TEMP_OK:' + p)",
+            env={'CPS_MOCK_DB_PATH': temp_db, 'CPS_ARAC_GPS_CANONICAL_WRITE': None},
+        )
+        ok('explicit_temp_db_allowed') if rc == 0 and 'TEMP_OK:' in out else bad('explicit_temp_db_allowed', out[-200:])
+    finally:
+        if os.path.exists(temp_db):
+            os.remove(temp_db)
+
+    if os.path.normcase(wrong_norm) != os.path.normcase(canon_norm):
+        ok('wrong_stub_distinct_from_canonical')
+    else:
+        bad('wrong_stub_distinct_from_canonical')
+
+
 def create_temp_dpapi_fixture() -> str:
     """Create temp DPAPI LocalMachine fixture with dummy (non-real) credentials."""
     path = os.path.join(tempfile.gettempdir(), f'arac_gps_test_{os.getpid()}.dpapi')
@@ -109,6 +239,34 @@ Write-Output 'FIXTURE_OK'
     return path
 
 
+def get_worker_pids() -> list[str]:
+    rc, out = run_ps_cmd(
+        "Get-CimInstance Win32_Process | Where-Object { "
+        "$_.CommandLine -like '*arac_gps_poll_worker*' -and "
+        "$_.CommandLine -notlike '*Where-Object*' "
+        "} | Select-Object -ExpandProperty ProcessId"
+    )
+    if rc != 0:
+        return []
+    return [ln.strip() for ln in out.splitlines() if ln.strip()]
+
+
+def get_task_state() -> str:
+    rc, out = run_ps_cmd(
+        "Get-ScheduledTask -TaskPath '\\Solariz\\' -TaskName 'Solariz_CPS_Arac_GPS_Worker' "
+        "-ErrorAction SilentlyContinue | Select-Object -ExpandProperty State"
+    )
+    return out.strip() if rc == 0 else ''
+
+
+def read_worker_log_tail() -> str:
+    log_path = os.path.join(ROOT, 'logs', 'arac_gps_worker.out.log')
+    if not os.path.isfile(log_path):
+        return ''
+    with open(log_path, encoding='utf-8', errors='replace') as fh:
+        return fh.read()[-8000:]
+
+
 def acl_has_system(path: str) -> bool:
     rc, out = run_ps_cmd(
         rf"(Get-Acl -LiteralPath '{path}').Access | Where-Object {{ $_.IdentityReference.Value -eq 'NT AUTHORITY\SYSTEM' }} | Measure-Object | Select-Object -ExpandProperty Count"
@@ -119,8 +277,12 @@ def acl_has_system(path: str) -> bool:
 def main() -> int:
     global TEMP_SECRET
     print('=' * 60)
-    print('GPS SYSTEM + DPAPI HARDENING TESTS')
+    print('GPS CANONICAL DB PATH + FILOM URL FINAL LOCK TESTS')
     before = canon_counts()
+    worker_before = get_worker_pids()
+    task_before = get_task_state()
+
+    test_canonical_guard_contract()
 
     TEMP_SECRET = create_temp_dpapi_fixture()
     ok('dpapi_temp_fixture_created', TEMP_SECRET)
@@ -168,6 +330,14 @@ def main() -> int:
         ok('setup_acl_inheritance_disabled')
     else:
         bad('setup_acl_inheritance_disabled')
+    if f"BaseUrl = '{FILOM_BASE_URL}'" in setup_text:
+        ok('setup_default_filom_baseurl')
+    else:
+        bad('setup_default_filom_baseurl')
+    if 'filom.turkcell.com.tr/api' not in setup_text.replace(FILOM_BASE_URL, ''):
+        ok('setup_no_legacy_api_baseurl')
+    else:
+        bad('setup_no_legacy_api_baseurl')
 
     # Start wrapper contracts
     start_text = open(START_PS1, encoding='utf-8').read()
@@ -196,21 +366,34 @@ def main() -> int:
     else:
         bad('supervisor_filom_from_env')
 
-    # Register SYSTEM contract
-    rc, out = run_ps([REGISTER_PS1, '-PythonExe', REAL_PY, '-ValidateOnly', '-SecretFile', TEMP_SECRET])
+    # Wrapper ValidateOnly parity fields
+    rc, start_out = run_ps([START_PS1, '-PythonExe', REAL_PY, '-ValidateOnly', '-SecretFile', TEMP_SECRET])
+    parity_checks = {
+        'wrapper_expected_canonical_db': 'ExpectedCanonicalDb=' in start_out and 'mock_data.db' in start_out,
+        'wrapper_active_db': 'ActiveDb=' in start_out,
+        'wrapper_config_db': 'ConfigDb=' in start_out,
+        'wrapper_db_path_parity': 'DbPathParity=True' in start_out,
+    }
+    for k, v in parity_checks.items():
+        ok(k) if v else bad(k, start_out[-300:])
+
+    # Register ValidateOnly chain
+    rc, reg_out = run_ps([REGISTER_PS1, '-PythonExe', REAL_PY, '-ValidateOnly', '-SecretFile', TEMP_SECRET])
+    ok('register_validateonly_pass') if rc == 0 and 'VALIDATE_ONLY=PASS' in reg_out else bad('register_validateonly_pass', reg_out[-300:])
+
     reg_checks = {
-        'system_principal': 'PrincipalUserId=SYSTEM' in out,
-        'service_account': 'LogonType=ServiceAccount' in out,
-        'runlevel_highest': 'RunLevel=Highest' in out,
-        'trigger_startup': 'Trigger=AtStartup' in out,
-        'start_when_available': 'StartWhenAvailable=True' in out,
-        'ignore_new': 'MultipleInstances=IgnoreNew' in out,
-        'initial_disabled': 'InitialState=Disabled' in out,
-        'secret_not_in_action': 'TURKCELL_FILOM_PASSWORD' not in out.split('Argument=')[-1] if 'Argument=' in out else True,
-        'dpapi_secret_source': 'DPAPI LocalMachine' in out,
+        'system_principal': 'PrincipalUserId=SYSTEM' in reg_out,
+        'service_account': 'LogonType=ServiceAccount' in reg_out,
+        'runlevel_highest': 'RunLevel=Highest' in reg_out,
+        'trigger_startup': 'Trigger=AtStartup' in reg_out,
+        'start_when_available': 'StartWhenAvailable=True' in reg_out,
+        'ignore_new': 'MultipleInstances=IgnoreNew' in reg_out,
+        'initial_disabled': 'InitialState=Disabled' in reg_out,
+        'secret_not_in_action': 'TURKCELL_FILOM_PASSWORD' not in reg_out.split('Argument=')[-1] if 'Argument=' in reg_out else True,
+        'dpapi_secret_source': 'DPAPI LocalMachine' in reg_out,
     }
     for k, v in reg_checks.items():
-        ok(k) if v else bad(k, out[-200:])
+        ok(k) if v else bad(k, reg_out[-200:])
 
     # WindowsApps rejected
     if os.path.exists(WINDOWS_APPS_PY):
@@ -235,19 +418,13 @@ def main() -> int:
         text = open(path, encoding='utf-8').read()
         ok(f'no_path_lookup_{os.path.basename(path)}') if 'Get-Command python' not in text else bad(f'no_path_lookup_{os.path.basename(path)}')
 
-    # ValidateOnly no worker
-    before_procs = subprocess.run(
-        ['powershell', '-NoProfile', '-Command',
-         "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*arac_gps_poll_worker*' -and $_.CommandLine -notlike '*Where-Object*' } | Measure-Object | Select-Object -ExpandProperty Count"],
-        capture_output=True, text=True,
-    ).stdout.strip()
+    # ValidateOnly must not spawn a new worker; live instance preserved
+    mid_worker = get_worker_pids()
     run_ps([START_PS1, '-PythonExe', REAL_PY, '-ValidateOnly', '-SecretFile', TEMP_SECRET])
-    after_procs = subprocess.run(
-        ['powershell', '-NoProfile', '-Command',
-         "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*arac_gps_poll_worker*' -and $_.CommandLine -notlike '*Where-Object*' } | Measure-Object | Select-Object -ExpandProperty Count"],
-        capture_output=True, text=True,
-    ).stdout.strip()
-    ok('validateonly_no_worker_process') if before_procs == after_procs else bad('validateonly_no_worker_process')
+    after_validate_worker = get_worker_pids()
+    ok('validateonly_no_new_worker') if mid_worker == after_validate_worker else bad(
+        'validateonly_no_new_worker', f'mid={mid_worker} after={after_validate_worker}'
+    )
 
     # Secret not leaked in outputs
     secret_patterns = [
@@ -255,7 +432,7 @@ def main() -> int:
         r'fixture_user_not_real',
         r'password\s*=\s*(?!unset\b|present)[A-Za-z0-9@#$%^&*!]{6,}',
     ]
-    leaked = any(re.search(pat, out, re.I) for pat in secret_patterns)
+    leaked = any(re.search(pat, reg_out, re.I) for pat in secret_patterns)
     ok('validateonly_no_secret_leak') if not leaked else bad('validateonly_no_secret_leak')
 
     # ACL on temp fixture
@@ -292,9 +469,14 @@ def main() -> int:
     # Register does not overwrite wrapper
     ok('register_no_wrapper_overwrite') if 'Set-Content -Path $Wrapper' not in open(REGISTER_PS1, encoding='utf-8').read() else bad('register_no_wrapper_overwrite')
 
-    # Task not created
-    rc, task_out = run_ps_cmd("Get-ScheduledTask -TaskPath '\\Solariz\\' -TaskName 'Solariz_CPS_Arac_GPS_Worker' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty State")
-    ok('task_not_created') if rc != 0 or not task_out.strip() else bad('task_not_created', task_out.strip())
+    # Live task must stay Running; tests must not stop/start it
+    task_after = get_task_state()
+    if task_before.lower() == 'running':
+        ok('task_still_running') if task_after.lower() == 'running' else bad('task_still_running', task_after)
+    elif not task_before:
+        ok('task_state_unchanged', 'absent')
+    else:
+        ok('task_state_unchanged') if task_before == task_after else bad('task_state_unchanged', f'{task_before}->{task_after}')
 
     # 8080 health
     try:
@@ -303,12 +485,36 @@ def main() -> int:
     except Exception as e:
         bad('8080_health', str(e))
 
-    # Canonical unchanged
+    # Live worker preserved; business counts stable (GPS may grow during polls)
+    worker_after = get_worker_pids()
+    if len(worker_before) == 1:
+        ok('worker_count_one') if len(worker_after) == 1 else bad('worker_count_one', str(worker_after))
+        ok('worker_instance_preserved') if worker_before == worker_after else bad(
+            'worker_instance_preserved', f'{worker_before}->{worker_after}'
+        )
+    elif len(worker_before) == 0:
+        ok('worker_count_baseline_zero', 'no live worker in this host')
+        ok('worker_instance_preserved') if worker_before == worker_after else bad(
+            'worker_instance_preserved', f'{worker_before}->{worker_after}'
+        )
+    else:
+        bad('worker_count_one', f'baseline={worker_before}')
+
     after = canon_counts()
-    ok('canonical_sha_unchanged') if before['sha256'] == after['sha256'] else bad('canonical_sha_unchanged')
-    ok('gps_snapshot_unchanged') if before['gps'] == after['gps'] == 6 else bad('gps_snapshot_unchanged', str(after))
+    ok('gps_count_non_decreasing') if after['gps'] >= before['gps'] else bad('gps_count_non_decreasing', str(after))
     ok('bekleyen_unchanged') if before['bekleyen'] == after['bekleyen'] == 85 else bad('bekleyen_unchanged', str(after))
     ok('plan_is_unchanged') if before['plan_is'] == after['plan_is'] == 92 else bad('plan_is_unchanged', str(after))
+
+    log_tail = read_worker_log_tail()
+    if len(worker_before) == 1:
+        ok('worker_log_poll_ok') if log_tail and 'poll ok=True' in log_tail else bad('worker_log_poll_ok', 'missing poll ok=True')
+        ok('worker_log_vehicles_four') if log_tail and 'vehicles=4' in log_tail else bad('worker_log_vehicles_four', 'missing vehicles=4')
+    elif log_tail and ('poll ok=True' in log_tail or 'vehicles=' in log_tail):
+        ok('worker_log_poll_ok') if 'poll ok=True' in log_tail else bad('worker_log_poll_ok')
+        ok('worker_log_vehicles_four') if 'vehicles=4' in log_tail else bad('worker_log_vehicles_four')
+    else:
+        ok('worker_log_poll_ok', 'skipped — no live worker/log on host')
+        ok('worker_log_vehicles_four', 'skipped — no live worker/log on host')
 
     # git diff --check
     p = subprocess.run(['git', 'diff', '--check', '--'] + CHANGED_FILES, capture_output=True, text=True, cwd=ROOT)
