@@ -72,6 +72,21 @@ def ux_v2_columns_ready() -> bool:
         con.close()
 
 
+def multi_location_columns_ready() -> bool:
+    if not tablo_var_mi('arac_kayitli_yer'):
+        return False
+    con = get_conn()
+    try:
+        cols = {r[1] for r in con.execute('PRAGMA table_info(arac_kayitli_yer)').fetchall()}
+        return all(c in cols for c in ('konum_adi', 'cari_id', 'updated_at'))
+    finally:
+        con.close()
+
+
+def idempotency_ready() -> bool:
+    return tablo_var_mi('arac_plana_idempotency')
+
+
 def _parse_ux_v2_payload(payload: dict) -> dict:
     from modules.planlama.arac_sofor_service import resolve_sofor_from_payload
 
@@ -219,16 +234,26 @@ def _location_dto(row: sqlite3.Row | dict, usage: dict | None = None) -> dict:
     r = _row_dict(row) or {}
     lat = r.get('latitude')
     lng = r.get('longitude')
+    firma = r.get('firma_adi', '')
+    adres = r.get('adres') or ''
+    konum_adi = (r.get('konum_adi') or '').strip() if multi_location_columns_ready() else ''
+    short = _short_adres(adres)
+    display = f'{konum_adi} — {short}' if konum_adi else short or adres
     return {
         'id': str(r['id']),
-        'firma': r.get('firma_adi', ''),
+        'firma': firma,
+        'name': firma,
         'kisi': r.get('kisi_adi') or '',
         'telefon': r.get('telefon') or '',
-        'adres': r.get('adres') or '',
+        'adres': adres,
+        'address': adres,
+        'konum_adi': konum_adi,
+        'display_label': display,
+        'cari_id': r.get('cari_id') if multi_location_columns_ready() else None,
         'latitude': lat,
         'longitude': lng,
         'maps_url': r.get('konum_linki') or '',
-        'short_adres': _short_adres(r.get('adres') or ''),
+        'short_adres': short,
         'has_location': lat is not None and lng is not None,
         'last_used_at': usage.get('last_used_at') or r.get('son_kullanim_at'),
         'usage_count': usage.get('usage_count', r.get('kullanim_sayisi') or 0),
@@ -266,6 +291,67 @@ def search_locations(query: str = '', limit: int = 12) -> list[dict]:
                 (limit,),
             ).fetchall()
         return [_location_dto(r) for r in rows]
+    finally:
+        con.close()
+
+
+def list_company_locations(
+    anchor_location_id: int | None = None,
+    cari_id: int | None = None,
+) -> dict:
+    """List saved locations for a company (cari_id or anchor-scoped firma group)."""
+    if not tables_ready():
+        return {'locations': [], 'company': None}
+    con = get_conn()
+    try:
+        anchor = None
+        if anchor_location_id:
+            anchor = con.execute(
+                'SELECT * FROM arac_kayitli_yer WHERE id=? AND aktif=1',
+                (int(anchor_location_id),),
+            ).fetchone()
+        resolved_cari = int(cari_id) if cari_id not in (None, '') else None
+        if resolved_cari is None and anchor and multi_location_columns_ready():
+            anchor_cari = anchor['cari_id'] if 'cari_id' in anchor.keys() else None
+            if anchor_cari not in (None, ''):
+                resolved_cari = int(anchor_cari)
+        rows: list[sqlite3.Row] = []
+        if resolved_cari is not None and multi_location_columns_ready():
+            rows = con.execute(
+                """
+                SELECT * FROM arac_kayitli_yer
+                WHERE aktif=1 AND cari_id=?
+                ORDER BY COALESCE(son_kullanim_at,'') DESC, COALESCE(konum_adi,''), id
+                """,
+                (resolved_cari,),
+            ).fetchall()
+        elif anchor:
+            nf = _norm_firma(anchor['firma_adi'] or '')
+            all_rows = con.execute(
+                """
+                SELECT * FROM arac_kayitli_yer WHERE aktif=1
+                ORDER BY COALESCE(son_kullanim_at,'') DESC, id
+                """,
+            ).fetchall()
+            rows = [r for r in all_rows if _norm_firma(r['firma_adi'] or '') == nf]
+        company = None
+        if anchor:
+            company = {
+                'firma': anchor['firma_adi'],
+                'cari_id': resolved_cari,
+                'anchor_location_id': int(anchor['id']),
+            }
+        elif resolved_cari is not None:
+            sample = rows[0] if rows else None
+            company = {
+                'firma': sample['firma_adi'] if sample else '',
+                'cari_id': resolved_cari,
+                'anchor_location_id': int(sample['id']) if sample else None,
+            }
+        return {
+            'locations': [_location_dto(r) for r in rows],
+            'company': company,
+        }
     finally:
         con.close()
 
@@ -326,6 +412,8 @@ def _ensure_kayitli_yer(
     telefon: str | None = None,
     existing_yer_id: int | None = None,
     now: str | None = None,
+    konum_adi: str | None = None,
+    cari_id: int | None = None,
 ) -> tuple[int, str]:
     """Create/reuse arac_kayitli_yer; returns (yer_id, master_action)."""
     now = now or _now_iso()
@@ -340,35 +428,69 @@ def _ensure_kayitli_yer(
             loc_id = int(existing_yer_id)
             master_action = 'linked_existing'
     if loc_id is None:
-        dup = find_duplicate_location({
-            'firma_adi': firma,
-            'telefon': telefon,
-            'adres': adres,
-            'latitude': latitude,
-            'longitude': longitude,
-        })
-        if dup:
-            loc_id = int(dup['id'])
-            master_action = 'reused'
+        nf = _norm_firma(firma)
+        np = _norm_phone(telefon or '')
+        na = _norm_adres(adres)
+        rows = con.execute(
+            'SELECT id, firma_adi, telefon, adres, latitude, longitude FROM arac_kayitli_yer WHERE aktif=1',
+        ).fetchall()
+        for row in rows:
+            if _norm_firma(row['firma_adi'] or '') != nf:
+                continue
+            if (
+                latitude is not None and longitude is not None
+                and row['latitude'] is not None and row['longitude'] is not None
+                and abs(float(latitude) - float(row['latitude'])) < 0.0001
+                and abs(float(longitude) - float(row['longitude'])) < 0.0001
+            ):
+                loc_id = int(row['id'])
+                master_action = 'reused'
+                break
+            if np and _norm_phone(row['telefon'] or '') == np:
+                loc_id = int(row['id'])
+                master_action = 'reused'
+                break
+            if na and _norm_adres(row['adres'] or '') == na:
+                loc_id = int(row['id'])
+                master_action = 'reused'
+                break
+    update_cols = [
+        'latitude=?', 'longitude=?',
+        'konum_linki=COALESCE(?, konum_linki)',
+        'kisi_adi=COALESCE(?, kisi_adi)', 'telefon=COALESCE(?, telefon)',
+    ]
+    update_vals: list[Any] = [float(latitude), float(longitude), konum_linki, kisi, telefon]
+    if multi_location_columns_ready():
+        if konum_adi:
+            update_cols.append('konum_adi=COALESCE(?, konum_adi)')
+            update_vals.append(konum_adi.strip())
+        if cari_id is not None:
+            update_cols.append('cari_id=COALESCE(?, cari_id)')
+            update_vals.append(int(cari_id))
+        update_cols.append('updated_at=?')
+        update_vals.append(now)
     if loc_id is not None:
+        update_vals.append(loc_id)
         con.execute(
-            """
-            UPDATE arac_kayitli_yer
-            SET latitude=?, longitude=?, konum_linki=COALESCE(?, konum_linki),
-                kisi_adi=COALESCE(?, kisi_adi), telefon=COALESCE(?, telefon)
-            WHERE id=?
-            """,
-            (float(latitude), float(longitude), konum_linki, kisi, telefon, loc_id),
+            f"UPDATE arac_kayitli_yer SET {', '.join(update_cols)} WHERE id=?",
+            tuple(update_vals),
         )
     else:
+        cols = [
+            'firma_adi', 'kisi_adi', 'telefon', 'adres', 'konum_linki',
+            'latitude', 'longitude', 'aktif', 'kullanim_sayisi', 'created_at', 'created_by',
+        ]
+        vals: list[Any] = [
+            firma, kisi, telefon, adres, konum_linki,
+            float(latitude), float(longitude), 1, 0, now, session_user_id,
+        ]
+        if multi_location_columns_ready():
+            cols.extend(['konum_adi', 'cari_id', 'updated_at'])
+            vals.extend([(konum_adi or '').strip() or None, cari_id, now])
+        placeholders = ','.join('?' for _ in cols)
         cur = con.execute(
-            """
-            INSERT INTO arac_kayitli_yer (
-                firma_adi, kisi_adi, telefon, adres, konum_linki,
-                latitude, longitude, aktif, kullanim_sayisi, created_at, created_by
-            ) VALUES (?,?,?,?,?,?,?,1,0,?,?)
-            """,
-            (firma, kisi, telefon, adres, konum_linki, float(latitude), float(longitude), now, session_user_id),
+            f"INSERT INTO arac_kayitli_yer ({', '.join(cols)}) VALUES ({placeholders})",
+            tuple(vals),
         )
         loc_id = int(cur.lastrowid)
         master_action = 'created'

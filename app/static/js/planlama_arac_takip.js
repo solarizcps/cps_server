@@ -9,6 +9,21 @@
   var root = document.getElementById('atpV2Root');
   if (!root) return;
 
+  /* ─── Injected styles (firma dropdown + validation errors) ─── */
+  (function () {
+    var s = document.createElement('style');
+    s.textContent =
+      '.firma-dd-item.firma-dd-focused{background:#fffbec;outline:2px solid #f59e0b;}' +
+      '.firma-dd-item.firma-dd-new strong{color:#1d4ed8;font-style:italic;}' +
+      /* validation error states */
+      '.atp-field-err input,.atp-field-err select,.atp-field-err textarea{border-color:#ef4444!important;box-shadow:0 0 0 2px rgba(239,68,68,.18)!important;}' +
+      '.atp-field-err-msg{display:block;color:#dc2626;font-size:12px;margin-top:3px;font-weight:500;}' +
+      '#atpValidationSummary .atp-val-box{background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:8px 12px;font-size:13px;color:#991b1b;line-height:1.5;}' +
+      '#atpValidationSummary .atp-val-box ul{margin:4px 0 0 16px;padding:0;}' +
+      '#atpValidationSummary .atp-val-box ul li{margin:2px 0;}';
+    document.head.appendChild(s);
+  }());
+
   /* ─── Dashboard SSR data ─── */
   var dashEl = document.getElementById('atpDashboardJson');
   var dashboard = {};
@@ -1243,23 +1258,302 @@
     if (e.target === tlBackdrop) closeTimelineModal();
   });
 
-  /* ─── Plana İş Ekle Modal ─── */
-  function openPlanaModal() {
-    var backdrop = qs('atpModalBackdrop');
-    var modal = qs('atpRequestModal');
+  /* ─── Plana İş Ekle Modal (legacy restore + Kayıtlı Konum V1) ─── */
+  var _locState = {
+    anchorId: null,
+    cariId: null,
+    locations: [],
+    selectedId: null,
+    mode: 'saved',
+    validated: null,
+    submitToken: null,
+  };
+  var _konumMiniMap = null;
+  var _konumMiniLayer = null;
+  var _konumMiniMarker = null;
+  var _konumMapInit = false;
+  var _submitInFlight = false;
+
+  function _genSubmitToken() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'atp-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+  }
+
+  function _setHidden(id, val) {
+    var el = qs(id);
+    if (el) el.value = val == null ? '' : String(val);
+  }
+
+  function _clearKonumStatus() {
+    var st = qs('atpKonumStatus');
+    if (st) { st.textContent = ''; st.className = 'konum-status'; }
+  }
+
+  function _showKonumStatus(html, cls) {
+    var st = qs('atpKonumStatus');
+    if (!st) return;
+    st.innerHTML = html;
+    st.className = 'konum-status' + (cls ? ' ' + cls : '');
+  }
+
+  function initKonumMiniMap() {
+    var box = qs('atpKonumMapMini');
+    if (!box || !window.L) return;
+    if (_konumMapInit && _konumMiniMap) {
+      setTimeout(function () { _konumMiniMap.invalidateSize({ animate: false }); }, 80);
+      return;
+    }
+    box.innerHTML = '';
+    _konumMiniMap = L.map(box, { zoomControl: false, attributionControl: false, keyboard: false }).setView([41.02, 29.05], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(_konumMiniMap);
+    _konumMiniLayer = L.layerGroup().addTo(_konumMiniMap);
+    // Suppress clicks during the init settle period (Leaflet fires spurious events on setView).
+    var _mapReady = false;
+    setTimeout(function () { _mapReady = true; }, 300);
+    _konumMiniMap.on('click', function (e) {
+      if (!_mapReady) return;  // ignore clicks during init
+      if (_locState.mode !== 'new') return;
+      setKonumCoords(e.latlng.lat, e.latlng.lng, null, true, 'manual_pin');
+      _showKonumStatus(
+        'Haritadan pin seçildi (' + e.latlng.lat.toFixed(6) + ', ' + e.latlng.lng.toFixed(6) + '). ' +
+        '"Konumu Kontrol Et" ile doğrulayın.',
+        'ok'
+      );
+      validateAddForm();
+    });
+    box.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+    box.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); });
+    _konumMapInit = true;
+  }
+
+  function setKonumMarker(lat, lng) {
+    if (!_konumMiniMap || lat == null || lng == null) return;
+    if (_konumMiniLayer) _konumMiniLayer.clearLayers();
+    _konumMiniMarker = L.circleMarker([lat, lng], {
+      radius: 8, color: '#F97316', fillColor: '#F97316', fillOpacity: 0.95, weight: 2,
+    });
+    _konumMiniLayer.addLayer(_konumMiniMarker);
+    _konumMiniMap.setView([lat, lng], 14);
+    setTimeout(function () { if (_konumMiniMap) _konumMiniMap.invalidateSize({ animate: false }); }, 60);
+  }
+
+  // source: 'api_resolved' | 'manual_pin' | 'saved'
+  function setKonumCoords(lat, lng, mapsUrl, fromMapClick, source) {
+    _locState.validated = {
+      latitude: lat,
+      longitude: lng,
+      maps_url: mapsUrl || (lat + ',' + lng),
+      adres: mapsUrl || (lat + ',' + lng),
+      source: source || (fromMapClick ? 'manual_pin' : 'api_resolved'),
+    };
+    _setHidden('atpReqLat', lat);
+    _setHidden('atpReqLng', lng);
+    _setHidden('atpReqAdres', _locState.validated.adres);
+    var mapsInp = qs('atpReqMapsUrl');
+    if (mapsInp && !fromMapClick && mapsUrl) mapsInp.value = mapsUrl;
+    var hiddenMaps = qs('atpReqMapsUrlHidden');
+    if (hiddenMaps) hiddenMaps.value = _locState.validated.maps_url;
+    setKonumMarker(lat, lng);
+    validateAddForm(false);
+  }
+
+  // Clear all coordinate state when the Maps input changes (user is editing).
+  function _clearMapsInputState() {
+    if (_locState.validated) {
+      _locState.validated = null;
+      _setHidden('atpReqLat', '');
+      _setHidden('atpReqLng', '');
+      _setHidden('atpReqAdres', '');
+      var hiddenMaps = qs('atpReqMapsUrlHidden');
+      if (hiddenMaps) hiddenMaps.value = '';
+      if (_konumMiniLayer) _konumMiniLayer.clearLayers();
+      _clearKonumStatus();
+      validateAddForm();
+    }
+  }
+
+  function showKonumSection(show, initMap) {
+    var sec = qs('atpKonumSection');
+    if (sec) sec.style.display = show ? '' : 'none';
+    if (show && initMap) {
+      initKonumMiniMap();
+      setTimeout(function () { if (_konumMiniMap) _konumMiniMap.invalidateSize({ animate: false }); }, 120);
+    }
+  }
+
+  function populateKonumSelect(locations, selectId) {
+    var sel = qs('atpReqKonumSelect');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Konum seç —</option>' +
+      (locations || []).map(function (loc) {
+        var label = loc.display_label || loc.konum_adi || loc.short_adres || loc.adres || loc.address || 'Konum';
+        return '<option value="' + loc.id + '">' + fmtVal(label) + '</option>';
+      }).join('');
+    sel.disabled = !(locations && locations.length);
+    if (selectId) sel.value = String(selectId);
+  }
+
+  function applySavedLocation(loc) {
+    if (!loc) return;
+    _locState.selectedId = loc.id;
+    _locState.mode = 'saved';
+    _locState.validated = {
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      maps_url: loc.maps_url || '',
+      adres: loc.adres || loc.address || '',
+      source: 'saved',
+    };
+    _setHidden('atpReqLocationMasterId', loc.id);
+    _setHidden('atpReqIsNewLocation', '0');
+    _setHidden('atpReqLat', loc.latitude);
+    _setHidden('atpReqLng', loc.longitude);
+    _setHidden('atpReqAdres', _locState.validated.adres);
+    if (loc.cari_id != null) _setHidden('atpReqCariId', loc.cari_id);
+    var mapsInp = qs('atpReqMapsUrl');
+    if (mapsInp) {
+      mapsInp.value = loc.maps_url || _locState.validated.adres || '';
+      mapsInp.readOnly = true;
+    }
+    var yeniFields = qs('atpYeniKonumFields');
+    if (yeniFields) yeniFields.hidden = true;
+    var konumAdi = qs('atpReqKonumAdi');
+    if (konumAdi) konumAdi.value = loc.konum_adi || '';
+    var firma = (qs('atpReqFirma') || {}).value || loc.firma || loc.name || '';
+    _showKonumStatus(
+      '<span class="konum-check">✓ Bu konum <strong>' + fmtVal(firma) + '</strong> için kayıtlıdır.<br>Sonraki işlerde otomatik gelir.</span>',
+      'ok'
+    );
+    if (loc.latitude != null && loc.longitude != null) setKonumMarker(loc.latitude, loc.longitude);
+    validateAddForm();
+  }
+
+  function enterNewKonumMode(focusMaps) {
+    _locState.mode = 'new';
+    _locState.selectedId = null;
+    _locState.validated = null;
+    _setHidden('atpReqLocationMasterId', '');
+    _setHidden('atpReqIsNewLocation', '1');
+    _setHidden('atpReqLat', '');
+    _setHidden('atpReqLng', '');
+    var sel = qs('atpReqKonumSelect');
+    if (sel) sel.value = '';
+    var yeniFields = qs('atpYeniKonumFields');
+    if (yeniFields) yeniFields.hidden = false;
+    var mapsInp = qs('atpReqMapsUrl');
+    if (mapsInp) {
+      mapsInp.value = '';
+      mapsInp.readOnly = false;
+      if (focusMaps) mapsInp.focus();
+    }
+    var konumAdi = qs('atpReqKonumAdi');
+    if (konumAdi) konumAdi.value = '';
+    _clearKonumStatus();
+    if (_konumMiniLayer) _konumMiniLayer.clearLayers();
+    validateAddForm();
+  }
+
+  function loadCompanyLocations(anchorId, cariId) {
+    var qsParts = [];
+    if (anchorId) qsParts.push('anchor_id=' + encodeURIComponent(anchorId));
+    if (cariId) qsParts.push('cari_id=' + encodeURIComponent(cariId));
+    if (!qsParts.length) {
+      enterNewKonumMode(false);
+      showKonumSection(true, true);
+      return Promise.resolve();
+    }
+    return fetch('/planlama/arac-takip/api/locations/for-company?' + qsParts.join('&'), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        _locState.locations = data.locations || [];
+        if (data.company) {
+          _locState.anchorId = data.company.anchor_location_id || anchorId;
+          _locState.cariId = data.company.cari_id || cariId || null;
+          if (_locState.cariId != null) _setHidden('atpReqCariId', _locState.cariId);
+        }
+        showKonumSection(true, true);
+        populateKonumSelect(_locState.locations, null);
+        if (_locState.locations.length) {
+          applySavedLocation(_locState.locations[0]);
+          populateKonumSelect(_locState.locations, _locState.locations[0].id);
+        } else {
+          enterNewKonumMode(false);
+        }
+      })
+      .catch(function () {
+        showKonumSection(true, true);
+        enterNewKonumMode(false);
+      });
+  }
+
+  function onFirmaTyped() {
+    var firma = ((qs('atpReqFirma') || {}).value || '').trim();
+    if (firma.length < 2) {
+      showKonumSection(false);
+      _locState.anchorId = null;
+      _locState.locations = [];
+      _setHidden('atpReqLocationMasterId', '');
+      return;
+    }
+    // Do NOT call enterNewKonumMode() or initKonumMiniMap() while the user is still typing.
+    // The location section becomes active only after an explicit dropdown selection.
+  }
+
+  function _resetPlanaForm() {
+    var form = qs('atpRequestForm');
+    if (form) form.reset();
     var tarih = qs('atpReqTarih');
     if (tarih) tarih.value = planDate;
-    /* populate vehicle select */
+    /* saat is optional — do NOT auto-fill with 10:00; leave empty so backend assigns via route optimization */
+    _locState = {
+      anchorId: null, cariId: null, locations: [], selectedId: null,
+      mode: 'new', validated: null, submitToken: _genSubmitToken(),
+    };
+    _setHidden('atpReqLocationMasterId', '');
+    _setHidden('atpReqLat', '');
+    _setHidden('atpReqLng', '');
+    _setHidden('atpReqAdres', '');
+    _setHidden('atpReqCariId', '');
+    _setHidden('atpReqIsNewLocation', '0');
+    var hiddenMaps = qs('atpReqMapsUrlHidden');
+    if (hiddenMaps) hiddenMaps.value = '';
+    var warn = qs('atpModalWarn'); if (warn) warn.classList.remove('show');
+    _clearValidationSummary();
+    /* Clear all per-field error states */
+    ['atpReqFirma','atpReqIs','atpReqArac','atpReqTarih','atpReqMapsUrl','atpReqKonumSec'].forEach(function (id) {
+      var el = qs(id); if (el) _clearFieldErr(el);
+    });
+    var dd = qs('atpFirmaDropdown'); if (dd) dd.classList.remove('open');
+    showKonumSection(false);
+    populateKonumSelect([], null);
+    var yeniFields = qs('atpYeniKonumFields'); if (yeniFields) yeniFields.hidden = true;
+    var mapsInp = qs('atpReqMapsUrl'); if (mapsInp) { mapsInp.value = ''; mapsInp.readOnly = false; }
+    _clearKonumStatus();
+    if (_konumMiniLayer) _konumMiniLayer.clearLayers();
+    _submitInFlight = false;
+  }
+
+  function openPlanaModal(mode, prefillVehicleExtId) {
+    var backdrop = qs('atpModalBackdrop');
+    var modal = qs('atpRequestModal');
+    var titleEl = qs('atpModalTitle');
+    if (titleEl) titleEl.textContent = '+ Plana İş Ekle';
+    _resetPlanaForm();
     var reqSel = qs('atpReqArac');
     if (reqSel && reqSel.options.length <= 1) hydrateVehicleSelect(lastVehicles, []);
+    if (mode === 'existing' && prefillVehicleExtId && reqSel) {
+      reqSel.value = String(prefillVehicleExtId);
+      var opt = reqSel.options[reqSel.selectedIndex];
+      var soforEl = qs('atpReqPlanaSofor');
+      if (opt && soforEl) soforEl.value = opt.getAttribute('data-driver') || '';
+    }
     validateAddForm();
     if (backdrop) { backdrop.classList.add('open'); backdrop.setAttribute('aria-hidden', 'false'); }
     if (modal) modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
-    /* focus first input */
     setTimeout(function () {
-      var first = modal && modal.querySelector('input:not([readonly]):not([type=hidden]),select');
-      if (first) first.focus();
+      var firmaEl = qs('atpReqFirma');
+      if (firmaEl) firmaEl.focus();
     }, 60);
   }
 
@@ -1269,9 +1563,11 @@
     if (backdrop) { backdrop.classList.remove('open'); backdrop.setAttribute('aria-hidden', 'true'); }
     if (modal) modal.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
+    _submitInFlight = false;
+    var submit = qs('atpModalSubmit');
+    if (submit) submit.disabled = false;
   }
 
-  /* Escape key closes modal */
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       var backdrop = qs('atpModalBackdrop');
@@ -1282,11 +1578,22 @@
   var btnPlana = qs('atpBtnPlanaIsEkle');
   var btnPlanaPrs = qs('atpBtnPlanaIsEklePrs');
   var btnPlanaEmpty = qs('atpBtnPlanaIsEkleEmpty');
-  if (btnPlana) btnPlana.addEventListener('click', openPlanaModal);
-  if (btnPlanaPrs) btnPlanaPrs.addEventListener('click', openPlanaModal);
-  if (btnPlanaEmpty) btnPlanaEmpty.addEventListener('click', openPlanaModal);
+  /* Main "+ Plana İş Ekle" → opens multi-add modal */
+  function _openMultiOrFallback() {
+    if (typeof window.atpMultiOpen === 'function') {
+      window.atpMultiOpen();
+    } else {
+      openPlanaModal('new', null);
+    }
+  }
+  if (btnPlana) btnPlana.addEventListener('click', _openMultiOrFallback);
+  /* PRS (vehicle summary) button → existing single modal (vehicle pre-filled) */
+  if (btnPlanaPrs) btnPlanaPrs.addEventListener('click', function (e) {
+    e.stopPropagation();
+    openPlanaModal('existing', _activeVehicleExtId);
+  });
+  if (btnPlanaEmpty) btnPlanaEmpty.addEventListener('click', _openMultiOrFallback);
 
-  /* Quick plan vehicle select — sync driver */
   var quickArac = qs('atpQuickArac');
   var quickSofor = qs('atpQuickSofor');
   if (quickArac) quickArac.addEventListener('change', function () {
@@ -1300,118 +1607,520 @@
   if (modalClose) modalClose.addEventListener('click', closePlanaModal);
 
   var modalBackdrop = qs('atpModalBackdrop');
-  if (modalBackdrop) modalBackdrop.addEventListener('click', function (e) {
-    if (e.target === modalBackdrop) closePlanaModal();
-  });
-
-  /* Validate add form */
-  function validateAddForm() {
-    var firma = qs('atpReqFirma');
-    var is = qs('atpReqIs');
-    var arac = qs('atpReqArac');
-    var tarih = qs('atpReqTarih');
-    var saat = qs('atpReqSaat');
-    var submit = qs('atpModalSubmit');
-    var ok = firma && firma.value.trim() &&
-      is && is.value.trim() &&
-      arac && arac.value &&
-      tarih && tarih.value &&
-      saat && saat.value;
-    if (submit) submit.disabled = !ok;
-    return !!ok;
+  var _backdropPointerDown = false;
+  if (modalBackdrop) {
+    modalBackdrop.addEventListener('pointerdown', function (e) {
+      _backdropPointerDown = (e.target === modalBackdrop);
+    });
+    modalBackdrop.addEventListener('click', function (e) {
+      if (_backdropPointerDown && e.target === modalBackdrop) closePlanaModal();
+      _backdropPointerDown = false;
+    });
   }
 
-  ['atpReqFirma','atpReqIs','atpReqArac','atpReqTarih','atpReqSaat'].forEach(function (id) {
+  /* ── Validation helpers ── */
+  function _fieldWrap(el) {
+    if (!el) return null;
+    var p = el.parentElement;
+    return (p && (p.classList.contains('form-ctrl') || p.classList.contains('firma-wrap') || p.classList.contains('input-wrap'))) ? p : el.parentElement;
+  }
+
+  function _setFieldErr(el, msg) {
+    if (!el) return;
+    var wrap = _fieldWrap(el);
+    if (wrap) wrap.classList.add('atp-field-err');
+    var existing = el.parentElement && el.parentElement.querySelector('.atp-field-err-msg[data-for="' + el.id + '"]');
+    if (!existing) {
+      var span = document.createElement('span');
+      span.className = 'atp-field-err-msg';
+      span.setAttribute('data-for', el.id);
+      span.textContent = msg;
+      el.parentElement.appendChild(span);
+    } else {
+      existing.textContent = msg;
+    }
+  }
+
+  function _clearFieldErr(el) {
+    if (!el) return;
+    var wrap = _fieldWrap(el);
+    if (wrap) wrap.classList.remove('atp-field-err');
+    var existing = el.parentElement && el.parentElement.querySelector('.atp-field-err-msg[data-for="' + el.id + '"]');
+    if (existing) existing.remove();
+  }
+
+  function _showValidationSummary(errors) {
+    var box = document.getElementById('atpValidationSummary');
+    if (!box) return;
+    if (!errors || errors.length === 0) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    var html = '<div class="atp-val-box"><strong>Planı eklemek için aşağıdaki alanları düzeltin:</strong><ul>';
+    errors.forEach(function (e) { html += '<li>' + e + '</li>'; });
+    html += '</ul></div>';
+    box.innerHTML = html;
+    box.style.display = 'block';
+  }
+
+  function _clearValidationSummary() {
+    var box = document.getElementById('atpValidationSummary');
+    if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+    var warn = qs('atpModalWarn'); if (warn) warn.classList.remove('show');
+  }
+
+  /* Core validation — always clears all errors first, then marks bad fields.
+     showErrors=true: updates UI feedback (called on submit click).
+     showErrors=false: silent check only (called on input/change for live clear). */
+  function validateAddForm(showErrors) {
+    var firma = qs('atpReqFirma');
+    var isEl = qs('atpReqIs');
+    var arac = qs('atpReqArac');
+    var tarih = qs('atpReqTarih');
+    /* saat is optional — no longer validated as required */
+
+    var errors = [];
+    var firstErrEl = null;
+
+    /* ── Araç ── */
+    var aracOk = arac && arac.value;
+    if (!aracOk) {
+      errors.push('Araç seçmelisiniz.');
+      if (showErrors) _setFieldErr(arac, 'Araç seçmelisiniz.');
+      if (!firstErrEl && arac) firstErrEl = arac;
+    } else {
+      _clearFieldErr(arac);
+    }
+
+    /* ── Firma ── */
+    var firmaOk = firma && firma.value.trim().length >= 2;
+    if (!firmaOk) {
+      errors.push('Firma adı en az 2 karakter olmalıdır.');
+      if (showErrors) _setFieldErr(firma, 'Firma adı giriniz.');
+      if (!firstErrEl && firma) firstErrEl = firma;
+    } else {
+      _clearFieldErr(firma);
+    }
+
+    /* ── Konum / koordinat ── */
+    var locOk = (_locState.mode === 'saved' || _locState.mode === 'new') &&
+      _locState.validated && _locState.validated.latitude != null;
+    if (!locOk) {
+      var locMsg = firma && firma.value.trim().length >= 2
+        ? 'Kayıtlı konumu seçin veya Maps bağlantısını doğrulayın.'
+        : 'Firma seçildikten sonra konum giriniz.';
+      errors.push(locMsg);
+      if (showErrors) {
+        var konumSec = qs('atpKonumSection');
+        var mapsInp = qs('atpReqMapsUrl');
+        var konumSelect = qs('atpReqKonumSec');
+        if (mapsInp && !mapsInp.hidden && konumSec && konumSec.style.display !== 'none') {
+          _setFieldErr(mapsInp, locMsg);
+          if (!firstErrEl) firstErrEl = mapsInp;
+        } else if (konumSelect && konumSec && konumSec.style.display !== 'none') {
+          _setFieldErr(konumSelect, locMsg);
+          if (!firstErrEl) firstErrEl = konumSelect;
+        } else if (firma && firma.value.trim().length >= 2) {
+          if (!firstErrEl) firstErrEl = firma;
+        }
+      }
+    } else {
+      var mapsInp2 = qs('atpReqMapsUrl'); if (mapsInp2) _clearFieldErr(mapsInp2);
+      var konumSelect2 = qs('atpReqKonumSec'); if (konumSelect2) _clearFieldErr(konumSelect2);
+    }
+
+    /* ── Yapılacak iş ── */
+    var isOk = isEl && isEl.value.trim();
+    if (!isOk) {
+      errors.push('Yapılacak işi yazınız.');
+      if (showErrors) _setFieldErr(isEl, 'Yapılacak işi yazınız.');
+      if (!firstErrEl && isEl) firstErrEl = isEl;
+    } else {
+      _clearFieldErr(isEl);
+    }
+
+    /* ── Tarih ── */
+    var tarihOk = tarih && tarih.value;
+    if (!tarihOk) {
+      errors.push('Tarih seçiniz.');
+      if (showErrors) _setFieldErr(tarih, 'Tarih seçiniz.');
+      if (!firstErrEl && tarih) firstErrEl = tarih;
+    } else {
+      _clearFieldErr(tarih);
+      /* Past date: warn but do not block (backend enforces business rules) */
+      if (showErrors && tarih.value < new Date().toISOString().slice(0, 10)) {
+        _setFieldErr(tarih, 'Geçmiş tarih: plan eklenebilir fakat dikkat ediniz.');
+      }
+    }
+
+    /* Saat optional: no required validation; just clear any stale error */
+    var saatEl = qs('atpReqSaat'); if (saatEl) _clearFieldErr(saatEl);
+
+    var ok = errors.length === 0;
+
+    if (showErrors) {
+      _showValidationSummary(errors);
+      if (firstErrEl) {
+        firstErrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(function () { try { firstErrEl.focus(); } catch (e) {} }, 300);
+      }
+    } else {
+      /* Live mode: only hide summary if now fully valid */
+      if (ok) _clearValidationSummary();
+    }
+
+    return ok;
+  }
+
+  /* Live field-clear: whenever user fixes a field, re-run silent validation */
+  ['atpReqFirma','atpReqIs','atpReqArac','atpReqTarih','atpReqKonumAdi'].forEach(function (id) {
     var el = qs(id);
-    if (el) { el.addEventListener('input', validateAddForm); el.addEventListener('change', validateAddForm); }
+    if (el) {
+      el.addEventListener('input', function () { validateAddForm(false); });
+      el.addEventListener('change', function () { validateAddForm(false); });
+    }
   });
 
-  /* Sync driver from vehicle select */
   var reqArac = qs('atpReqArac');
   var reqSofor = qs('atpReqPlanaSofor');
+  var soforDropdown = qs('atpSoforDropdown');
+  var soforTimer = null;
+
   if (reqArac) reqArac.addEventListener('change', function () {
     var opt = reqArac.options[reqArac.selectedIndex];
-    if (opt && reqSofor) reqSofor.value = opt.getAttribute('data-driver') || '';
+    // Prefill with default driver but do NOT lock it — user can always override.
+    if (opt && reqSofor) {
+      var defaultDriver = opt.getAttribute('data-driver') || '';
+      reqSofor.value = defaultDriver;
+      if (defaultDriver) {
+        reqSofor.title = 'Varsayılan şoför: ' + defaultDriver + ' — Değiştirebilirsiniz';
+      } else {
+        reqSofor.title = '';
+      }
+    }
     validateAddForm();
   });
 
-  /* Submit add form */
+  // ── Şoför autocomplete ──
+  function _positionSoforDropdown() {
+    if (!reqSofor || !soforDropdown) return;
+    var r = reqSofor.getBoundingClientRect();
+    soforDropdown.style.left  = r.left + 'px';
+    soforDropdown.style.width = r.width + 'px';
+    soforDropdown.style.top   = (r.bottom + 2) + 'px';
+  }
+
+  function _closeSoforDropdown() {
+    if (soforDropdown) soforDropdown.style.display = 'none';
+  }
+
+  function _renderSoforDropdown(users) {
+    if (!soforDropdown || !users.length) { _closeSoforDropdown(); return; }
+    _positionSoforDropdown();
+    soforDropdown.innerHTML = users.map(function (u) {
+      var nm = u.display_name || u.kullanici_adi || '';
+      return '<div class="firma-dd-item" style="padding:7px 12px;cursor:pointer;" tabindex="-1">' + fmtVal(nm) + '</div>';
+    }).join('');
+    soforDropdown.style.display = 'block';
+    soforDropdown.querySelectorAll('.firma-dd-item').forEach(function (item, idx) {
+      item.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        reqSofor.value = users[idx].display_name || users[idx].kullanici_adi || '';
+        _closeSoforDropdown();
+        validateAddForm();
+      });
+    });
+  }
+
+  if (reqSofor && soforDropdown) {
+    reqSofor.addEventListener('input', function () {
+      clearTimeout(soforTimer);
+      var q = reqSofor.value.trim();
+      if (q.length < 1) { _closeSoforDropdown(); return; }
+      soforTimer = setTimeout(function () {
+        fetch('/planlama/arac-takip/api/users/search?q=' + encodeURIComponent(q) + '&limit=8', { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) { _renderSoforDropdown(data.results || []); })
+          .catch(function () { _closeSoforDropdown(); });
+      }, 250);
+    });
+    reqSofor.addEventListener('blur', function () {
+      setTimeout(_closeSoforDropdown, 200);
+    });
+    window.addEventListener('scroll', _positionSoforDropdown, true);
+  }
+
   var modalSubmit = qs('atpModalSubmit');
   if (modalSubmit) modalSubmit.addEventListener('click', function () {
-    if (!validateAddForm()) {
-      var warn = qs('atpModalWarn'); if (warn) warn.classList.add('show');
-      return;
-    }
+    if (_submitInFlight) return;
+
+    /* Run full validation with error UI */
+    if (!validateAddForm(true)) return;
+
+    _submitInFlight = true;
+    modalSubmit.disabled = true;
+    var v = _locState.validated || {};
+    var tarihEl = qs('atpReqTarih');
+    var useTarih = (tarihEl && tarihEl.value) ? tarihEl.value : planDate;
     var payload = {
-      plan_tarihi: planDate,
-      tarih: planDate,
+      plan_tarihi: useTarih,
+      tarih: useTarih,
       arac_external_id: (qs('atpReqArac') || {}).value || '',
       yapilacak_is: ((qs('atpReqIs') || {}).value || '').trim(),
       is: ((qs('atpReqIs') || {}).value || '').trim(),
       firma: ((qs('atpReqFirma') || {}).value || '').trim(),
-      planlanan_saat: ((qs('atpReqSaat') || {}).value || ''),
+      planlanan_saat: ((qs('atpReqSaat') || {}).value || '') || null,
       oncelik: ((qs('atpReqOncelik') || {}).value || 'NORMAL'),
       is_turu: ((qs('atpReqIsTuru') || {}).value || 'TESLIM'),
       urun_malzeme: ((qs('atpReqUrun') || {}).value || '').trim(),
       miktar: ((qs('atpReqMiktar') || {}).value || '').trim(),
       miktar_birim: ((qs('atpReqBirim') || {}).value || 'ADET'),
+      sofor_adi: ((qs('atpReqPlanaSofor') || {}).value || '').trim(),
       ek_not: ((qs('atpReqNot') || {}).value || '').trim(),
       location_master_id: ((qs('atpReqLocationMasterId') || {}).value || '') || null,
+      latitude: v.latitude,
+      longitude: v.longitude,
+      lat: v.latitude,
+      lng: v.longitude,
+      adres: v.adres || ((qs('atpReqMapsUrl') || {}).value || '').trim(),
+      maps_url: v.maps_url || ((qs('atpReqMapsUrl') || {}).value || '').trim(),
+      is_new_location: _locState.mode === 'new',
+      konum_adi: ((qs('atpReqKonumAdi') || {}).value || '').trim() || null,
+      cari_id: ((qs('atpReqCariId') || {}).value || '') || null,
+      client_submit_id: _locState.submitToken,
+      save_to_master: _locState.mode === 'new',
     };
-    modalSubmit.disabled = true;
     fetch('/planlama/arac-takip/api/plana-is-ekle', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }).then(function (r) { return r.json(); }).then(function (j) {
-      if (!j.ok) { toast('İş eklenemedi: ' + (j.message || '')); modalSubmit.disabled = false; return; }
+      if (!j.ok) {
+        toast('İş eklenemedi: ' + (j.error || j.message || ''));
+        _submitInFlight = false;
+        modalSubmit.disabled = false;
+        return;
+      }
       closePlanaModal();
       toast('İş plana eklendi.');
       loadOps();
     }).catch(function () {
       toast('Sunucu hatası. Tekrar deneyin.');
+      _submitInFlight = false;
       modalSubmit.disabled = false;
     });
   });
 
-  /* Firma autocomplete */
   var firmaInput = qs('atpReqFirma');
   var firmaDropdown = qs('atpFirmaDropdown');
   var firmaTimer = null;
 
+  // Position the dropdown using fixed coords so modal overflow:hidden/auto cannot clip it.
+  function _positionFirmaDropdown() {
+    if (!firmaInput || !firmaDropdown) return;
+    var r = firmaInput.getBoundingClientRect();
+    firmaDropdown.style.position = 'fixed';
+    firmaDropdown.style.left = r.left + 'px';
+    firmaDropdown.style.width = r.width + 'px';
+    firmaDropdown.style.top = (r.bottom + 2) + 'px';
+    firmaDropdown.style.right = '';
+  }
+
+  // Select a firma item from the dropdown: set state, close dropdown, load locations.
+  function _selectFirmaItem(lid, cari, firmaName) {
+    _locState.anchorId = lid || null;
+    _setHidden('atpReqLocationMasterId', lid || '');
+    if (cari) _setHidden('atpReqCariId', cari);
+    firmaInput.value = firmaName;
+    firmaDropdown.classList.remove('open');
+    if (lid) {
+      loadCompanyLocations(lid, cari || null);
+    } else {
+      // "Yeni firma" path: no anchor, open new location mode
+      showKonumSection(true, true);
+      enterNewKonumMode(false);
+    }
+  }
+
+  // Render search results (or "yeni firma" fallback) into dropdown and open it.
+  function _renderFirmaDropdown(items, rawQuery) {
+    _positionFirmaDropdown();
+    var html = items.slice(0, 8).map(function (it) {
+      var nm = it.firma || it.name || '';
+      var ad = it.adres || it.address || it.short_adres || '';
+      return '<div class="firma-dd-item" data-id="' + (it.id || '') + '" data-cari="' + (it.cari_id || '') + '" tabindex="-1">' +
+        '<strong>' + fmtVal(nm) + '</strong>' +
+        (ad ? '<span>' + fmtVal(ad) + '</span>' : '') +
+        '</div>';
+    }).join('');
+    // Always append "new company" option
+    if (rawQuery && rawQuery.length >= 2) {
+      html += '<div class="firma-dd-item firma-dd-new" data-id="" data-cari="" tabindex="-1">' +
+        '<strong>Yeni firma olarak kullan: ' + fmtVal(rawQuery) + '</strong>' +
+        '</div>';
+    }
+    firmaDropdown.innerHTML = html;
+    firmaDropdown.classList.add('open');
+
+    firmaDropdown.querySelectorAll('.firma-dd-item').forEach(function (item) {
+      item.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        var lid = item.getAttribute('data-id');
+        var cari = item.getAttribute('data-cari');
+        var nm = (item.querySelector('strong') || {}).textContent || rawQuery;
+        if (!lid) {
+          // "Yeni firma" selected — use raw query as firm name
+          _selectFirmaItem('', '', rawQuery);
+        } else {
+          _selectFirmaItem(lid, cari, nm);
+        }
+      });
+    });
+  }
+
+  // Keyboard navigation index within the open dropdown.
+  var _firmaDdFocusIdx = -1;
+
+  function _firmaDdItems() {
+    return firmaDropdown ? Array.from(firmaDropdown.querySelectorAll('.firma-dd-item')) : [];
+  }
+
+  function _firmaDdMoveFocus(delta) {
+    var items = _firmaDdItems();
+    if (!items.length) return;
+    _firmaDdFocusIdx = Math.max(0, Math.min(items.length - 1, _firmaDdFocusIdx + delta));
+    items.forEach(function (el, i) { el.classList.toggle('firma-dd-focused', i === _firmaDdFocusIdx); });
+    items[_firmaDdFocusIdx].scrollIntoView({ block: 'nearest' });
+  }
+
   if (firmaInput && firmaDropdown) {
     firmaInput.addEventListener('input', function () {
       clearTimeout(firmaTimer);
+      onFirmaTyped();
+      _firmaDdFocusIdx = -1;
       var q = firmaInput.value.trim();
       if (q.length < 2) { firmaDropdown.classList.remove('open'); return; }
       firmaTimer = setTimeout(function () {
         fetch('/planlama/arac-takip/api/locations/search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (data) {
-            var items = data.results || [];
-            if (!items.length) { firmaDropdown.classList.remove('open'); return; }
-            firmaDropdown.innerHTML = items.slice(0, 8).map(function (it) {
-              return '<div class="firma-dd-item" data-id="' + (it.id || '') + '" data-adres="' + (it.address || '') + '">' +
-                '<strong>' + fmtVal(it.name) + '</strong>' +
-                '<span>' + fmtVal(it.address) + '</span></div>';
-            }).join('');
-            firmaDropdown.classList.add('open');
-            firmaDropdown.querySelectorAll('.firma-dd-item').forEach(function (item) {
-              item.addEventListener('mousedown', function (e) {
-                e.preventDefault();
-                firmaInput.value = item.querySelector('strong').textContent;
-                var lid = item.getAttribute('data-id');
-                var midEl = qs('atpReqLocationMasterId');
-                if (midEl) midEl.value = lid;
-                firmaDropdown.classList.remove('open');
-                validateAddForm();
-              });
-            });
-          }).catch(function () { firmaDropdown.classList.remove('open'); });
+            _renderFirmaDropdown(data.results || [], q);
+          })
+          .catch(function () {
+            // On error, still show "new company" option
+            _renderFirmaDropdown([], q);
+          });
       }, 300);
     });
-    firmaInput.addEventListener('blur', function () { setTimeout(function () { firmaDropdown.classList.remove('open'); }, 180); });
+
+    firmaInput.addEventListener('keydown', function (e) {
+      if (!firmaDropdown.classList.contains('open')) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); _firmaDdMoveFocus(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); _firmaDdMoveFocus(-1); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        var items = _firmaDdItems();
+        if (_firmaDdFocusIdx >= 0 && items[_firmaDdFocusIdx]) {
+          items[_firmaDdFocusIdx].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        }
+      } else if (e.key === 'Escape') {
+        firmaDropdown.classList.remove('open');
+      }
+    });
+
+    /* Track whether the mouse button is held down inside firmaInput.
+       While dragging (text selection), a blur event must NOT close the dropdown
+       so the user can freely select/copy text without losing the open state. */
+    var _firmaMouseHeld = false;
+    firmaInput.addEventListener('mousedown', function () { _firmaMouseHeld = true; });
+    document.addEventListener('mouseup', function () { _firmaMouseHeld = false; });
+
+    firmaInput.addEventListener('blur', function () {
+      setTimeout(function () {
+        if (_firmaMouseHeld) return; // drag still in progress — keep dropdown open
+        firmaDropdown.classList.remove('open');
+      }, 200);
+    });
+
+    // Reposition on scroll/resize so fixed coords stay accurate
+    window.addEventListener('scroll', _positionFirmaDropdown, true);
+    window.addEventListener('resize', _positionFirmaDropdown);
+  }
+
+  var konumSelect = qs('atpReqKonumSelect');
+  if (konumSelect) konumSelect.addEventListener('change', function () {
+    var id = konumSelect.value;
+    if (!id) return;
+    var loc = (_locState.locations || []).find(function (l) { return String(l.id) === String(id); });
+    if (loc) applySavedLocation(loc);
+  });
+
+  var btnYeniKonum = qs('atpBtnYeniKonum');
+  if (btnYeniKonum) btnYeniKonum.addEventListener('click', function (e) {
+    e.preventDefault();
+    enterNewKonumMode(true);
+  });
+
+  // Clear stale coords whenever the Maps input is edited.
+  var mapsUrlInput = qs('atpReqMapsUrl');
+  if (mapsUrlInput) {
+    mapsUrlInput.addEventListener('input', function () {
+      _clearMapsInputState();
+    });
+  }
+
+  var btnKonumKontrol = qs('atpBtnKonumKontrol');
+  if (btnKonumKontrol) btnKonumKontrol.addEventListener('click', function () {
+    var mapsVal = ((qs('atpReqMapsUrl') || {}).value || '').trim();
+    if (!mapsVal) {
+      _showKonumStatus('Google Maps bağlantısı veya adres girin.', 'err');
+      return;
+    }
+    btnKonumKontrol.disabled = true;
+    fetch('/planlama/arac-takip/api/maps/resolve', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maps_url: mapsVal, adres: mapsVal }),
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      btnKonumKontrol.disabled = false;
+      if (!j.ok) {
+        _showKonumStatus(j.error || 'Konum bulunamadı.', 'err');
+        validateAddForm();
+        return;
+      }
+      setKonumCoords(j.latitude, j.longitude, j.maps_url || mapsVal, false, 'api_resolved');
+      _setHidden('atpReqAdres', j.adres || mapsVal);
+      _showKonumStatus(
+        'Konum doğrulandı: ' + Number(j.latitude).toFixed(6) + ', ' + Number(j.longitude).toFixed(6) +
+        (j.resolved_url && j.resolved_url !== mapsVal ? ' (bağlantı çözüldü)' : ''),
+        'ok'
+      );
+      validateAddForm();
+    }).catch(function () {
+      btnKonumKontrol.disabled = false;
+      _showKonumStatus('Konum doğrulanamadı.', 'err');
+    });
+  });
+
+  var btnHaritadaGor = qs('atpBtnHaritadaGor');
+  if (btnHaritadaGor) btnHaritadaGor.addEventListener('click', function () {
+    var v = _locState.validated;
+    // Only use coordinates that were explicitly resolved via API or loaded from saved location.
+    // A manual_pin or no-source state must be re-verified with "Konumu Kontrol Et" first.
+    if (v && v.latitude != null && v.longitude != null &&
+        (v.source === 'api_resolved' || v.source === 'saved')) {
+      var url = 'https://www.google.com/maps?q=' + v.latitude + ',' + v.longitude;
+      window.open(url, '_blank', 'noopener');
+    } else {
+      _showKonumStatus(
+        'Önce "Konumu Kontrol Et" ile koordinatı doğrulayın.',
+        'err'
+      );
+    }
+  });
+
+  var modalBody = document.querySelector('#atpRequestModal .modal-body');
+  if (modalBody) {
+    modalBody.addEventListener('mousedown', function (e) { e.stopPropagation(); });
   }
 
   /* ─── Route UI wiring ─── */
@@ -1661,30 +2370,897 @@
     if (window.AtpPlanMap) window.AtpPlanMap.focusBase();
   });
 
-  /* ─── ESC close modals ─── */
+  /* ─── ESC close timeline modal (plan modal handled by its own listener) ─── */
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { closeTimelineModal(); closePlanaModal(); }
+    if (e.key === 'Escape') { closeTimelineModal(); }
   });
 
-  /* ─── Accordion toggle: init plan map when opened ─── */
+  /* ─── Accordion toggle + summary click isolation ─── */
   var planAcc = qs('atpPlanningSection');
+  var planSummary = planAcc && planAcc.querySelector('summary.plan-rota-summary');
+  var chevronEl   = qs('atpPrsChevron');
+
+  function _syncChevronState() {
+    if (!chevronEl || !planAcc) return;
+    var open = !!planAcc.open;
+    chevronEl.textContent = open ? '▲' : '▼';
+    chevronEl.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function _togglePlanAcc(forceOpen) {
+    if (!planAcc) return;
+    if (typeof forceOpen === 'boolean') {
+      planAcc.open = forceOpen;
+    } else {
+      planAcc.open = !planAcc.open;
+    }
+    _syncChevronState();
+    /* fire map init if just opened */
+    if (planAcc.open && window.AtpPlanMap) {
+      requestAnimationFrame(function () { window.AtpPlanMap.onPlanTabShown(); });
+      setTimeout(function () { if (window.AtpPlanMap) window.AtpPlanMap.onPlanTabShown(); }, 250);
+    }
+  }
+
   if (planAcc) {
     planAcc.addEventListener('toggle', function () {
+      _syncChevronState();
       if (planAcc.open && window.AtpPlanMap) {
-        /* Give the browser one frame to render the now-visible container */
-        requestAnimationFrame(function () {
-          window.AtpPlanMap.onPlanTabShown();
-        });
-        /* Extra safety pass */
-        setTimeout(function () {
-          if (window.AtpPlanMap) window.AtpPlanMap.onPlanTabShown();
-        }, 250);
+        requestAnimationFrame(function () { window.AtpPlanMap.onPlanTabShown(); });
+        setTimeout(function () { if (window.AtpPlanMap) window.AtpPlanMap.onPlanTabShown(); }, 250);
       }
     });
+  }
+
+  if (planSummary) {
+    _syncChevronState();
+
+    if (chevronEl) {
+      chevronEl.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        _togglePlanAcc();
+      });
+    }
+
+    /* Single summary-level click interceptor */
+    planSummary.addEventListener('click', function (e) {
+      /* Always prevent native <details> toggle — we control it manually */
+      e.preventDefault();
+
+      var target = e.target;
+
+      /* Chevron handled by its own listener */
+      if (target === chevronEl || (chevronEl && chevronEl.contains(target))) {
+        return;
+      }
+
+      /* "Plana İş Ekle" button inside summary → open modal, no toggle */
+      if (target === qs('atpBtnPlanaIsEklePrs') ||
+          (qs('atpBtnPlanaIsEklePrs') && qs('atpBtnPlanaIsEklePrs').contains(target))) {
+        openPlanaModal('existing', _activeVehicleExtId);
+        return;
+      }
+
+      /* All other summary children (Araç, Şoför, Tarih, Saat divs) → no-op */
+    });
+
+    planSummary.style.cursor = 'default';
   }
 
   /* ─── Expose for external scripts ─── */
   window.atpOpenTimeline = openTimelineModal;
   window.atpSetTab = setTab;
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     ÇOKLU İŞ EKLE MODAL  — atpMulti controller  (FIX1: mouse + row-state)
+     Self-contained: does not modify any existing single-modal variables.
+  ═══════════════════════════════════════════════════════════════════════ */
+  (function () {
+    'use strict';
+
+    /* ── Leaflet mini-map ── */
+    var _mMap = null;
+    var _mMapLayer = null;
+
+    function _initMMap() {
+      var el = document.getElementById('atpMultiMapMini');
+      if (!el || _mMap) return;
+      try {
+        _mMap = window.L.map(el, { zoomControl: false, attributionControl: false, keyboard: false });
+        window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(_mMap);
+        _mMapLayer = window.L.layerGroup().addTo(_mMap);
+        _mMap.setView([41.0, 29.0], 10);
+      } catch (e) { /* leaflet not ready */ }
+    }
+
+    function _showMMapPin(lat, lng, adres) {
+      if (!_mMap) _initMMap();
+      if (!_mMap) return;
+      if (_mMapLayer) _mMapLayer.clearLayers();
+      window.L.marker([lat, lng]).addTo(_mMapLayer);
+      _mMap.setView([lat, lng], 14);
+      var addrEl = document.getElementById('atpMultiMapAddr');
+      if (addrEl) addrEl.textContent = adres || (lat.toFixed(4) + ', ' + lng.toFixed(4));
+      setTimeout(function () { _mMap.invalidateSize({ animate: false }); }, 80);
+    }
+
+    /* ── FINAL LOCK: close only via X / İptal / submit_ok ── */
+    var _multiMouseHeld = false;
+    var _multiMouseDownInsideModal = false;
+    var _multiModalEl = null;
+    var _CLOSE_OK = { x: 1, cancel: 1, submit_ok: 1 };
+
+    function _getModal() {
+      if (!_multiModalEl) _multiModalEl = document.getElementById('atpMultiModal');
+      return _multiModalEl;
+    }
+
+    function _eventPathIncludesModal(e) {
+      var modal = _getModal();
+      if (!modal) return false;
+      if (modal.contains(e.target)) return true;
+      if (typeof e.composedPath === 'function') {
+        var path = e.composedPath();
+        for (var i = 0; i < path.length; i++) {
+          if (path[i] === modal) return true;
+        }
+      }
+      var dd = _getFirmaDD();
+      if (dd && dd.contains(e.target)) return true;
+      return false;
+    }
+
+    function _insideModal(target) {
+      var modal = _getModal();
+      var dd = _getFirmaDD();
+      return (modal && modal.contains(target)) || (dd && dd.contains(target));
+    }
+
+    function _resetMultiMouseGuards() {
+      _multiMouseHeld = false;
+      _multiMouseDownInsideModal = false;
+    }
+
+    document.addEventListener('mousedown', function (e) {
+      if (_insideModal(e.target)) {
+        _multiMouseHeld = true;
+        _multiMouseDownInsideModal = true;
+      }
+    }, true);
+
+    document.addEventListener('mouseup', function () {
+      setTimeout(_resetMultiMouseGuards, 180);
+    }, true);
+
+    function _wireModalCloseGuards() {
+      var modal = _getModal();
+      if (!modal || modal._atpMultiCloseGuard) return;
+      modal._atpMultiCloseGuard = true;
+      ['mousedown', 'mouseup', 'click'].forEach(function (evtName) {
+        modal.addEventListener(evtName, function (e) {
+          e.stopPropagation();
+          if (evtName === 'mousedown') {
+            _multiMouseHeld = true;
+            _multiMouseDownInsideModal = true;
+          }
+        });
+      });
+    }
+    _wireModalCloseGuards();
+
+    /* ── Row state ── */
+    var _rows = [];
+    var _rowUidSeq = 0;
+    var _submitInFlight = false;
+
+    function _mkRowState() {
+      return {
+        uid: 'r' + (++_rowUidSeq),   // immutable unique identifier (BUG2 FIX)
+        firma: '',
+        firmaAnchorId: null,
+        cariId: null,
+        konumId: null,
+        konumAdi: '',
+        mapsUrl: '',
+        lat: null,
+        lng: null,
+        adres: '',
+        status: 'empty',   // empty | pending | ok | err
+        yapilacakIs: '',
+        oncelik: 'NORMAL',
+      };
+    }
+
+    /* ── Helpers ── */
+    function _qs(id) { return document.getElementById(id); }
+
+    function _aracOpts() {
+      var src = _qs('atpReqArac');
+      var dst = _qs('atpMultiArac');
+      if (!src || !dst) return;
+      if (dst.options.length > 1) return;
+      dst.innerHTML = src.innerHTML;
+    }
+
+    /* Find row by its uid attribute on the TR (BUG2 FIX: uid not index) */
+    function _rowByEl(el) {
+      var tr = el.closest ? el.closest('tr[data-row-uid]') : null;
+      if (!tr) {
+        /* fallback: walk up manually */
+        var p = el;
+        while (p && p !== document.body) {
+          if (p.hasAttribute && p.hasAttribute('data-row-uid')) { tr = p; break; }
+          p = p.parentElement;
+        }
+      }
+      var uid = tr ? tr.getAttribute('data-row-uid') : null;
+      return uid ? _rows.find(function (r) { return r.uid === uid; }) : null;
+    }
+
+    /* ── Patch single row's dynamic cells without full DOM rebuild ──────────
+       This avoids the "user loses typed text" problem and the async-wrong-row
+       problem: only the badge/konum cells are updated, input values are untouched.
+    ──────────────────────────────────────────────────────────────────────── */
+    function _patchRowDom(row) {
+      var tr = document.querySelector('tr[data-row-uid="' + row.uid + '"]');
+      if (!tr) return; // row was deleted before async resolved
+
+      /* Badge */
+      var durumCell = tr.querySelector('.col-durum');
+      if (durumCell) {
+        var badge = '';
+        if (row.status === 'ok') {
+          badge = '<span class="atp-multi-badge ok">✓ Doğrulandı</span>';
+        } else if (row.status === 'pending') {
+          badge = '<span class="atp-multi-badge warn">⚠ Kontrol et</span>';
+        } else if (row.status === 'err') {
+          badge = '<span class="atp-multi-badge err">Hata</span>';
+        } else {
+          badge = '<span class="atp-multi-badge err">Eksik</span>';
+        }
+        durumCell.innerHTML = badge;
+      }
+
+      /* Konum column */
+      var konumCell = tr.querySelector('.col-konum');
+      if (konumCell) {
+        var konumLabel = row.konumAdi
+          ? '<strong>' + fmtVal(row.konumAdi) + '</strong>'
+          : '<span style="color:#9ca3af">—</span>';
+        var linkText = '+ ' + (row.konumAdi ? 'Değiştir' : 'Yeni Konum');
+        konumCell.innerHTML = konumLabel +
+          '<a class="atp-multi-konum-link" data-action="konum-edit">' + linkText + '</a>';
+        konumCell.querySelector('[data-action="konum-edit"]').addEventListener('click', function () {
+          _openKonumEditor(row);
+        });
+      }
+
+      /* Harita button enable/disable */
+      var haritaBtn = tr.querySelector('.row-btn-harita');
+      if (haritaBtn) haritaBtn.disabled = (row.status !== 'ok');
+
+      _updateSummary();
+    }
+
+    /* ── Row HTML (full render — called on full rebuild only) ── */
+    function _rowHtml(row) {
+      var oncelikSel = ['NORMAL','YUKSEK','ACIL','DUSUK'].map(function (v) {
+        var lbl = {NORMAL:'Normal',YUKSEK:'Yüksek',ACIL:'Acil',DUSUK:'Düşük'}[v];
+        return '<option value="' + v + '"' + (row.oncelik === v ? ' selected' : '') + '>' + lbl + '</option>';
+      }).join('');
+
+      var badge = '';
+      if (row.status === 'ok') badge = '<span class="atp-multi-badge ok">✓ Doğrulandı</span>';
+      else if (row.status === 'pending') badge = '<span class="atp-multi-badge warn">⚠ Kontrol et</span>';
+      else if (row.status === 'err') badge = '<span class="atp-multi-badge err">Hata</span>';
+      else badge = '<span class="atp-multi-badge err">Eksik</span>';
+
+      var konumLabel = row.konumAdi
+        ? '<strong>' + fmtVal(row.konumAdi) + '</strong>'
+        : '<span style="color:#9ca3af">—</span>';
+      var konumLink = '<a class="atp-multi-konum-link" data-action="konum-edit">+ ' +
+        (row.konumAdi ? 'Değiştir' : 'Yeni Konum') + '</a>';
+
+      return '<tr data-row-uid="' + row.uid + '">' +
+        '<td class="col-no" style="color:#9ca3af;font-size:11px;text-align:center">' + (row._idx || '') + '</td>' +
+        '<td class="col-firma"><div style="position:relative">' +
+          '<input class="row-input row-firma" placeholder="Firma adı…" value="' + fmtVal(row.firma || '') + '" autocomplete="off">' +
+        '</div></td>' +
+        '<td class="col-konum">' + konumLabel + konumLink + '</td>' +
+        '<td class="col-is"><input class="row-input row-is" placeholder="Yapılacak iş…" value="' + fmtVal(row.yapilacakIs || '') + '"></td>' +
+        '<td class="col-oncelik"><select class="row-input row-oncelik">' + oncelikSel + '</select></td>' +
+        '<td class="col-durum">' + badge + '</td>' +
+        '<td class="col-saat"><span class="atp-multi-badge auto">Otomatik</span></td>' +
+        '<td class="col-islem">' +
+          '<button class="btn btn-xs btn-outline row-btn-harita" title="Haritada Gör"' +
+            (row.status === 'ok' ? '' : ' disabled') + '>🗺</button> ' +
+          '<button class="btn btn-xs row-btn-sil" style="color:#ef4444;border:1px solid #fca5a5;background:#fef2f2">Sil</button>' +
+        '</td>' +
+      '</tr>';
+    }
+
+    /* ── Full render (called on add/delete/open) ── */
+    function _renderRows() {
+      var tbody = _qs('atpMultiTbody');
+      if (!tbody) return;
+      tbody.innerHTML = _rows.map(function (r, i) {
+        r._idx = i + 1;
+        return _rowHtml(r);
+      }).join('');
+      _attachRowListeners();
+      _updateSummary();
+    }
+
+    /* ── Attach per-row listeners (runs after full render) ── */
+    function _attachRowListeners() {
+      var tbody = _qs('atpMultiTbody');
+      if (!tbody) return;
+
+      /* Firma inputs */
+      tbody.querySelectorAll('.row-firma').forEach(function (inp) {
+        /* BUG1 FIX: track mousedown on input so blur won't close DD during drag */
+        var _inpMouseHeld = false;
+        inp.addEventListener('mousedown', function () { _inpMouseHeld = true; });
+        document.addEventListener('mouseup', function () { _inpMouseHeld = false; }, { once: false });
+
+        inp.addEventListener('input', function () {
+          var row = _rowByEl(inp);
+          if (!row) return;
+          row.firma = inp.value;
+          row.firmaAnchorId = null;
+          row.cariId = null;
+          if (row.status === 'ok') { row.status = 'pending'; _patchRowDom(row); }
+          _openFirmaDD(row, inp);
+        });
+
+        inp.addEventListener('blur', function () {
+          setTimeout(function () {
+            if (_inpMouseHeld || _multiMouseHeld) return; // drag in progress
+            _closeFirmaDD();
+          }, 200);
+        });
+
+        inp.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') _closeFirmaDD();
+        });
+      });
+
+      /* İş inputs */
+      tbody.querySelectorAll('.row-is').forEach(function (inp) {
+        inp.addEventListener('input', function () {
+          var row = _rowByEl(inp);
+          if (row) { row.yapilacakIs = inp.value; _updateSummary(); }
+        });
+      });
+
+      /* Öncelik selects */
+      tbody.querySelectorAll('.row-oncelik').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          var row = _rowByEl(sel);
+          if (row) row.oncelik = sel.value;
+        });
+      });
+
+      /* Konum edit links */
+      tbody.querySelectorAll('[data-action="konum-edit"]').forEach(function (a) {
+        a.addEventListener('click', function () {
+          var row = _rowByEl(a);
+          if (row) _openKonumEditor(row);
+        });
+      });
+
+      /* Harita buttons */
+      tbody.querySelectorAll('.row-btn-harita').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var row = _rowByEl(btn);
+          if (row && row.lat != null && row.lng != null) {
+            _showMMapPin(row.lat, row.lng, row.adres);
+          }
+        });
+      });
+
+      /* Sil buttons */
+      tbody.querySelectorAll('.row-btn-sil').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var row = _rowByEl(btn);
+          if (!row) return;
+          /* BUG2 FIX: mark uid as deleted so any in-flight async ignores it */
+          row._deleted = true;
+          _rows = _rows.filter(function (r) { return r.uid !== row.uid; });
+          if (!_rows.length) _addRow();
+          else _renderRows();
+        });
+      });
+    }
+
+    /* ── Firma dropdown (shared, position:fixed) ── */
+    var _firmaDDEl = null;
+    var _firmaDDRow = null;
+    var _firmaDDInp = null;
+    var _firmaDDTimer = null;
+
+    function _getFirmaDD() {
+      if (!_firmaDDEl) _firmaDDEl = _qs('atpMultiFirmaDD');
+      return _firmaDDEl;
+    }
+
+    function _closeFirmaDD() {
+      var dd = _getFirmaDD();
+      if (dd) dd.style.display = 'none';
+      _firmaDDRow = null;
+      _firmaDDInp = null;
+    }
+
+    function _openFirmaDD(row, inp) {
+      var q = (inp.value || '').trim();
+      _firmaDDRow = row;
+      _firmaDDInp = inp;
+      clearTimeout(_firmaDDTimer);
+      if (q.length < 2) { _closeFirmaDD(); return; }
+      _firmaDDTimer = setTimeout(function () {
+        fetch('/planlama/arac-takip/api/locations/search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) { _renderFirmaDD(data.results || [], q, row, inp); })
+          .catch(function () { _renderFirmaDD([], q, row, inp); });
+      }, 280);
+    }
+
+    function _renderFirmaDD(items, rawQuery, row, inp) {
+      var dd = _getFirmaDD();
+      /* BUG2 FIX: discard if row deleted or different row opened since */
+      if (!dd || _firmaDDRow !== row || row._deleted) return;
+      var r = inp.getBoundingClientRect();
+      dd.style.left = r.left + 'px';
+      dd.style.width = r.width + 'px';
+      dd.style.top = (r.bottom + 2) + 'px';
+
+      var html = items.slice(0, 8).map(function (it) {
+        var nm = it.firma || it.name || '';
+        var ad = it.adres || it.address || it.short_adres || '';
+        return '<div class="mdd-item" data-id="' + (it.id || '') + '" data-cari="' + (it.cari_id || '') + '">' +
+          '<strong>' + fmtVal(nm) + '</strong>' +
+          (ad ? '<span>' + fmtVal(ad) + '</span>' : '') +
+          '</div>';
+      }).join('');
+      if (rawQuery && rawQuery.length >= 2) {
+        html += '<div class="mdd-item mdd-new" data-id="" data-cari="">' +
+          '<strong>Yeni firma: ' + fmtVal(rawQuery) + '</strong></div>';
+      }
+      dd.innerHTML = html;
+      dd.style.display = 'block';
+
+      dd.querySelectorAll('.mdd-item').forEach(function (item) {
+        item.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          var lid = item.getAttribute('data-id');
+          var cariId = item.getAttribute('data-cari');
+          var nm = (item.querySelector('strong') || {}).textContent || rawQuery;
+          row.firmaAnchorId = lid || null;
+          row.cariId = cariId || null;
+          if (lid) {
+            row.firma = nm.replace(/^Yeni firma: /, '');
+            /* Update the input value without re-rendering all rows */
+            if (inp && inp.isConnected) inp.value = row.firma;
+            _closeFirmaDD();
+            _loadRowLocations(row, lid, cariId);
+          } else {
+            row.firma = rawQuery;
+            row.status = 'pending';
+            if (inp && inp.isConnected) inp.value = row.firma;
+            _closeFirmaDD();
+            _patchRowDom(row);
+          }
+        });
+      });
+    }
+
+    /* Load saved locations for a row — BUG2 FIX: uses row.uid to verify row still alive */
+    function _loadRowLocations(row, anchorId, cariId) {
+      var rowUid = row.uid;
+      var url = '/planlama/arac-takip/api/locations/for-company?anchor_id=' + encodeURIComponent(anchorId || '') +
+        (cariId ? '&cari_id=' + encodeURIComponent(cariId) : '');
+      fetch(url, { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          /* Discard if row was deleted or replaced */
+          if (row._deleted || !_rows.find(function (r2) { return r2.uid === rowUid; })) return;
+          var locs = d.locations || [];
+          if (locs.length > 0) {
+            var best = locs.find(function (l) { return l.latitude != null; }) || locs[0];
+            row.konumId = best.id;
+            row.konumAdi = best.konum_adi || best.name || '';
+            row.mapsUrl = best.maps_url || '';
+            row.lat = best.latitude;
+            row.lng = best.longitude;
+            row.adres = best.adres || best.address || '';
+            row.status = (row.lat != null && row.lng != null) ? 'ok' : 'pending';
+          } else {
+            row.konumId = null;
+            row.konumAdi = '';
+            row.status = 'pending';
+          }
+          _patchRowDom(row); /* BUG2 FIX: patch only this row, don't full-rebuild */
+        })
+        .catch(function () {
+          if (row._deleted) return;
+          row.status = 'pending';
+          _patchRowDom(row);
+        });
+    }
+
+    /* ── Konum editor via prompt → resolve ── */
+    function _openKonumEditor(row) {
+      var rowUid = row.uid;
+      var mapsVal = window.prompt('Google Maps bağlantısı veya koordinat (lat,lng):', row.mapsUrl || '');
+      if (mapsVal === null) return;
+      mapsVal = mapsVal.trim();
+      if (!mapsVal) { row.status = 'pending'; _patchRowDom(row); return; }
+      row.mapsUrl = mapsVal;
+      row.status = 'pending';
+      _patchRowDom(row);
+      fetch('/planlama/arac-takip/api/maps/resolve', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maps_url: mapsVal, adres: mapsVal }),
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        /* BUG2 FIX: check row still alive */
+        if (row._deleted || !_rows.find(function (r2) { return r2.uid === rowUid; })) return;
+        if (j.ok && j.latitude != null) {
+          row.lat = j.latitude;
+          row.lng = j.longitude;
+          row.adres = j.adres || j.maps_url || mapsVal;
+          row.mapsUrl = j.maps_url || mapsVal;
+          row.status = 'ok';
+          _showMMapPin(row.lat, row.lng, row.adres);
+        } else {
+          row.status = 'err';
+          toast('Konum bulunamadı: ' + (j.error || mapsVal));
+        }
+        _patchRowDom(row);
+      }).catch(function () {
+        if (row._deleted) return;
+        row.status = 'err';
+        _patchRowDom(row);
+      });
+    }
+
+    /* ── Bulk location check — BUG2 FIX: capture rowUid per iteration ── */
+    function _bulkKonumKontrol() {
+      var pending = _rows.filter(function (r) { return r.status === 'pending' && r.mapsUrl; });
+      if (!pending.length) {
+        toast('Kontrol edilecek bekleyen satır yok.');
+        return;
+      }
+      pending.forEach(function (row) {
+        var rowUid = row.uid;
+        fetch('/planlama/arac-takip/api/maps/resolve', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ maps_url: row.mapsUrl, adres: row.mapsUrl }),
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          /* BUG2 FIX: verify row still in _rows by uid */
+          if (row._deleted || !_rows.find(function (r2) { return r2.uid === rowUid; })) return;
+          if (j.ok && j.latitude != null) {
+            row.lat = j.latitude; row.lng = j.longitude;
+            row.adres = j.adres || j.maps_url || row.mapsUrl;
+            row.status = 'ok';
+          } else {
+            row.status = 'err';
+          }
+          _patchRowDom(row); /* only this row */
+        }).catch(function () {
+          if (row._deleted) return;
+          row.status = 'err';
+          _patchRowDom(row);
+        });
+      });
+    }
+
+    /* ── Summary line ── */
+    function _updateSummary() {
+      var el = _qs('atpMultiSummary');
+      if (!el) return;
+      var total = _rows.length;
+      var okCount = _rows.filter(function (r) { return r.status === 'ok'; }).length;
+      var pendCount = _rows.filter(function (r) { return r.status !== 'ok'; }).length;
+      el.innerHTML =
+        '<span class="s-count">' + total + ' satır</span>' +
+        ' • <span class="s-ok">✓ ' + okCount + ' konum doğrulandı</span>' +
+        (pendCount ? ' • <span class="s-warn">⚠ ' + pendCount + ' konum bekliyor</span>' : '');
+    }
+
+    /* ── Add row ── */
+    function _addRow() {
+      _rows.push(_mkRowState()); /* new row always starts empty — no state copy */
+      _renderRows();
+    }
+
+    /* ── Sentinel guard: reject placeholders that are not real values ── */
+    var _SENTINEL = /^[\s\-—–]+$/;  // only dashes / whitespace = empty
+    function _isBlank(s) {
+      return !s || !s.trim() || _SENTINEL.test(s.trim());
+    }
+
+    /* ── Per-row validation error mark ── */
+    function _markRowError(uid, fieldCls, msg) {
+      var tr = document.querySelector('tr[data-row-uid="' + uid + '"]');
+      if (!tr) return;
+      var inp = tr.querySelector('.' + fieldCls);
+      if (!inp) return;
+      inp.style.borderColor = '#ef4444';
+      inp.title = msg;
+      /* Small red helper below input */
+      var helper = inp.parentElement.querySelector('.row-err-hint');
+      if (!helper) {
+        helper = document.createElement('div');
+        helper.className = 'row-err-hint';
+        helper.style.cssText = 'color:#ef4444;font-size:10.5px;margin-top:2px';
+        inp.parentElement.appendChild(helper);
+      }
+      helper.textContent = msg;
+    }
+
+    function _clearRowErrors() {
+      document.querySelectorAll('#atpMultiTbody .row-input').forEach(function (inp) {
+        inp.style.borderColor = '';
+        inp.title = '';
+      });
+      document.querySelectorAll('#atpMultiTbody .row-err-hint').forEach(function (el) {
+        el.textContent = '';
+      });
+    }
+
+    /* ── Strict submit validation — returns true only if ALL rows are valid ── */
+    function _validateAllRows(showErrors) {
+      /* Step 1: sync DOM → state */
+      _rows.forEach(function (r) {
+        var tr = document.querySelector('tr[data-row-uid="' + r.uid + '"]');
+        if (!tr) return;
+        var firmaInp = tr.querySelector('.row-firma');
+        var isInp = tr.querySelector('.row-is');
+        if (firmaInp) r.firma = firmaInp.value;
+        if (isInp) r.yapilacakIs = isInp.value;
+      });
+
+      if (showErrors) _clearRowErrors();
+
+      var valid = true;
+
+      _rows.forEach(function (r, i) {
+        var rowValid = true;
+
+        /* firma: min 2 real chars, no placeholder sentinels */
+        var firmaClean = (r.firma || '').trim();
+        if (_isBlank(firmaClean) || firmaClean.length < 2) {
+          rowValid = false;
+          if (showErrors) _markRowError(r.uid, 'row-firma', 'Firma adı en az 2 karakter');
+        }
+
+        /* yapilacak_is: min 2 real chars */
+        var isClean = (r.yapilacakIs || '').trim();
+        if (_isBlank(isClean) || isClean.length < 2) {
+          rowValid = false;
+          if (showErrors) _markRowError(r.uid, 'row-is', 'Yapılacak iş en az 2 karakter');
+        }
+
+        /* konum: must be status=ok AND have lat/lng */
+        if (r.status !== 'ok' || r.lat == null || r.lng == null) {
+          rowValid = false;
+          if (showErrors) {
+            var tr = document.querySelector('tr[data-row-uid="' + r.uid + '"]');
+            var durumCell = tr && tr.querySelector('.col-durum');
+            if (durumCell) {
+              var existing = durumCell.querySelector('.row-err-hint');
+              if (!existing) {
+                var hint = document.createElement('div');
+                hint.className = 'row-err-hint';
+                hint.style.cssText = 'color:#ef4444;font-size:10.5px;margin-top:2px';
+                hint.textContent = 'Konum doğrulanmalı';
+                durumCell.appendChild(hint);
+              }
+            }
+          }
+        }
+
+        if (!rowValid) valid = false;
+      });
+
+      return valid;
+    }
+
+    /* ── Submit ── */
+    function _submit() {
+      if (_submitInFlight) return;
+      var arac = (_qs('atpMultiArac') || {}).value || '';
+      var sofor = ((_qs('atpMultiSofor') || {}).value || '').trim();
+      var tarih = (_qs('atpMultiTarih') || {}).value || '';
+
+      /* Header validation */
+      var headerErrors = [];
+      if (!arac) headerErrors.push('Araç seçmelisiniz.');
+      if (!tarih) headerErrors.push('Tarih seçiniz.');
+      if (headerErrors.length) { toast(headerErrors.join(' ')); return; }
+
+      /* Row validation — strict, with visual feedback */
+      if (!_validateAllRows(true)) {
+        /* Count problems for user */
+        var badFirma = _rows.filter(function (r) { return _isBlank((r.firma || '').trim()) || (r.firma || '').trim().length < 2; }).length;
+        var badIs = _rows.filter(function (r) { return _isBlank((r.yapilacakIs || '').trim()) || (r.yapilacakIs || '').trim().length < 2; }).length;
+        var badKonum = _rows.filter(function (r) { return r.status !== 'ok' || r.lat == null; }).length;
+        var msgs = [];
+        if (badFirma) msgs.push(badFirma + ' satırda firma eksik');
+        if (badIs) msgs.push(badIs + ' satırda yapılacak iş eksik');
+        if (badKonum) msgs.push(badKonum + ' satırda konum doğrulanmamış');
+        /* Show persistent error in summary area */
+        var summaryEl = _qs('atpMultiSummary');
+        if (summaryEl) {
+          var prev = summaryEl.querySelector('.multi-submit-err');
+          if (!prev) {
+            prev = document.createElement('div');
+            prev.className = 'multi-submit-err';
+            prev.style.cssText = 'color:#ef4444;font-weight:600;margin-top:4px';
+            summaryEl.appendChild(prev);
+          }
+          prev.textContent = 'Eksik satırlar var, kaydedilmedi: ' + msgs.join(', ');
+        }
+        toast('Eksik veya hatalı satırlar var — kaydedilmedi. ' + msgs.join(', '));
+        return;
+      }
+
+      /* Clear any previous error markers */
+      _clearRowErrors();
+      var summaryEl2 = _qs('atpMultiSummary');
+      if (summaryEl2) {
+        var errMsg = summaryEl2.querySelector('.multi-submit-err');
+        if (errMsg) errMsg.remove();
+      }
+
+      /* Build payload — only include validated rows; double-check each field */
+      var payloadRows = _rows.map(function (r) {
+        var firmaFinal = (r.firma || '').trim();
+        var isFinal = (r.yapilacakIs || '').trim();
+        return {
+          plan_tarihi: tarih, tarih: tarih,
+          arac_external_id: arac,
+          sofor_adi: sofor || null,
+          planlanan_saat: null,
+          firma: firmaFinal,
+          yapilacak_is: isFinal,
+          is: isFinal,
+          oncelik: r.oncelik || 'NORMAL',
+          location_master_id: r.konumId || null,
+          latitude: r.lat,
+          longitude: r.lng,
+          lat: r.lat,
+          lng: r.lng,
+          adres: (r.adres || '').trim() || null,
+          maps_url: r.mapsUrl || '',
+          is_new_location: !r.konumId,
+          konum_adi: r.konumAdi || null,
+          client_submit_id: 'multi_' + r.uid + '_' + Date.now(),
+          save_to_master: !r.konumId,
+        };
+      });
+
+      _submitInFlight = true;
+      var submitBtns = [_qs('atpMultiBtnSubmit'), _qs('atpMultiBtnSubmitTop')];
+      submitBtns.forEach(function (b) { if (b) b.disabled = true; });
+
+      fetch('/planlama/arac-takip/api/plana-is-ekle-batch', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: payloadRows, plan_tarihi: tarih, arac_external_id: arac }),
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        _submitInFlight = false;
+        submitBtns.forEach(function (b) { if (b) b.disabled = false; });
+        if (j.ok) {
+          toast('✓ ' + j.ok_count + '/' + j.total + ' iş plana eklendi.');
+          _closeModal('submit_ok');
+          loadOps();
+        } else {
+          var errs = (j.results || []).filter(function (r) { return !r.ok; });
+          var msg = errs.map(function (r) { return 'Satır ' + (r.row + 1) + ': ' + (r.error || ''); }).join(' | ');
+          toast('Bazı satırlar eklenemedi: ' + (msg || j.error || ''));
+          (j.results || []).forEach(function (res) {
+            if (!res.ok) {
+              var target = _rows[res.row];
+              if (target) { target.status = 'err'; _patchRowDom(target); }
+            }
+          });
+        }
+      }).catch(function () {
+        _submitInFlight = false;
+        submitBtns.forEach(function (b) { if (b) b.disabled = false; });
+        toast('Sunucu hatası. Tekrar deneyin.');
+      });
+    }
+
+    /* ── Open / close modal ── */
+    function _openModal() {
+      var backdrop = _qs('atpMultiBackdrop');
+      var modal = _qs('atpMultiModal');
+      if (!backdrop || !modal) return;
+      _multiModalEl = modal;
+      _wireModalCloseGuards();
+
+      var tarihEl = _qs('atpMultiTarih');
+      if (tarihEl) tarihEl.value = planDate || new Date().toISOString().slice(0, 10);
+
+      _aracOpts();
+      var aracEl = _qs('atpMultiArac');
+      if (aracEl && _activeVehicleExtId) aracEl.value = String(_activeVehicleExtId);
+      if (aracEl && _qs('atpMultiSofor')) {
+        var opt = aracEl.options[aracEl.selectedIndex];
+        _qs('atpMultiSofor').value = (opt && opt.getAttribute('data-driver')) || '';
+      }
+
+      _rows = [];
+      _addRow();
+
+      backdrop.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      setTimeout(function () { _initMMap(); }, 100);
+    }
+
+    function _closeModal(reason) {
+      if (!_CLOSE_OK[reason]) return;
+      var backdrop = _qs('atpMultiBackdrop');
+      var modal = _qs('atpMultiModal');
+      if (backdrop) backdrop.classList.remove('open');
+      if (modal) modal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      _closeFirmaDD();
+      _submitInFlight = false;
+    }
+
+    /* ── Araç change → prefill driver ── */
+    var aracEl2 = _qs('atpMultiArac');
+    if (aracEl2) aracEl2.addEventListener('change', function () {
+      var opt = aracEl2.options[aracEl2.selectedIndex];
+      var soforEl = _qs('atpMultiSofor');
+      if (soforEl && opt) soforEl.value = opt.getAttribute('data-driver') || '';
+    });
+
+    /* ── Event wiring ── */
+    var btnClose = _qs('atpMultiClose');
+    if (btnClose) btnClose.addEventListener('click', function () { _closeModal('x'); });
+
+    var btnCancel = _qs('atpMultiBtnCancel');
+    if (btnCancel) btnCancel.addEventListener('click', function () { _closeModal('cancel'); });
+
+    var btnSatirEkle = _qs('atpMultiBtnSatirEkle');
+    if (btnSatirEkle) btnSatirEkle.addEventListener('click', _addRow);
+
+    var btnKonumKontrol = _qs('atpMultiBtnKonumKontrol');
+    if (btnKonumKontrol) btnKonumKontrol.addEventListener('click', _bulkKonumKontrol);
+
+    var btnSubmitTop = _qs('atpMultiBtnSubmitTop');
+    if (btnSubmitTop) btnSubmitTop.addEventListener('click', _submit);
+
+    var btnSubmit = _qs('atpMultiBtnSubmit');
+    if (btnSubmit) btnSubmit.addEventListener('click', _submit);
+
+    /* No backdrop/outside-click close — X and İptal only (submit_ok on success) */
+
+    /* Dropdown close — separate from modal close */
+    document.addEventListener('mousedown', function (e) {
+      var dd = _getFirmaDD();
+      if (!dd || dd.style.display === 'none') return;
+      /* Keep open if click is inside dropdown or inside modal */
+      if (dd.contains(e.target)) return;
+      if (_firmaDDInp && _firmaDDInp.contains(e.target)) return;
+      if (_insideModal(e.target)) return; /* BUG1 FIX: clicks inside modal don't close DD */
+      _closeFirmaDD();
+    });
+
+    /* Expose opener */
+    window.atpMultiOpen = _openModal;
+
+  }());
 
 }());

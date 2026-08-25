@@ -33,6 +33,7 @@ from modules.planlama.arac_takip_repo import (
     _touch_location,
     _uret_talep_no,
     get_conn,
+    idempotency_ready,
     tables_ready,
     ux_v2_columns_ready,
 )
@@ -101,8 +102,15 @@ def _resolve_location_conn(
     konum = (payload.get('maps_url') or payload.get('konum_linki') or '').strip() or None
     kisi = (payload.get('kisi') or '').strip() or None
     telefon = (payload.get('telefon') or '').strip() or None
+    konum_adi = (payload.get('konum_adi') or '').strip() or None
+    cari_id_raw = payload.get('cari_id')
+    try:
+        cari_id = int(cari_id_raw) if cari_id_raw not in (None, '') else None
+    except (TypeError, ValueError):
+        cari_id = None
+    is_new_location = bool(payload.get('is_new_location'))
 
-    if given_loc_id:
+    if given_loc_id and not is_new_location:
         master_row = con.execute(
             'SELECT * FROM arac_kayitli_yer WHERE id=? AND aktif=1', (given_loc_id,),
         ).fetchone()
@@ -114,16 +122,62 @@ def _resolve_location_conn(
                 firma = master_row['firma_adi'] or firma
             if not adres:
                 adres = master_row['adres'] or adres
+            if not konum and master_row['konum_linki']:
+                konum = master_row['konum_linki']
             _touch_location(con, given_loc_id)
             return given_loc_id, 'linked_existing'
 
     if lat is not None and lng is not None and firma and adres:
         loc_id, master_action = _ensure_kayitli_yer(
-            con, session_user_id, firma, adres, lat, lng, konum, kisi, telefon, None, now,
+            con, session_user_id, firma, adres, lat, lng, konum, kisi, telefon,
+            None if is_new_location else given_loc_id, now,
+            konum_adi=konum_adi, cari_id=cari_id,
         )
         return loc_id, master_action
 
     return None, 'none'
+
+
+def _get_idempotent_result(con: sqlite3.Connection, token: str | None) -> dict | None:
+    if not token or not idempotency_ready():
+        return None
+    row = con.execute(
+        'SELECT talep_id, plan_id, plan_is_id FROM arac_plana_idempotency WHERE token=?',
+        (str(token),),
+    ).fetchone()
+    if not row:
+        return None
+    talep_row = con.execute('SELECT * FROM arac_is_talebi WHERE id=?', (row['talep_id'],)).fetchone()
+    return {
+        'ok': True,
+        'atomic': True,
+        'compensating_delete': False,
+        'plan_id': int(row['plan_id']),
+        'plan_is_id': int(row['plan_is_id']),
+        'talep_id': int(row['talep_id']),
+        'talep': _talep_dto(talep_row),
+        'master_action': 'idempotent_replay',
+        'idempotent': True,
+    }
+
+
+def _save_idempotent_result(
+    con: sqlite3.Connection,
+    token: str | None,
+    talep_id: int,
+    plan_id: int,
+    plan_is_id: int,
+    now: str,
+) -> None:
+    if not token or not idempotency_ready():
+        return
+    con.execute(
+        """
+        INSERT OR IGNORE INTO arac_plana_idempotency (token, talep_id, plan_id, plan_is_id, created_at)
+        VALUES (?,?,?,?,?)
+        """,
+        (str(token), int(talep_id), int(plan_id), int(plan_is_id), now),
+    )
 
 
 def _create_request_conn(
@@ -317,20 +371,46 @@ def _add_plan_item_conn(
 # 2. Validation helpers (pre-transaction — no DB calls)
 # ---------------------------------------------------------------------------
 
+import re as _re
+_SENTINEL_PAT = _re.compile(r'^[\s\-\u2014\u2013]+$')
+
+
+def _is_blank_value(s: str) -> bool:
+    """True if value is empty, whitespace-only, or a dash/em-dash sentinel."""
+    return not s or not s.strip() or bool(_SENTINEL_PAT.match(s.strip()))
+
+
 def _validate_payload(payload: dict) -> None:
     plan_date = str(payload.get('plan_tarihi') or payload.get('tarih') or '').strip()
     if not plan_date or len(plan_date) < 10:
         raise ValueError('plan_tarihi gerekli (YYYY-MM-DD)')
+
     arac_id = str(payload.get('arac_external_id') or '').strip()
     if not arac_id:
         raise ValueError('arac_external_id gerekli')
+
     yapilacak = (payload.get('is') or payload.get('yapilacak_is') or '').strip()
-    if not yapilacak:
-        raise ValueError('yapilacak_is gerekli')
+    if _is_blank_value(yapilacak) or len(yapilacak) < 2:
+        raise ValueError('yapilacak_is gerekli ve en az 2 karakter olmalı')
+
     firma = (payload.get('firma') or payload.get('firma_adi') or '').strip()
     loc_id_raw = payload.get('location_master_id') or payload.get('kayitli_yer_id')
-    if not firma and not loc_id_raw:
-        raise ValueError('firma veya kayitli_yer_id gerekli')
+
+    if _is_blank_value(firma) and not loc_id_raw:
+        raise ValueError('firma adı gerekli (en az 2 karakter)')
+
+    if not _is_blank_value(firma) and len(firma) < 2:
+        raise ValueError('firma adı en az 2 karakter olmalı')
+
+
+def _require_coordinates(payload: dict, lat: float | None, lng: float | None) -> None:
+    if lat is None or lng is None:
+        raise ValueError(
+            'Geçerli konum koordinatı gerekli. Google Maps bağlantısını doğrulayın veya haritadan pin seçin.'
+        )
+    adres = (payload.get('adres') or '').strip()
+    if not adres:
+        raise ValueError('Adres veya Google Maps bağlantısı gerekli')
 
 
 def _extract_coords(payload: dict) -> tuple[float | None, float | None]:
@@ -375,6 +455,7 @@ def add_job_to_plan_atomic(session_user_id: int, payload: dict) -> dict:
     # Pre-transaction validation (no DB)
     _validate_payload(payload)
     lat, lng = _extract_coords(payload)
+    _require_coordinates(payload, lat, lng)
 
     plan_date = str(payload.get('plan_tarihi') or payload.get('tarih') or '')[:10]
     arac_external_id = str(payload.get('arac_external_id') or '').strip()
@@ -393,15 +474,25 @@ def add_job_to_plan_atomic(session_user_id: int, payload: dict) -> dict:
     enriched = dict(payload)
     enriched['_lat'] = lat
     enriched['_lng'] = lng
+    if not enriched.get('adres'):
+        enriched['adres'] = (payload.get('adres') or payload.get('maps_url') or payload.get('konum_linki') or '').strip()
 
+    submit_token = (payload.get('client_submit_id') or payload.get('submit_token') or '').strip() or None
     now = _now_iso()
     con = get_conn()
     con.row_factory = sqlite3.Row
     try:
         con.execute('BEGIN IMMEDIATE')
 
+        replay = _get_idempotent_result(con, submit_token)
+        if replay:
+            con.commit()
+            return replay
+
         # Step 1: kayıtlı yer (conn-içi)
         loc_id, master_action = _resolve_location_conn(con, session_user_id, enriched, now)
+        if loc_id is None:
+            raise ValueError('Konum kaydedilemedi — koordinat ve adres gerekli')
 
         # Step 2: talep insert — durum doğrudan PLANA_ALINDI
         talep_id = _create_request_conn(con, session_user_id, enriched, loc_id, now)
@@ -416,6 +507,8 @@ def add_job_to_plan_atomic(session_user_id: int, payload: dict) -> dict:
         plan_is_id = _add_plan_item_conn(
             con, session_user_id, plan_id, talep_id, planlanan_saat, sira, now,
         )
+
+        _save_idempotent_result(con, submit_token, talep_id, plan_id, plan_is_id, now)
 
         con.commit()
 

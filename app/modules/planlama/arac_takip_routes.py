@@ -211,6 +211,37 @@ def arac_takip_api_users_search():
     return jsonify({'ok': True, 'results': search_cps_users(q, limit=limit)})
 
 
+@arac_takip_bp.route('/api/locations/for-company', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_locations_for_company():
+    from modules.planlama.arac_takip_repo import list_company_locations, tables_ready
+    if not tables_ready():
+        return jsonify({'ok': True, 'locations': [], 'company': None})
+    anchor = request.args.get('anchor_id') or request.args.get('location_master_id')
+    cari_id = request.args.get('cari_id', type=int)
+    try:
+        anchor_id = int(anchor) if anchor not in (None, '') else None
+    except (TypeError, ValueError):
+        anchor_id = None
+    data = list_company_locations(anchor_location_id=anchor_id, cari_id=cari_id)
+    return jsonify({'ok': True, **data})
+
+
+@arac_takip_bp.route('/api/maps/resolve', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_maps_resolve():
+    """Validate-only maps coordinate resolve — no DB write."""
+    from modules.planlama.arac_lokasyon_service import MAPS_COORD_USER_ERROR, resolve_maps_input
+    body = request.get_json(silent=True) or {}
+    try:
+        result = resolve_maps_input(body)
+        return jsonify({'ok': True, **result})
+    except ValueError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+
+
 @arac_takip_bp.route('/api/locations/from-maps', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_location_from_maps():
@@ -461,6 +492,118 @@ def arac_takip_api_plan_timeline():
         vehicle_id=vehicle_id,
     )
     return jsonify(dto)
+
+
+_SENTINEL_RE = __import__('re').compile(r'^[\s\-\u2014\u2013]+$')
+
+
+def _batch_validate_row(idx: int, row: dict) -> str | None:
+    """
+    Backend guard for a single batch row.
+    Returns an error string if invalid, None if ok.
+    Never lets placeholder sentinels ('—') reach the service.
+    """
+    import re
+    sentinel = _SENTINEL_RE
+
+    firma = (row.get('firma') or row.get('firma_adi') or '').strip()
+    if not firma or sentinel.match(firma) or len(firma) < 2:
+        return f'Satır {idx + 1}: firma adı eksik veya çok kısa (min 2 karakter)'
+
+    yapilacak = (row.get('is') or row.get('yapilacak_is') or '').strip()
+    if not yapilacak or sentinel.match(yapilacak) or len(yapilacak) < 2:
+        return f'Satır {idx + 1}: yapılacak iş eksik veya çok kısa (min 2 karakter)'
+
+    arac = (row.get('arac_external_id') or '').strip()
+    if not arac:
+        return f'Satır {idx + 1}: araç seçilmemiş'
+
+    lat_raw = row.get('latitude') or row.get('lat')
+    lng_raw = row.get('longitude') or row.get('lng')
+    try:
+        lat = float(lat_raw) if lat_raw not in (None, '') else None
+    except (TypeError, ValueError):
+        lat = None
+    try:
+        lng = float(lng_raw) if lng_raw not in (None, '') else None
+    except (TypeError, ValueError):
+        lng = None
+    loc_id = row.get('location_master_id') or row.get('kayitli_yer_id')
+    if (lat is None or lng is None) and not loc_id:
+        return f'Satır {idx + 1}: konum koordinatı doğrulanmamış'
+
+    adres = (row.get('adres') or '').strip()
+    if not adres and not loc_id:
+        return f'Satır {idx + 1}: adres eksik'
+
+    return None
+
+
+@arac_takip_bp.route('/api/plana-is-ekle-batch', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plana_is_ekle_batch():
+    """
+    Çoklu iş ekleme — tümü-veya-hiç (all-or-nothing) güvenli mod.
+    Herhangi bir satırda eksik firma/is/konum varsa hiçbir satır eklenmez.
+    """
+    if not _planlama_duzenle():
+        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    from modules.planlama.arac_add_to_plan_service import add_job_to_plan_atomic
+    from modules.planlama.arac_today_operations_service import get_today_vehicle_operations
+    from modules.planlama.arac_takip_repo import tables_ready
+    if not tables_ready():
+        return jsonify({'ok': False, 'error': 'Tablolar hazır değil'}), 503
+    body = request.get_json(silent=True) or {}
+    rows = body.get('rows', [])
+    if not rows or not isinstance(rows, list):
+        return jsonify({'ok': False, 'error': 'rows listesi gerekli'}), 400
+
+    # ── Backend-side pre-validation (all-or-nothing) ──────────────────────────
+    pre_errors = []
+    for idx, row in enumerate(rows):
+        err = _batch_validate_row(idx, row)
+        if err:
+            pre_errors.append({'row': idx, 'ok': False, 'error': err})
+
+    if pre_errors:
+        return jsonify({
+            'ok': False,
+            'ok_count': 0,
+            'total': len(rows),
+            'results': pre_errors,
+            'error': 'Bazı satırlar geçersiz — hiçbir kayıt yapılmadı',
+            'daily_tasks': [],
+            'today_operations': {},
+        }), 400
+
+    uid = _uid()
+    results = []
+    ok_count = 0
+    for idx, row in enumerate(rows):
+        try:
+            r = add_job_to_plan_atomic(uid, row)
+            results.append({'row': idx, 'ok': True, **r})
+            ok_count += 1
+        except (KeyError, TypeError, ValueError) as exc:
+            results.append({'row': idx, 'ok': False, 'error': str(exc)})
+        except Exception as exc:
+            results.append({'row': idx, 'ok': False, 'error': str(exc)})
+
+    plan_date = _parse_date(
+        body.get('plan_tarihi') or body.get('tarih')
+        or (rows[0].get('plan_tarihi') if rows else None)
+    )
+    vehicle_id = body.get('arac_external_id') or (rows[0].get('arac_external_id') if rows else None)
+    tasks = get_tasks_for_session(uid, plan_date.isoformat(), vehicle_id)
+    ops = get_today_vehicle_operations(plan_date.isoformat())
+    return jsonify({
+        'ok': ok_count > 0,
+        'ok_count': ok_count,
+        'total': len(rows),
+        'results': results,
+        'daily_tasks': tasks,
+        'today_operations': ops,
+    })
 
 
 @arac_takip_bp.route('/api/plana-is-ekle', methods=['POST'])

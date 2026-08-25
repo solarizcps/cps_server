@@ -228,6 +228,63 @@ def parse_maps_coords(maps_url: str, *, resolve_redirects: bool = True) -> tuple
     return None, None
 
 
+def resolve_maps_input(payload: dict) -> dict:
+    """Validate-only coordinate resolve from maps URL, address text, or lat/lng pair."""
+    lat_raw = payload.get('latitude') or payload.get('lat')
+    lng_raw = payload.get('longitude') or payload.get('lng') or payload.get('lon')
+    maps_url = (payload.get('maps_url') or payload.get('konum_linki') or payload.get('adres') or '').strip()
+    resolved_url = None
+
+    if lat_raw not in (None, '') and lng_raw not in (None, ''):
+        try:
+            lat = float(lat_raw)
+            lng = float(lng_raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(MAPS_COORD_USER_ERROR) from exc
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            raise ValueError(MAPS_COORD_USER_ERROR)
+        return {
+            'latitude': lat,
+            'longitude': lng,
+            'maps_url': maps_url or f'{lat},{lng}',
+            'resolved_url': resolved_url,
+            'adres': (payload.get('adres') or maps_url or '').strip(),
+        }
+
+    if not maps_url:
+        raise ValueError(MAPS_COORD_USER_ERROR)
+
+    coord_match = re.match(r'^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$', maps_url)
+    if coord_match:
+        lat = float(coord_match.group(1))
+        lng = float(coord_match.group(2))
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            raise ValueError(MAPS_COORD_USER_ERROR)
+        return {
+            'latitude': lat,
+            'longitude': lng,
+            'maps_url': maps_url,
+            'resolved_url': None,
+            'adres': maps_url,
+        }
+
+    parsed = urlparse(maps_url)
+    host = (parsed.hostname or '').lower()
+    if parsed.scheme == 'https' and host in _SHORT_LINK_HOSTS:
+        resolved_url = resolve_google_maps_url(maps_url)
+
+    lat, lng = parse_maps_coords(maps_url)
+    if lat is None or lng is None:
+        raise ValueError(MAPS_COORD_USER_ERROR)
+    return {
+        'latitude': lat,
+        'longitude': lng,
+        'maps_url': maps_url,
+        'resolved_url': resolved_url,
+        'adres': maps_url,
+    }
+
+
 def _ensure_store() -> dict[str, Any]:
     os.makedirs(_STORE_DIR, exist_ok=True)
     if not os.path.isfile(_STORE_FILE):

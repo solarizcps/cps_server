@@ -636,6 +636,17 @@ MANIFEST: tuple[MigEntry, ...] = (
         dependencies=(179,),
         required_tables=("arac_plan_is_ziyaret_durum",),
     ),
+    MigEntry(
+        181, "181_arac_kayitli_yer_multi_location",
+        "181_arac_kayitli_yer_multi_location.py",
+        "Araç Takip — kayıtlı yer çoklu konum (konum_adi, cari_id)",
+        dependencies=(180,),
+        required_columns=(
+            ("arac_kayitli_yer", "konum_adi"),
+            ("arac_kayitli_yer", "cari_id"),
+        ),
+        required_tables=("arac_plana_idempotency",),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}
