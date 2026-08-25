@@ -61,11 +61,18 @@ def routing_status_message(provider: RoadRoutingProvider | None) -> tuple[str, s
     return 'READY', None
 
 
+def _route_points_with_return(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Round-trip route: base → stops → base. Matrix/optimization uses points without trailing base."""
+    if len(points) < 2:
+        return list(points)
+    return list(points) + [points[0]]
+
+
 def _build_routable_points(
     base: dict | None,
     tasks: list[dict],
 ) -> tuple[list[tuple[float, float]], list[dict], list[dict], dict[str, Any]]:
-    """Returns points [base, ...stops], routable_stops, missing_stops, meta."""
+    """Returns depot+stop points [base, ...stops] for matrix; route adds return base leg separately."""
     routable: list[dict] = []
     missing: list[dict] = []
     if not base or not base.get('has_coordinates'):
@@ -74,6 +81,9 @@ def _build_routable_points(
             'total_stops': len(tasks),
             'routable_count': 0,
             'missing_count': len(tasks),
+            'return_leg_included': False,
+            'route_points_start': None,
+            'route_points_end': None,
         }
     points: list[tuple[float, float]] = [(float(base['latitude']), float(base['longitude']))]
     for t in sorted(tasks, key=lambda x: x.get('order_no') or 0):
@@ -90,6 +100,9 @@ def _build_routable_points(
         'total_stops': len(tasks),
         'routable_count': len(routable),
         'missing_count': len(missing),
+        'return_leg_included': len(routable) > 0,
+        'route_points_start': 'base',
+        'route_points_end': 'base',
     }
 
 
@@ -219,7 +232,7 @@ def build_plan_route_dto(
     current_full_order = [str(t['id']) for t in active_tasks]
 
     try:
-        current_route = _route_with_cache(prov, points)
+        current_route = _route_with_cache(prov, _route_points_with_return(points))
     except RoutingError as exc:
         empty_route['status'] = exc.code
         empty_route['message'] = str(exc) or 'Rota hesaplanamadı.'
@@ -279,7 +292,7 @@ def build_plan_route_dto(
                 sug_points = [points[0]] + [
                     (float(s['latitude']), float(s['longitude'])) for s in suggested_stops
                 ]
-                suggested_route = _route_with_cache(prov, sug_points)
+                suggested_route = _route_with_cache(prov, _route_points_with_return(sug_points))
         except RoutingError:
             suggested_full_order = list(current_full_order)
             suggested_routable_ids = list(current_routable_ids)
