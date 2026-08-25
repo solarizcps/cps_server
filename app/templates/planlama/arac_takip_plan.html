@@ -4,7 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=48">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=53">
 {% endblock %}
 
 {% block content %}
@@ -184,6 +184,8 @@
                   <tr><td colspan="6" class="atp-v2-empty">Plan verisi yükleniyor…</td></tr>
                 </tbody>
               </table>
+              <div id="atpPassiveJobsToggle" class="atp-passive-jobs-toggle" style="display:none"></div>
+              <div id="atpPassiveJobsPanel" class="atp-passive-jobs-panel" style="display:none"></div>
             </div>
           </div>
         </div>
@@ -648,15 +650,113 @@
   </div>
 </div>
 
+{# ── Plan Change Modal ── #}
+<div id="atpPlanChangeBackdrop" class="modal-bg" aria-hidden="true">
+  <div class="modal atp-plan-change-modal" role="dialog" aria-modal="true" id="atpPlanChangeModal" aria-hidden="true">
+    <div class="modal-hdr">
+      <h3>Planı Değiştir</h3>
+      <button type="button" class="modal-close" id="atpPlanChangeClose" aria-label="Kapat">✕</button>
+    </div>
+    <div class="modal-body" id="atpPlanChangeBody">
+      <p style="color:var(--gray);font-size:12px">Yükleniyor…</p>
+    </div>
+    <div class="modal-footer">
+      <div id="atpPlanChangeWarn" class="add-warn"></div>
+      <div class="btn-row" style="display:flex;justify-content:flex-end;gap:8px">
+        <button type="button" class="btn btn-outline" id="atpPlanChangeCancel">İptal</button>
+        <button type="button" class="btn btn-gold" id="atpPcSaveBtn">Kaydet</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<template id="atpPlanChangeFormTpl">
+  <div class="atp-pc-summary">
+    <div class="atp-pc-row"><span>İş</span><strong id="atpPcSummaryJob">—</strong></div>
+    <div class="atp-pc-row"><span>Tarih</span><strong id="atpPcSummaryDate">—</strong></div>
+    <div class="atp-pc-row"><span>Araç / Şoför</span><strong id="atpPcSummaryVehicle">—</strong></div>
+    <div class="atp-pc-row"><span>Durum</span><strong id="atpPcSummaryStatus">—</strong></div>
+    <div class="atp-pc-row"><span>Konum</span><strong id="atpPcSummaryLocation">—</strong></div>
+  </div>
+  <div id="atpPcAcilWarn" class="atp-pc-acil-warn" style="display:none">ACİL iş — taşıma/erteleme dikkatli yapılmalı.</div>
+  <div class="form-ctrl">
+    <label for="atpPcAction">Aksiyon</label>
+    <select id="atpPcAction"></select>
+  </div>
+  <div id="atpPcPanelTransfer" style="display:none">
+    <div class="form-2col">
+      <div class="form-ctrl">
+        <label for="atpPcTargetVehicle">Hedef Araç</label>
+        <select id="atpPcTargetVehicle"></select>
+      </div>
+      <div class="form-ctrl">
+        <label for="atpPcTargetDriver">Şoför</label>
+        <input type="text" id="atpPcTargetDriver" placeholder="Şoför adı">
+      </div>
+    </div>
+  </div>
+  <div id="atpPcPanelDefer" style="display:none">
+    <div class="form-2col">
+      <div class="form-ctrl">
+        <label for="atpPcTargetDate">Yeni Tarih</label>
+        <input type="date" id="atpPcTargetDate">
+      </div>
+      <div class="form-ctrl">
+        <label for="atpPcDeferVehicle">Araç</label>
+        <select id="atpPcDeferVehicle"></select>
+      </div>
+    </div>
+    <div class="form-ctrl">
+      <label for="atpPcDeferDriver">Şoför</label>
+      <input type="text" id="atpPcDeferDriver" placeholder="Şoför adı">
+    </div>
+  </div>
+  <div id="atpPcPanelLocation" style="display:none">
+    <div class="form-ctrl firma-wrap">
+      <label for="atpPcLocSearch">Kayıtlı Konum Ara</label>
+      <input type="text" id="atpPcLocSearch" placeholder="Firma veya adres ara…" autocomplete="off">
+      <input type="hidden" id="atpPcLocationId">
+      <input type="hidden" id="atpPcLocLat">
+      <input type="hidden" id="atpPcLocLng">
+      <div id="atpPcLocDropdown" class="firma-dropdown"></div>
+    </div>
+  </div>
+  <div id="atpPcPanelReorder" style="display:none">
+    <p id="atpPcReorderInfo" class="atp-pc-info">Saatler rota hesaplamasıyla atanır.</p>
+  </div>
+  <div id="atpPcReasonWrap" class="form-ctrl" style="display:none">
+    <label for="atpPcReason">Neden</label>
+    <textarea id="atpPcReason" rows="2" placeholder="Kısa açıklama…"></textarea>
+  </div>
+</template>
+
+{# ── Floating job action menu (outside card overflow) ── #}
+<div id="atpJobMenuFloat" class="atp-job-menu-float" aria-hidden="true"></div>
+
 {# ── Toast ── #}
 <div id="atpToast" class="atp-toast" role="status" aria-live="polite"></div>
+
+{# ── Passive / cancelled job detail (read-only) ── #}
+<div id="atpPassiveJobBackdrop" class="modal-bg" aria-hidden="true">
+  <div class="modal atp-passive-detail-modal" role="dialog" aria-modal="true" id="atpPassiveJobModal" aria-hidden="true">
+    <div class="modal-hdr">
+      <span id="atpPassiveJobTitle">İş Plan Dışına Alındı</span>
+      <button type="button" class="modal-close" id="atpPassiveJobClose" aria-label="Kapat">✕</button>
+    </div>
+    <div class="modal-body" id="atpPassiveJobBody"></div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-outline" id="atpPassiveJobOk">Kapat</button>
+    </div>
+  </div>
+</div>
 
 {# ── Scripts ── #}
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_map.js') }}?v=6"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=9"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=12"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=3"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=60"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=13"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=67"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}

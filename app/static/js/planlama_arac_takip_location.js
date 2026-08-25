@@ -57,7 +57,7 @@
   }
 
   var baseBtn = document.getElementById('atpBtnBaseLocation');
-  if (baseBtn) {
+  if (baseBtn && baseModal && document.getElementById('atpBaseName')) {
     baseBtn.addEventListener('click', function () {
       var dashEl = document.getElementById('atpDashboardJson');
       var dash = dashEl ? JSON.parse(dashEl.textContent) : {};
