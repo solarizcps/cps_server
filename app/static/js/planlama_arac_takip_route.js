@@ -188,6 +188,20 @@
 
 
 
+  var ALREADY_OPTIMAL_MSG = 'Mevcut sıra rota motoruna göre zaten uygun.';
+
+
+
+  function alreadyOptimalMessage(route) {
+
+    if (!route || route.status !== 'OK' || !isSameRoute(route)) return '';
+
+    return ALREADY_OPTIMAL_MSG;
+
+  }
+
+
+
   function updateFuelDisplay(route, fuelSaving) {
 
     var fuelEl = el('atpRouteFuelL');
@@ -284,21 +298,37 @@
 
     if (previewBtn) {
 
-      previewBtn.disabled = !previewOk;
+      previewBtn.title = '';
 
-      if (!previewOk && noEligible) {
+      if (!previewOk) {
+
+        previewBtn.disabled = true;
 
         previewBtn.textContent = 'Önerilen Rotayı Göster';
 
+      } else if (same) {
+
+        previewBtn.disabled = false;
+
+        previewBtn.textContent = 'Öneri = Mevcut';
+
+        previewBtn.title = 'Mevcut rota zaten optimal; haritada göster';
+
       } else if (_previewMode === 'suggested') {
+
+        previewBtn.disabled = false;
 
         previewBtn.textContent = 'Karşılaştırma Görünümü';
 
       } else if (_previewMode === 'compare') {
 
+        previewBtn.disabled = false;
+
         previewBtn.textContent = 'Mevcut Rotaya Dön';
 
       } else {
+
+        previewBtn.disabled = false;
 
         previewBtn.textContent = 'Önerilen Rotayı Göster';
 
@@ -308,9 +338,31 @@
 
     if (applyBtn) {
 
-      applyBtn.disabled = !canApplyRoute(route, vehicleId) || same;
+      var canApply = canApplyRoute(route, vehicleId) && !same;
+
+      applyBtn.disabled = !canApply;
 
       applyBtn.textContent = _applyInFlight ? 'Uygulanıyor…' : '✔ Önerilen Sırayı Uygula';
+
+      if (same) {
+
+        applyBtn.title = 'Mevcut sıra zaten uygun — uygulama gerekmiyor';
+
+      } else if (!canApply) {
+
+        applyBtn.title = 'Öneri uygulanamıyor';
+
+      } else {
+
+        applyBtn.title = '';
+
+      }
+
+    }
+
+    if (global.AtpRouteExplainer && global.AtpRouteExplainer.updateExplainerButton) {
+
+      global.AtpRouteExplainer.updateExplainerButton(route);
 
     }
 
@@ -380,6 +432,8 @@
 
     if (msgEl) {
 
+      msgEl.classList.remove('already-optimal');
+
       var msg = ra.message || '';
 
       var noEligReason = _noEligibleReorderReason(ra);
@@ -402,7 +456,9 @@
 
       } else if (isSameRoute(ra) && ra.status === 'OK') {
 
-        msg = (msg ? msg + ' · ' : '') + 'Mevcut sıra zaten uygun.';
+        msg = ALREADY_OPTIMAL_MSG;
+
+        if (msgEl) msgEl.classList.add('already-optimal');
 
       }
 
@@ -556,6 +612,12 @@
 
     renderPreviewMode();
 
+    if (global.AtpRouteExplainer && global.AtpRouteExplainer.updateExplainerButton) {
+
+      global.AtpRouteExplainer.updateExplainerButton(route);
+
+    }
+
   }
 
 
@@ -611,6 +673,74 @@
     }
 
     lastRoute = null;
+
+  }
+
+
+
+  function showRouteEmptyPlan(message) {
+
+    resetPreviewMode();
+
+    updateRouteCards({});
+
+    setText(el('atpRouteCurrentKm'), '—');
+
+    setText(el('atpRouteCurrentDur'), '—');
+
+    setText(el('atpRouteSugKm'), '—');
+
+    setText(el('atpRouteSugDur'), '—');
+
+    setText(el('atpRouteGainKm'), '—');
+
+    setText(el('atpRouteGainDetail'), '—');
+
+    setText(el('atpRouteFuelL'), '—');
+
+    setText(el('atpRouteFuelTry'), '—');
+
+    var fuelCard = el('atpRouteFuelCard');
+
+    if (fuelCard) fuelCard.title = 'Araç tüketim bilgisi tanımlı değil';
+
+    var previewBtn = el('atpBtnPreviewSuggestedRoute');
+
+    var applyBtn = el('atpBtnApplySuggestedOrder');
+
+    if (previewBtn) {
+
+      previewBtn.disabled = true;
+
+      previewBtn.textContent = 'Önerilen Rotayı Göster';
+
+    }
+
+    if (applyBtn) {
+
+      applyBtn.disabled = true;
+
+      applyBtn.textContent = '✔ Önerilen Sırayı Uygula';
+
+    }
+
+    if (global.AtpPlanMap && global.AtpPlanMap.clearRouteLayers) {
+
+      global.AtpPlanMap.clearRouteLayers();
+
+    }
+
+    lastRoute = null;
+
+    var msgEl = el('atpRouteStatusMsg');
+
+    if (msgEl) {
+
+      msgEl.textContent = message || 'Aktif iş yok — plan boş.';
+
+      msgEl.style.display = '';
+
+    }
 
   }
 
@@ -1086,11 +1216,17 @@
 
         if (isSameRoute(lastRoute)) {
 
-          notify('Mevcut sıra zaten uygun.');
+          notify(ALREADY_OPTIMAL_MSG);
 
           resetPreviewMode();
 
           renderPreviewMode();
+
+          if (global.AtpPlanMap && global.AtpPlanMap.focusCurrentRoute) {
+
+            global.AtpPlanMap.focusCurrentRoute();
+
+          }
 
           return;
 
@@ -1168,11 +1304,15 @@
 
     clearRouteDisplay: clearRouteDisplay,
 
+    showRouteEmptyPlan: showRouteEmptyPlan,
+
     showRouteLoading: showRouteLoading,
 
     hasOrderDiff: hasOrderDiff,
 
-    isSameRoute: isSameRoute
+    isSameRoute: isSameRoute,
+
+    alreadyOptimalMessage: alreadyOptimalMessage
 
   };
 

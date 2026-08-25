@@ -275,6 +275,8 @@
   margin-top:4px;justify-content:center;
 }
 #atpV2Root .map-badge-row span { display:flex;align-items:center;gap:4px;font-size:10.5px;color:var(--gray); }
+#atpV2Root .map-badge-row .dot-blue { background:#1d4ed8; }
+#atpV2Root .map-badge-row .dot-green { background:#16a34a; }
 /* Mini harita map-badge-row (position:absolute i?indeki) */
 #atpV2Root .map-card-body .map-badge-row {
   position:absolute;bottom:6px;left:50%;transform:translateX(-50%);margin-top:0;
@@ -392,7 +394,28 @@
 #atpV2Root .rm-sub { font-size:9.5px;color:var(--gray); }
 #atpV2Root .route-btns { display:flex;gap:8px;margin-top:8px; }
 #atpV2Root .route-btns .btn { flex:1;justify-content:center; }
+/* already-optimal preview button ? outline-info style */
+#atpV2Root .route-btns #atpBtnPreviewSuggestedRoute:not(:disabled) {
+  border-color:#1d4ed8;color:#1d4ed8;
+}
+#atpV2Root .route-btns #atpBtnPreviewSuggestedRoute:not(:disabled):hover {
+  background:#eff6ff;
+}
+/* disabled apply gets muted look with cursor tooltip */
+#atpV2Root .route-btns #atpBtnApplySuggestedOrder:disabled {
+  opacity:0.48;cursor:not-allowed;
+}
 #atpV2Root .route-status-msg { font-size:11.5px;color:var(--gray);margin-bottom:8px; }
+/* already-optimal inline info */
+#atpV2Root #atpRouteStatusMsg.already-optimal {
+  color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;
+  border-radius:4px;padding:5px 8px;
+}
+/* map-badge legend: explicit colors aligned with polylines */
+#atpV2Root .map-badge-row .dot-blue { background:#1d4ed8 !important; }
+#atpV2Root .map-badge-row .dot-green { background:#16a34a !important; }
+/* plan map pin shadow base */
+#atpV2Root .atp-plan-pin { filter:none; }
 #atpV2Root .route-constraint-banner {
   display:flex;align-items:flex-start;gap:6px;
   background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;
@@ -403,6 +426,126 @@
 
 /* ??? Route status message ??? */
 #atpV2Root #atpRouteStatusMsg { display:none;font-size:11.5px;color:var(--orange);padding:4px 0;margin-bottom:8px; }
+
+/* ??? Route Decision Explainer Modal ??? */
+.atp-explainer-modal {
+  width:860px;max-width:calc(100vw - 24px);
+  max-height:calc(100vh - 40px);overflow:hidden;
+  display:flex;flex-direction:column;
+}
+.atp-explainer-body {
+  overflow-y:auto;flex:1;min-height:0;
+  padding:16px 20px;
+}
+.atp-explainer-layout {
+  display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;
+}
+.atp-explainer-left { display:flex;flex-direction:column;gap:12px; }
+.atp-explainer-reason {
+  font-size:13px;font-weight:600;color:#111827;
+  background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;
+  padding:8px 12px;margin:0;line-height:1.5;
+}
+.atp-explainer-reason.optimal {
+  background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8;
+}
+.atp-explainer-reason.warn {
+  background:#fef2f2;border-color:#fca5a5;color:#b91c1c;
+}
+.atp-explainer-reason.priority-override {
+  background:#fffbeb;border-color:#f59e0b;color:#92400e;
+}
+.atp-explainer-section { display:flex;flex-direction:column;gap:4px; }
+.atp-explainer-section-title {
+  font-size:10px;text-transform:uppercase;letter-spacing:.06em;
+  font-weight:700;color:var(--gray);margin-bottom:2px;
+}
+.atp-explainer-order-list {
+  display:flex;flex-direction:column;gap:3px;
+}
+.atp-exp-row {
+  display:flex;align-items:center;gap:8px;
+  padding:5px 10px;border-radius:5px;
+  background:var(--gray-50);border:var(--border);
+  font-size:12px;
+}
+.atp-exp-row.base {
+  background:var(--blue-light);border-color:var(--blue-border);
+  font-weight:600;color:#1e3a8a;
+}
+.atp-exp-num {
+  width:20px;height:20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  font-size:10px;font-weight:700;
+  background:var(--gold);color:#fff;
+}
+.atp-exp-name { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.atp-explainer-metrics {
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+}
+.atp-exp-metric {
+  text-align:center;background:var(--gray-50);border:var(--border);
+  border-radius:var(--radius);padding:7px 6px;
+}
+.atp-exp-metric-label { font-size:9.5px;color:var(--gray);text-transform:uppercase;letter-spacing:.04em; }
+.atp-exp-metric-val { font-size:15px;font-weight:800;color:#111827;line-height:1.3; }
+.atp-exp-metric-sub { font-size:9.5px;color:var(--gray); }
+.atp-exp-metric.gain .atp-exp-metric-val { color:var(--green-h); }
+.atp-exp-metric.gain-neg .atp-exp-metric-val { color:#b91c1c; }
+.atp-exp-metric.gain-zero .atp-exp-metric-val { color:#6b7280; }
+.atp-explainer-reason-box {
+  background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;
+  padding:8px 12px;font-size:12px;color:#1d4ed8;line-height:1.5;
+}
+.atp-explainer-constraints {
+  background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;
+  padding:8px 12px;font-size:12px;color:#92400e;line-height:1.5;
+}
+/* Priority banner */
+.atp-explainer-priority-banner {
+  background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;
+  padding:7px 11px;font-size:12px;color:#92400e;line-height:1.5;
+}
+/* Priority badges */
+.atp-exp-pri {
+  font-size:9.5px;font-weight:700;border-radius:3px;
+  padding:1px 5px;flex-shrink:0;white-space:nowrap;
+}
+.atp-exp-pri.pri-acil   { background:#fee2e2;color:#991b1b; }
+.atp-exp-pri.pri-yuksek { background:#fef9c3;color:#854d0e; }
+.atp-exp-pri.pri-normal { background:#f0fdf4;color:#166534; }
+.atp-exp-pri.pri-dusuk  { background:#f3f4f6;color:#6b7280; }
+/* Lock icon */
+.atp-exp-lock { font-size:12px;margin-left:2px;opacity:.7; }
+/* Right: map */
+.atp-explainer-right { display:flex;flex-direction:column;gap:6px; }
+.atp-explainer-map-wrap {
+  height:340px;border-radius:8px;overflow:hidden;
+  border:var(--border);background:#dde9f4;position:relative;
+}
+#atpExplainerMap {
+  width:100%;height:100%;
+}
+.atp-explainer-legend {
+  display:flex;gap:12px;font-size:11px;color:var(--gray);
+  align-items:center;justify-content:center;
+}
+.atp-exp-dot {
+  display:inline-block;width:12px;height:5px;border-radius:3px;vertical-align:middle;margin-right:3px;
+}
+.atp-exp-dot.blue { background:#1d4ed8; }
+.atp-exp-dot.green { background:#16a34a; }
+/* btn-blue */
+#atpV2Root .btn-blue {
+  background:#1d4ed8;color:#fff;border-color:#1e3a8a;
+}
+#atpV2Root .btn-blue:hover { background:#1e3a8a; }
+#atpV2Root .btn-blue:disabled { opacity:0.45;cursor:not-allowed; }
+/* Responsive */
+@media (max-width:800px) {
+  .atp-explainer-layout { grid-template-columns:1fr; }
+  .atp-explainer-map-wrap { height:220px; }
+}
 
 /* ??? Empty states ??? */
 #atpV2Root .empty-state,

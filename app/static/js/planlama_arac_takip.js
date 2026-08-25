@@ -521,6 +521,8 @@
     updatePrsForVehicle(vehicle, items);
     renderStopList(items, vehicle ? safePlate(vehicle) : '');
 
+    updatePlanMap();
+
     if (window.AtpRoute) {
       if (window.AtpRoute.clearRouteDisplay) window.AtpRoute.clearRouteDisplay();
       if (window.AtpRoute.showRouteLoading) window.AtpRoute.showRouteLoading();
@@ -1368,6 +1370,12 @@
           dashboard = Object.assign({}, dashboard, dto);
           var dashJson = qs('atpDashboardJson');
           if (dashJson) dashJson.textContent = JSON.stringify(dashboard);
+          updatePlanMap();
+          requestAnimationFrame(function () {
+            if (window.AtpPlanMap && window.AtpPlanMap.onPlanTabShown) {
+              window.AtpPlanMap.onPlanTabShown();
+            }
+          });
         }
       }, {
         expectedVehicleId: vid,
@@ -1394,10 +1402,53 @@
   };
 
   /* ─── Plan map update ─── */
+  function buildPlanMapPayload() {
+    var base = (dashboard.plan_map && dashboard.plan_map.base) || dashboard.base_location || {};
+    var tasks = [];
+    if (_activeVehicleExtId && lastOpsData && lastOpsData.items) {
+      tasks = sortStopItems(filterItemsForVehicle(_activeVehicleExtId, lastOpsData.items));
+    } else if (dashboard.daily_tasks && dashboard.daily_tasks.length) {
+      tasks = sortStopItems((dashboard.daily_tasks || []).filter(function (t) {
+        return isActivePlanItem(t);
+      }));
+    } else if (dashboard.plan_map && dashboard.plan_map.stops) {
+      tasks = sortStopItems((dashboard.plan_map.stops || []).filter(function (s) {
+        return isActivePlanItem({ status: s.status || 'PLANLANDI' });
+      }));
+    }
+    var stops = tasks.map(function (t, idx) {
+      return {
+        id: t.id,
+        plan_item_id: t.plan_item_id,
+        is_talebi_id: t.is_talebi_id,
+        order_no: t.order_no != null && t.order_no !== '' ? t.order_no : (idx + 1),
+        company_name: t.company_name,
+        job_title: t.job_title,
+        planned_time: t.planned_time,
+        address_text: t.address_text,
+        latitude: t.latitude,
+        longitude: t.longitude,
+        has_coordinates: !!t.has_coordinates,
+        location_source_label: t.location_source_label,
+        status: t.status
+      };
+    });
+    var ready = stops.filter(function (s) { return s.has_coordinates; }).length;
+    return {
+      base: base,
+      stops: stops,
+      completeness: {
+        total_stops: stops.length,
+        ready: ready,
+        missing: stops.length - ready,
+        base_configured: !!(base && base.has_coordinates)
+      }
+    };
+  }
+
   function updatePlanMap() {
     if (!window.AtpPlanMap) return;
-    var planMapData = dashboard.plan_map || { base: {}, stops: [], completeness: {} };
-    window.AtpPlanMap.renderPlanMap(planMapData);
+    window.AtpPlanMap.renderPlanMap(buildPlanMapPayload());
   }
 
   /* ─── Live vehicles (canli tab) ─── */
@@ -2524,6 +2575,14 @@
   var modalBody = document.querySelector('#atpRequestModal .modal-body');
   if (modalBody) {
     modalBody.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+  }
+
+  /* ─── Route explainer button wiring ─── */
+  if (window.AtpRouteExplainer) {
+    window.AtpRouteExplainer.bindExplainerButton(
+      function () { return window.AtpRoute && window.AtpRoute.getLastRoute ? window.AtpRoute.getLastRoute() : null; },
+      function () { return typeof buildPlanMapPayload === 'function' ? buildPlanMapPayload() : null; }
+    );
   }
 
   /* ─── Route UI wiring ─── */

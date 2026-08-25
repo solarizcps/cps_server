@@ -299,9 +299,52 @@ def build_plan_route_dto(
             suggested_stops = routable
             suggested_route = current_route
 
+    # ── order_same (needed before gain and priority context) ──
+    order_same = (current_full_order == suggested_full_order)
+
+    # ── Gain calculation ──
+    gain_km = None
+    gain_min = None
+    gain_pct = None
+    if (
+        isinstance(current_dto.get('km'), (int, float))
+        and isinstance(_format_km(suggested_route.distance_m), (int, float))
+        and current_route.distance_m is not None
+        and current_route.distance_m > 0
+    ):
+        gain_km = round(
+            float(current_route.distance_m - suggested_route.distance_m) / 1000.0, 1
+        )
+        cur_min = current_route.duration_s / 60.0
+        sug_min = suggested_route.duration_s / 60.0
+        gain_min = int(round(cur_min - sug_min))
+        gain_pct = round(100.0 * gain_km / (float(current_route.distance_m) / 1000.0), 1)
+
+    # ── Priority context ──
+    # ACIL (critical) stops are already locked by _lock_reason → they don't get reordered.
+    # YUKSEK (important) stops ARE included in optimizer scoring: lower duration wins but
+    # priority weight is applied, which CAN produce a longer total route if a high-priority
+    # stop is visited earlier.  We expose this to the user transparently.
+    has_priority_override = bool(
+        constraints.get('important_task_ids') and
+        not order_same and
+        isinstance(gain_km, (int, float)) and
+        gain_km < 0
+    )
+
+    # ── apply_disabled: also disable when gain <= 0 and no priority driver ──
     apply_disabled_reason = _resolve_apply_disabled(
         constraints, current_full_order, suggested_full_order,
     )
+    # Extend rule: if suggested is longer/equal and there's no priority override reason, disable
+    if (
+        apply_disabled_reason is None
+        and isinstance(gain_km, (int, float))
+        and gain_km <= 0
+        and not has_priority_override
+    ):
+        apply_disabled_reason = 'NO_GAIN'
+
     apply_enabled = apply_disabled_reason is None and suggested_full_order != current_full_order
 
     suggested_dto = {
@@ -319,20 +362,6 @@ def build_plan_route_dto(
         'provider': suggested_route.provider,
     }
 
-    gain_km = None
-    gain_min = None
-    gain_pct = None
-    if (
-        isinstance(current_dto['km'], (int, float))
-        and isinstance(suggested_dto['km'], (int, float))
-        and current_dto['km'] > 0
-    ):
-        gain_km = round(float(current_dto['km']) - float(suggested_dto['km']), 1)
-        cur_min = current_route.duration_s / 60.0
-        sug_min = suggested_route.duration_s / 60.0
-        gain_min = int(round(cur_min - sug_min))
-        gain_pct = round(100.0 * gain_km / float(current_dto['km']), 1)
-
     partial_msg = None
     if meta['missing_count'] > 0:
         partial_msg = (
@@ -342,6 +371,85 @@ def build_plan_route_dto(
 
     if apply_disabled_reason == 'ALREADY_OPTIMAL' and not partial_msg:
         partial_msg = 'Mevcut sıra zaten uygun.'
+
+    # ── Human-readable apply reason (read-only, no DB write) ──
+    _APPLY_REASON_LABELS: dict[str, str] = {
+        'ALREADY_OPTIMAL': 'Mevcut sıra rota motoruna göre zaten uygun. Daha kısa bir alternatif bulunamadı.',
+        'NO_ELIGIBLE_REORDER': 'Sıralanabilir iş sayısı yetersiz (en az 2 serbest iş gerekir).',
+        'NO_GAIN': 'Önerilen sıra mevcut rotadan daha uzun veya eşit; uygulama önerilmiyor.',
+    }
+    apply_disabled_reason_label = _APPLY_REASON_LABELS.get(
+        apply_disabled_reason or '', apply_disabled_reason or ''
+    )
+
+    # ── Correct decision_reason text ──
+    if order_same:
+        decision_reason = 'Mevcut sıra rota motoruna göre zaten uygun. Sıra değişmedi.'
+    elif isinstance(gain_km, (int, float)) and gain_km < 0 and has_priority_override:
+        decision_reason = (
+            'Önerilen sıra mevcut rotadan daha uzun; ancak yüksek öncelikli iş daha erken '
+            'ziyaret edildiği için bu sıra önerildi.'
+        )
+    elif isinstance(gain_km, (int, float)) and gain_km < 0:
+        decision_reason = (
+            f'Önerilen sıra mevcut rotadan daha uzun '
+            f'({abs(gain_km)} km). Uygulama önerilmiyor.'
+        )
+    elif isinstance(gain_km, (int, float)) and gain_km == 0:
+        decision_reason = 'Önerilen sıra mevcut rota ile aynı mesafede. Uygulama gerekmiyor.'
+    else:
+        gain_txt = f'{gain_km} km' if isinstance(gain_km, (int, float)) else '—'
+        decision_reason = f'Rota motoru daha kısa bir sıra öneriyor ({gain_txt} kazanç).'
+
+    # ── Constraint labels in human language ──
+    _LOCK_LABEL_MAP: dict[str, str] = {
+        'TAMAMLANDI': 'Tamamlanmış iş var; sıra değiştirilemez.',
+        'BASLADI': 'Başlamış iş var; sıra değiştirilemez.',
+        'ACIL': 'Acil öncelikli iş var; sırası kilitli.',
+        'ARRIVED': 'Ziyaret edilmiş iş var; sırası kilitli.',
+        'DEPARTED': 'Ziyaret edilmiş iş var; sırası kilitli.',
+        'DEPARTED_PENDING': 'Ziyaret edilmiş iş var; sırası kilitli.',
+        'VISIT_TIMESTAMP': 'Ziyaret kaydı olan iş var; sırası değiştirilemez.',
+    }
+    lock_reasons = constraints_public.get('lock_reasons') or {}
+    constraint_labels: list[str] = []
+    for reason in lock_reasons.values():
+        lbl = _LOCK_LABEL_MAP.get(reason, reason)
+        if lbl not in constraint_labels:
+            constraint_labels.append(lbl)
+
+    # ── Stop list for modal display (includes priority) ──
+    def _stop_label_list(stops: list[dict]) -> list[dict]:
+        from modules.planlama.arac_route_constraints import normalize_priority
+        _PRI_LABEL = {'ACIL': 'Acil', 'YUKSEK': 'Yüksek', 'NORMAL': 'Normal', 'DUSUK': 'Düşük'}
+        out = []
+        for s in stops:
+            pri_code = normalize_priority(s.get('priority'))
+            out.append({
+                'id': str(s.get('id') or ''),
+                'order_no': s.get('order_no'),
+                'company_name': s.get('company_name') or '—',
+                'has_coordinates': bool(s.get('has_coordinates')),
+                'priority': pri_code,
+                'priority_label': _PRI_LABEL.get(pri_code, 'Normal'),
+                'is_locked': str(s.get('id') or '') in set(constraints.get('locked_task_ids') or []),
+            })
+        return out
+
+    # ── Priority banner text for modal (optimizer note) ──
+    has_acil = bool(constraints.get('critical_task_ids'))
+    has_yuksek = bool(constraints.get('important_task_ids'))
+    if has_acil:
+        priority_banner = (
+            'Bu planda acil iş var; acil işlerin sırası değiştirilemez ve rota buna göre hesaplanır.'
+        )
+    elif has_yuksek:
+        priority_banner = (
+            'Bu planda yüksek öncelikli iş var. Optimizer yüksek öncelikli işleri önce ziyaret '
+            'etmeye çalışır; bu toplam mesafeyi artırabilir.'
+        )
+    else:
+        priority_banner = None
 
     return {
         'status': 'PARTIAL' if meta['missing_count'] > 0 else 'OK',
@@ -364,4 +472,15 @@ def build_plan_route_dto(
             for m in missing
         ],
         'suggested_preview_only': True,
+        # ── Explainer modal fields (read-only, no DB write) ──
+        'decision_reason': decision_reason,
+        'apply_disabled_reason_label': apply_disabled_reason_label,
+        'order_same': order_same,
+        'has_priority_override': has_priority_override,
+        'priority_banner': priority_banner,
+        'current_stop_list': _stop_label_list(routable),
+        'suggested_stop_list': _stop_label_list(suggested_stops),
+        'constraint_labels': constraint_labels,
+        'gain_negative': isinstance(gain_km, (int, float)) and gain_km < 0,
+        'gain_zero': isinstance(gain_km, (int, float)) and gain_km == 0,
     }

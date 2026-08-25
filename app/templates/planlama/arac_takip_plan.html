@@ -4,7 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=53">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=57">
 {% endblock %}
 
 {% block content %}
@@ -258,7 +258,7 @@
                 <div id="atpPlanLeafletMap" style="width:100%;height:100%;border-radius:4px"></div>
               </div>
               <div class="map-badge-row">
-                <span><span class="dot dot-red"></span>Mevcut</span>
+                <span><span class="dot dot-blue"></span>Mevcut</span>
                 <span><span class="dot dot-green"></span>Önerilen</span>
               </div>
             </div>
@@ -297,6 +297,7 @@
             <div id="atpRouteConstraintBanner" class="route-constraint-banner" style="display:none"></div>
             <div class="route-btns">
               <button type="button" class="btn btn-outline btn-sm" id="atpBtnPreviewSuggestedRoute" disabled>Önerilen Rotayı Göster</button>
+              <button type="button" class="btn btn-blue btn-sm" id="atpBtnRouteExplainer" disabled title="Rota kararını ve sıralamayı açıklar">🗺 Rota Kararını İncele</button>
               <button type="button" class="btn btn-green btn-sm" id="atpBtnApplySuggestedOrder" disabled>✔ Önerilen Sırayı Uygula</button>
             </div>
           </div>
@@ -372,6 +373,49 @@
 {# ══════════════════════════════════════════════════════
    MODALS (outside root for proper z-index stacking)
 ══════════════════════════════════════════════════════ #}
+
+{# ── Route Decision Explainer Modal ── #}
+<div id="atpRouteExplainerBackdrop" class="modal-bg" aria-hidden="true">
+  <div class="modal atp-explainer-modal" role="dialog" aria-modal="true" id="atpRouteExplainerModal" aria-hidden="true">
+    <div class="modal-hdr">
+      <h3>Rota Kararı</h3>
+      <button type="button" class="modal-close" id="atpRouteExplainerClose" aria-label="Kapat">✕</button>
+    </div>
+    <div class="modal-body atp-explainer-body" id="atpRouteExplainerBody">
+      <div class="atp-explainer-layout">
+        {# Left column: decision text + stop lists #}
+        <div class="atp-explainer-left">
+          <p id="atpExplainerDecisionReason" class="atp-explainer-reason"></p>
+          <div class="atp-explainer-priority-banner" id="atpExplainerPriorityBanner" style="display:none"></div>
+          <div class="atp-explainer-section">
+            <div class="atp-explainer-section-title">Mevcut Sıra</div>
+            <div id="atpExplainerCurrentOrder" class="atp-explainer-order-list"></div>
+          </div>
+          <div class="atp-explainer-section" id="atpExplainerSugSection">
+            <div class="atp-explainer-section-title">Önerilen Sıra</div>
+            <div id="atpExplainerSugOrder" class="atp-explainer-order-list"></div>
+          </div>
+          <div class="atp-explainer-metrics" id="atpExplainerMetrics"></div>
+          <div class="atp-explainer-reason-box" id="atpExplainerApplyReason" style="display:none"></div>
+          <div class="atp-explainer-constraints" id="atpExplainerConstraints" style="display:none"></div>
+        </div>
+        {# Right column: route map #}
+        <div class="atp-explainer-right">
+          <div class="atp-explainer-map-wrap">
+            <div id="atpExplainerMap"></div>
+          </div>
+          <div class="atp-explainer-legend">
+            <span><span class="atp-exp-dot blue"></span>Mevcut</span>
+            <span id="atpExplainerLegendSug" style="display:none"><span class="atp-exp-dot green"></span>Önerilen</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" id="atpRouteExplainerDismiss">Kapat</button>
+    </div>
+  </div>
+</div>
 
 {# ── Timeline Modal ── #}
 <div id="atpTimelineBackdrop" class="modal-bg" aria-hidden="true">
@@ -753,10 +797,11 @@
 {# ── Scripts ── #}
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_map.js') }}?v=6"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=9"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=13"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=11"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=16"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=2"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=67"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=69"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}
