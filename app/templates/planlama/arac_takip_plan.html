@@ -256,7 +256,12 @@
               <div>
                 <div class="map-wrap" style="height:200px;margin-bottom:12px">
                   <div id="atp-plan-map-container" style="position:relative;height:100%;background:#dde9f4;border-radius:4px;border:var(--border)">
-                    <div id="atpPlanMapEmpty" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:12px;color:var(--gray)">Plan item yok.</div>
+                    <div id="atpPlanMapEmpty" style="display:none;position:absolute;inset:0;z-index:2">
+                      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:12px 16px;box-sizing:border-box">
+                        <div class="atp-plan-empty-title" style="font-size:12.5px;font-weight:700;color:#111827;margin-bottom:4px"></div>
+                        <div class="atp-plan-empty-sub" style="font-size:11.5px;color:var(--gray);line-height:1.4;max-width:240px"></div>
+                      </div>
+                    </div>
                     <div id="atpPlanLeafletMap" style="width:100%;height:100%;border-radius:4px"></div>
                   </div>
                   <div class="map-badge-row">
