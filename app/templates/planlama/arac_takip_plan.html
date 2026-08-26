@@ -374,46 +374,117 @@
    MODALS (outside root for proper z-index stacking)
 ══════════════════════════════════════════════════════ #}
 
-{# ── Route Decision Explainer Modal ── #}
+{# ── Route Decision Explainer Modal v4 ── #}
 <div id="atpRouteExplainerBackdrop" class="modal-bg" aria-hidden="true">
   <div class="modal atp-explainer-modal" role="dialog" aria-modal="true" id="atpRouteExplainerModal" aria-hidden="true">
-    <div class="modal-hdr">
-      <h3>Rota Kararı</h3>
+
+    {# ── Header ── #}
+    <div class="modal-hdr atp-exp-hdr">
+      <div>
+        <h3 class="atp-exp-title">Rota Kararı</h3>
+        <p class="atp-exp-subtitle">Uygulanacak ziyaret sırasını seçin.</p>
+      </div>
       <button type="button" class="modal-close" id="atpRouteExplainerClose" aria-label="Kapat">✕</button>
     </div>
+
+    {# ── Karar açıklaması — tek satır ── #}
+    <div class="atp-exp-decision-bar" id="atpExpDecisionBar" style="display:none">
+      <p id="atpExplainerDecisionReason" class="atp-exp-decision-text"></p>
+    </div>
+
+    {# ── Aynı sıra uyarısı ── #}
+    <div id="atpExplainerSameRouteNote" class="atp-exp-same-note" style="display:none"></div>
+
+    {# ── Body: sol + sağ ── #}
     <div class="modal-body atp-explainer-body" id="atpRouteExplainerBody">
       <div class="atp-explainer-layout">
-        {# Left column: decision text + stop lists #}
+
+        {# ── SOL: Seçim Kartları + Farklar + Accordionlar ── #}
         <div class="atp-explainer-left">
-          <p id="atpExplainerDecisionReason" class="atp-explainer-reason"></p>
-          <div class="atp-explainer-priority-banner" id="atpExplainerPriorityBanner" style="display:none"></div>
-          <div class="atp-explainer-section">
-            <div class="atp-explainer-section-title">Mevcut Sıra</div>
-            <div id="atpExplainerCurrentOrder" class="atp-explainer-order-list"></div>
-          </div>
-          <div class="atp-explainer-section" id="atpExplainerSugSection">
-            <div class="atp-explainer-section-title">Önerilen Sıra</div>
-            <div id="atpExplainerSugOrder" class="atp-explainer-order-list"></div>
-          </div>
-          <div class="atp-explainer-metrics" id="atpExplainerMetrics"></div>
+
+          {# Kısıt / uygulama engeli ── #}
           <div class="atp-explainer-reason-box" id="atpExplainerApplyReason" style="display:none"></div>
           <div class="atp-explainer-constraints" id="atpExplainerConstraints" style="display:none"></div>
-        </div>
-        {# Right column: route map #}
+
+          {# ── Seçim Kartları ── #}
+          <div class="atp-exp-cards" id="atpExpCards">
+            {# Kart A — Mevcut #}
+            <div class="atp-exp-card" id="atpExpCardCurrent" data-choice="current" role="button" tabindex="0" aria-pressed="true">
+              <div class="atp-exp-card-hdr">
+                <span class="atp-exp-card-check" aria-hidden="true">✓</span>
+                <span class="atp-exp-card-label">A — Mevcut Sırayı Koru</span>
+              </div>
+              <div id="atpExplainerCurrentOrder" class="atp-explainer-order-list"></div>
+              <div id="atpExplainerCurrentSummary" class="atp-exp-card-summary"></div>
+            </div>
+            {# Kart B — Önerilen #}
+            <div class="atp-exp-card" id="atpExpCardSuggested" data-choice="suggested" role="button" tabindex="0" aria-pressed="false">
+              <div class="atp-exp-card-hdr">
+                <span class="atp-exp-card-check" aria-hidden="true">✓</span>
+                <span class="atp-exp-card-label">B — Önerilen Sırayı Uygula</span>
+                <span class="atp-exp-system-badge" id="atpExpSystemBadge">Sistem Önerisi</span>
+              </div>
+              <div id="atpExplainerSugOrder" class="atp-explainer-order-list" id="atpExplainerSugSection"></div>
+              <div id="atpExplainerSugSummary" class="atp-exp-card-summary"></div>
+            </div>
+          </div>
+
+          {# Fark rozetleri #}
+          <div class="atp-exp-diff-row" id="atpExpDiffRow" style="display:none"></div>
+
+          {# Ayak Ayak Hesap — varsayılan kapalı accordion #}
+          <details class="atp-exp-accordion" id="atpExpLegsAccordion">
+            <summary class="atp-exp-accordion-toggle">Ayak Ayak Hesabı Gör</summary>
+            <div class="atp-exp-accordion-body" id="atpExpLegsBody">
+              <div id="atpExplainerCurrentLegs"></div>
+              <div id="atpExplainerSugLegs" style="display:none"></div>
+            </div>
+          </details>
+
+          {# Hesap Bilgisi — varsayılan kapalı accordion #}
+          <details class="atp-exp-accordion" id="atpExpSourceAccordion">
+            <summary class="atp-exp-accordion-toggle">Hesap Bilgisi</summary>
+            <div class="atp-exp-accordion-body">
+              <div id="atpExplainerSourceInfo" class="atp-explainer-source"></div>
+              <div class="atp-exp-gmaps-links" id="atpExpGmapsLinks"></div>
+              <p id="atpExplainerGmapsNote" class="atp-explainer-gmaps-note"></p>
+            </div>
+          </details>
+
+          {# Hidden compat refs (metricsEl no longer shown but JS may set them) #}
+          <div id="atpExplainerMetrics" style="display:none"></div>
+          <div id="atpExplainerPriorityBanner" style="display:none"></div>
+          <p id="atpExplainerOrsBanner" style="display:none"></p>
+
+        </div>{# /left #}
+
+        {# ── SAĞ: Harita ── #}
         <div class="atp-explainer-right">
           <div class="atp-explainer-map-wrap">
             <div id="atpExplainerMap"></div>
           </div>
-          <div class="atp-explainer-legend">
+          <div class="atp-exp-map-legend">
             <span><span class="atp-exp-dot blue"></span>Mevcut</span>
             <span id="atpExplainerLegendSug" style="display:none"><span class="atp-exp-dot green"></span>Önerilen</span>
           </div>
-        </div>
+          <div class="atp-exp-map-toggles">
+            <button type="button" class="atp-exp-map-toggle active" id="atpExpToggleCurrent" data-route="current">Mevcut Rotayı Göster</button>
+            <button type="button" class="atp-exp-map-toggle" id="atpExpToggleSuggested" data-route="suggested" style="display:none">Önerilen Rotayı Göster</button>
+          </div>
+        </div>{# /right #}
+
+      </div>{# /layout #}
+    </div>{# /body #}
+
+    {# ── Footer ── #}
+    <div class="modal-footer atp-exp-footer">
+      <button type="button" class="btn btn-outline" id="atpRouteExplainerDismiss">Kapat</button>
+      <div class="atp-exp-footer-actions">
+        <button type="button" class="btn btn-outline" id="atpExpFooterKeepCurrent">Mevcut Sırayı Koru</button>
+        <button type="button" class="btn btn-green" id="atpExpFooterApplySuggested" style="display:none">✔ Önerilen Sırayı Uygula</button>
       </div>
     </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-outline" id="atpRouteExplainerDismiss">Kapat</button>
-    </div>
+
   </div>
 </div>
 
@@ -794,14 +865,52 @@
   </div>
 </div>
 
+{# ── İstenen Varış Saati Düzenle Modal — BU FAZ GİZLİ (randevulu işler için korunur) ── #}
+<div id="atpDesiredTimeBackdrop" class="modal-bg" aria-hidden="true" style="display:none!important">
+  <div class="modal" role="dialog" aria-modal="true" id="atpDesiredTimeModal" aria-hidden="true" style="max-width:380px">
+    <div class="modal-head">
+      <span class="modal-title">İstenen Varış Saati</span>
+      <button type="button" class="modal-close" id="atpDesiredTimeClose" aria-label="Kapat">✕</button>
+    </div>
+    <div class="modal-body" style="padding:16px 18px">
+      <div id="atpDesiredTimeInfo" style="font-size:12px;color:var(--gray);margin-bottom:12px"></div>
+      <div style="margin-bottom:10px">
+        <label for="atpDesiredTimeInput" style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">
+          İstenen Varış Saati
+          <span style="font-size:10px;font-weight:400;color:var(--gray);margin-left:4px">(düzenlenebilir)</span>
+        </label>
+        <input type="time"
+               id="atpDesiredTimeInput"
+               class="atp-time-input"
+               style="width:120px;padding:4px 8px;font-size:13px;border:1px solid #d1d5db;border-radius:6px"
+               autocomplete="off">
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="atpDesiredTimeFree" style="width:14px;height:14px">
+          <span>Saat serbest — zaman kısıtı uygulanmasın</span>
+        </label>
+      </div>
+      <div style="font-size:11px;color:var(--gray);border-top:1px solid #f3f4f6;padding-top:8px;margin-bottom:8px">
+        Tahmini Varış (ETA) — sistem hesaplar, buradan değiştirilemez.
+      </div>
+      <div id="atpDesiredTimeMsg" style="font-size:11px;min-height:16px;color:var(--orange);margin-bottom:6px"></div>
+    </div>
+    <div class="modal-foot" style="display:flex;gap:8px;justify-content:flex-end;padding:10px 18px">
+      <button type="button" class="btn btn-outline" id="atpDesiredTimeCancel">İptal</button>
+      <button type="button" class="btn btn-primary" id="atpDesiredTimeSave">Kaydet</button>
+    </div>
+  </div>
+</div>
+
 {# ── Scripts ── #}
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_map.js') }}?v=6"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=11"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=12"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=16"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=2"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=5"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=69"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=77"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}
