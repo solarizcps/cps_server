@@ -131,7 +131,7 @@
               <div class="empty-day-title">Bugün henüz plan oluşturulmadı</div>
               <div class="empty-day-sub">Araç atayarak günlük işleri planlayabilir ya da doğrudan plana iş ekleyebilirsiniz.</div>
               <div class="empty-day-actions">
-                <button type="button" class="btn btn-outline">Plan Oluştur</button>
+                <button type="button" class="btn btn-outline" id="atpBtnPlanOlusturEmpty">Plan Oluştur</button>
                 <button type="button" class="btn btn-gold" id="atpBtnPlanaIsEkleEmpty">+ Plana İş Ekle</button>
               </div>
               <div class="unplanned-list" id="atpUnplannedList">
@@ -1012,6 +1012,6 @@
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=11"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=83"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=84"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}

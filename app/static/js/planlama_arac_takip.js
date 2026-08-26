@@ -1457,10 +1457,11 @@
     }
     wrap.innerHTML = '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--gray);font-weight:700;text-align:left;margin-bottom:6px">Atanmamış Araçlar</div>' +
       filomVehicles.slice(0, 5).map(function (v) {
+        var vid = String(v.arac_external_id || v.id || '');
         return '<div class="unp-item">' +
           '<div><div class="unp-plate">' + safePlate(v) + '</div><div class="unp-driver">' + fmtVal(v.driver_name || v.driver) + '</div></div>' +
           '<span class="badge badge-gray" style="margin-left:8px">Atanmadı</span>' +
-          '<button type="button" class="btn btn-outline btn-xs unp-btn">Plan Oluştur</button>' +
+          '<button type="button" class="btn btn-outline btn-xs unp-btn" data-vid="' + vid + '">Plan Oluştur</button>' +
           '</div>';
       }).join('');
 
@@ -2340,28 +2341,7 @@
     }
   });
 
-  var btnPlana = qs('atpBtnPlanaIsEkle');
-  var btnPlanaPrs = qs('atpBtnPlanaIsEklePrs');
-  var btnPlanaEmpty = qs('atpBtnPlanaIsEkleEmpty');
-  /* Main "+ Plana İş Ekle" → opens multi-add modal */
-  function _openMultiOrFallback() {
-    if (typeof window.atpMultiOpen === 'function') {
-      window.atpMultiOpen();
-    } else {
-      openPlanaModal('new', null);
-    }
-  }
-  if (btnPlana) btnPlana.addEventListener('click', _openMultiOrFallback);
-  /* PRS (vehicle summary card) button → multi-add modal, vehicle locked */
-  if (btnPlanaPrs) btnPlanaPrs.addEventListener('click', function (e) {
-    e.stopPropagation();
-    if (typeof window.atpMultiOpen === 'function') {
-      window.atpMultiOpen({ lockVehicle: true });
-    } else {
-      openPlanaModal('existing', _activeVehicleExtId);
-    }
-  });
-  if (btnPlanaEmpty) btnPlanaEmpty.addEventListener('click', _openMultiOrFallback);
+  /* Daily multi-modal entry points bound after atpMultiOpen init (see _initDailyMultiEntryPoints). */
 
   /* ─── Çıkış Saati: Kaydet ve Hesapla → Google Route Options ─── */
   (function initCikisSaati() {
@@ -3442,12 +3422,7 @@
         return;
       }
 
-      /* "Plana İş Ekle" button inside summary → open modal, no toggle */
-      if (target === qs('atpBtnPlanaIsEklePrs') ||
-          (qs('atpBtnPlanaIsEklePrs') && qs('atpBtnPlanaIsEklePrs').contains(target))) {
-        openPlanaModal('existing', _activeVehicleExtId);
-        return;
-      }
+      /* Plana İş Ekle (prs) — handled by dedicated listener; do not open legacy modal here */
 
       /* All other summary children (Araç, Şoför, Tarih, Saat divs) → no-op */
     });
@@ -4188,7 +4163,9 @@
 
     /* ── Open / close modal ── */
     function _openModal(opts) {
-      var lockVehicle = !!(opts && opts.lockVehicle);
+      opts = opts || {};
+      var lockVehicle = !!opts.lockVehicle;
+      var prefillVid = opts.vehicleExtId ? String(opts.vehicleExtId) : '';
       var backdrop = _qs('atpMultiBackdrop');
       var modal = _qs('atpMultiModal');
       if (!backdrop || !modal) return;
@@ -4200,25 +4177,27 @@
 
       _aracOpts();
       var aracEl = _qs('atpMultiArac');
-      if (aracEl && _activeVehicleExtId) {
-        /* _activeVehicleExtId may be the arac_external_id or the DB id.
-           Try direct assignment first; if it doesn't match any option,
-           look up the vehicle in lastOpsData.vehicles and use arac_external_id. */
-        aracEl.value = String(_activeVehicleExtId);
-        if (!aracEl.value) {
-          var _vList = (lastOpsData && lastOpsData.vehicles) ? lastOpsData.vehicles : [];
-          for (var _vi = 0; _vi < _vList.length; _vi++) {
-            var _veh = _vList[_vi];
-            if (String(_veh.id || '') === String(_activeVehicleExtId) ||
-                String(_veh.arac_id || '') === String(_activeVehicleExtId)) {
-              aracEl.value = String(_veh.arac_external_id || '');
-              break;
+      if (aracEl) {
+        aracEl.disabled = lockVehicle;
+        var targetVid = prefillVid || (lockVehicle ? String(_activeVehicleExtId || '') : '');
+        if (targetVid) {
+          aracEl.value = targetVid;
+          if (!aracEl.value) {
+            var _vList = (lastOpsData && lastOpsData.vehicles) ? lastOpsData.vehicles : lastVehicles;
+            for (var _vi = 0; _vi < _vList.length; _vi++) {
+              var _veh = _vList[_vi];
+              if (String(_veh.id || '') === targetVid ||
+                  String(_veh.arac_id || '') === targetVid ||
+                  String(_veh.arac_external_id || '') === targetVid) {
+                aracEl.value = String(_veh.arac_external_id || _veh.id || '');
+                break;
+              }
             }
           }
+        } else if (!lockVehicle) {
+          aracEl.value = '';
         }
       }
-      /* Lock vehicle selector when opened from vehicle plan card */
-      if (aracEl) aracEl.disabled = lockVehicle;
       if (aracEl && _qs('atpMultiSofor')) {
         var opt = aracEl.options[aracEl.selectedIndex];
         _qs('atpMultiSofor').value = (opt && opt.getAttribute('data-driver')) || '';
@@ -4284,10 +4263,87 @@
       _closeFirmaDD();
     });
 
-    /* Expose opener — accepts optional {lockVehicle: bool} */
+    /* Expose opener — accepts optional {lockVehicle, vehicleExtId} */
     window.atpMultiOpen = function (opts) { _openModal(opts); };
 
   }());
+
+  var _dailyMultiEntryBound = false;
+
+  function _openDailyMultiModal(opts) {
+    if (typeof window.atpMultiOpen !== 'function') {
+      console.error('[ATP] atpMultiOpen unavailable — multi modal controller failed to initialize');
+      toast('Çoklu plan ekranı yüklenemedi. Sayfayı yenileyin.');
+      return false;
+    }
+    window.atpMultiOpen(opts || { lockVehicle: false });
+    return true;
+  }
+
+  function _initDailyMultiEntryPoints() {
+    if (_dailyMultiEntryBound) return;
+    _dailyMultiEntryBound = true;
+
+    var btnPlana = qs('atpBtnPlanaIsEkle');
+    var btnPlanaPrs = qs('atpBtnPlanaIsEklePrs');
+    var btnPlanaEmpty = qs('atpBtnPlanaIsEkleEmpty');
+    var btnPlanOlusturEmpty = qs('atpBtnPlanOlusturEmpty');
+    var btnQuickPlan = qs('atpBtnQuickPlan');
+    var unplannedList = qs('atpUnplannedList');
+
+    if (btnPlana) {
+      btnPlana.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _openDailyMultiModal({ lockVehicle: false });
+      });
+    }
+    if (btnPlanaEmpty) {
+      btnPlanaEmpty.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _openDailyMultiModal({ lockVehicle: false });
+      });
+    }
+    if (btnPlanOlusturEmpty) {
+      btnPlanOlusturEmpty.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _openDailyMultiModal({ lockVehicle: false });
+      });
+    }
+    if (btnPlanaPrs) {
+      btnPlanaPrs.addEventListener('click', function (e) {
+        e.stopPropagation();
+        _openDailyMultiModal({ lockVehicle: true, vehicleExtId: _activeVehicleExtId });
+      });
+    }
+    if (btnQuickPlan) {
+      btnQuickPlan.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var quickSel = qs('atpQuickArac');
+        var vid = quickSel && quickSel.value ? String(quickSel.value) : '';
+        if (!vid) {
+          toast('Hızlı planlama için önce araç seçin.');
+          return;
+        }
+        _openDailyMultiModal({ lockVehicle: true, vehicleExtId: vid });
+      });
+    }
+    if (unplannedList) {
+      unplannedList.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('.unp-btn') : null;
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var vid = btn.getAttribute('data-vid') || '';
+        if (!vid) {
+          toast('Araç kimliği bulunamadı.');
+          return;
+        }
+        _openDailyMultiModal({ lockVehicle: true, vehicleExtId: vid });
+      });
+    }
+  }
+
+  _initDailyMultiEntryPoints();
 
   /* ─── Timeline Panel: Çıkış Saati sonrası durak zinciri ─── */
   function buildDurationLabelLines(tl) {
