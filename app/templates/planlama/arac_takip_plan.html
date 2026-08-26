@@ -4,7 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=57">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=64">
 {% endblock %}
 
 {% block content %}
@@ -152,11 +152,10 @@
       </div>
 
       {# ── Dolu gün content ── #}
-      <div id="atpGunlukDolu">
-      <div class="main-grid">
+      <div id="atpGunlukDolu" class="atp-dolu-grid">
 
-        {# ── Left column ── #}
-        <div>
+        {# ── Left column: vehicle cards + jobs table + plan accordion ── #}
+        <div class="atp-dolu-left">
           {# Vehicle cards #}
           <div class="vehicle-grid" id="atpVehicleCards">
             <div class="atp-loading">Plan verisi yükleniyor…</div>
@@ -172,7 +171,7 @@
               <table class="jobs-tbl" id="atpJobsTable">
                 <thead>
                   <tr>
-                    <th>Saat</th>
+                    <th title="Tahmini Varış Saati — sistem hesaplar">Tahmini Varış</th>
                     <th>İş / Firma</th>
                     <th>Şoför</th>
                     <th>Plan</th>
@@ -188,17 +187,136 @@
               <div id="atpPassiveJobsPanel" class="atp-passive-jobs-panel" style="display:none"></div>
             </div>
           </div>
-        </div>
+
+          {# ── Planlama & Rota Accordion — inside left column, follows jobs table immediately ── #}
+          <details class="plan-rota-acc plan-rota-inline" id="atpPlanningSection">
+            <summary class="plan-rota-summary">
+              <div class="prs-field">
+                <div class="prs-label">Araç</div>
+                <div class="prs-val gold" id="atpPrsArac">—</div>
+              </div>
+              <div class="prs-field">
+                <div class="prs-label">Şoför</div>
+                <div class="prs-val" id="atpPrsSofor">—</div>
+              </div>
+              <div class="prs-field">
+                <div class="prs-label">Tarih</div>
+                <div class="prs-val">{{ dashboard.date_label }}</div>
+              </div>
+              <div class="prs-field">
+                <div class="prs-label">Saat</div>
+                <div class="prs-val" id="atpPrsSaat">—</div>
+              </div>
+              <div class="prs-field prs-field-cikis" id="atpCikisSaatiField">
+                <div class="prs-label">Çıkış Saati</div>
+                <div class="prs-val" style="display:flex;align-items:center;gap:6px">
+                  <input type="time"
+                         id="atpCikisSaatiInput"
+                         class="atp-time-input"
+                         placeholder="09:00"
+                         style="width:86px;padding:3px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff"
+                         autocomplete="off">
+                  <button type="button"
+                          id="atpBtnCikisSaatiKaydet"
+                          class="btn btn-primary btn-sm"
+                          style="font-size:11px;padding:3px 10px;white-space:nowrap"
+                          title="Çıkış Saatini kaydet ve durak ETA'larını hesapla">
+                    Saati Kaydet ve Hesapla
+                  </button>
+                </div>
+                <div id="atpCikisSaatiMsg" style="font-size:10.5px;margin-top:3px;color:var(--gray);min-height:14px"></div>
+              </div>
+              {# ── Timeline Özet Paneli — compact single field in summary bar ── #}
+              <div id="atpTimelineSummary" class="atp-timeline-summary" style="display:none">
+                <div class="prs-label">Tahmini Dönüş</div>
+                <div id="atpTimelineReturn" class="atp-timeline-return prs-val"></div>
+                <div id="atpTimelineTotals" class="atp-timeline-totals"></div>
+              </div>
+              <div class="prs-actions">
+                <button type="button" class="btn btn-gold btn-sm" id="atpBtnPlanaIsEklePrs" style="display:none" tabindex="-1">+ Plana İş Ekle</button>
+                <button type="button"
+                        class="prs-chevron"
+                        id="atpPrsChevron"
+                        aria-label="Planlama ve rota panelini aç/kapat"
+                        aria-expanded="false"
+                        aria-controls="atpPlanRotaDetail">▼</button>
+              </div>
+            </summary>
+            <div class="plan-rota-detail" id="atpPlanRotaDetail">
+              {# Left: stop list #}
+              <div>
+                <div style="font-size:12.5px;font-weight:700;color:#111827;margin-bottom:8px" id="atpStopListTitle">Sıralı Duraklar</div>
+                <div id="atpStopListWrap">
+                  <div class="atp-v2-empty">Henüz planlanmış durak yok.</div>
+                </div>
+              {# keep atpTimelineList in DOM for compat but always hidden — ETAs shown in jobs table #}
+              <div id="atpTimelineList" class="atp-timeline-list" style="display:none"></div>
+              </div>
+              {# Right: route map + metrics #}
+              <div>
+                <div class="map-wrap" style="height:200px;margin-bottom:12px">
+                  <div id="atp-plan-map-container" style="position:relative;height:100%;background:#dde9f4;border-radius:4px;border:var(--border)">
+                    <div id="atpPlanMapEmpty" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:12px;color:var(--gray)">Plan item yok.</div>
+                    <div id="atpPlanLeafletMap" style="width:100%;height:100%;border-radius:4px"></div>
+                  </div>
+                  <div class="map-badge-row">
+                    <span><span class="dot dot-blue"></span>Mevcut</span>
+                    <span><span class="dot dot-green"></span>Önerilen</span>
+                  </div>
+                </div>
+                <div id="atpPlanMapCompleteness" style="font-size:10.5px;color:var(--gray);text-align:center;margin-bottom:8px"></div>
+                {# Hidden elements for route.js compatibility #}
+                <div style="display:none">
+                  <span id="atpRouteCurrentOrder"></span>
+                  <span id="atpRouteSuggestedOrder"></span>
+                  <div id="atpRouteLegs"></div>
+                  <div id="atpFootTotal"></div>
+                  <button id="atpBtnSortSuggest">Yenile</button>
+                </div>
+                <div class="route-metrics">
+                  <div class="rm">
+                    <div class="rm-label">Mevcut Plan</div>
+                    <div class="rm-val" id="atpRouteCurrentKm">—</div>
+                    <div class="rm-sub" id="atpRouteCurrentDur">—</div>
+                  </div>
+                  <div class="rm hl">
+                    <div class="rm-label">Önerilen</div>
+                    <div class="rm-val" id="atpRouteSugKm">—</div>
+                    <div class="rm-sub" id="atpRouteSugDur">—</div>
+                  </div>
+                  <div class="rm hl">
+                    <div class="rm-label">Kazanç</div>
+                    <div class="rm-val" id="atpRouteGainKm">—</div>
+                    <div class="rm-sub" id="atpRouteGainDetail">—</div>
+                  </div>
+                  <div class="rm hl" id="atpRouteFuelCard" title="Araç tüketim bilgisi tanımlı değil">
+                    <div class="rm-label">Yakıt Tasarrufu</div>
+                    <div class="rm-val" id="atpRouteFuelL">—</div>
+                    <div class="rm-sub" id="atpRouteFuelTry">—</div>
+                  </div>
+                </div>
+                <p id="atpRouteStatusMsg" class="route-status-msg" style="display:none"></p>
+                <div id="atpRouteConstraintBanner" class="route-constraint-banner" style="display:none"></div>
+                <div class="route-btns">
+                  <button type="button" class="btn btn-outline btn-sm" id="atpBtnPreviewSuggestedRoute" disabled>Önerilen Rotayı Göster</button>
+                  <button type="button" class="btn btn-blue btn-sm" id="atpBtnRouteExplainer" disabled title="Rota kararını ve sıralamayı açıklar">🗺 Rota Kararını İncele</button>
+                  <button type="button" class="btn btn-green btn-sm" id="atpBtnApplySuggestedOrder" disabled>✔ Önerilen Sırayı Uygula</button>
+                </div>
+              </div>
+            </div>
+          </details>
+
+        </div>{# /atp-dolu-left #}
 
         {# ── Right column ── #}
-        <div class="right-col">
+        <div class="right-col atp-dolu-right">
           <div class="card">
             <div class="card-hdr">Dikkat Gerekenler</div>
             <div id="atpAlertsBody">
               <p style="padding:12px 14px;font-size:12px;color:var(--gray)">Yükleniyor…</p>
             </div>
           </div>
-          <div class="card" style="flex:1">
+          <div class="card">
             <div class="card-hdr">
               Harita Önizleme
               <button type="button" class="btn btn-outline btn-xs" id="atpBtnBaseLocation">Fabrika Başlangıç Noktası</button>
@@ -211,98 +329,7 @@
           </div>
         </div>
 
-      </div>{# /main-grid #}
-
-      {# ── Planlama & Rota Accordion ── #}
-      <details class="plan-rota-acc plan-rota-wrap" id="atpPlanningSection">
-        <summary class="plan-rota-summary">
-          <div class="prs-field">
-            <div class="prs-label">Araç</div>
-            <div class="prs-val gold" id="atpPrsArac">—</div>
-          </div>
-          <div class="prs-field">
-            <div class="prs-label">Şoför</div>
-            <div class="prs-val" id="atpPrsSofor">—</div>
-          </div>
-          <div class="prs-field">
-            <div class="prs-label">Tarih</div>
-            <div class="prs-val">{{ dashboard.date_label }}</div>
-          </div>
-          <div class="prs-field">
-            <div class="prs-label">Saat</div>
-            <div class="prs-val" id="atpPrsSaat">—</div>
-          </div>
-          <div class="prs-actions">
-            <button type="button" class="btn btn-gold btn-sm" id="atpBtnPlanaIsEklePrs" style="display:none" tabindex="-1">+ Plana İş Ekle</button>
-            <button type="button"
-                    class="prs-chevron"
-                    id="atpPrsChevron"
-                    aria-label="Planlama ve rota panelini aç/kapat"
-                    aria-expanded="false"
-                    aria-controls="atpPlanRotaDetail">▼</button>
-          </div>
-        </summary>
-        <div class="plan-rota-detail" id="atpPlanRotaDetail">
-          {# Left: stop list #}
-          <div>
-            <div style="font-size:12.5px;font-weight:700;color:#111827;margin-bottom:8px" id="atpStopListTitle">Sıralı Duraklar</div>
-            <div id="atpStopListWrap">
-              <div class="atp-v2-empty">Henüz planlanmış durak yok.</div>
-            </div>
-          </div>
-          {# Right: route map + metrics #}
-          <div>
-            <div class="map-wrap" style="height:200px;margin-bottom:12px">
-              <div id="atp-plan-map-container" style="position:relative;height:100%;background:#dde9f4;border-radius:4px;border:var(--border)">
-                <div id="atpPlanMapEmpty" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;font-size:12px;color:var(--gray)">Plan item yok.</div>
-                <div id="atpPlanLeafletMap" style="width:100%;height:100%;border-radius:4px"></div>
-              </div>
-              <div class="map-badge-row">
-                <span><span class="dot dot-blue"></span>Mevcut</span>
-                <span><span class="dot dot-green"></span>Önerilen</span>
-              </div>
-            </div>
-            <div id="atpPlanMapCompleteness" style="font-size:10.5px;color:var(--gray);text-align:center;margin-bottom:8px"></div>
-            {# Hidden elements for route.js compatibility #}
-            <div style="display:none">
-              <span id="atpRouteCurrentOrder"></span>
-              <span id="atpRouteSuggestedOrder"></span>
-              <div id="atpRouteLegs"></div>
-              <div id="atpFootTotal"></div>
-              <button id="atpBtnSortSuggest">Yenile</button>
-            </div>
-            <div class="route-metrics">
-              <div class="rm">
-                <div class="rm-label">Mevcut Plan</div>
-                <div class="rm-val" id="atpRouteCurrentKm">—</div>
-                <div class="rm-sub" id="atpRouteCurrentDur">—</div>
-              </div>
-              <div class="rm hl">
-                <div class="rm-label">Önerilen</div>
-                <div class="rm-val" id="atpRouteSugKm">—</div>
-                <div class="rm-sub" id="atpRouteSugDur">—</div>
-              </div>
-              <div class="rm hl">
-                <div class="rm-label">Kazanç</div>
-                <div class="rm-val" id="atpRouteGainKm">—</div>
-                <div class="rm-sub" id="atpRouteGainDetail">—</div>
-              </div>
-              <div class="rm hl" id="atpRouteFuelCard" title="Araç tüketim bilgisi tanımlı değil">
-                <div class="rm-label">Yakıt Tasarrufu</div>
-                <div class="rm-val" id="atpRouteFuelL">—</div>
-                <div class="rm-sub" id="atpRouteFuelTry">—</div>
-              </div>
-            </div>
-            <p id="atpRouteStatusMsg" class="route-status-msg" style="display:none"></p>
-            <div id="atpRouteConstraintBanner" class="route-constraint-banner" style="display:none"></div>
-            <div class="route-btns">
-              <button type="button" class="btn btn-outline btn-sm" id="atpBtnPreviewSuggestedRoute" disabled>Önerilen Rotayı Göster</button>
-              <button type="button" class="btn btn-blue btn-sm" id="atpBtnRouteExplainer" disabled title="Rota kararını ve sıralamayı açıklar">🗺 Rota Kararını İncele</button>
-              <button type="button" class="btn btn-green btn-sm" id="atpBtnApplySuggestedOrder" disabled>✔ Önerilen Sırayı Uygula</button>
-            </div>
-          </div>
-        </div>
-      </details>
+      </div>{# /atp-dolu-grid #}
 
       {# ── SEÇİLİ PLAN side panel (hidden — for vehicle select) ── #}
       <div id="atpSidePlanWrap" style="display:none">
@@ -311,7 +338,6 @@
         </select>
       </div>
 
-      </div>{# /atpGunlukDolu #}
     </div>{# /atpGunlukView #}
   </div>{# /atpPanelGunluk #}
 
@@ -911,6 +937,6 @@
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=5"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=77"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=79"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}

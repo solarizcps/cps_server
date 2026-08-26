@@ -30,6 +30,7 @@
   try { dashboard = JSON.parse(dashEl ? dashEl.textContent : '{}'); } catch (e) { dashboard = {}; }
 
   var planDate = root.getAttribute('data-date') || dashboard.date || new Date().toISOString().slice(0, 10);
+  window.ATP_PLAN_DATE = planDate;
   var urlParams = new URLSearchParams(window.location.search);
   var initTab = urlParams.get('tab') || 'gunluk';
   var currentTab = initTab;
@@ -309,9 +310,21 @@
       var badge = routeStateBadge(v);
       var planId = v.plan_id || '';
       var vid = v.arac_external_id || v.id || '';
-      /* Next stop: API uses next_stop / next_time (fallback next_stop_name / next_stop_time) */
+      /* Next stop: canonical label from API or local fallback */
       var nextName = v.next_stop || v.next_stop_name || '';
+      var nextLabel = v.next_stop_label || '';
       var nextTime = v.next_time || v.next_stop_time || '';
+      var nextOrder = v.next_order_no != null && v.next_order_no !== '' ? v.next_order_no : null;
+      var nextDisplayOrder = v.next_display_order_no != null && v.next_display_order_no !== '' ? v.next_display_order_no : nextOrder;
+      if (!nextLabel) {
+        if (nextName && nextTime && nextTime !== '—') {
+          nextLabel = nextDisplayOrder != null ? nextTime + ' · ' + nextDisplayOrder + '. Durak · ' + nextName : nextTime + ' · ' + nextName;
+        } else if (nextName && nextDisplayOrder != null) {
+          nextLabel = nextDisplayOrder + '. Durak · ' + nextName;
+        } else {
+          nextLabel = nextName;
+        }
+      }
       /* GPS: API uses gps_last_seen_at (vehicles), last_seen_at (araclar) */
       var gpsTs = v.gps_last_seen_at || v.gps_timestamp || v.last_seen_at || '';
       var gpsAge = gpsTs ? fmtGpsAge(gpsTs) : '—';
@@ -327,9 +340,9 @@
       if (planEmpty) {
         detailRows += '<div class="vcard-detail-row"><span class="icon">📋</span>' +
           '<span style="color:var(--gray)">Sıradaki iş yok — plan boş</span></div>';
-      } else if (nextName) {
+      } else if (nextLabel) {
         detailRows += '<div class="vcard-detail-row"><span class="icon">📅</span><span>Sıradaki: <strong>' +
-          fmtVal(nextName) + '</strong>' + (nextTime ? ' — ' + nextTime : '') + '</span></div>';
+          fmtVal(nextLabel) + '</strong></span></div>';
       }
       if (deviating && v.deviation_m != null) {
         var km = (Number(v.deviation_m) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
@@ -420,17 +433,33 @@
     });
   }
 
+  function compareOrderNo(a, b) {
+    var ao = a.order_no != null && a.order_no !== '' ? Number(a.order_no) : null;
+    var bo = b.order_no != null && b.order_no !== '' ? Number(b.order_no) : null;
+    if (ao != null && bo != null && ao !== bo) return ao - bo;
+    if (ao != null && bo == null) return -1;
+    if (ao == null && bo != null) return 1;
+    if (ao == null && bo == null) {
+      var ptA = (a.planned_time || '').replace('—', '');
+      var ptB = (b.planned_time || '').replace('—', '');
+      var ptCmp = ptA.localeCompare(ptB);
+      if (ptCmp !== 0) return ptCmp;
+    }
+    var ap = a.plan_item_id != null ? Number(a.plan_item_id) : 0;
+    var bp = b.plan_item_id != null ? Number(b.plan_item_id) : 0;
+    return ap - bp;
+  }
+
   function sortStopItems(tasks) {
-    return (tasks || []).slice().sort(function (a, b) {
-      var ao = a.order_no != null && a.order_no !== '' ? Number(a.order_no) : null;
-      var bo = b.order_no != null && b.order_no !== '' ? Number(b.order_no) : null;
-      if (ao != null && bo != null && ao !== bo) return ao - bo;
-      if (ao != null && bo == null) return -1;
-      if (ao == null && bo != null) return 1;
-      var ap = a.plan_item_id != null ? Number(a.plan_item_id) : 0;
-      var bp = b.plan_item_id != null ? Number(b.plan_item_id) : 0;
-      if (ap !== bp) return ap - bp;
-      return (a.planned_time || '').localeCompare(b.planned_time || '');
+    return (tasks || []).slice().sort(compareOrderNo);
+  }
+
+  function sortActiveJobItems(items) {
+    return activeJobItems(items).slice().sort(function (a, b) {
+      var va = String(a.arac_plaka_snapshot || a.plate || a.arac_external_id || '');
+      var vb = String(b.arac_plaka_snapshot || b.plate || b.arac_external_id || '');
+      if (va !== vb) return va.localeCompare(vb);
+      return compareOrderNo(a, b);
     });
   }
 
@@ -442,22 +471,52 @@
     return true;
   }
 
+  function domOrderPrefixMatches(domIds, expected) {
+    if (!domIds || !domIds.length || !expected || !expected.length) return false;
+    for (var i = 0; i < domIds.length; i++) {
+      if (i >= expected.length) break;
+      if (String(domIds[i]) !== String(expected[i])) return false;
+    }
+    return true;
+  }
+
   function getDomStopItemIds() {
     var nodes = document.querySelectorAll('#atpStopListWrap .stop-item[data-item-id]');
     return Array.prototype.map.call(nodes, function (n) { return n.getAttribute('data-item-id'); });
   }
+
+  function getDomJobItemIdsForVehicle(vid) {
+    if (!vid) return [];
+    var rows = document.querySelectorAll('#atpDailyJobsBody tr[data-item-id]');
+    var ids = [];
+    rows.forEach(function (row) {
+      if (String(row.getAttribute('data-vid') || '') !== String(vid)) return;
+      var id = row.getAttribute('data-item-id');
+      if (id) ids.push(String(id));
+    });
+    return ids;
+  }
+
+  var APPLY_VERIFY_FAIL_MSG = 'Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.';
 
   function verifyApplyReadback(vid, expectedTaskIds) {
     var expected = (expectedTaskIds || []).map(String);
     var items = sortStopItems(filterItemsForVehicle(vid, lastOpsData.items || []));
     var readbackIds = items.map(function (it) { return String(it.id); });
     var route = window.AtpRoute && window.AtpRoute.getLastRoute && window.AtpRoute.getLastRoute();
-    var routeIds = route && route.current && route.current.task_ids
-      ? route.current.task_ids.map(String) : [];
-    var domIds = getDomStopItemIds().map(String);
+    var routeIds = route && route.current && (route.current.full_task_ids || route.current.task_ids)
+      ? (route.current.full_task_ids || route.current.task_ids).map(String) : [];
+    var domStopIds = getDomStopItemIds().map(String);
+    var domJobIds = getDomJobItemIdsForVehicle(vid).map(String);
+    var domJobOk = domJobIds.length === 0
+      ? false
+      : (domJobIds.length === expected.length
+        ? idsEqualLists(domJobIds, expected)
+        : domOrderPrefixMatches(domJobIds, expected));
     return idsEqualLists(readbackIds, expected)
       && idsEqualLists(routeIds, expected)
-      && idsEqualLists(domIds, expected);
+      && idsEqualLists(domStopIds, expected)
+      && domJobOk;
   }
 
   function setActiveVehicleCard(extId) {
@@ -475,6 +534,8 @@
     var prsSaat = qs('atpPrsSaat');
     var prsBtn = qs('atpBtnPlanaIsEklePrs');
     var sel = qs('atpSelVehicle');
+    var cikisSaatiInput = qs('atpCikisSaatiInput');
+    var cikisSaatiMsg = qs('atpCikisSaatiMsg');
 
     if (prsArac) prsArac.textContent = vehicle ? safePlate(vehicle) : '—';
     if (prsSofor) prsSofor.textContent = vehicle ? fmtVal(vehicle.driver_name || vehicle.driver) : '—';
@@ -482,14 +543,34 @@
     if (sel && vehicle && vehicle.arac_external_id) sel.value = String(vehicle.arac_external_id);
 
     if (prsSaat && items && items.length) {
-      var times = items.map(function (it) { return it.planned_time || ''; }).filter(Boolean).sort();
+      var sorted = sortStopItems(items);
+      var times = sorted.map(function (it) {
+        var pt = (it.planned_time || '').trim();
+        return pt && pt !== '—' ? pt : '';
+      }).filter(Boolean);
       if (times.length) {
-        prsSaat.textContent = times[0] + ' – ' + times[times.length - 1];
+        prsSaat.textContent = times[0] + (times.length > 1 ? ' – ' + times[times.length - 1] : '');
       } else {
         prsSaat.textContent = '—';
       }
     } else if (prsSaat) {
       prsSaat.textContent = '—';
+    }
+
+    /* Çıkış Saati: populate from vehicle's plan data, clear message */
+    if (cikisSaatiInput) {
+      var cs = (vehicle && (vehicle.cikis_saati || vehicle.departure_time)) || '';
+      cikisSaatiInput.value = cs ? cs.substring(0, 5) : '';
+    }
+    if (cikisSaatiMsg) {
+      if (!vehicle) {
+        cikisSaatiMsg.textContent = '';
+      } else if (!(vehicle.cikis_saati || vehicle.departure_time)) {
+        cikisSaatiMsg.textContent = 'Durak saatlerini hesaplamak için Çıkış Saati girin.';
+        cikisSaatiMsg.style.color = 'var(--gray)';
+      } else {
+        cikisSaatiMsg.textContent = '';
+      }
     }
   }
 
@@ -507,6 +588,101 @@
       : [];
     updatePrsForVehicle(chosen, scopedItems);
     setActiveVehicleCard(_activeVehicleExtId);
+  }
+
+  var _timelineSyncToken = 0;
+
+  function _planDateForApi() {
+    return window.ATP_PLAN_DATE || lastOpsData.plan_date || (root && root.getAttribute('data-date')) || '';
+  }
+
+  function _mergeDepartureTasksIntoOps(vid, dailyTasks) {
+    if (!dailyTasks || !dailyTasks.length) return;
+    var updMap = {};
+    dailyTasks.forEach(function (t) { if (t.id) updMap[t.id] = t; });
+    if (lastOpsData.items) {
+      lastOpsData.items = lastOpsData.items.map(function (t) {
+        return updMap[t.id] ? Object.assign({}, t, updMap[t.id]) : t;
+      });
+    } else {
+      lastOpsData.items = dailyTasks.slice();
+    }
+    var veh = findVehicleByExtId(vid);
+    var scopedItems = filterItemsForVehicle(vid, lastOpsData.items || dailyTasks);
+    renderJobs(lastOpsData.items || []);
+    renderStopList(scopedItems, veh ? safePlate(veh) : '');
+    updatePrsForVehicle(veh, scopedItems);
+    updatePlanMap();
+  }
+
+  function fetchPlanTimeline(vid) {
+    var planDate = _planDateForApi();
+    if (!vid || !planDate) return Promise.resolve(null);
+    var q = '/planlama/arac-takip/api/plan/timeline?date=' + encodeURIComponent(planDate) +
+      '&vehicle_id=' + encodeURIComponent(vid);
+    return fetch(q, { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.stops && d.stops.length) {
+          renderTimeline(d);
+          return d;
+        }
+        if (d && d.timeline) {
+          renderTimeline(d.timeline);
+          return d.timeline;
+        }
+        return null;
+      })
+      .catch(function () { return null; });
+  }
+
+  function persistDepartureEtasIfNeeded(vid, cikis) {
+    if (!vid || !cikis) return Promise.resolve(null);
+    var scoped = filterItemsForVehicle(vid, lastOpsData.items || []);
+    var needsEta = scoped.some(function (t) {
+      return !(t.eta_time || t.tahmini_varis_saati);
+    });
+    if (!needsEta) return Promise.resolve(null);
+    var planDate = _planDateForApi();
+    if (!planDate) return Promise.resolve(null);
+    return fetch('/planlama/arac-takip/api/plan/departure-time', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        date: planDate,
+        vehicle_id: vid,
+        departure_time: cikis.substring(0, 5),
+      }),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.data || !res.data.ok) return null;
+        var d = res.data;
+        var veh = findVehicleByExtId(vid);
+        if (veh) veh.cikis_saati = d.departure_time || cikis;
+        if (d.daily_tasks && d.daily_tasks.length) {
+          _mergeDepartureTasksIntoOps(vid, d.daily_tasks);
+        }
+        if (d.timeline) renderTimeline(d.timeline);
+        return d;
+      })
+      .catch(function () { return null; });
+  }
+
+  function syncDepartureAndTimeline(vid) {
+    if (!vid) return Promise.resolve();
+    var token = ++_timelineSyncToken;
+    var veh = findVehicleByExtId(vid);
+    var cikis = veh && (veh.cikis_saati || veh.departure_time);
+    if (cikis && qs('atpCikisSaatiInput') && !qs('atpCikisSaatiInput').value) {
+      qs('atpCikisSaatiInput').value = cikis.substring(0, 5);
+    }
+    return fetchPlanTimeline(vid).then(function () {
+      if (token !== _timelineSyncToken) return;
+      if (!cikis) return;
+      return persistDepartureEtasIfNeeded(vid, cikis);
+    });
   }
 
   function openPlanRouteForVehicle(aracExternalId) {
@@ -529,6 +705,8 @@
     }
 
     refreshPlanRoute(extId);
+
+    syncDepartureAndTimeline(extId);
 
     var det = qs('atpPlanningSection');
     if (det) {
@@ -558,9 +736,13 @@
   }
 
   function planBadgeCls(status, visitState) {
-    if (status === 'TAMAMLANDI') return 'badge-green';
+    var st = (status || '').toUpperCase();
+    if (st === 'TAMAMLANDI') return 'badge-green';
+    if (st === 'IPTAL')      return 'badge-gray';
+    if (st === 'ERTELENDI')  return 'badge-orange';
+    if (st === 'GECIKIYOR')  return 'badge-orange';
     if (visitState === 'DEPARTED_PENDING') return 'badge-orange';
-    if (status === 'BASLADI') return 'badge-blue';
+    if (st === 'BASLADI' || st === 'YOLDA') return 'badge-blue';
     return 'badge-gray';
   }
 
@@ -573,12 +755,21 @@
   function buildVisitLabel(it) {
     var raw = it.visit_label || '';
     var state = it.visit_state || '';
+    var status = (it.status || '').toUpperCase();
     if (raw && raw !== 'DEPARTED' && raw !== 'ARRIVED' && raw !== 'OUTSIDE') return raw;
     var arr = fmtTime(it.arrived_at);
     var dep = fmtTime(it.departed_at);
+    /* Tamamlandı: vardı / ayrıldı / süre */
     if (state === 'DEPARTED' && arr && dep) return arr + ' Vardı · ' + dep + ' Ayrıldı';
     if (state === 'DEPARTED' && arr) return arr + ' Vardı · Ayrıldı';
-    if (state === 'ARRIVED' && arr) return arr + ' Varış · Konumda';
+    /* Durakta */
+    if (state === 'ARRIVED' && arr) return arr + ' Vardı · Konumda';
+    /* Yolda: show current ETA if available */
+    if (status === 'BASLADI' || status === 'YOLDA') {
+      var eta = fmtTime(it.eta_time || it.tahmini_varis_saati);
+      if (eta) return 'Güncel tahmin ' + eta;
+      return 'Yolda';
+    }
     if (state === 'OUTSIDE') return 'Henüz varmadı';
     return raw || 'Henüz varmadı';
   }
@@ -702,27 +893,56 @@
 
   window.closeAtpJobMenu = closeJobMenu;
 
+  /* Return true if s looks like a URL (http/https or maps.app.goo). */
+  function _isUrl(s) {
+    return /^https?:\/\//i.test(s) || /^maps\.app\.goo/i.test(s);
+  }
+
+  /* Build address sub-row: suppress raw URLs; show pin link instead if we have coords. */
+  function _addressSubHtml(it) {
+    var raw = it.address_text || '';
+    if (!raw) return '';
+    if (_isUrl(raw)) {
+      /* Replace bare URL with a small location link if coordinates exist */
+      if (it.latitude != null && it.longitude != null) {
+        var mapsUrl = 'https://www.google.com/maps?q=' + it.latitude + ',' + it.longitude;
+        return '<div class="job-firm-sub"><a href="' + mapsUrl + '" target="_blank" rel="noopener noreferrer" class="atp-loc-link" title="Konumu haritada gör">📍 Konum</a></div>';
+      }
+      return ''; /* hide bare URL entirely */
+    }
+    return '<div class="job-firm-sub">' + fmtVal(raw) + '</div>';
+  }
+
   function makeJobRow(it) {
     var dotCls = jobDotClass(it.status, it.visit_state);
     var visCls = visitRowClass(it.visit_state);
     var badgeCls = planBadgeCls(it.status, it.visit_state);
     var statusLabel = fmtVal(it.status_label);
     var visitLabel = fmtVal(buildVisitLabel(it));
-    var timeCls = 'job-time' + (it.is_late ? ' late' : '');
-    return '<tr data-plan-item="' + (it.plan_item_id || '') + '">' +
-      '<td class="' + timeCls + '">' + fmtVal(it.planned_time) + '</td>' +
-      '<td><div class="job-firm"><span class="dot ' + dotCls + '"></span>' + fmtVal(it.job_title) +
-      (it.company_name ? ' / ' + it.company_name : '') + '</div>' +
-      (it.address_text ? '<div class="job-firm-sub">' + it.address_text + '</div>' : '') + '</td>' +
-      '<td style="font-size:11.5px;color:#374151">' + fmtVal(it.driver) + '</td>' +
+    var isLate = !!it.is_late;
+    var itemId = it.id ? String(it.id) : '';
+    var vidAttr = it.arac_external_id != null ? String(it.arac_external_id) : '';
+
+    /* ── Tahmini Varış Saati — yalnız ETA/tahmini_varis_saati ── */
+    var eta = it.eta_time || it.tahmini_varis_saati || null;
+    var etaHtml = eta
+      ? '<span class="job-eta' + (isLate ? ' late' : '') + '">' + fmtVal(eta) + '</span>'
+      : '<span class="job-eta-empty" title="ETA hesaplanmadı">—</span>';
+
+    return '<tr data-plan-item="' + (it.plan_item_id || '') + '" data-item-id="' + itemId + '" data-vid="' + vidAttr + '">' +
+      '<td class="job-eta-cell">' + etaHtml + '</td>' +
+      '<td><div class="job-firm"><span class="dot ' + dotCls + '"></span>' +
+        fmtVal(it.job_title) + (it.company_name ? ' / ' + it.company_name : '') +
+        '</div>' + _addressSubHtml(it) + '</td>' +
+      '<td class="job-driver-cell">' + fmtVal(it.driver || '—') + '</td>' +
       '<td><span class="badge ' + badgeCls + '">' + statusLabel + '</span></td>' +
       '<td><span class="' + visCls + '">' + visitLabel + '</span></td>' +
       '<td><div class="atp-job-menu-wrap">' +
-      '<button type="button" class="btn btn-outline btn-sm atp-job-menu-btn" ' +
-        'data-vid="' + (it.arac_external_id || '') + '" ' +
-        'data-plan-item="' + (it.plan_item_id || '') + '" ' +
-        'data-status="' + (it.status || '') + '" ' +
-        'data-visit="' + (it.visit_state || '') + '">İşlem ▾</button></div></td></tr>';
+        '<button type="button" class="btn btn-outline btn-sm atp-job-menu-btn" ' +
+          'data-vid="' + (it.arac_external_id || '') + '" ' +
+          'data-plan-item="' + (it.plan_item_id || '') + '" ' +
+          'data-status="' + (it.status || '') + '" ' +
+          'data-visit="' + (it.visit_state || '') + '">İşlem ▾</button></div></td></tr>';
   }
 
   function activeJobItems(items) {
@@ -732,7 +952,7 @@
   function renderJobs(items) {
     var tbody = qs('atpDailyJobsBody');
     if (!tbody) return;
-    var activeItems = activeJobItems(items);
+    var activeItems = sortActiveJobItems(items);
     if (!activeItems.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="atp-v2-empty">Henüz kayıt yok.</td></tr>';
       /* Clear any toggle row */
@@ -1106,22 +1326,45 @@
     }
     var base = (dashboard.base_location && dashboard.base_location.base_name) || 'Fabrika — Tuzla OSB';
     var sorted = sortStopItems(tasks);
+    /* Assign frontend display_order_no if backend didn't send it (fallback for PLANLANDI items) */
+    var activeIdx = 0;
+    sorted.forEach(function (t) {
+      if (t.display_order_no == null && isActivePlanItem(t)) {
+        activeIdx++;
+        t.display_order_no = activeIdx;
+      }
+    });
     var html = '<div class="factory-row"><span class="fl">🏭</span><span class="factory-label">Başlangıç: ' + base + '</span></div>';
     html += '<div class="stop-list">' + sorted.map(function (t, idx) {
+      /* Active/inactive decision: status-based (canonical), not display_order_no presence */
+      var inact = !isActivePlanItem(t);
       var done = t.status === 'TAMAMLANDI';
       var late = t.is_late;
-      var cls = 'stop-item' + (done ? ' done' : (late ? ' late' : ''));
-      var numCls = 'stop-num' + (done ? ' done' : (late ? ' late' : ''));
+      var cls = 'stop-item' + (inact ? ' passive' : (done ? ' done' : (late ? ' late' : '')));
+      var numCls = 'stop-num' + (inact ? ' passive' : (done ? ' done' : (late ? ' late' : '')));
       var badgeCls = done ? 'badge-green' : (late ? 'badge-orange' : 'badge-gray');
       var badgeLbl = done ? '✓' : (late ? 'Gecikmeli' : fmtVal(t.status_label || t.status || 'Planlandı'));
-      var seq = t.order_no != null && t.order_no !== '' ? t.order_no : (idx + 1);
+      var seq = inact
+        ? '—'
+        : (t.display_order_no != null && t.display_order_no !== ''
+            ? t.display_order_no
+            : (t.order_no != null && t.order_no !== '' ? t.order_no : (idx + 1)));
+      var prevSiraHtml = inact && t.order_no != null
+        ? '<span class="stop-prev-sira">Önceki sıra: ' + t.order_no + '</span>'
+        : '';
       var itemId = t.id ? String(t.id) : '';
       var talepId = t.is_talebi_id != null ? String(t.is_talebi_id) : '';
+      var priHtml = (t.priority && t.priority !== 'NORMAL')
+        ? '<span class="badge badge-orange" style="margin-right:4px;font-size:10px">' + fmtVal(t.priority_label || t.priority) + '</span>'
+        : '';
       return '<div class="' + cls + '" data-item-id="' + itemId + '" data-is-talebi-id="' + talepId + '">' +
         '<span class="' + numCls + '">' + seq + '</span>' +
         '<span class="stop-name">' + fmtVal(t.company_name || t.job_title) + '</span>' +
+        priHtml +
         '<span class="badge ' + badgeCls + '" style="margin-right:4px">' + badgeLbl + '</span>' +
-        '<span class="stop-time" style="' + (late ? 'color:var(--orange)' : '') + '">' + fmtVal(t.planned_time) + '</span>' +
+        prevSiraHtml +
+        '<span class="stop-time" style="' + (late ? 'color:var(--orange)' : '') + '">' +
+        (inact ? '' : fmtVal(t.eta_time || t.tahmini_varis_saati || '—')) + '</span>' +
         '</div>';
     }).join('') + '</div>';
     html += '<div class="factory-row" style="margin-top:4px"><span class="fl">🏭</span><span class="factory-label">Bitiş: Fabrika Dönüş — ' + base + '</span></div>';
@@ -1230,18 +1473,40 @@
       renderAlerts(data.alerts || [], 'Dikkat gerektiren durum yok.');
       renderMiniMap(data.map || { vehicles: [] });
 
-      /* Summary band — scoped to active or first vehicle */
-      if (!_activeVehicleExtId && vehiclesForCards.length && vehiclesForCards[0].arac_external_id) {
-        _activeVehicleExtId = String(vehiclesForCards[0].arac_external_id);
-      }
-      updatePrsSummary(vehiclesForCards, data.items || []);
+      var urlVid = urlParams.get('vehicle_id');
+      var urlVehicleMatch = urlVid && vehiclesForCards.some(function (v) {
+        return String(v.arac_external_id) === String(urlVid);
+      });
 
-      /* Stop list: only selected vehicle active items */
-      var activeVeh = findVehicleByExtId(_activeVehicleExtId);
-      var scopedItems = _activeVehicleExtId
-        ? sortStopItems(filterItemsForVehicle(_activeVehicleExtId, data.items || []))
-        : [];
-      renderStopList(scopedItems, activeVeh ? safePlate(activeVeh) : '');
+      if (urlVehicleMatch) {
+        openPlanRouteForVehicle(String(urlVid));
+      } else {
+        /* Summary band — scoped to active or first vehicle */
+        if (!_activeVehicleExtId && vehiclesForCards.length && vehiclesForCards[0].arac_external_id) {
+          _activeVehicleExtId = String(vehiclesForCards[0].arac_external_id);
+        }
+        updatePrsSummary(vehiclesForCards, data.items || []);
+
+        /* Stop list: only selected vehicle active items */
+        var activeVeh = findVehicleByExtId(_activeVehicleExtId);
+        var scopedItems = _activeVehicleExtId
+          ? sortStopItems(filterItemsForVehicle(_activeVehicleExtId, data.items || []))
+          : [];
+        renderStopList(scopedItems, activeVeh ? safePlate(activeVeh) : '');
+
+        /* Route — only when active jobs exist */
+        if (window.AtpRoute && hasActiveItems && _activeVehicleExtId) {
+          refreshPlanRoute(_activeVehicleExtId);
+        } else if (window.AtpRoute && window.AtpRoute.showRouteEmptyPlan) {
+          window.AtpRoute.showRouteEmptyPlan('Aktif iş yok — plan boş.');
+        } else if (window.AtpRoute) {
+          window.AtpRoute.clearRouteDisplay();
+        }
+
+        if (_activeVehicleExtId) {
+          syncDepartureAndTimeline(_activeVehicleExtId);
+        }
+      }
 
       /* Date label in jobs header */
       var jobsDateLbl = qs('atpJobsDateLabel');
@@ -1249,15 +1514,6 @@
 
       /* Empty plan guard — active jobs, not raw item count */
       syncEmptyDayPlanRota(hasActiveItems);
-
-      /* Route — only when active jobs exist */
-      if (window.AtpRoute && hasActiveItems && _activeVehicleExtId) {
-        refreshPlanRoute(_activeVehicleExtId);
-      } else if (window.AtpRoute && window.AtpRoute.showRouteEmptyPlan) {
-        window.AtpRoute.showRouteEmptyPlan('Aktif iş yok — plan boş.');
-      } else if (window.AtpRoute) {
-        window.AtpRoute.clearRouteDisplay();
-      }
     }
 
     /* Populate vehicle select (hidden) for route & modal */
@@ -1422,6 +1678,9 @@
         plan_item_id: t.plan_item_id,
         is_talebi_id: t.is_talebi_id,
         order_no: t.order_no != null && t.order_no !== '' ? t.order_no : (idx + 1),
+        display_order_no: t.display_order_no != null && t.display_order_no !== ''
+          ? t.display_order_no
+          : (idx + 1),
         company_name: t.company_name,
         job_title: t.job_title,
         planned_time: t.planned_time,
@@ -2041,12 +2300,124 @@
     }
   }
   if (btnPlana) btnPlana.addEventListener('click', _openMultiOrFallback);
-  /* PRS (vehicle summary) button → existing single modal (vehicle pre-filled) */
+  /* PRS (vehicle summary card) button → multi-add modal, vehicle locked */
   if (btnPlanaPrs) btnPlanaPrs.addEventListener('click', function (e) {
     e.stopPropagation();
-    openPlanaModal('existing', _activeVehicleExtId);
+    if (typeof window.atpMultiOpen === 'function') {
+      window.atpMultiOpen({ lockVehicle: true });
+    } else {
+      openPlanaModal('existing', _activeVehicleExtId);
+    }
   });
   if (btnPlanaEmpty) btnPlanaEmpty.addEventListener('click', _openMultiOrFallback);
+
+  /* ─── Çıkış Saati: Kaydet ve Hesapla ─── */
+  (function initCikisSaati() {
+    var btn = qs('atpBtnCikisSaatiKaydet');
+    var inp = qs('atpCikisSaatiInput');
+    var msg = qs('atpCikisSaatiMsg');
+    if (!btn || !inp) return;
+
+    function _setMsg(text, isError) {
+      if (!msg) return;
+      msg.textContent = text || '';
+      msg.style.color = isError ? 'var(--red, #ef4444)' : 'var(--gray)';
+    }
+
+    btn.addEventListener('click', function () {
+      var val = (inp.value || '').trim();
+      if (!val) {
+        _setMsg('Önce çıkış saati girin.', false);
+        return;
+      }
+      /* HH:mm client-side check */
+      if (!/^\d{1,2}:\d{2}$/.test(val)) {
+        _setMsg('Geçersiz saat formatı — HH:mm girin (örnek: 09:00)', true);
+        return;
+      }
+      var parts = val.split(':');
+      var hh = parseInt(parts[0], 10), mm = parseInt(parts[1], 10);
+      if (hh > 23 || mm > 59) {
+        _setMsg('Geçersiz saat değeri.', true);
+        return;
+      }
+      var vid = _activeVehicleExtId;
+      if (!vid) {
+        _setMsg('Araç seçili değil.', true);
+        return;
+      }
+      var planDate = (window.ATP_PLAN_DATE || lastOpsData.plan_date || root.getAttribute('data-date') || '');
+      if (!planDate) {
+        _setMsg('Plan tarihi bulunamadı.', true);
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Kaydediliyor…';
+      _setMsg('', false);
+
+      fetch('/planlama/arac-takip/api/plan/departure-time', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          date: planDate,
+          vehicle_id: vid,
+          departure_time: (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm,
+        }),
+        credentials: 'same-origin',
+      })
+      .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, data: d}; }); })
+      .then(function (res) {
+        btn.disabled = false;
+        btn.textContent = 'Saati Kaydet ve Hesapla';
+        if (!res.ok || !res.data.ok) {
+          var errMsg = (res.data && res.data.error) || 'Kayıt başarısız.';
+          _setMsg('Hata: ' + errMsg, true);
+          return;
+        }
+        var d = res.data;
+        /* Update local vehicle record with new cikis_saati */
+        var veh = findVehicleByExtId(vid);
+        if (veh) veh.cikis_saati = d.departure_time;
+        /* Re-render with updated tasks */
+        if (d.daily_tasks && d.daily_tasks.length) {
+          /* merge updated tasks into ops cache */
+          var updMap = {};
+          d.daily_tasks.forEach(function (t) { if (t.id) updMap[t.id] = t; });
+          if (lastOpsData.items) {
+            lastOpsData.items = lastOpsData.items.map(function (t) {
+              return updMap[t.id] ? Object.assign({}, t, updMap[t.id]) : t;
+            });
+          }
+          var scopedItems = filterItemsForVehicle(vid, lastOpsData.items || d.daily_tasks);
+          renderJobs(scopedItems);
+          renderStopList(scopedItems, veh ? safePlate(veh) : '');
+          updatePrsForVehicle(veh, scopedItems);
+        }
+        /* Dashboard update if returned */
+        if (d.dashboard) {
+          dashboard = Object.assign({}, dashboard, d.dashboard);
+        }
+        if (d.eta_applied) {
+          _setMsg('Çıkış saati kaydedildi. Varış ve dönüş saatleri yeniden hesaplandı.', false);
+        } else {
+          var reason = d.eta_reason || 'Çıkış Saati kaydedildi. Rota snapshot bulunamadı — saatler hesaplanmadı.';
+          _setMsg(reason, false);
+        }
+        if (d.missing_leg_count) {
+          _setMsg(_getMsg() + ' (' + d.missing_leg_count + ' durakta rota süresi bulunamadı.)', false);
+        }
+        /* Render timeline */
+        if (d.timeline) renderTimeline(d.timeline);
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        btn.textContent = 'Saati Kaydet ve Hesapla';
+        _setMsg('Bağlantı hatası: ' + (err.message || err), true);
+      });
+    });
+
+    function _getMsg() { return msg ? msg.textContent : ''; }
+  }());
 
   var quickArac = qs('atpQuickArac');
   var quickSofor = qs('atpQuickSofor');
@@ -3655,7 +4026,8 @@
     }
 
     /* ── Open / close modal ── */
-    function _openModal() {
+    function _openModal(opts) {
+      var lockVehicle = !!(opts && opts.lockVehicle);
       var backdrop = _qs('atpMultiBackdrop');
       var modal = _qs('atpMultiModal');
       if (!backdrop || !modal) return;
@@ -3667,7 +4039,25 @@
 
       _aracOpts();
       var aracEl = _qs('atpMultiArac');
-      if (aracEl && _activeVehicleExtId) aracEl.value = String(_activeVehicleExtId);
+      if (aracEl && _activeVehicleExtId) {
+        /* _activeVehicleExtId may be the arac_external_id or the DB id.
+           Try direct assignment first; if it doesn't match any option,
+           look up the vehicle in lastOpsData.vehicles and use arac_external_id. */
+        aracEl.value = String(_activeVehicleExtId);
+        if (!aracEl.value) {
+          var _vList = (lastOpsData && lastOpsData.vehicles) ? lastOpsData.vehicles : [];
+          for (var _vi = 0; _vi < _vList.length; _vi++) {
+            var _veh = _vList[_vi];
+            if (String(_veh.id || '') === String(_activeVehicleExtId) ||
+                String(_veh.arac_id || '') === String(_activeVehicleExtId)) {
+              aracEl.value = String(_veh.arac_external_id || '');
+              break;
+            }
+          }
+        }
+      }
+      /* Lock vehicle selector when opened from vehicle plan card */
+      if (aracEl) aracEl.disabled = lockVehicle;
       if (aracEl && _qs('atpMultiSofor')) {
         var opt = aracEl.options[aracEl.selectedIndex];
         _qs('atpMultiSofor').value = (opt && opt.getAttribute('data-driver')) || '';
@@ -3733,9 +4123,195 @@
       _closeFirmaDD();
     });
 
-    /* Expose opener */
-    window.atpMultiOpen = _openModal;
+    /* Expose opener — accepts optional {lockVehicle: bool} */
+    window.atpMultiOpen = function (opts) { _openModal(opts); };
 
+  }());
+
+  /* ─── Timeline Panel: Çıkış Saati sonrası durak zinciri ─── */
+  function buildDurationLabelLines(tl) {
+    if (!tl) return [];
+    if (tl.duration_labels && tl.duration_labels.lines && tl.duration_labels.lines.length) {
+      return tl.duration_labels.lines.slice();
+    }
+    function ceilMin(sec) {
+      if (sec == null || sec === '') return null;
+      return Math.ceil(Math.max(0, Number(sec)) / 60);
+    }
+    var outbound = ceilMin(tl.outbound_travel_seconds);
+    var ret = ceilMin(tl.return_travel_seconds != null ? tl.return_travel_seconds : tl.return_seconds);
+    var totalDrive = ceilMin(tl.total_travel_seconds);
+    var service = tl.total_service_minutes != null
+      ? tl.total_service_minutes
+      : ceilMin(tl.total_service_seconds);
+    var totalPlan = (tl.total_travel_seconds != null && tl.total_service_seconds != null)
+      ? ceilMin(Number(tl.total_travel_seconds) + Number(tl.total_service_seconds))
+      : tl.estimated_total_minutes;
+    var lines = [];
+    if (outbound != null) lines.push('Duraklara kadar sürüş: yaklaşık ' + outbound + ' dk');
+    if (ret != null) lines.push('Fabrikaya dönüş: yaklaşık ' + ret + ' dk');
+    if (totalDrive != null) lines.push('Toplam sürüş: ' + totalDrive + ' dk');
+    if (service != null) lines.push('İşlem: ' + service + ' dk');
+    if (totalPlan != null) lines.push('Toplam plan: ' + totalPlan + ' dk');
+    return lines;
+  }
+
+  function renderTimeline(tl) {
+    var summaryEl  = document.getElementById('atpTimelineSummary');
+    var returnEl   = document.getElementById('atpTimelineReturn');
+    var totalsEl   = document.getElementById('atpTimelineTotals');
+    var listEl     = document.getElementById('atpTimelineList');
+    if (!summaryEl) return;
+
+    /* Always hide the stop-by-stop duplicate list — ETAs already in jobs table */
+    if (listEl) listEl.style.display = 'none';
+
+    if (!tl || tl.status === 'CIKIS_SAATI_EKSIK' || !tl.stops || !tl.stops.length) {
+      summaryEl.style.display = 'none';
+      return;
+    }
+
+    /* Build compact one-line return summary */
+    var retTime = tl.estimated_return_time || null;
+    if (returnEl) {
+      returnEl.innerHTML = retTime
+        ? '<span class="atp-tl-ret-label">Tahmini dönüş:</span> <strong class="atp-tl-ret-val">' + fmtVal(retTime) + '</strong>'
+        : '<span class="atp-tl-ret-label">Dönüş hesaplanamadı</span>';
+    }
+
+    /* Build compact totals: show tooltip trigger with full detail lines */
+    if (totalsEl) {
+      var labelLines = buildDurationLabelLines(tl);
+      if (labelLines.length) {
+        /* Compact: "191 dk sürüş · 30 dk işlem · 221 dk toplam" */
+        var totalDrive = tl.total_travel_minutes != null ? tl.total_travel_minutes : null;
+        var totalSvc   = tl.total_service_minutes != null ? tl.total_service_minutes : null;
+        var totalPlan  = tl.total_plan_minutes != null ? tl.total_plan_minutes : null;
+        var parts = [];
+        if (totalDrive != null) parts.push(totalDrive + ' dk sürüş');
+        if (totalSvc   != null) parts.push(totalSvc   + ' dk işlem');
+        if (totalPlan  != null) parts.push(totalPlan  + ' dk toplam');
+        var compact = parts.join(' · ');
+        var tip = labelLines.join('\n');
+        totalsEl.innerHTML = compact
+          ? '<span class="atp-tl-totals-compact" title="' + fmtVal(tip) + '">' + compact + ' <span class="atp-tl-info">ⓘ</span></span>'
+          : '';
+      } else {
+        totalsEl.textContent = '';
+      }
+    }
+    summaryEl.style.display = '';
+  }
+
+  /* ─── İstenen Varış Saati: popup handler (bu fazda gizli, altyapı korunur) ─── */
+  (function initDesiredTime() {
+    var backdrop = document.getElementById('atpDesiredTimeBackdrop');
+    var modal    = document.getElementById('atpDesiredTimeModal');
+    var infoEl   = document.getElementById('atpDesiredTimeInfo');
+    var inp      = document.getElementById('atpDesiredTimeInput');
+    var freeChk  = document.getElementById('atpDesiredTimeFree');
+    var msgEl    = document.getElementById('atpDesiredTimeMsg');
+    var saveBtn  = document.getElementById('atpDesiredTimeSave');
+    var cancelBtn= document.getElementById('atpDesiredTimeClose');
+    var cancelBtn2=document.getElementById('atpDesiredTimeCancel');
+    if (!backdrop || !modal || !inp || !saveBtn) return;
+
+    var _state = { planItemId: null, vid: null, company: '', date: '' };
+
+    function _open(btn) {
+      _state.planItemId = btn.dataset.planItemId || '';
+      _state.vid        = btn.dataset.vid || '';
+      _state.company    = btn.dataset.company || '—';
+      var prev          = btn.dataset.istened || '';
+      var isFree        = btn.dataset.free === '1';
+      var kaynak        = btn.dataset.kaynak || 'YOK';
+      _state.date       = window.ATP_PLAN_DATE || '';
+
+      if (infoEl) {
+        var src = kaynak === 'SISTEM' ? ' (Kaynak sistem)' : (kaynak === 'MANUEL' ? ' (Manuel)' : '');
+        infoEl.textContent = _state.company + (prev ? ' — Mevcut: ' + prev + src : ' — Saat girilmemiş');
+      }
+      inp.value    = prev || '';
+      freeChk.checked = isFree;
+      inp.disabled = isFree;
+      msgEl.textContent = '';
+
+      backdrop.setAttribute('aria-hidden', 'false');
+      modal.setAttribute('aria-hidden', 'false');
+      backdrop.style.display = '';
+      if (!isFree) { try { inp.focus(); } catch(e) {} }
+    }
+
+    function _close() {
+      backdrop.setAttribute('aria-hidden', 'true');
+      modal.setAttribute('aria-hidden', 'true');
+      backdrop.style.display = 'none';
+      _state = { planItemId: null, vid: null, company: '', date: '' };
+    }
+
+    freeChk.addEventListener('change', function() {
+      inp.disabled = this.checked;
+      if (this.checked) { inp.value = ''; msgEl.textContent = ''; }
+    });
+
+    function _save() {
+      var timeFree = freeChk.checked;
+      var raw = (inp.value || '').trim();
+      if (!timeFree && !raw) {
+        msgEl.textContent = 'Saat girin veya "Saat serbest" seçin.';
+        return;
+      }
+      if (!_state.planItemId || !_state.vid || !_state.date) {
+        msgEl.textContent = 'İç hata: plan bilgisi eksik.';
+        return;
+      }
+      saveBtn.disabled = true;
+      msgEl.textContent = 'Kaydediliyor…';
+      var payload = {
+        date: _state.date,
+        vehicle_id: _state.vid,
+        plan_item_id: parseInt(_state.planItemId, 10),
+        desired_time: timeFree ? null : raw,
+        time_free: timeFree
+      };
+      fetch('/planlama/arac-takip/api/plan-job/desired-time', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        credentials: 'same-origin'
+      })
+      .then(function(r) { return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
+      .then(function(res) {
+        saveBtn.disabled = false;
+        if (!res.ok || !res.data.ok) {
+          msgEl.textContent = (res.data && res.data.error) || 'Kayıt hatası.';
+          return;
+        }
+        _close();
+        /* Refresh: update dashboard + jobs if callback available */
+        if (typeof refreshDashboardPartial === 'function') {
+          var tasks = res.data.tasks || [];
+          refreshDashboardPartial({ daily_tasks: tasks, dashboard: res.data.dashboard });
+        } else if (typeof loadGunlukData === 'function') {
+          loadGunlukData();
+        }
+      })
+      .catch(function(err) {
+        saveBtn.disabled = false;
+        msgEl.textContent = 'Bağlantı hatası: ' + err.message;
+      });
+    }
+
+    saveBtn.addEventListener('click', _save);
+    if (cancelBtn)  cancelBtn.addEventListener('click',  _close);
+    if (cancelBtn2) cancelBtn2.addEventListener('click', _close);
+    backdrop.addEventListener('click', function(e) { if (e.target === backdrop) _close(); });
+
+    /* Delegate: open popup on .atp-desired-time-btn click */
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest && e.target.closest('.atp-desired-time-btn');
+      if (btn) { e.preventDefault(); _open(btn); }
+    });
   }());
 
 }());

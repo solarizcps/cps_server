@@ -141,8 +141,32 @@
 
 /* ??? Main Grid ??? */
 #atpV2Root .main-grid {
-  display:grid;grid-template-columns:1fr 320px;gap:14px;padding:14px 24px;
+  display:grid;grid-template-columns:1fr 320px;gap:14px;
+  padding:14px 24px 0;
+  min-width:0;align-items:start;
+}
+
+/* New unified dolu-grid: left col (jobs+accordion) + right col (alerts+map) */
+#atpV2Root .atp-dolu-grid {
+  display:grid;
+  grid-template-columns:1fr 320px;
+  grid-template-rows:auto;
+  gap:14px;
+  padding:14px 24px;
+  align-items:start;
   min-width:0;
+}
+#atpV2Root .atp-dolu-left {
+  display:flex;flex-direction:column;gap:14px;min-width:0;grid-column:1;
+}
+#atpV2Root .atp-dolu-right {
+  display:flex;flex-direction:column;gap:10px;min-width:0;width:100%;grid-column:2;
+}
+
+/* Accordion inside left col — no extra outer margin */
+#atpV2Root .plan-rota-inline {
+  background:var(--white);border:var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;
 }
 
 /* ??? Card ??? */
@@ -226,12 +250,30 @@
 }
 #atpV2Root .jobs-tbl tr:last-child td { border-bottom:none; }
 #atpV2Root .jobs-tbl tr:hover td { background:var(--gray-50); }
-#atpV2Root .job-time { font-weight:700;color:#111827;white-space:nowrap; }
+
+/* Tahmini Varış column — larger, prominent */
+#atpV2Root .job-eta-cell { width:68px;white-space:nowrap; }
+#atpV2Root .job-eta {
+  font-size:14px;font-weight:800;color:#111827;white-space:nowrap;letter-spacing:-.02em;
+}
+#atpV2Root .job-eta.late { color:var(--orange); }
+#atpV2Root .job-eta-empty { font-size:12px;color:var(--gray);font-weight:400; }
+
+/* Eski job-time uyumluluk */
+#atpV2Root .job-time { font-weight:700;color:#111827;white-space:nowrap;font-size:13px; }
 #atpV2Root .job-time.late { color:var(--orange); }
+
 #atpV2Root .job-firm { font-weight:600;color:#111827;display:flex;align-items:center; }
 #atpV2Root .job-firm-sub { font-size:10.5px;color:var(--gray); }
+#atpV2Root .job-driver-cell { font-size:11.5px;color:#374151;vertical-align:middle;white-space:nowrap; }
 #atpV2Root .visit-text { font-size:11px;color:#374151; }
 #atpV2Root .visit-text.gray { color:var(--gray); }
+
+/* Location pin link in İş/Firma cell */
+#atpV2Root .atp-loc-link {
+  color:#1d4ed8;text-decoration:none;font-size:10.5px;
+}
+#atpV2Root .atp-loc-link:hover { text-decoration:underline; }
 
 /* ??? Alert List (right column) ??? */
 #atpV2Root .alert-list { display:flex;flex-direction:column; }
@@ -264,10 +306,10 @@
 #atpV2Root .right-col > .card { width:100%;min-width:0; }
 #atpV2Root .map-card-body { padding:8px; }
 
-/* ??? Mini Map ??? */
+/* ▓▓▓ Mini Map ▓▓▓ */
 #atpV2Root .map-wrap {
   position:relative;background:#dde9f4;border-radius:var(--radius);
-  overflow:hidden;border:var(--border);height:240px;width:100%;box-sizing:border-box;
+  overflow:hidden;border:var(--border);height:clamp(130px, 18vh, 180px);width:100%;box-sizing:border-box;
 }
 #atpV2Root .map-badge-row {
   display:flex;gap:10px;background:rgba(255,255,255,.93);border-radius:10px;
@@ -294,12 +336,12 @@
 
 /* ??? Planlama & Rota Accordion ??? */
 #atpV2Root .plan-rota-wrap {
-  margin:0 24px 14px;background:var(--white);border:var(--border);
+  margin:14px 24px 14px;background:var(--white);border:var(--border);
   border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;
 }
 #atpV2Root .plan-rota-summary {
   display:grid;
-  grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,max-content) auto;
   align-items:center;gap:12px;padding:12px 18px;
   cursor:default;list-style:none;
   min-height:56px;overflow:hidden;
@@ -318,6 +360,15 @@
   cursor:default;
 }
 #atpV2Root .prs-val.gold { color:var(--gold); }
+#atpV2Root .prs-field-cikis { flex-shrink:0;min-width:0; }
+#atpV2Root .atp-time-input {
+  width:86px;padding:3px 6px;font-size:12px;
+  border:1px solid #d1d5db;border-radius:6px;background:#fff;
+  line-height:1.5;
+}
+#atpV2Root .atp-time-input:focus {
+  outline:2px solid #3b82f6;border-color:#3b82f6;
+}
 #atpV2Root .prs-actions {
   display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:4px;
 }
@@ -348,6 +399,7 @@
 }
 #atpV2Root .stop-item.done { background:var(--green-light);border-color:var(--green-border); }
 #atpV2Root .stop-item.late { background:var(--orange-light);border-color:var(--orange-border); }
+#atpV2Root .stop-item.passive { background:#f9fafb;border-color:#e5e7eb;opacity:.75; }
 #atpV2Root .stop-num {
   width:20px;height:20px;border-radius:50%;font-size:10px;font-weight:700;
   display:flex;align-items:center;justify-content:center;flex-shrink:0;
@@ -355,6 +407,8 @@
 }
 #atpV2Root .stop-num.done { background:var(--green); }
 #atpV2Root .stop-num.late { background:var(--orange); }
+#atpV2Root .stop-num.passive { background:#9ca3af;color:#fff; }
+#atpV2Root .stop-prev-sira { font-size:10px;color:var(--gray);white-space:nowrap;font-style:italic; }
 #atpV2Root .stop-name { flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
 #atpV2Root .stop-time { font-size:11px;color:var(--gray);white-space:nowrap; }
 #atpV2Root .factory-row {
@@ -1145,18 +1199,22 @@
 /* ??? Responsive ??? */
 @media(max-width:1366px) {
   #atpV2Root .main-grid { grid-template-columns:1fr 290px; }
+  #atpV2Root .atp-dolu-grid { grid-template-columns:1fr 290px; }
   #atpV2Root .kpi-band { gap:8px;padding:12px 20px; }
   #atpV2Root .kpi { padding:9px 10px;gap:8px;min-height:0 !important; }
   #atpV2Root .kpi-val { font-size:20px; }
   #atpV2Root .kpi-label { font-size:10px; }
   #atpV2Root .plan-rota-summary {
-    grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,max-content) auto;
     gap:8px;padding:10px 12px;
   }
+  #atpV2Root .atp-timeline-totals { font-size:10px; }
   #atpV2Root .prs-actions { gap:6px; }
   #atpV2Root .prs-actions .btn-sm { font-size:11px;padding:4px 8px; }
   #atpV2Root .live-grid { grid-template-columns:1fr 200px; }
   #atpV2Root .weekly-grid { gap:6px;padding:0 16px 14px; }
+  /* Compact ETA on tight tables */
+  #atpV2Root .job-eta { font-size:13px; }
 }
 @media(min-width:1600px) {
   #atpV2Root .main-grid { grid-template-columns:1fr 360px; }
@@ -1164,9 +1222,14 @@
 }
 @media(max-width:900px) {
   #atpV2Root .main-grid { grid-template-columns:1fr; }
+  #atpV2Root .atp-dolu-grid { grid-template-columns:1fr; }
+  #atpV2Root .atp-dolu-right { grid-column:1; }
   #atpV2Root .live-grid { grid-template-columns:1fr; }
   #atpV2Root .weekly-grid { grid-template-columns:repeat(4,1fr); }
   #atpV2Root .plan-rota-detail { grid-template-columns:1fr; }
+}
+@media(min-width:1600px) {
+  #atpV2Root .atp-dolu-grid { grid-template-columns:1fr 360px; }
 }
 
 /* ??? Disabled plan rota buttons ??? */
@@ -1392,3 +1455,74 @@
   padding:8px 12px;font-size:11.5px;color:#92400e;
   margin-bottom:10px;
 }
+
+/* ── İstenen Varış Saati + ETA Durum ──────────────────────────── */
+#atpV2Root .col-istened-saat  { width:62px; font-size:11px; color:var(--gray); }
+#atpV2Root .col-tahmini-saat  { width:62px; font-size:11px; color:var(--gray); font-style:italic; }
+
+/* ETA readonly hücre */
+#atpV2Root .tahmini-saat-cell { white-space:nowrap; cursor:default; }
+
+/* ETA durum badge'leri */
+#atpV2Root .eta-badge         { display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;border-radius:4px;padding:1px 5px;white-space:nowrap; }
+#atpV2Root .eta-badge.zamaninda  { background:#d1fae5;color:#065f46; }
+#atpV2Root .eta-badge.erken      { background:#dbeafe;color:#1e40af; }
+#atpV2Root .eta-badge.gecikiyor  { background:#fee2e2;color:#991b1b; }
+#atpV2Root .eta-badge.serbest    { background:#f3f4f6;color:#6b7280; }
+#atpV2Root .eta-badge.eta-yok    { background:transparent;color:var(--gray); }
+
+/* İstenen saat hücresi — "Düzenle" linki hover'da görünür */
+#atpV2Root .istened-saat-cell     { position:relative;white-space:nowrap; }
+#atpV2Root .istened-saat-val      { font-size:11.5px;color:#374151;font-weight:500; }
+#atpV2Root .istened-saat-val.free { font-style:italic;color:var(--gray); }
+#atpV2Root .btn-istened-saat-edit {
+  display:none;font-size:10px;padding:1px 6px;margin-left:4px;
+  border-radius:4px;border:1px solid #d1d5db;background:#f9fafb;
+  color:#374151;cursor:pointer;vertical-align:middle;
+}
+#atpV2Root .jobs-tbl tbody tr:hover .btn-istened-saat-edit { display:inline; }
+
+/* Rota Kararı modal stop list — desired/eta skeleton alanları */
+#atpV2Root .stop-desired-time  { font-size:10.5px;color:#6b7280;margin-top:2px; }
+#atpV2Root .stop-eta-time      { font-size:10.5px;font-weight:600; }
+#atpV2Root .stop-eta-status    { margin-left:4px; }
+
+/* İstenen Saat modal */
+#atpDesiredTimeModal .modal-title { font-size:14px;font-weight:700; }
+
+/* ── Timeline Panel ──────────────────────────────────────────── */
+#atpV2Root .atp-timeline-summary {
+  /* sits as a grid cell in plan-rota-summary — no extra box */
+  min-width:0;
+}
+#atpV2Root .atp-timeline-return {
+  font-size:13px;font-weight:800;color:#111827;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
+  cursor:default;
+}
+#atpV2Root .atp-tl-ret-label { font-size:10px;color:var(--gray);margin-right:2px; }
+#atpV2Root .atp-tl-ret-val   { color:#111827; }
+#atpV2Root .atp-timeline-totals {
+  color:var(--gray);font-size:10.5px;margin-top:2px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;
+}
+#atpV2Root .atp-tl-totals-compact { cursor:default; }
+#atpV2Root .atp-tl-info {
+  font-size:10px;color:#93c5fd;cursor:help;margin-left:2px;
+}
+
+/* Keep legacy classes in DOM for compat */
+#atpV2Root .atp-tl-total-line { line-height:1.35; }
+#atpV2Root .atp-timeline-list { border-top:1px solid #f3f4f6;padding-top:8px; }
+#atpV2Root .atp-tl-stop {
+  display:flex;align-items:flex-start;gap:8px;
+  padding:6px 0;border-bottom:1px solid #f9fafb;font-size:11.5px;
+}
+#atpV2Root .atp-tl-no            { width:20px;flex-shrink:0;font-weight:700;color:#6366f1;font-size:12px;padding-top:2px; }
+#atpV2Root .atp-tl-body          { flex:1;min-width:0; }
+#atpV2Root .atp-tl-company       { font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+#atpV2Root .atp-tl-times         { display:flex;gap:8px;flex-wrap:wrap;margin-top:2px;color:var(--gray); }
+#atpV2Root .atp-tl-arrival       { color:#059669;font-weight:600; }
+#atpV2Root .atp-tl-svc           { font-style:italic; }
+#atpV2Root .atp-tl-depart        { color:#6b7280; }
+#atpV2Root .atp-tl-missing       { color:#f59e0b;font-style:italic; }
