@@ -13,7 +13,11 @@ from modules.planlama.arac_gps_snapshot_repo import (
     list_gps_snapshots_ordered,
 )
 from modules.planlama.arac_rota_deviation_repo import deviation_tables_ready, get_deviation_state
-from modules.planlama.arac_takip_repo import build_daily_plan_aggregate, tables_ready
+from modules.planlama.arac_takip_repo import (
+    INACTIVE_PLAN_STATUSES,
+    build_daily_plan_aggregate,
+    tables_ready,
+)
 
 ROUTE_LABELS = {
     'ON_ROUTE': 'Rotada',
@@ -107,17 +111,24 @@ def _build_visit_label(
     return VISIT_LABELS.get(state, state)
 
 
+def _is_active_plan_item(item: dict | None) -> bool:
+    st = (item or {}).get('status') or 'PLANLANDI'
+    return st not in INACTIVE_PLAN_STATUSES
+
+
 def _build_vehicle_visit_summary(items: list[dict], vid: str) -> dict | None:
-    """Active visit info for vehicle card from today's items."""
+    """Active visit info for vehicle card from today's active items."""
     active = [
         it for it in items
-        if str(it.get('arac_external_id') or '') == vid
+        if _is_active_plan_item(it)
+        and str(it.get('arac_external_id') or '') == vid
         and it.get('visit_state') in ('ARRIVED', 'DEPARTED_PENDING')
     ]
     if not active:
         pending = [
             it for it in items
-            if str(it.get('arac_external_id') or '') == vid
+            if _is_active_plan_item(it)
+            and str(it.get('arac_external_id') or '') == vid
             and it.get('status') in ('PLANLANDI', 'BASLADI')
             and it.get('visit_state') == 'OUTSIDE'
         ]
@@ -193,16 +204,18 @@ def _build_alerts(
                 'vehicle_id': vid,
                 'plan_id': v.get('plan_id'),
             })
-        if _gps_stale(gps, now):
-            if v.get('plan_id'):
-                alerts.append({
-                    'type': 'GPS_STALE',
-                    'severity': 'warning',
-                    'message': f"{v.get('plate') or v.get('arac_plaka_snapshot')} — GPS verisi eski",
-                    'vehicle_id': vid,
-                })
+        if _gps_stale(gps, now) and vid:
+            alerts.append({
+                'type': 'GPS_STALE',
+                'severity': 'warning',
+                'message': f"{v.get('plate') or v.get('arac_plaka_snapshot')} — GPS verisi eski",
+                'vehicle_id': vid,
+                'plan_id': v.get('plan_id'),
+            })
 
     for item in items:
+        if not _is_active_plan_item(item):
+            continue
         if item.get('visit_state') == 'DEPARTED_PENDING' and item.get('status') != 'TAMAMLANDI':
             alerts.append({
                 'type': 'VISIT_RESULT_PENDING',
@@ -358,10 +371,16 @@ def get_today_vehicle_operations(
             'arac_external_id': vid,
             'plate': plan_v.get('arac_plaka_snapshot'),
             'driver': plan_v.get('sofor_adi_snapshot'),
+            'driver_name': plan_v.get('sofor_adi_snapshot'),
+            'cikis_saati': plan_v.get('cikis_saati'),
+            'departure_time': plan_v.get('cikis_saati'),
             'progress_completed': plan_v.get('progress_completed', 0),
             'progress_total': plan_v.get('progress_total', 0),
             'progress_label': plan_v.get('progress_label', '0/0'),
-            'next_stop': (plan_v.get('next_item') or {}).get('company_name'),
+            'next_stop': plan_v.get('next_stop_label') or (plan_v.get('next_item') or {}).get('company_name'),
+            'next_stop_label': plan_v.get('next_stop_label'),
+            'next_order_no': plan_v.get('next_order_no'),
+            'next_display_order_no': plan_v.get('next_display_order_no'),
             'next_time': plan_v.get('next_time'),
             'physical_status': physical,
             'physical_source': 'filom' if filom else ('sqlite' if gps_db else None),
@@ -407,9 +426,15 @@ def get_today_vehicle_operations(
             'plan_item_id': plan_is_id,
             'is_talebi_id': item.get('is_talebi_id'),
             'order_no': item.get('order_no'),
+            'display_order_no': item.get('display_order_no'),
             'planned_time': item.get('planned_time'),
+            'eta_time': item.get('eta_time'),
+            'tahmini_varis_saati': item.get('tahmini_varis_saati'),
             'company_name': item.get('company_name'),
             'job_title': item.get('job_title'),
+            'address_text': item.get('address_text'),
+            'priority': item.get('priority'),
+            'priority_label': item.get('priority_label'),
             'plate': item.get('arac_plaka_snapshot'),
             'driver': item.get('sofor_adi_snapshot'),
             'arac_external_id': item.get('arac_external_id'),
@@ -427,10 +452,12 @@ def get_today_vehicle_operations(
             'longitude': item.get('longitude'),
         })
 
-    # Vehicle visit summary from items
+    active_items_out = [it for it in items_out if _is_active_plan_item(it)]
+
+    # Vehicle visit summary from active items only
     for v in vehicles_out:
         vid = str(v.get('arac_external_id') or '')
-        summary = _build_vehicle_visit_summary(items_out, vid)
+        summary = _build_vehicle_visit_summary(active_items_out, vid)
         v['visit_summary'] = summary
         if summary and summary.get('label'):
             v['visit_label'] = summary['label']
@@ -449,7 +476,10 @@ def get_today_vehicle_operations(
             v['deviation_label'] = None
             v['gps_stale_label'] = None
 
-    problem_count = sum(1 for a in _build_alerts(plan_date, vehicles_out, items_out, filom_by_id) if a.get('severity') in ('warning', 'danger'))
+    problem_count = sum(
+        1 for a in _build_alerts(plan_date, vehicles_out, active_items_out, filom_by_id)
+        if a.get('severity') in ('warning', 'danger')
+    )
 
     kpi = {
         'aktif_arac': (filom_kpi or {}).get('aktif_arac') if filom_kpi else (len(active_filom) if filom_vehicles else None),
@@ -479,7 +509,7 @@ def get_today_vehicle_operations(
                 'source': 'sqlite',
             })
 
-    alerts = _build_alerts(plan_date, vehicles_out, items_out, filom_by_id)
+    alerts = _build_alerts(plan_date, vehicles_out, active_items_out, filom_by_id)
     normal_message = 'Bugünkü plan normal ilerliyor' if not alerts else None
 
     return {
@@ -488,7 +518,7 @@ def get_today_vehicle_operations(
         'data_source': 'merged',
         'kpi': kpi,
         'vehicles': vehicles_out,
-        'items': items_out,
+        'items': active_items_out,
         'alerts': alerts,
         'alerts_normal_message': normal_message,
         'map': {

@@ -11,6 +11,19 @@ PRIORITY_WEIGHT = {
     'DUSUK': 3,
 }
 
+# Yalnızca sıralama skorunda — gerçek rota süresi/mesafesi değişmez.
+PRIORITY_TRAVEL_BONUS_S = {
+    'ACIL': 5400.0,
+    'YUKSEK': 3000.0,
+    'NORMAL': 0.0,
+    'DUSUK': 0.0,
+}
+
+
+def _effective_travel_s(stop: dict, duration_s: float) -> float:
+    bonus = PRIORITY_TRAVEL_BONUS_S.get(_normalize_priority(stop.get('priority')), 0.0)
+    return max(0.0, float(duration_s) - bonus)
+
 
 def _time_minutes(label: str | None) -> int | None:
     if not label or label == '—':
@@ -42,6 +55,8 @@ def _score_stop(
     dur = duration_matrix[current][mi]
     if dur is None:
         dur = 1e12
+    else:
+        dur = _effective_travel_s(stop, float(dur))
     pri = PRIORITY_WEIGHT.get(_normalize_priority(stop.get('priority')), 2)
     tm = _time_minutes(stop.get('planned_time'))
     canonical = int(stop.get('order_no') or 0)

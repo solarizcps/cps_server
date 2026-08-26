@@ -497,7 +497,7 @@
     return ids;
   }
 
-  var APPLY_VERIFY_FAIL_MSG = 'Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.';
+  var APPLY_VERIFY_FAIL_MSG = 'Rota sırası doğrulanamadı. Planı değişmiş kabul etmeyin.';
 
   function verifyApplyReadback(vid, expectedTaskIds) {
     var expected = (expectedTaskIds || []).map(String);
@@ -517,6 +517,58 @@
       && idsEqualLists(routeIds, expected)
       && idsEqualLists(domStopIds, expected)
       && domJobOk;
+  }
+
+  function verifyGoogleApplyReadback(vid, expectedTaskIds) {
+    var expected = (expectedTaskIds || []).map(String);
+    var items = sortStopItems(filterItemsForVehicle(vid, lastOpsData.items || []));
+    var readbackIds = items.map(function (it) { return String(it.id); });
+    var domStopIds = getDomStopItemIds().map(String);
+    var domJobIds = getDomJobItemIdsForVehicle(vid).map(String);
+    var domJobOk = domJobIds.length === 0
+      ? false
+      : (domJobIds.length === expected.length
+        ? idsEqualLists(domJobIds, expected)
+        : domOrderPrefixMatches(domJobIds, expected));
+    return idsEqualLists(readbackIds, expected)
+      && idsEqualLists(domStopIds, expected)
+      && domJobOk;
+  }
+
+  function verifyGoogleProfileApplyReadback(vid, expectedTaskIds, expectedProfile, expectedReturn) {
+    if (!verifyGoogleApplyReadback(vid, expectedTaskIds)) return false;
+    var route = window.AtpRoute && window.AtpRoute.getLastRoute && window.AtpRoute.getLastRoute();
+    if (!route || !route.current) return false;
+    var prov = String(route.current.provider || route.current.routing_provider || '');
+    var want = expectedProfile === 'toll_free' ? 'traffic-free' : 'traffic-fast';
+    if (prov.indexOf(want) === -1) return false;
+    if (expectedReturn) {
+      var ret = route.current.estimated_return_time || route.current.return_display || '';
+      if (ret && String(ret) !== String(expectedReturn)) return false;
+    }
+    return true;
+  }
+
+  function reloadAfterGoogleProfileApply(vid, expectedTaskIds, expectedProfile, expectedReturn) {
+    if (vid) _activeVehicleExtId = String(vid);
+    return loadOps().then(function (ok) {
+      if (!ok) return false;
+      return refreshPlanRoute(vid).then(function () {
+        updatePlanMap();
+        return verifyGoogleProfileApplyReadback(vid, expectedTaskIds, expectedProfile, expectedReturn);
+      });
+    });
+  }
+
+  function reloadAfterGoogleApply(vid, expectedTaskIds) {
+    if (vid) _activeVehicleExtId = String(vid);
+    return loadOps().then(function (ok) {
+      if (!ok) return false;
+      return refreshPlanRoute(vid).then(function () {
+        updatePlanMap();
+        return verifyGoogleApplyReadback(vid, expectedTaskIds);
+      });
+    });
   }
 
   function setActiveVehicleCard(extId) {
@@ -2311,12 +2363,14 @@
   });
   if (btnPlanaEmpty) btnPlanaEmpty.addEventListener('click', _openMultiOrFallback);
 
-  /* ─── Çıkış Saati: Kaydet ve Hesapla ─── */
+  /* ─── Çıkış Saati: Kaydet ve Hesapla → Google Route Options ─── */
   (function initCikisSaati() {
     var btn = qs('atpBtnCikisSaatiKaydet');
     var inp = qs('atpCikisSaatiInput');
     var msg = qs('atpCikisSaatiMsg');
     if (!btn || !inp) return;
+
+    var _googleCalcInFlight = false;
 
     function _setMsg(text, isError) {
       if (!msg) return;
@@ -2324,7 +2378,83 @@
       msg.style.color = isError ? 'var(--red, #ef4444)' : 'var(--gray)';
     }
 
+    function _hhmm(hh, mm) {
+      return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+    }
+
+    function _departureIsFuture(planDateStr, hhmm) {
+      if (!planDateStr || !hhmm) return false;
+      var parts = hhmm.split(':');
+      if (parts.length < 2) return false;
+      var hh = String(parseInt(parts[0], 10));
+      var mm = String(parseInt(parts[1], 10));
+      if (hh === 'NaN' || mm === 'NaN') return false;
+      hh = (hh.length < 2 ? '0' : '') + hh;
+      mm = (mm.length < 2 ? '0' : '') + mm;
+      var dep = new Date(planDateStr + 'T' + hh + ':' + mm + ':00');
+      if (isNaN(dep.getTime())) return false;
+      return dep.getTime() > Date.now();
+    }
+
+    var _GOOGLE_PAST_DEPARTURE_MSG =
+      'Google trafik tahmini için çıkış tarihi ve saati gelecekte olmalıdır.';
+
+    function _resetCalcBtn() {
+      _googleCalcInFlight = false;
+      btn.disabled = false;
+      btn.textContent = 'Saati Kaydet ve Hesapla';
+    }
+
+    function _planIdForVehicle(vid) {
+      var veh = findVehicleByExtId(vid);
+      if (veh && veh.plan_id != null && veh.plan_id !== '') return veh.plan_id;
+      var items = filterItemsForVehicle(vid, lastOpsData.items || []);
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].plan_id != null && items[i].plan_id !== '') return items[i].plan_id;
+      }
+      return null;
+    }
+
+    function _planMapPayloadForVehicle(vid) {
+      var base = (dashboard.plan_map && dashboard.plan_map.base) || dashboard.base_location || {};
+      var items = sortStopItems(filterItemsForVehicle(vid, lastOpsData.items || []));
+      return {
+        base: base,
+        stops: items.map(function (t) {
+          return {
+            id: t.id,
+            plan_item_id: t.plan_item_id,
+            order_no: t.order_no,
+            company_name: t.company_name,
+            job_title: t.job_title || t.yapilacak_is || '',
+            has_coordinates: !!t.has_coordinates,
+            latitude: t.latitude,
+            longitude: t.longitude,
+            priority: t.priority,
+            is_locked: !!t.is_locked,
+          };
+        }),
+      };
+    }
+
+    function _openGoogleModalOrError(dto) {
+      if (!dto || (window.AtpRouteExplainer && AtpRouteExplainer.bothProfilesFailed && AtpRouteExplainer.bothProfilesFailed(dto))) {
+        _setMsg('Google rota hesabı tamamlanamadı.', true);
+        return;
+      }
+      var payload = _planMapPayloadForVehicle(_activeVehicleExtId);
+      var opened = window.AtpRouteExplainer && AtpRouteExplainer.openGoogleModal
+        ? AtpRouteExplainer.openGoogleModal(dto, payload)
+        : false;
+      if (!opened) {
+        _setMsg('Google rota hesabı tamamlanamadı.', true);
+        return;
+      }
+      _setMsg('Google rota seçenekleri hesaplandı.', false);
+    }
+
     btn.addEventListener('click', function () {
+      if (_googleCalcInFlight) return;
       var val = (inp.value || '').trim();
       if (!val) {
         _setMsg('Önce çıkış saati girin.', false);
@@ -2351,6 +2481,8 @@
         _setMsg('Plan tarihi bulunamadı.', true);
         return;
       }
+      var hhmm = _hhmm(hh, mm);
+      _googleCalcInFlight = true;
       btn.disabled = true;
       btn.textContent = 'Kaydediliyor…';
       _setMsg('', false);
@@ -2361,18 +2493,17 @@
         body: JSON.stringify({
           date: planDate,
           vehicle_id: vid,
-          departure_time: (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm,
+          departure_time: hhmm,
         }),
         credentials: 'same-origin',
       })
       .then(function (r) { return r.json().then(function (d) { return {ok: r.ok, data: d}; }); })
       .then(function (res) {
-        btn.disabled = false;
-        btn.textContent = 'Saati Kaydet ve Hesapla';
         if (!res.ok || !res.data.ok) {
           var errMsg = (res.data && res.data.error) || 'Kayıt başarısız.';
           _setMsg('Hata: ' + errMsg, true);
-          return;
+          _resetCalcBtn();
+          return null;
         }
         var d = res.data;
         /* Update local vehicle record with new cikis_saati */
@@ -2380,7 +2511,6 @@
         if (veh) veh.cikis_saati = d.departure_time;
         /* Re-render with updated tasks */
         if (d.daily_tasks && d.daily_tasks.length) {
-          /* merge updated tasks into ops cache */
           var updMap = {};
           d.daily_tasks.forEach(function (t) { if (t.id) updMap[t.id] = t; });
           if (lastOpsData.items) {
@@ -2393,30 +2523,54 @@
           renderStopList(scopedItems, veh ? safePlate(veh) : '');
           updatePrsForVehicle(veh, scopedItems);
         }
-        /* Dashboard update if returned */
         if (d.dashboard) {
           dashboard = Object.assign({}, dashboard, d.dashboard);
         }
-        if (d.eta_applied) {
-          _setMsg('Çıkış saati kaydedildi. Varış ve dönüş saatleri yeniden hesaplandı.', false);
-        } else {
-          var reason = d.eta_reason || 'Çıkış Saati kaydedildi. Rota snapshot bulunamadı — saatler hesaplanmadı.';
-          _setMsg(reason, false);
-        }
-        if (d.missing_leg_count) {
-          _setMsg(_getMsg() + ' (' + d.missing_leg_count + ' durakta rota süresi bulunamadı.)', false);
-        }
-        /* Render timeline */
         if (d.timeline) renderTimeline(d.timeline);
+        if (!_departureIsFuture(planDate, hhmm)) {
+          _setMsg(_GOOGLE_PAST_DEPARTURE_MSG, true);
+          _resetCalcBtn();
+          return null;
+        }
+        btn.textContent = 'Google rotaları hesaplanıyor…';
+        var gBody = {
+          date: planDate,
+          vehicle_id: vid,
+          departure_time: hhmm,
+        };
+        var planId = _planIdForVehicle(vid);
+        if (d.plan_id != null && d.plan_id !== '') planId = d.plan_id;
+        if (planId != null && planId !== '') gBody.plan_id = planId;
+        return fetch('/planlama/arac-takip/api/plan/google-route-options', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(gBody),
+          credentials: 'same-origin',
+        }).then(function (r) {
+          return r.json().then(function (gd) { return { ok: r.ok, status: r.status, data: gd }; })
+            .catch(function () { return { ok: false, status: r.status, data: {} }; });
+        });
+      })
+      .then(function (gres) {
+        if (!gres) return;
+        var gd = gres.data || {};
+        var code = gd.code || gd.error_code || '';
+        if (!gres.ok || gd.ok === false) {
+          var gMsg = (window.AtpRouteExplainer && AtpRouteExplainer.googleHttpErrorMessage)
+            ? AtpRouteExplainer.googleHttpErrorMessage(gres.status, code)
+            : (gd.error || 'Google rota hesabı tamamlanamadı.');
+          _setMsg(gMsg, true);
+          return;
+        }
+        _openGoogleModalOrError(gd);
       })
       .catch(function (err) {
-        btn.disabled = false;
-        btn.textContent = 'Saati Kaydet ve Hesapla';
         _setMsg('Bağlantı hatası: ' + (err.message || err), true);
+      })
+      .then(function () {
+        _resetCalcBtn();
       });
     });
-
-    function _getMsg() { return msg ? msg.textContent : ''; }
   }());
 
   var quickArac = qs('atpQuickArac');
@@ -2954,6 +3108,13 @@
       function () { return window.AtpRoute && window.AtpRoute.getLastRoute ? window.AtpRoute.getLastRoute() : null; },
       function () { return typeof buildPlanMapPayload === 'function' ? buildPlanMapPayload() : null; }
     );
+    window.AtpRouteExplainer.bindApplyHooks({
+      getVehicleId: vehicleId,
+      getPlanDate: _planDateForApi,
+      toast: toast,
+      reloadAfterApply: reloadAfterGoogleApply,
+      reloadAfterProfileApply: reloadAfterGoogleProfileApply,
+    });
   }
 
   /* ─── Route UI wiring ─── */

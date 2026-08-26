@@ -7,6 +7,7 @@ from pathlib import Path
 
 _ROUTING_KEYS = frozenset({
     'ORS_API_KEY',
+    'GOOGLE_ROUTES_API_KEY',
     'ARAC_ROUTING_PROVIDER',
     'ORS_PROFILE',
     'ARAC_ROUTING_TIMEOUT',
@@ -60,3 +61,7 @@ def routing_key_metadata() -> dict:
 
 def ors_key_present() -> bool:
     return bool((os.environ.get('ORS_API_KEY') or '').strip())
+
+
+def google_routes_key_present() -> bool:
+    return bool((os.environ.get('GOOGLE_ROUTES_API_KEY') or '').strip())

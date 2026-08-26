@@ -19,9 +19,13 @@ STATUS_LABEL = {
 PLAN_ITEM_STATUS = {
     'PLANLANDI': 'Planlandı', 'BASLADI': 'Başladı',
     'TAMAMLANDI': 'Tamamlandı', 'IPTAL': 'İptal',
+    'ERTELENDI': 'Ertelendi', 'GIDILEMEDI': 'Gidilemedi',
 }
-PLAN_ITEM_STATUS_KEYS = ('PLANLANDI', 'BASLADI', 'TAMAMLANDI', 'IPTAL')
+PLAN_ITEM_STATUS_KEYS = (
+    'PLANLANDI', 'BASLADI', 'TAMAMLANDI', 'IPTAL', 'ERTELENDI', 'GIDILEMEDI',
+)
 OPERATIONAL_STATUS_KEYS = ('PLANLANDI', 'BASLADI', 'TAMAMLANDI')
+INACTIVE_PLAN_STATUSES = frozenset({'IPTAL', 'ERTELENDI', 'GIDILEMEDI'})
 NEXT_ITEM_STATUSES = frozenset({'PLANLANDI', 'BASLADI'})
 PLAN_PROVIDER_FILOM = 'TURKCELL_FILOM'
 IS_TURU_LABEL = {
@@ -771,12 +775,65 @@ def _plan_task_dto(row: sqlite3.Row, talep: sqlite3.Row, master: sqlite3.Row | N
     pri = t.get('oncelik', 'NORMAL')
     st = row['durum']
     loc = resolve_item_location(t, m if m else None)
+
+    # ── Semantik ayrım ─────────────────────────────────────────────────────
+    # planlanan_saat = LEGACY "istenen" (plan eklenirken girilen veya talep fallback)
+    # istenen_varis_saati = migration 188 sonrası canonical istenen
+    # tahmini_varis_saati = migration 188 sonrası ETA (sadece sistem yazar)
+
+    row_d = _row_dict(row) or {}
+
+    # Canonical istenen — migration 188 uygulandıktan sonra dolu gelir
+    # Önce mi-188 kolonunu, yoksa planlanan_saat'i (legacy anlamı = istenen) kullan
+    if 'istenen_varis_saati' in row_d:
+        istenen_varis = row_d.get('istenen_varis_saati') or None
+        istenen_kaynak = row_d.get('istenen_saat_kaynak') or None
+        istenen_manuel = bool(row_d.get('istenen_saat_manuel')) if row_d.get('istenen_saat_manuel') is not None else False
+    else:
+        # Migration 188 uygulanmamış — planlanan_saat'in legacy istenen anlamını kullan
+        legacy_val = row_d.get('planlanan_saat') or None
+        talep_val = t.get('istenen_saat') or None
+        istenen_varis = legacy_val or talep_val or None
+        if istenen_varis is None:
+            istenen_kaynak = 'YOK'
+        elif legacy_val and talep_val and legacy_val == talep_val:
+            istenen_kaynak = 'SISTEM'
+        elif legacy_val:
+            istenen_kaynak = 'LEGACY'
+        else:
+            istenen_kaynak = 'SISTEM'
+        istenen_manuel = False
+
+    # Kaynak normalize: kolon geldi ama değer yoksa talep'ten fallback
+    if istenen_varis is None and istenen_kaynak in (None, 'YOK'):
+        talep_val = t.get('istenen_saat') or None
+        if talep_val:
+            istenen_varis = talep_val
+            istenen_kaynak = 'SISTEM'
+        else:
+            istenen_varis = None
+            istenen_kaynak = 'YOK'
+
+    # ETA — sadece migration 188 sonrası tahmini_varis_saati kolonundan gelir
+    # Migration öncesi: NULL (ETA hesaplanmamış anlamında doğru)
+    eta_saati = row_d.get('tahmini_varis_saati') or None
+
     return {
         'id': f'pi-{row["id"]}',
         'plan_item_id': row['id'],
         'is_talebi_id': row['is_talebi_id'],
         'order_no': row['sira'],
-        'planned_time': row['planlanan_saat'] or '—',
+        # planlanan_saat: legacy değer — görüntüleme ve geriye uyumluluk için korunur
+        'planned_time': row_d.get('planlanan_saat') or '—',
+        # Yeni semantik ayrımlı alanlar
+        'istenen_varis_saati': istenen_varis,
+        'istenen_saat_kaynak': istenen_kaynak,
+        'istenen_saat_manuel': istenen_manuel,
+        'tahmini_varis_saati': eta_saati,
+        # Frontend/API alias'ları (optimizer DTO ve UI kullanır)
+        'desired_time': istenen_varis,
+        'desired_time_source': istenen_kaynak,
+        'eta_time': eta_saati,
         'job_title': t.get('yapilacak_is') or '',
         'company_name': t.get('firma_adi') or '',
         'address_text': t.get('adres') or '',
@@ -799,23 +856,114 @@ def _plan_task_dto(row: sqlite3.Row, talep: sqlite3.Row, master: sqlite3.Row | N
 
 
 def get_active_plan_row(plan_date: str, arac_external_id: str) -> dict | None:
-    """Günün aktif plan satırı — durum=AKTIF, UNIQUE(plan_tarihi, provider, external_id)."""
+    """Günün aktif plan satırı — durum=AKTIF, UNIQUE(plan_tarihi, provider, external_id).
+
+    cikis_saati kolonunu da döndürür (migration 187 ile eklendi; öncesinde NULL gelir).
+    """
     if not tables_ready() or not arac_external_id:
         return None
     con = get_conn()
     con.row_factory = sqlite3.Row
     try:
-        row = con.execute(
-            """
-            SELECT id, plan_tarihi, arac_external_id, arac_plaka_snapshot, durum
-            FROM arac_gunluk_plan
-            WHERE plan_tarihi=? AND arac_provider=? AND arac_external_id=? AND durum='AKTIF'
-            """,
-            (plan_date, PLAN_PROVIDER_FILOM, str(arac_external_id)),
-        ).fetchone()
-        return dict(row) if row else None
+        # cikis_saati: idempotent — kolon yoksa (migration uygulanmamış ortam) SELECT * ile fallback
+        try:
+            row = con.execute(
+                """
+                SELECT id, plan_tarihi, arac_external_id, arac_plaka_snapshot, durum,
+                       sofor_id, sofor_adi_snapshot, cikis_saati
+                FROM arac_gunluk_plan
+                WHERE plan_tarihi=? AND arac_provider=? AND arac_external_id=? AND durum='AKTIF'
+                """,
+                (plan_date, PLAN_PROVIDER_FILOM, str(arac_external_id)),
+            ).fetchone()
+        except Exception:
+            row = con.execute(
+                """
+                SELECT id, plan_tarihi, arac_external_id, arac_plaka_snapshot, durum,
+                       sofor_id, sofor_adi_snapshot
+                FROM arac_gunluk_plan
+                WHERE plan_tarihi=? AND arac_provider=? AND arac_external_id=? AND durum='AKTIF'
+                """,
+                (plan_date, PLAN_PROVIDER_FILOM, str(arac_external_id)),
+            ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d.setdefault('cikis_saati', None)
+        return d
     finally:
         con.close()
+
+
+def update_plan_cikis_saati(
+    plan_id: int,
+    cikis_saati: str | None,
+    session_user_id: int,
+    con: sqlite3.Connection,
+) -> None:
+    """Update arac_gunluk_plan.cikis_saati within an open transaction (caller commits)."""
+    now = _now_iso()
+    con.execute(
+        'UPDATE arac_gunluk_plan SET cikis_saati=?, updated_at=?, updated_by=? WHERE id=?',
+        (cikis_saati, now, session_user_id, plan_id),
+    )
+
+
+def update_plan_item_desired_time_conn(
+    con: sqlite3.Connection,
+    plan_is_id: int,
+    istenen_varis_saati: str | None,
+    kaynak: str,
+    manuel: bool,
+    session_user_id: int,
+) -> None:
+    """
+    Update arac_gunluk_plan_is.istenen_varis_saati within an open transaction (caller commits).
+
+    Migration 188 gerektirir. Kolon yoksa (migration uygulanmamış ortam) sessizce atlar.
+    kaynak: 'SISTEM' | 'MANUEL' | 'SERBEST' | 'KULLANICI' | 'LEGACY' | 'YOK'
+
+    NOT: planlanan_saat'e asla dokunmaz — bu alan legacy istenen saattir, ETA değildir.
+    tahmini_varis_saati'ne de dokunmaz — o alan yalnız ETA servisi tarafından yazılır.
+    """
+    cols = [r[1] for r in con.execute('PRAGMA table_info(arac_gunluk_plan_is)').fetchall()]
+    if 'istenen_varis_saati' not in cols:
+        return
+    con.execute(
+        """
+        UPDATE arac_gunluk_plan_is
+        SET istenen_varis_saati=?,
+            istenen_saat_kaynak=?,
+            istenen_saat_manuel=?
+        WHERE id=?
+        """,
+        (
+            istenen_varis_saati,
+            kaynak,
+            1 if manuel else 0,
+            plan_is_id,
+        ),
+    )
+
+
+def update_plan_item_eta_conn(
+    con: sqlite3.Connection,
+    plan_is_id: int,
+    tahmini_varis_saati: str | None,
+) -> None:
+    """
+    Update arac_gunluk_plan_is.tahmini_varis_saati — sadece ETA servisi çağırır.
+
+    Migration 188 gerektirir. Kolon yoksa sessizce atlar.
+    Kullanıcı istenen saatini (istenen_varis_saati, planlanan_saat) asla ezmez.
+    """
+    cols = [r[1] for r in con.execute('PRAGMA table_info(arac_gunluk_plan_is)').fetchall()]
+    if 'tahmini_varis_saati' not in cols:
+        return
+    con.execute(
+        'UPDATE arac_gunluk_plan_is SET tahmini_varis_saati=? WHERE id=?',
+        (tahmini_varis_saati, plan_is_id),
+    )
 
 
 def get_plan_vehicle_meta(plan_date: str, arac_external_id: str) -> dict | None:
@@ -875,9 +1023,30 @@ def list_plan_tasks(plan_date: str, arac_external_id: str) -> list[dict]:
                     (talep['kayitli_yer_id'],),
                 ).fetchone()
             result.append(_plan_task_dto(item, talep, master))
+        _assign_display_order(result)
         return result
     finally:
         con.close()
+
+
+def _assign_display_order(tasks: list[dict]) -> None:
+    """
+    Mutate tasks in-place: add display_order_no (frontend read-model only).
+
+    Active tasks (sorted by order_no) get 1-based sequential numbers.
+    Inactive tasks (IPTAL/ERTELENDI/GIDILEMEDI) get display_order_no=None.
+    DB canonical sira is never touched.
+    """
+    active = sorted(
+        [t for t in tasks if (t.get('status') or '').upper() not in INACTIVE_PLAN_STATUSES],
+        key=lambda x: x.get('order_no') or 0,
+    )
+    for i, t in enumerate(active, start=1):
+        t['display_order_no'] = i
+    inactive_ids = {t['id'] for t in tasks if (t.get('status') or '').upper() in INACTIVE_PLAN_STATUSES}
+    for t in tasks:
+        if t['id'] in inactive_ids:
+            t['display_order_no'] = None
 
 
 def _empty_status_counts() -> dict[str, int]:
@@ -894,16 +1063,38 @@ def _count_task_statuses(tasks: list[dict]) -> dict[str, int]:
 
 
 def _operational_count(status_counts: dict) -> int:
-    """Operasyonel kalem: IPTAL hariç (PLANLANDI + BASLADI + TAMAMLANDI)."""
+    """Operasyonel kalem: IPTAL/ERTELENDI/GIDILEMEDI hariç."""
     return sum(int(status_counts.get(k) or 0) for k in OPERATIONAL_STATUS_KEYS)
 
 
 def _pick_next_task(tasks: list[dict]) -> dict | None:
-    """İlk tamamlanmamış/iptal olmayan kalem — mevcut sıra (sira) kuralı."""
+    """İlk aktif, tamamlanmamış kalem — canonical order_no (sira) kuralı."""
     for task in sorted(tasks, key=lambda x: x.get('order_no') or 0):
-        if task.get('status') in NEXT_ITEM_STATUSES:
+        st = (task.get('status') or 'PLANLANDI').upper()
+        if st in INACTIVE_PLAN_STATUSES:
+            continue
+        if st in NEXT_ITEM_STATUSES:
             return task
     return None
+
+
+def canonical_item_sort_key(item: dict) -> tuple:
+    """
+    Canonical sort: vehicle → order_no (when set) → legacy planned_time → plan_item_id.
+    planned_time must not override a defined order_no.
+    """
+    vehicle = item.get('arac_plaka_snapshot') or item.get('arac_external_id') or ''
+    order_no = item.get('order_no')
+    try:
+        has_order = order_no is not None and order_no != '' and int(order_no) > 0
+    except (TypeError, ValueError):
+        has_order = False
+    plan_item_id = item.get('plan_item_id') or 0
+    if has_order:
+        return (vehicle, 0, int(order_no), plan_item_id)
+    pt = (item.get('planned_time') or '').strip()
+    pt_sort = pt if pt and pt != '—' else '99:99'
+    return (vehicle, 1, pt_sort, plan_item_id)
 
 
 def _next_item_summary(task: dict | None) -> dict | None:
@@ -913,6 +1104,7 @@ def _next_item_summary(task: dict | None) -> dict | None:
         'plan_item_id': task.get('plan_item_id'),
         'is_talebi_id': task.get('is_talebi_id'),
         'order_no': task.get('order_no'),
+        'display_order_no': task.get('display_order_no'),
         'company_name': task.get('company_name'),
         'job_title': task.get('job_title'),
         'planned_time': task.get('planned_time'),
@@ -966,14 +1158,28 @@ def _assemble_tasks_for_plan_items(
 
 
 def _flat_item_sort_key(item: dict) -> tuple:
-    pt = (item.get('planned_time') or '').strip()
-    pt_sort = '99:99' if not pt or pt == '—' else pt
-    return (
-        pt_sort,
-        item.get('arac_plaka_snapshot') or item.get('arac_external_id') or '',
-        item.get('order_no') or 0,
-        item.get('plan_item_id') or 0,
-    )
+    return canonical_item_sort_key(item)
+
+
+def _format_next_stop_label(task: dict | None) -> str | None:
+    if not task:
+        return None
+    name = (task.get('company_name') or task.get('job_title') or '').strip()
+    if not name:
+        return None
+    # Prefer display_order_no (1-based active sequential) over canonical order_no for user-facing label
+    display_no = task.get('display_order_no')
+    order_no = task.get('order_no')
+    label_no = display_no if display_no is not None else order_no
+    pt = (task.get('planned_time') or '').strip()
+    has_time = bool(pt and pt != '—')
+    if has_time:
+        if label_no is not None and label_no != '':
+            return f'{pt[:5]} · {label_no}. Durak · {name}'
+        return f'{pt[:5]} · {name}'
+    if label_no is not None and label_no != '':
+        return f'{label_no}. Durak · {name}'
+    return name
 
 
 def _attach_vehicle_context(task: dict, plan: dict) -> dict:
@@ -1054,8 +1260,10 @@ def list_plans_for_date(plan_date: str) -> list[dict]:
             pid = int(plan['id'])
             plan_items = items_by_plan.get(pid, [])
             tasks = _assemble_tasks_for_plan_items(plan_items, taleps, masters)
+            _assign_display_order(tasks)
             status_counts = _count_task_statuses(tasks)
             next_task = _pick_next_task(tasks)
+            plan_d = _row_dict(plan) or {}
             result.append({
                 'plan_id': pid,
                 'plan_tarihi': plan['plan_tarihi'],
@@ -1064,6 +1272,7 @@ def list_plans_for_date(plan_date: str) -> list[dict]:
                 'arac_plaka_snapshot': plan['arac_plaka_snapshot'],
                 'sofor_id': plan['sofor_id'],
                 'sofor_adi_snapshot': plan['sofor_adi_snapshot'],
+                'cikis_saati': plan_d.get('cikis_saati'),
                 'plan_durum': plan['durum'],
                 'items': tasks,
                 'item_count': len(tasks),
@@ -1101,6 +1310,8 @@ def build_daily_plan_aggregate(plan_date: str) -> dict:
             'arac_plaka_snapshot': plan['arac_plaka_snapshot'],
             'sofor_id': plan.get('sofor_id'),
             'sofor_adi_snapshot': plan.get('sofor_adi_snapshot'),
+            'cikis_saati': plan.get('cikis_saati'),
+            'driver_name': plan.get('sofor_adi_snapshot'),
             'status_counts': dict(sc),
             'item_count': plan['item_count'],
             'operational_total_count': operational,
@@ -1110,6 +1321,9 @@ def build_daily_plan_aggregate(plan_date: str) -> dict:
             'progress_label': f'{completed}/{operational}',
             'next_item': next_item,
             'next_time': (next_item or {}).get('planned_time'),
+            'next_order_no': (next_item or {}).get('order_no'),
+            'next_stop_label': _format_next_stop_label(next_item),
+            'next_display_order_no': (next_item or {}).get('display_order_no'),
         })
 
     flat_items.sort(key=_flat_item_sort_key)
@@ -1511,6 +1725,41 @@ def reorder_plan_items_bulk(
         raise
     finally:
         con.close()
+
+
+def _update_plan_item_times_bulk_conn(
+    con: sqlite3.Connection,
+    plan_id: int,
+    task_time_map: dict[str, str],
+) -> None:
+    """
+    ETA saatlerini bulk yaz — SADECE tahmini_varis_saati alanına.
+
+    planlanan_saat'e ASLA dokunmaz:
+      - planlanan_saat = legacy istenen saat (kullanıcı/talep kaynaklı)
+      - tahmini_varis_saati = migration 188 sonrası ETA kolonu
+
+    Migration 188 uygulanmamışsa (kolon yok): her satır için sessizce atlar.
+    Caller must filter inactive tasks before calling.
+    """
+    for task_id, hhmm in task_time_map.items():
+        if not task_id or not hhmm:
+            continue
+        if not str(task_id).startswith('pi-'):
+            continue
+        try:
+            pi_id = int(str(task_id)[3:])
+        except ValueError:
+            continue
+        row = con.execute(
+            'SELECT id, plan_id, durum FROM arac_gunluk_plan_is WHERE id=?',
+            (pi_id,),
+        ).fetchone()
+        if not row or int(row['plan_id']) != int(plan_id):
+            continue
+        if (row['durum'] or '').upper() in INACTIVE_PLAN_STATUSES:
+            continue
+        update_plan_item_eta_conn(con, pi_id, hhmm[:5])
 
 
 def _reorder_plan_items_bulk_conn(

@@ -353,6 +353,10 @@ def build_plan_route_dto(
         'distance_m': suggested_route.distance_m,
         'duration_s': suggested_route.duration_s,
         'geometry': suggested_route.geometry,
+        'legs': [lg.to_dict() if hasattr(lg, 'to_dict') else {
+            'from_index': lg.from_index, 'to_index': lg.to_index,
+            'distance_m': lg.distance_m, 'duration_s': lg.duration_s,
+        } for lg in suggested_route.legs],
         'order_labels': _order_labels(suggested_stops),
         'task_ids': suggested_routable_ids,
         'full_task_ids': suggested_full_order,
@@ -383,6 +387,7 @@ def build_plan_route_dto(
     )
 
     # ── Correct decision_reason text ──
+    has_priority_reorder = bool(constraints.get('important_task_ids') and not order_same)
     if order_same:
         decision_reason = 'Mevcut sıra rota motoruna göre zaten uygun. Sıra değişmedi.'
     elif isinstance(gain_km, (int, float)) and gain_km < 0 and has_priority_override:
@@ -394,6 +399,24 @@ def build_plan_route_dto(
         decision_reason = (
             f'Önerilen sıra mevcut rotadan daha uzun '
             f'({abs(gain_km)} km). Uygulama önerilmiyor.'
+        )
+    elif (
+        isinstance(gain_km, (int, float)) and gain_km > 0
+        and isinstance(gain_min, (int, float)) and gain_min < 0
+        and has_priority_reorder
+    ):
+        decision_reason = (
+            f'Önerilen rota {gain_km} km daha kısa; ancak tahmini sürüş süresi '
+            f'{abs(gain_min)} dk daha uzun. Yüksek öncelikli iş daha erken ziyaret edildiği '
+            f'için bu sıra önerildi.'
+        )
+    elif (
+        isinstance(gain_km, (int, float)) and gain_km > 0
+        and isinstance(gain_min, (int, float)) and gain_min < 0
+    ):
+        decision_reason = (
+            f'Önerilen rota {gain_km} km daha kısa; ancak tahmini sürüş süresi '
+            f'{abs(gain_min)} dk daha uzun.'
         )
     elif isinstance(gain_km, (int, float)) and gain_km == 0:
         decision_reason = 'Önerilen sıra mevcut rota ile aynı mesafede. Uygulama gerekmiyor.'
@@ -418,21 +441,44 @@ def build_plan_route_dto(
         if lbl not in constraint_labels:
             constraint_labels.append(lbl)
 
-    # ── Stop list for modal display (includes priority) ──
+    # ── Stop list for modal display (includes priority + desired/eta time skeleton) ──
     def _stop_label_list(stops: list[dict]) -> list[dict]:
         from modules.planlama.arac_route_constraints import normalize_priority
+        from modules.planlama.arac_eta_status import eta_status
         _PRI_LABEL = {'ACIL': 'Acil', 'YUKSEK': 'Yüksek', 'NORMAL': 'Normal', 'DUSUK': 'Düşük'}
         out = []
         for s in stops:
             pri_code = normalize_priority(s.get('priority'))
+            # Semantik ayrım:
+            #   desired_time  = istenen_varis_saati (kullanıcı/kaynak istenen)
+            #   eta_time      = tahmini_varis_saati (sistem ETA)
+            # Migration 188 öncesi: eta_time NULL, desired_time planlanan_saat'ten legacy fallback
+            desired = s.get('desired_time') or s.get('istenen_varis_saati') or None
+            eta = s.get('eta_time') or s.get('tahmini_varis_saati') or None
+            # planlanan_saat legacy fallback: yalnız desired boşsa VE migration 188 yoksa
+            if desired is None and eta is None:
+                legacy = s.get('planned_time')
+                if legacy and legacy != '—':
+                    desired = legacy  # legacy istenen anlamında okun
+            eta_info = eta_status(eta, desired)
             out.append({
                 'id': str(s.get('id') or ''),
                 'order_no': s.get('order_no'),
+                'display_order_no': s.get('display_order_no'),
                 'company_name': s.get('company_name') or '—',
                 'has_coordinates': bool(s.get('has_coordinates')),
                 'priority': pri_code,
                 'priority_label': _PRI_LABEL.get(pri_code, 'Normal'),
                 'is_locked': str(s.get('id') or '') in set(constraints.get('locked_task_ids') or []),
+                # ── Rota Kararı DTO zaman alanları (H bölümü) ──────────────
+                'desired_time': desired,           # istened varış (kullanıcı/kaynak)
+                'eta_time': eta,                    # tahmini varış (sistem)
+                'suggested_eta': None,              # optimizer sonrası doldurulacak
+                'current_time_status': eta_info['code'],
+                'current_time_label': eta_info['label'],
+                'suggested_time_status': None,
+                'current_delay_minutes': eta_info['delay_minutes'],
+                'suggested_delay_minutes': None,
             })
         return out
 

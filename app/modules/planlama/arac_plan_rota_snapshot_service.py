@@ -24,10 +24,16 @@ def _now_str() -> str:
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
-def build_stop_order_from_tasks(tasks: list[dict]) -> list[dict]:
+def build_stop_order_from_tasks(
+    tasks: list[dict],
+    eta_by_task: dict[str, dict] | None = None,
+) -> list[dict]:
     ordered = sorted(tasks, key=lambda t: t.get('order_no') or 0)
+    eta_by_task = eta_by_task or {}
     out: list[dict] = []
     for t in ordered:
+        tid = str(t.get('id') or '')
+        eta = eta_by_task.get(tid) or {}
         out.append({
             'plan_item_id': t.get('id'),
             'is_talebi_id': t.get('is_talebi_id') or t.get('request_id'),
@@ -35,6 +41,9 @@ def build_stop_order_from_tasks(tasks: list[dict]) -> list[dict]:
             'company_name': t.get('company_name'),
             'latitude': t.get('latitude'),
             'longitude': t.get('longitude'),
+            'planned_time': eta.get('display_hhmm') or t.get('planned_time'),
+            'eta_at': eta.get('eta_at'),
+            'leg_duration_s': eta.get('leg_duration_s'),
         })
     return out
 

@@ -361,15 +361,48 @@ def arac_takip_api_route_plan():
     from modules.planlama.arac_operasyon_ayar_repo import get_active_base, operasyon_ayar_ready
     from modules.planlama.arac_location_resolver import resolve_base_location
     from modules.planlama.arac_plan_service import get_tasks_for_session
+    from modules.planlama.arac_route_constraints import active_tasks_sorted
+    from modules.planlama.arac_route_explainer_dto import enrich_route_explainer_dto
+    from modules.planlama.arac_takip_repo import get_active_plan_row
     from modules.planlama.road_routing.route_planner_service import build_plan_route_dto
+    import os
 
     plan_date = _parse_date(request.args.get('date'))
     vehicle_id = request.args.get('vehicle_id') or None
     uid = _uid()
-    tasks = get_tasks_for_session(uid, plan_date.isoformat(), vehicle_id)
+    plan_date_str = plan_date.isoformat()
+    tasks = get_tasks_for_session(uid, plan_date_str, vehicle_id)
     base_row = get_active_base() if operasyon_ayar_ready() else None
     base = resolve_base_location(base_row)
     route_dto = build_plan_route_dto(base, tasks)
+
+    active = active_tasks_sorted(tasks)
+    id_to_task = {str(t['id']): t for t in active}
+    routable_current = [
+        t for t in active
+        if t.get('has_coordinates') and t.get('latitude') is not None and t.get('longitude') is not None
+    ]
+    sug_full = (route_dto.get('suggested') or {}).get('full_task_ids') or []
+    routable_suggested = [
+        id_to_task[i] for i in sug_full
+        if i in id_to_task
+        and id_to_task[i].get('has_coordinates')
+        and id_to_task[i].get('latitude') is not None
+    ]
+    plan_row = get_active_plan_row(plan_date_str, vehicle_id) if vehicle_id else None
+    departure = (plan_row or {}).get('cikis_saati') or None
+    profile = os.environ.get('ORS_PROFILE') or 'driving-car'
+    if route_dto.get('status') in ('OK', 'PARTIAL') and routable_current:
+        route_dto = enrich_route_explainer_dto(
+            route_dto,
+            plan_date=plan_date_str,
+            departure_hhmm=departure,
+            base=base,
+            routable_tasks=routable_current,
+            suggested_tasks=routable_suggested or routable_current,
+            profile=profile,
+        )
+
     dto = get_arac_dashboard_dto(
         plan_date=plan_date, vehicle_id=vehicle_id, daily_tasks=tasks,
     )
@@ -431,9 +464,34 @@ def arac_takip_api_route_apply():
 
     if mode == 'atomic':
         try:
-            result = apply_route_order_and_snapshot(
-                uid, plan_date_str, str(vehicle_id or ''), task_ids, user_id=uid,
-            )
+            departure_time = (body.get('departure_time') or body.get('cikis_saati') or '').strip() or None
+            apply_source = (body.get('apply_source') or body.get('routing_source') or '').strip().lower()
+            google_profile = (body.get('google_profile') or '').strip().lower() or None
+            keep_current = bool(body.get('keep_current_order'))
+            profile_only = bool(body.get('profile_only') or body.get('apply_mode') == 'profile_only')
+
+            if apply_source == 'google':
+                if not google_profile:
+                    return jsonify({'ok': False, 'error': 'google_profile gerekli', 'code': 'INVALID_REQUEST'}), 400
+                if not departure_time:
+                    return jsonify({'ok': False, 'error': 'departure_time gerekli', 'code': 'INVALID_REQUEST'}), 400
+                from modules.planlama.arac_google_route_apply_service import apply_google_route_order_and_snapshot
+                result = apply_google_route_order_and_snapshot(
+                    uid,
+                    plan_date_str,
+                    str(vehicle_id or ''),
+                    [str(t) for t in task_ids],
+                    google_profile=google_profile,
+                    departure_time=departure_time,
+                    user_id=uid,
+                    keep_current_order=keep_current or profile_only,
+                    profile_only=profile_only,
+                )
+            else:
+                result = apply_route_order_and_snapshot(
+                    uid, plan_date_str, str(vehicle_id or ''), task_ids, user_id=uid,
+                    departure_time=departure_time,
+                )
         except RouteApplyConflictError as exc:
             return jsonify(exc.to_dict()), 409
         except RouteApplyValidationError as exc:
@@ -455,6 +513,18 @@ def arac_takip_api_route_apply():
             'route_snapshot': result.route_snapshot,
             'route_version': result.route_version,
             'deduplicated': result.deduplicated,
+            'eta_applied': result.eta_applied,
+            'departure_source': result.departure_source,
+            'reorder_applied': result.reorder_applied,
+            'google_profile': google_profile if apply_source == 'google' else None,
+            'departure_time': result.eta_by_task and next(iter(result.eta_by_task.values()), {}).get('departure_source_at', '')[:5] if result.eta_by_task else None,
+            'eta_reason': (
+                'Rota profili uygulandı ve durak saatleri güncellendi.'
+                if result.eta_applied and apply_source == 'google' and profile_only
+                else 'Rota sırası uygulandı ve durak saatleri güncellendi.'
+                if result.eta_applied
+                else 'Rota uygulandı. Saatler için Çıkış Saati girin.'
+            ),
         })
 
     # Legacy (pre-migration-179 / canonical): reorder only — mevcut 8080 davranışı korunur
@@ -473,6 +543,14 @@ def arac_takip_api_today_operations():
     plan_date = _parse_date(request.args.get('date'))
     dto = get_today_vehicle_operations(plan_date.isoformat())
     return jsonify(dto)
+
+
+@arac_takip_bp.route('/api/plan-changes', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_changes():
+    from modules.planlama.arac_plan_changes_service import list_plan_changes_for_date
+    plan_date = _parse_date(request.args.get('date'))
+    return jsonify(list_plan_changes_for_date(plan_date.isoformat()))
 
 
 @arac_takip_bp.route('/api/plan-timeline', methods=['GET'])
@@ -637,3 +715,432 @@ def arac_takip_api_plana_is_ekle():
         return jsonify({'ok': False, 'error': str(exc)}), 400
     except Exception as exc:
         return jsonify({'ok': False, 'error': str(exc)}), 400
+
+
+@arac_takip_bp.route('/api/plan-job/<int:plan_is_id>/detail', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_job_detail(plan_is_id: int):
+    from modules.planlama.arac_plan_change_service import PlanChangeError, get_plan_job_detail
+    from modules.planlama.arac_takip_repo import tables_ready
+    if not tables_ready():
+        return jsonify({'ok': False, 'error': 'Tablolar hazır değil'}), 503
+    try:
+        return jsonify(get_plan_job_detail(plan_is_id))
+    except PlanChangeError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 404
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+
+
+@arac_takip_bp.route('/api/plan-job/<int:plan_is_id>/change', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_job_change(plan_is_id: int):
+    if not _planlama_duzenle():
+        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    from modules.planlama.arac_plan_change_service import (
+        PlanChangeError,
+        PlanChangeForbidden,
+        apply_plan_job_change,
+    )
+    from modules.planlama.arac_plan_service import get_tasks_for_session
+    from modules.planlama.arac_today_operations_service import get_today_vehicle_operations
+    from modules.planlama.arac_takip_repo import tables_ready
+    if not tables_ready():
+        return jsonify({'ok': False, 'error': 'Tablolar hazır değil'}), 503
+    body = request.get_json(silent=True) or {}
+    try:
+        result = apply_plan_job_change(plan_is_id, _uid(), body)
+        plan_date = _parse_date(body.get('plan_tarihi') or request.args.get('date'))
+        vehicle_id = (
+            body.get('target_vehicle_external_id')
+            or body.get('arac_external_id')
+            or request.args.get('vehicle_id')
+        )
+        tasks = get_tasks_for_session(_uid(), plan_date.isoformat(), vehicle_id)
+        ops = get_today_vehicle_operations(plan_date.isoformat())
+        dto = get_arac_dashboard_dto(
+            plan_date=plan_date, vehicle_id=vehicle_id, daily_tasks=tasks,
+        )
+        return jsonify({
+            **result,
+            'daily_tasks': tasks,
+            'dashboard': dto,
+            'today_operations': ops,
+        })
+    except PlanChangeForbidden as exc:
+        return jsonify({'ok': False, 'error': str(exc), 'code': 'FORBIDDEN'}), 403
+    except PlanChangeError as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        import sqlite3
+        if isinstance(exc, sqlite3.IntegrityError):
+            return jsonify({
+                'ok': False,
+                'error': 'Bu iş silinemez; iptal olarak kapatabilirsiniz.',
+            }), 400
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+
+
+@arac_takip_bp.route('/api/plan/departure-time', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_departure_time():
+    """Araç planı çıkış saatini kaydet ve durak ETA'larını hesapla (atomic)."""
+    from modules.planlama.arac_departure_service import (
+        DepartureValidationError,
+        save_departure_and_compute_eta,
+    )
+
+    body = request.get_json(silent=True) or {}
+
+    # --- Input validation ---
+    date_raw = (body.get('date') or '').strip()
+    vehicle_id = (body.get('vehicle_id') or '').strip()
+    departure_raw = (body.get('departure_time') or '').strip()
+    plan_id_raw = body.get('plan_id')
+
+    if not date_raw:
+        return jsonify({'ok': False, 'error': 'date zorunludur', 'code': 'MISSING_DATE'}), 400
+    if not vehicle_id:
+        return jsonify({'ok': False, 'error': 'vehicle_id zorunludur', 'code': 'MISSING_VEHICLE'}), 400
+    if not departure_raw:
+        return jsonify({'ok': False, 'error': 'departure_time zorunludur', 'code': 'MISSING_DEPARTURE'}), 400
+
+    try:
+        plan_date = _parse_date(date_raw)
+    except Exception:
+        return jsonify({'ok': False, 'error': f'Geçersiz tarih: {date_raw!r}', 'code': 'INVALID_DATE'}), 400
+
+    plan_id = None
+    if plan_id_raw is not None:
+        try:
+            plan_id = int(plan_id_raw)
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'error': 'plan_id sayısal olmalıdır', 'code': 'INVALID_PLAN_ID'}), 400
+
+    try:
+        result = save_departure_and_compute_eta(
+            plan_date=plan_date.isoformat(),
+            arac_external_id=str(vehicle_id),
+            cikis_saati=departure_raw,
+            session_user_id=_uid(),
+            plan_id=plan_id,
+        )
+    except DepartureValidationError as exc:
+        return jsonify({'ok': False, 'error': str(exc), 'code': 'INVALID_DEPARTURE_TIME'}), 400
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc), 'code': 'UNEXPECTED_ERROR'}), 500
+
+    if not result.get('ok'):
+        code = result.get('code', 'ERROR')
+        http_status = 400
+        if code == 'PLAN_NOT_FOUND':
+            http_status = 404
+        elif code == 'TABLES_NOT_READY':
+            http_status = 503
+        return jsonify(result), http_status
+
+    # Refresh dashboard DTO with updated tasks
+    from modules.planlama.arac_dashboard_service import get_arac_dashboard_dto
+    from modules.planlama.arac_timeline_service import build_timeline_for_plan
+    tasks = result.get('tasks', [])
+    dto = get_arac_dashboard_dto(plan_date=plan_date, vehicle_id=vehicle_id, daily_tasks=tasks)
+    timeline = build_timeline_for_plan(plan_date.isoformat(), str(vehicle_id))
+
+    return jsonify({
+        **result,
+        'dashboard': dto,
+        'timeline': timeline,
+    })
+
+
+@arac_takip_bp.route('/api/plan-job/desired-time', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_job_desired_time():
+    """İş bazlı istenen varış saatini kaydet (atomic + audit).
+
+    Payload:
+      date          — YYYY-MM-DD
+      vehicle_id    — araç external_id
+      plan_item_id  — arac_gunluk_plan_is.id
+      desired_time  — HH:mm veya null (time_free=true ise boş olabilir)
+      time_free     — boolean, true ise saat null, kaynak='SERBEST'
+    """
+    from modules.planlama.arac_desired_time_service import (
+        DesiredTimeValidationError,
+        save_desired_time,
+    )
+    from modules.planlama.arac_dashboard_service import get_arac_dashboard_dto
+    from modules.planlama.arac_takip_repo import tables_ready
+
+    if not tables_ready():
+        return jsonify({'ok': False, 'error': 'Tablolar hazır değil', 'code': 'TABLES_NOT_READY'}), 503
+
+    body = request.get_json(silent=True) or {}
+
+    date_raw = body.get('date') or request.args.get('date', '')
+    vehicle_id = (
+        body.get('vehicle_id')
+        or body.get('arac_external_id')
+        or request.args.get('vehicle_id', '')
+    )
+    plan_item_id_raw = body.get('plan_item_id')
+    desired_time_raw = body.get('desired_time') or ''
+    time_free = bool(body.get('time_free', False))
+
+    if not date_raw:
+        return jsonify({'ok': False, 'error': 'date zorunludur', 'code': 'MISSING_DATE'}), 400
+    if not vehicle_id:
+        return jsonify({'ok': False, 'error': 'vehicle_id zorunludur', 'code': 'MISSING_VEHICLE'}), 400
+    if plan_item_id_raw is None:
+        return jsonify({'ok': False, 'error': 'plan_item_id zorunludur', 'code': 'MISSING_ITEM_ID'}), 400
+    if not time_free and not desired_time_raw:
+        return jsonify({'ok': False, 'error': 'desired_time veya time_free=true gereklidir', 'code': 'MISSING_TIME'}), 400
+
+    try:
+        plan_date = _parse_date(date_raw)
+        plan_item_id = int(plan_item_id_raw)
+    except (TypeError, ValueError) as exc:
+        return jsonify({'ok': False, 'error': f'Geçersiz parametre: {exc}', 'code': 'INVALID_PARAM'}), 400
+
+    try:
+        result = save_desired_time(
+            plan_date=plan_date.isoformat(),
+            arac_external_id=str(vehicle_id),
+            plan_item_id=plan_item_id,
+            desired_time=desired_time_raw if not time_free else None,
+            time_free=time_free,
+            session_user_id=_uid(),
+        )
+    except DesiredTimeValidationError as exc:
+        return jsonify({'ok': False, 'error': str(exc), 'code': 'INVALID_TIME'}), 400
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc), 'code': 'UNEXPECTED_ERROR'}), 500
+
+    if not result.get('ok'):
+        code = result.get('code', 'ERROR')
+        http_status = 400
+        if code in ('PLAN_NOT_FOUND', 'PLAN_ITEM_NOT_FOUND'):
+            http_status = 404
+        elif code in ('TABLES_NOT_READY', 'MIGRATION_REQUIRED'):
+            http_status = 503
+        elif code == 'INACTIVE_ITEM':
+            http_status = 422
+        return jsonify(result), http_status
+
+    tasks = result.get('tasks', [])
+    dto = get_arac_dashboard_dto(plan_date=plan_date, vehicle_id=str(vehicle_id), daily_tasks=tasks)
+
+    return jsonify({
+        **result,
+        'dashboard': dto,
+    })
+
+
+@arac_takip_bp.route('/api/plan/google-route-options', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_google_route_options():
+    """Google Routes API ile mevcut ve önerilen sıra için rota seçeneklerini hesapla.
+
+    Request JSON:
+      date          — YYYY-MM-DD
+      vehicle_id    — araç external_id
+      departure_time — HH:MM
+      plan_id       — optional int (araç-plan eşleşmesi için)
+
+    Constraints:
+      - Koordinatlar browser payload'ından ALINMAZ; canonical DB'den okunur.
+      - Önerilen sıra mevcut build_plan_route_dto suggested zincirinden gelir.
+      - ORS fallback yok; profil başarısızlığı DTO içinde raporlanır.
+    """
+    import dataclasses
+    import re as _re
+
+    from modules.planlama.arac_google_route_options_service import compute_google_route_options
+    from modules.planlama.arac_location_resolver import resolve_base_location
+    from modules.planlama.arac_operasyon_ayar_repo import get_active_base, operasyon_ayar_ready
+    from modules.planlama.arac_plan_service import get_tasks_for_session
+    from modules.planlama.arac_route_constraints import active_tasks_sorted
+    from modules.planlama.arac_takip_repo import get_active_plan_row, tables_ready
+    from modules.planlama.road_routing.env_loader import google_routes_key_present
+    from modules.planlama.road_routing.route_planner_service import build_plan_route_dto
+
+    _HHMM_RE = _re.compile(r'^\d{2}:\d{2}$')
+
+    body = request.get_json(silent=True) or {}
+
+    # ── Input validation ─────────────────────────────────────────────────────
+    date_raw = (body.get('date') or '').strip()
+    vehicle_id = (body.get('vehicle_id') or '').strip()
+    departure_raw = (body.get('departure_time') or '').strip()
+    plan_id_raw = body.get('plan_id')
+
+    if not date_raw or not vehicle_id or not departure_raw:
+        return jsonify({
+            'ok': False,
+            'error': 'date, vehicle_id ve departure_time zorunludur',
+            'code': 'INVALID_REQUEST',
+        }), 400
+
+    if not _HHMM_RE.match(departure_raw[:5]):
+        return jsonify({
+            'ok': False,
+            'error': f'departure_time HH:MM formatında olmalıdır: {departure_raw!r}',
+            'code': 'INVALID_REQUEST',
+        }), 400
+
+    try:
+        plan_date = _parse_date(date_raw)
+    except Exception:
+        return jsonify({
+            'ok': False,
+            'error': f'Geçersiz tarih: {date_raw!r}',
+            'code': 'INVALID_REQUEST',
+        }), 400
+
+    plan_id_req = None
+    if plan_id_raw is not None:
+        try:
+            plan_id_req = int(plan_id_raw)
+        except (TypeError, ValueError):
+            return jsonify({
+                'ok': False,
+                'error': 'plan_id sayısal olmalıdır',
+                'code': 'INVALID_REQUEST',
+            }), 400
+
+    # ── DB/table readiness ───────────────────────────────────────────────────
+    if not tables_ready():
+        return jsonify({'ok': False, 'error': 'Tablolar hazır değil', 'code': 'TABLES_NOT_READY'}), 503
+
+    # ── Google key check ──────────────────────────────────────────────────────
+    if not google_routes_key_present():
+        return jsonify({
+            'ok': False,
+            'error': 'Google Routes API anahtarı yapılandırılmamış',
+            'code': 'GOOGLE_ROUTES_NOT_CONFIGURED',
+        }), 503
+
+    # ── Plan doğrulama ────────────────────────────────────────────────────────
+    plan_date_str = plan_date.isoformat()
+    plan_row = get_active_plan_row(plan_date_str, vehicle_id)
+    if not plan_row:
+        return jsonify({
+            'ok': False,
+            'error': f'Plan bulunamadı: {plan_date_str} / {vehicle_id}',
+            'code': 'PLAN_NOT_FOUND',
+        }), 404
+
+    if plan_id_req is not None and int(plan_row.get('id') or 0) != plan_id_req:
+        return jsonify({
+            'ok': False,
+            'error': f'plan_id={plan_id_req} bu araca ait değil',
+            'code': 'VEHICLE_PLAN_MISMATCH',
+        }), 422
+
+    # ── Canonical duraklar (DB kaynağı; browser payload kabul edilmez) ───────
+    uid = _uid()
+    tasks = get_tasks_for_session(uid, plan_date_str, vehicle_id)
+    active = active_tasks_sorted(tasks)
+
+    routable = [
+        t for t in active
+        if t.get('has_coordinates')
+        and t.get('latitude') is not None
+        and t.get('longitude') is not None
+    ]
+
+    if not active:
+        return jsonify({
+            'ok': False,
+            'error': 'Bu planda aktif durak yok',
+            'code': 'NO_ACTIVE_STOPS',
+        }), 422
+
+    if not routable:
+        return jsonify({
+            'ok': False,
+            'error': 'Aktif durakların koordinatı eksik',
+            'code': 'MISSING_COORDINATES',
+        }), 422
+
+    # ── Base / fabrika ────────────────────────────────────────────────────────
+    base_row = get_active_base() if operasyon_ayar_ready() else None
+    base = resolve_base_location(base_row)
+
+    if not base.get('has_coordinates'):
+        return jsonify({
+            'ok': False,
+            'error': 'Başlangıç/fabrika koordinatı tanımlanmamış',
+            'code': 'MISSING_COORDINATES',
+        }), 422
+
+    # ── Suggested order: mevcut Rota Kararı servisi (ORS matrix) ─────────────
+    # build_plan_route_dto → suggested.full_task_ids (CPS sıralama mantığı)
+    # Google waypoint optimization KULLANILMAZ.
+    route_dto = build_plan_route_dto(base, tasks)
+    sug_full_ids = (route_dto.get('suggested') or {}).get('full_task_ids') or []
+
+    id_to_task = {str(t['id']): t for t in active}
+    suggested_stops_for_fn = [
+        id_to_task[i] for i in sug_full_ids
+        if i in id_to_task
+        and id_to_task[i].get('has_coordinates')
+        and id_to_task[i].get('latitude') is not None
+    ]
+
+    def _suggested_order_from_route(active_tasks_arg, base_arg):
+        """Inject pre-computed suggested order — no second ORS call."""
+        return suggested_stops_for_fn if suggested_stops_for_fn else list(active_tasks_arg)
+
+    # ── Orchestration call ────────────────────────────────────────────────────
+    options_dto = compute_google_route_options(
+        plan_date=plan_date_str,
+        departure_hhmm=departure_raw[:5],
+        base=base,
+        tasks=tasks,
+        _suggested_order_fn=_suggested_order_from_route,
+    )
+
+    result = dataclasses.asdict(options_dto)
+    result['ok'] = True
+    result['plan_id'] = int(plan_row.get('id') or 0)
+    result['vehicle_id'] = vehicle_id
+
+    return jsonify(result)
+
+
+@arac_takip_bp.route('/api/plan/timeline', methods=['GET', 'POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_departure_timeline():
+    """Çıkış Saati + rota ayakları + 10 dk işlem süresi → timeline DTO.
+
+    GET  ?date=YYYY-MM-DD&vehicle_id=...
+    POST {date, vehicle_id}
+
+    Response: timeline dict (DB write yok — sadece preview hesap)
+    planlanan_saat DOKUNULMAZ. tahmini_varis_saati: migration 188 ile ayrı endpoint.
+    """
+    from modules.planlama.arac_timeline_service import build_timeline_for_plan
+    from modules.planlama.arac_takip_repo import tables_ready
+
+    if not tables_ready():
+        return jsonify({'ok': False, 'status': 'TABLES_NOT_READY', 'stops': []}), 503
+
+    if request.method == 'POST':
+        body = request.get_json(silent=True) or {}
+        date_raw = body.get('date') or request.args.get('date', '')
+        vehicle_id = body.get('vehicle_id') or body.get('arac_external_id') or request.args.get('vehicle_id', '')
+    else:
+        date_raw = request.args.get('date', '')
+        vehicle_id = request.args.get('vehicle_id', '') or request.args.get('arac_external_id', '')
+
+    if not date_raw or not vehicle_id:
+        return jsonify({'ok': False, 'error': 'date ve vehicle_id zorunludur', 'stops': []}), 400
+
+    try:
+        plan_date = _parse_date(date_raw)
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'error': f'Geçersiz tarih: {date_raw}', 'stops': []}), 400
+
+    timeline = build_timeline_for_plan(plan_date.isoformat(), str(vehicle_id))
+    return jsonify({'ok': True, **timeline})

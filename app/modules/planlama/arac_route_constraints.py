@@ -6,6 +6,7 @@ from typing import Any
 
 LOCKED_STATUSES = frozenset({'TAMAMLANDI', 'BASLADI'})
 LOCKED_VISIT_STATES = frozenset({'ARRIVED', 'DEPARTED', 'DEPARTED_PENDING'})
+INACTIVE_PLAN_STATUSES = frozenset({'IPTAL', 'ERTELENDI', 'GIDILEMEDI'})
 VALID_PRIORITIES = frozenset({'ACIL', 'YUKSEK', 'NORMAL', 'DUSUK'})
 
 
@@ -90,7 +91,7 @@ def classify_route_tasks(
         if pri == 'YUKSEK':
             important_task_ids.append(tid)
 
-        if status == 'IPTAL':
+        if status in INACTIVE_PLAN_STATUSES:
             cancelled_task_ids.append(tid)
             continue
 
@@ -116,7 +117,7 @@ def classify_route_tasks(
 def active_tasks_sorted(tasks: list[dict]) -> list[dict]:
     return [
         t for t in sorted(tasks, key=lambda x: x.get('order_no') or 0)
-        if (t.get('status') or 'PLANLANDI').upper() != 'IPTAL'
+        if (t.get('status') or 'PLANLANDI').upper() not in INACTIVE_PLAN_STATUSES
     ]
 
 

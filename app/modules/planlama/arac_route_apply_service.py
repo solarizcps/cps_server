@@ -69,6 +69,10 @@ class RouteApplyResult:
     route_version: int
     deduplicated: bool
     applied: bool = True
+    eta_applied: bool = False
+    eta_by_task: dict[str, dict] | None = None
+    departure_source: str | None = None
+    reorder_applied: bool = True
 
 
 def _now_str() -> str:
@@ -95,6 +99,8 @@ def route_apply_atomic_enabled() -> bool:
 def prepare_route_snapshot_payload(
     route_dto: dict[str, Any],
     tasks: list[dict],
+    *,
+    eta_by_task: dict[str, dict] | None = None,
 ) -> PreparedRouteSnapshot:
     """Pre-transaction: validate route DTO and build snapshot payload."""
     status = route_dto.get('status')
@@ -110,7 +116,7 @@ def prepare_route_snapshot_payload(
         geojson = latlng_pairs_to_geojson(raw_geometry)
     except GeometryError as exc:
         raise RouteApplyRouteError(str(exc)) from exc
-    stop_order = build_stop_order_from_tasks(tasks)
+    stop_order = build_stop_order_from_tasks(tasks, eta_by_task=eta_by_task)
     content_hash = route_content_hash(
         geojson,
         stop_order,
@@ -148,6 +154,8 @@ def apply_route_order_and_snapshot(
     *,
     user_id: int | None = None,
     route_dto_builder: Callable[[dict, list[dict]], dict] | None = None,
+    departure_time: str | None = None,
+    skip_reorder: bool = False,
 ) -> RouteApplyResult:
     """
     Single unit-of-work: reorder plan items + persist route snapshot atomically.
@@ -179,6 +187,12 @@ def apply_route_order_and_snapshot(
     validate_apply_task_ids(current_tasks, task_ids, constraints)
     reordered_tasks = _reordered_tasks_preview(current_tasks, task_ids)
 
+    active_ordered = [str(t['id']) for t in active_tasks_sorted(current_tasks)]
+    if skip_reorder and task_ids != active_ordered:
+        raise RouteApplyValidationError(
+            'Profil uygulamasında sıra değişikliği yapılamaz — gönderilen sıra aktif plan ile uyuşmuyor',
+        )
+
     from modules.planlama.arac_operasyon_ayar_repo import get_active_base, operasyon_ayar_ready
     from modules.planlama.arac_location_resolver import resolve_base_location
 
@@ -190,16 +204,44 @@ def apply_route_order_and_snapshot(
         from modules.planlama.road_routing.route_planner_service import build_plan_route_dto
         route_dto = build_plan_route_dto(base, reordered_tasks)
 
-    prepared = prepare_route_snapshot_payload(route_dto, reordered_tasks)
+    from modules.planlama.arac_route_eta_service import (
+        compute_stop_etas,
+        eta_hhmm_map,
+        resolve_departure_anchor,
+    )
+    from modules.planlama.arac_takip_repo import _update_plan_item_times_bulk_conn
+
+    departure_dt, departure_source = resolve_departure_anchor(
+        plan_date, plan, explicit_departure_time=departure_time,
+    )
+    eta_by_task: dict[str, dict] = {}
+    if departure_dt:
+        svc_per_stop = int(route_dto.get('service_seconds_per_stop') or 0)
+        eta_by_task = compute_stop_etas(
+            departure_dt,
+            reordered_tasks,
+            route_dto.get('leg_details') or [],
+            service_seconds=svc_per_stop,
+            return_duration_s=route_dto.get('return_duration_s'),
+        )
+
+    prepared = prepare_route_snapshot_payload(
+        route_dto, reordered_tasks, eta_by_task=eta_by_task or None,
+    )
     created_by = user_id if user_id is not None else session_user_id
     created_at = _now_str()
 
     con = get_conn()
     try:
         con.execute('BEGIN IMMEDIATE')
-        _reorder_plan_items_bulk_conn(
-            con, session_user_id, plan_date, arac_external_id, task_ids,
-        )
+        if not skip_reorder:
+            _reorder_plan_items_bulk_conn(
+                con, session_user_id, plan_date, arac_external_id, task_ids,
+            )
+        if eta_by_task:
+            _update_plan_item_times_bulk_conn(
+                con, plan_id, eta_hhmm_map(eta_by_task),
+            )
         try:
             snapshot = _save_plan_rota_snapshot_conn(
                 con,
@@ -240,4 +282,8 @@ def apply_route_order_and_snapshot(
         route_version=int(snapshot['route_version']),
         deduplicated=bool(snapshot.get('dedup')),
         applied=True,
+        eta_applied=bool(eta_by_task),
+        eta_by_task=eta_by_task or None,
+        departure_source=departure_source,
+        reorder_applied=not skip_reorder,
     )

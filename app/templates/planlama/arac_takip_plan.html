@@ -4,7 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=64">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=71">
 {% endblock %}
 
 {% block content %}
@@ -413,6 +413,21 @@
       <button type="button" class="modal-close" id="atpRouteExplainerClose" aria-label="Kapat">✕</button>
     </div>
 
+    {# ── Google kaynak şeridi — yalnız Google DTO bağında görünür ── #}
+    <div class="atp-exp-google-source" id="atpExpGoogleSource" style="display:none" hidden>
+      <div class="atp-exp-google-source-main">Mesafe ve saatler: Google Routes trafik tahmini</div>
+      <div class="atp-exp-google-source-sub">
+        <span>Sıra önerisi: CPS rota motoru</span>
+        <span id="atpExpGoogleDep">Çıkış: —</span>
+        <span id="atpExpGoogleService">Her durakta işlem: 10 dk</span>
+      </div>
+      <div class="atp-exp-google-profiles" id="atpExpGoogleProfiles" role="tablist">
+        <button type="button" class="atp-exp-profile-btn active" id="atpExpProfileFast" data-profile="fastest" role="tab" aria-selected="true">EN HIZLI</button>
+        <button type="button" class="atp-exp-profile-btn" id="atpExpProfileFree" data-profile="toll_free" role="tab" aria-selected="false">ÜCRETLİ GEÇİŞİ AZALTAN</button>
+      </div>
+      <div class="atp-exp-profile-hint" id="atpExpProfileHint" style="display:none" hidden></div>
+    </div>
+
     {# ── Karar açıklaması — tek satır ── #}
     <div class="atp-exp-decision-bar" id="atpExpDecisionBar" style="display:none">
       <p id="atpExplainerDecisionReason" class="atp-exp-decision-text"></p>
@@ -432,6 +447,17 @@
           <div class="atp-explainer-reason-box" id="atpExplainerApplyReason" style="display:none"></div>
           <div class="atp-explainer-constraints" id="atpExplainerConstraints" style="display:none"></div>
 
+          {# ── Sıra aynı: tek panel + profil kartları (Google) ── #}
+          <div class="atp-exp-order-same-panel" id="atpExpOrderSamePanel" style="display:none" hidden>
+            <div class="atp-exp-order-same-hdr">MEVCUT SIRA CPS ÖNERİSİYLE AYNI</div>
+            <div class="atp-exp-order-same-flow" id="atpExpOrderSameFlow">Fabrika → — → Fabrika</div>
+            <div class="atp-exp-profile-recommendation" id="atpExpProfileRecommendation" style="display:none"></div>
+          </div>
+          <div class="atp-exp-profile-cards" id="atpExpProfileCards" style="display:none" hidden>
+            <div class="atp-exp-profile-card" id="atpExpProfileCardFast" data-profile="fastest" role="button" tabindex="0" aria-pressed="true"></div>
+            <div class="atp-exp-profile-card" id="atpExpProfileCardFree" data-profile="toll_free" role="button" tabindex="0" aria-pressed="false"></div>
+          </div>
+
           {# ── Seçim Kartları ── #}
           <div class="atp-exp-cards" id="atpExpCards">
             {# Kart A — Mevcut #}
@@ -441,6 +467,7 @@
                 <span class="atp-exp-card-label">A — Mevcut Sırayı Koru</span>
               </div>
               <div id="atpExplainerCurrentOrder" class="atp-explainer-order-list"></div>
+              <div id="atpExpTollBadgeCurrent" class="atp-exp-toll-badge-wrap"></div>
               <div id="atpExplainerCurrentSummary" class="atp-exp-card-summary"></div>
             </div>
             {# Kart B — Önerilen #}
@@ -448,9 +475,10 @@
               <div class="atp-exp-card-hdr">
                 <span class="atp-exp-card-check" aria-hidden="true">✓</span>
                 <span class="atp-exp-card-label">B — Önerilen Sırayı Uygula</span>
-                <span class="atp-exp-system-badge" id="atpExpSystemBadge">Sistem Önerisi</span>
+                <span class="atp-exp-system-badge" id="atpExpSystemBadge">CPS Sıra Önerisi</span>
               </div>
               <div id="atpExplainerSugOrder" class="atp-explainer-order-list" id="atpExplainerSugSection"></div>
+              <div id="atpExpTollBadgeSuggested" class="atp-exp-toll-badge-wrap"></div>
               <div id="atpExplainerSugSummary" class="atp-exp-card-summary"></div>
             </div>
           </div>
@@ -462,8 +490,7 @@
           <details class="atp-exp-accordion" id="atpExpLegsAccordion">
             <summary class="atp-exp-accordion-toggle">Ayak Ayak Hesabı Gör</summary>
             <div class="atp-exp-accordion-body" id="atpExpLegsBody">
-              <div id="atpExplainerCurrentLegs"></div>
-              <div id="atpExplainerSugLegs" style="display:none"></div>
+              <div id="atpExpLegsPanel"></div>
             </div>
           </details>
 
@@ -486,31 +513,79 @@
 
         {# ── SAĞ: Harita ── #}
         <div class="atp-explainer-right">
+          <div class="atp-exp-map-caption" id="atpExpMapCaption">Haritada: A — Mevcut Sıra</div>
           <div class="atp-explainer-map-wrap">
             <div id="atpExplainerMap"></div>
           </div>
-          <div class="atp-exp-map-legend">
+          <div class="atp-exp-route-flow" id="atpExpRouteFlow">Fabrika → — → Fabrika</div>
+          <div class="atp-exp-return-leg" id="atpExpReturnLeg"></div>
+          <div class="atp-exp-map-legend" id="atpExpMapLegend">
             <span><span class="atp-exp-dot blue"></span>Mevcut</span>
             <span id="atpExplainerLegendSug" style="display:none"><span class="atp-exp-dot green"></span>Önerilen</span>
           </div>
-          <div class="atp-exp-map-toggles">
-            <button type="button" class="atp-exp-map-toggle active" id="atpExpToggleCurrent" data-route="current">Mevcut Rotayı Göster</button>
-            <button type="button" class="atp-exp-map-toggle" id="atpExpToggleSuggested" data-route="suggested" style="display:none">Önerilen Rotayı Göster</button>
-          </div>
         </div>{# /right #}
 
+        {# ── Karar Özeti: tam genişlik grid satırı 2 ── #}
+        <div class="atp-exp-decision-summary" id="atpExpDecisionSummary" style="display:none" hidden>
+          <div class="atp-exp-decision-grid">
+            <div class="atp-exp-decision-row" id="atpExpDecisionRowA" data-choice="current"></div>
+            <div class="atp-exp-decision-row" id="atpExpDecisionRowB" data-choice="suggested"></div>
+          </div>
+          <div class="atp-exp-decision-footnote" id="atpExpDecisionFootnote"></div>
+        </div>
+
       </div>{# /layout #}
+
     </div>{# /body #}
 
     {# ── Footer ── #}
     <div class="modal-footer atp-exp-footer">
       <button type="button" class="btn btn-outline" id="atpRouteExplainerDismiss">Kapat</button>
+      <p class="atp-exp-apply-pending" id="atpExpApplyPending" style="display:none">Rota uygulama işlemi ekran onayından sonra etkinleştirilecek.</p>
+      <p class="atp-exp-apply-footnote" id="atpExpApplyFootnote" style="display:none"></p>
       <div class="atp-exp-footer-actions">
         <button type="button" class="btn btn-outline" id="atpExpFooterKeepCurrent">Mevcut Sırayı Koru</button>
         <button type="button" class="btn btn-green" id="atpExpFooterApplySuggested" style="display:none">✔ Önerilen Sırayı Uygula</button>
       </div>
     </div>
 
+  </div>
+</div>
+
+{# ── Google Apply Confirm ── #}
+<div id="atpGoogleApplyConfirmBackdrop" class="modal-bg" aria-hidden="true">
+  <div class="modal atp-google-apply-confirm" role="dialog" aria-modal="true" id="atpGoogleApplyConfirmModal" aria-hidden="true">
+    <div class="modal-hdr atp-exp-hdr">
+      <div>
+        <h3 class="atp-exp-title">Sıra Uygulama Onayı</h3>
+        <p class="atp-exp-subtitle">Önce / sonra durak sırasını kontrol edin.</p>
+      </div>
+      <button type="button" class="modal-close" id="atpGoogleApplyConfirmClose" aria-label="Kapat">✕</button>
+    </div>
+    <div class="modal-body atp-google-apply-body">
+      <div class="atp-google-apply-seq-change" id="atpGoogleApplySeqChange">
+        <div class="atp-google-apply-before"><strong>ÖNCE</strong><div id="atpGoogleApplyBeforeSeq">—</div></div>
+        <div class="atp-google-apply-after"><strong>SONRA</strong><div id="atpGoogleApplyAfterSeq">—</div></div>
+      </div>
+      <div class="atp-google-apply-profile-only" id="atpGoogleApplyProfileOnly" style="display:none" hidden>
+        <div class="atp-google-apply-order-note" id="atpGoogleApplyOrderNote">Sıra değişmeyecek: —</div>
+      </div>
+      <div class="atp-google-apply-decision" id="atpGoogleApplyDecisionBox">
+        <div class="atp-google-apply-decision-hdr" id="atpGoogleApplyDecisionHdr">UYGULANACAK KARAR</div>
+        <div class="atp-google-apply-decision-title" id="atpGoogleApplyDecisionTitle">—</div>
+        <div class="atp-google-apply-decision-metrics" id="atpGoogleApplyDecisionMetrics">—</div>
+        <div class="atp-google-apply-decision-diff" id="atpGoogleApplyDecisionDiff">—</div>
+        <div class="atp-google-apply-decision-why" id="atpGoogleApplyDecisionWhy">—</div>
+      </div>
+      <div class="atp-google-apply-meta">
+        <div>Profil: <strong id="atpGoogleApplyProfile">—</strong></div>
+        <div>Tahmini dönüş: <strong id="atpGoogleApplyReturn">—</strong></div>
+      </div>
+    </div>
+    <div class="modal-footer atp-exp-footer">
+      <button type="button" class="btn btn-outline" id="atpGoogleApplyCancel">İptal</button>
+      <button type="button" class="btn btn-green" id="atpGoogleApplyConfirm">Onayla ve B Sırasını Uygula</button>
+    </div>
   </div>
 </div>
 
@@ -934,9 +1009,9 @@
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_map.js') }}?v=6"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=12"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=16"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=5"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=11"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=79"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=83"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}

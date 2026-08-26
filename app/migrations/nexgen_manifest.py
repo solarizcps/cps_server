@@ -647,6 +647,34 @@ MANIFEST: tuple[MigEntry, ...] = (
         ),
         required_tables=("arac_plana_idempotency",),
     ),
+    MigEntry(
+        182, "182_arac_plan_change_v1",
+        "182_arac_plan_change_v1.py",
+        "Araç Takip — plan değişikliği audit + ERTELENDI/GIDILEMEDI durumları",
+        dependencies=(181,),
+        required_tables=("arac_plan_is_degisim",),
+    ),
+    MigEntry(
+        187, "187_arac_plan_cikis_saati",
+        "187_arac_plan_cikis_saati.py",
+        "Araç Takip — plan bazlı çıkış saati (arac_gunluk_plan.cikis_saati TEXT nullable)",
+        dependencies=(182,),
+        required_columns=(
+            ("arac_gunluk_plan", "cikis_saati"),
+        ),
+    ),
+    MigEntry(
+        188, "188_arac_plan_is_zaman_alanlari",
+        "188_arac_plan_is_zaman_alanlari.py",
+        "Araç Takip — iş bazlı zaman alanları: istenen_varis_saati (backfill), tahmini_varis_saati (ETA), istenen_saat_kaynak, istenen_saat_manuel (arac_gunluk_plan_is)",
+        dependencies=(187,),
+        required_columns=(
+            ("arac_gunluk_plan_is", "istenen_varis_saati"),
+            ("arac_gunluk_plan_is", "istenen_saat_kaynak"),
+            ("arac_gunluk_plan_is", "istenen_saat_manuel"),
+            ("arac_gunluk_plan_is", "tahmini_varis_saati"),
+        ),
+    ),
 )
 
 BY_VERSION = {m.version: m for m in MANIFEST}
