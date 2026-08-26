@@ -287,6 +287,11 @@ def get_live_vehicles(retry_auth: bool = True) -> dict:
     valid_loc = sum(1 for v in vehicles if v.get('has_valid_location'))
     elapsed = int((time.perf_counter() - t0) * 1000)
     _log_call('get_live_vehicles', 200, elapsed, f'vehicle_count={len(vehicles)} valid_location={valid_loc}')
+    try:
+        from modules.planlama.arac_vehicle_identity_service import update_filom_vehicle_catalog
+        update_filom_vehicle_catalog(vehicles)
+    except Exception:
+        pass
     return {
         'ok': True,
         'data_source': 'turkcell_filom',

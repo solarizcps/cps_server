@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from flask import Blueprint, jsonify, render_template, request, session
+from flask import Blueprint, g, jsonify, render_template, request, session
 
 from modules.auth import yetki_gerekli, yetki_var
 from modules.planlama.arac_dashboard_service import get_arac_dashboard_dto
@@ -30,6 +30,30 @@ arac_takip_bp = Blueprint(
 )
 
 _VALID_TABS = frozenset({'canli', 'gunluk', 'haftalik', 'gecmis'})
+
+_VEHICLE_IDENTITY_SCOPE_ENDPOINTS = frozenset({
+    'arac_takip_bp.arac_takip_api_plana_is_ekle',
+    'arac_takip_bp.arac_takip_api_plana_is_ekle_batch',
+})
+
+
+@arac_takip_bp.before_request
+def _vehicle_identity_scope_begin():
+    if request.endpoint not in _VEHICLE_IDENTITY_SCOPE_ENDPOINTS:
+        return None
+    from modules.planlama.arac_vehicle_identity_service import begin_vehicle_identity_request_scope
+    g._atp_vehicle_identity_scope_token = begin_vehicle_identity_request_scope()
+    return None
+
+
+@arac_takip_bp.teardown_request
+def _vehicle_identity_scope_end(exc):
+    token = getattr(g, '_atp_vehicle_identity_scope_token', None)
+    if token is None:
+        return None
+    from modules.planlama.arac_vehicle_identity_service import end_vehicle_identity_request_scope
+    end_vehicle_identity_request_scope(token)
+    return None
 
 
 def _uid() -> int:

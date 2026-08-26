@@ -83,10 +83,10 @@ def _resolve_location_conn(
     session_user_id: int,
     payload: dict,
     now: str,
-) -> tuple[int | None, str]:
+) -> tuple[int | None, str, float | None, float | None]:
     """
     Resolve kayıtlı yer within caller transaction.
-    Returns (yer_id | None, master_action).
+    Returns (yer_id | None, master_action, canonical_lat, canonical_lng).
     Koordinat validation yok burada — pre-transaction'da yapılmalı.
     """
     loc_id_raw = payload.get('location_master_id') or payload.get('kayitli_yer_id')
@@ -125,7 +125,8 @@ def _resolve_location_conn(
             if not konum and master_row['konum_linki']:
                 konum = master_row['konum_linki']
             _touch_location(con, given_loc_id)
-            return given_loc_id, 'linked_existing'
+            _sync_payload_coordinates(payload, lat, lng)
+            return given_loc_id, 'linked_existing', lat, lng
 
     if lat is not None and lng is not None and firma and adres:
         loc_id, master_action = _ensure_kayitli_yer(
@@ -133,9 +134,51 @@ def _resolve_location_conn(
             None if is_new_location else given_loc_id, now,
             konum_adi=konum_adi, cari_id=cari_id,
         )
-        return loc_id, master_action
+        _sync_payload_coordinates(payload, lat, lng)
+        return loc_id, master_action, lat, lng
 
-    return None, 'none'
+    return None, 'none', lat, lng
+
+
+def _sync_payload_coordinates(payload: dict, lat: float | None, lng: float | None) -> None:
+    """Canonical koordinatları talep INSERT için payload'a yaz."""
+    if lat is None or lng is None:
+        return
+    payload['_lat'] = float(lat)
+    payload['_lng'] = float(lng)
+    payload['latitude'] = float(lat)
+    payload['longitude'] = float(lng)
+
+
+def _finalize_canonical_coordinates(
+    con: sqlite3.Connection,
+    payload: dict,
+    loc_id: int | None,
+) -> tuple[float, float]:
+    """
+    Doğrulanmış koordinat — önce payload snapshot, sonra kayıtlı yer master.
+    Client ham değerine kör güvenilmez; INSERT öncesi canonical kaynak.
+    """
+    lat = payload.get('_lat')
+    lng = payload.get('_lng')
+    try:
+        if lat is not None and lng is not None:
+            return float(lat), float(lng)
+    except (TypeError, ValueError):
+        pass
+
+    if loc_id:
+        master = con.execute(
+            'SELECT latitude, longitude FROM arac_kayitli_yer WHERE id=? AND aktif=1',
+            (int(loc_id),),
+        ).fetchone()
+        if master and master['latitude'] is not None and master['longitude'] is not None:
+            clat = float(master['latitude'])
+            clng = float(master['longitude'])
+            _sync_payload_coordinates(payload, clat, clng)
+            return clat, clng
+
+    raise ValueError('Konum koordinatı doğrulanamadı — adres/konum yeniden doğrulanmalı')
 
 
 def _get_idempotent_result(con: sqlite3.Connection, token: str | None) -> dict | None:
@@ -404,6 +447,9 @@ def _validate_payload(payload: dict) -> None:
 
 
 def _require_coordinates(payload: dict, lat: float | None, lng: float | None) -> None:
+    loc_id_raw = payload.get('location_master_id') or payload.get('kayitli_yer_id')
+    if (lat is None or lng is None) and loc_id_raw not in (None, ''):
+        return
     if lat is None or lng is None:
         raise ValueError(
             'Geçerli konum koordinatı gerekli. Google Maps bağlantısını doğrulayın veya haritadan pin seçin.'
@@ -459,7 +505,13 @@ def add_job_to_plan_atomic(session_user_id: int, payload: dict) -> dict:
 
     plan_date = str(payload.get('plan_tarihi') or payload.get('tarih') or '')[:10]
     arac_external_id = str(payload.get('arac_external_id') or '').strip()
-    arac_plaka = str(payload.get('arac_plaka') or payload.get('plaka') or '').strip()
+    from modules.planlama.arac_vehicle_identity_service import resolve_vehicle_identity
+
+    vehicle_identity = resolve_vehicle_identity(
+        payload.get('arac_provider'),
+        arac_external_id,
+    )
+    arac_plaka = vehicle_identity['arac_plaka_snapshot']
     planlanan_saat = (payload.get('planlanan_saat') or payload.get('saat') or payload.get('istenen_saat') or '').strip() or None
     sira_raw = payload.get('sira')
     sira = int(sira_raw) if sira_raw not in (None, '') else None
@@ -490,9 +542,13 @@ def add_job_to_plan_atomic(session_user_id: int, payload: dict) -> dict:
             return replay
 
         # Step 1: kayıtlı yer (conn-içi)
-        loc_id, master_action = _resolve_location_conn(con, session_user_id, enriched, now)
+        loc_id, master_action, _, _ = _resolve_location_conn(con, session_user_id, enriched, now)
         if loc_id is None:
             raise ValueError('Konum kaydedilemedi — koordinat ve adres gerekli')
+
+        canon_lat, canon_lng = _finalize_canonical_coordinates(con, enriched, loc_id)
+        enriched['_lat'] = canon_lat
+        enriched['_lng'] = canon_lng
 
         # Step 2: talep insert — durum doğrudan PLANA_ALINDI
         talep_id = _create_request_conn(con, session_user_id, enriched, loc_id, now)

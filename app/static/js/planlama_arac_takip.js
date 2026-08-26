@@ -105,6 +105,143 @@
     return p;
   }
 
+  var PLAN_PROVIDER_FILOM = 'TURKCELL_FILOM';
+
+  function normalizePhysicalPlate(label) {
+    var raw = String(label || '').trim();
+    if (!raw || raw === 'Plaka bilgisi yok') return '';
+    var compact = raw.toUpperCase().replace(/[\s.\-_]+/g, '');
+    var m = compact.match(/^(\d{2})([A-Z]{1,3})(\d{2,4})$/);
+    if (m) return m[1] + ' ' + m[2] + ' ' + m[3];
+    return raw.toUpperCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function _vehicleGpsTs(v) {
+    var ts = v && (v.gps_last_seen_at || v.last_seen_at || v.posTimestamp);
+    if (!ts) return 0;
+    var d = new Date(String(ts).replace(' ', 'T'));
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+
+  function _vehicleCanonicalScore(externalId) {
+    var ext = String(externalId || '');
+    if (/^45\d{5,}$/.test(ext)) return 30;
+    if (/^99\d{3,}$/.test(ext)) return 5;
+    return 15;
+  }
+
+  function _uniqueVehiclePriority(c) {
+    if (c.has_current_plan) {
+      return 1000000 + _vehicleCanonicalScore(c.external_id) * 1000;
+    }
+    if (!c.is_stale && c.source === 'filom') {
+      return 500000 + _vehicleCanonicalScore(c.external_id) * 1000;
+    }
+    if (c.source === 'today-operations') {
+      return 200000 + _vehicleCanonicalScore(c.external_id) * 1000;
+    }
+    return 100000 + _vehicleCanonicalScore(c.external_id);
+  }
+
+  function _candidateBeats(next, prev) {
+    var pn = _uniqueVehiclePriority(next);
+    var pp = _uniqueVehiclePriority(prev);
+    if (pn !== pp) return pn > pp;
+    if (next.gps_ts !== prev.gps_ts) return next.gps_ts > prev.gps_ts;
+    return _vehicleCanonicalScore(next.external_id) > _vehicleCanonicalScore(prev.external_id);
+  }
+
+  function buildUniquePhysicalVehicleOptions(filomVehicles, opsVehicles) {
+    var candidates = [];
+
+    function pushCandidate(v, source) {
+      var ext = String(v.arac_external_id || v.id || '').trim();
+      if (!ext) return;
+      var provider = String(v.arac_provider || v.provider || PLAN_PROVIDER_FILOM).trim();
+      var livePlate = normalizePhysicalPlate(v.plate_display || v.plate);
+      var opsPlate = normalizePhysicalPlate(v.arac_plaka_snapshot);
+      var plateKey = livePlate || opsPlate || '';
+      candidates.push({
+        external_id: ext,
+        provider: provider,
+        plateKey: plateKey,
+        driver: v.driver_name || v.driver || v.sofor_adi_snapshot || '',
+        plan_id: v.plan_id != null ? v.plan_id : null,
+        has_current_plan: v.plan_id != null && v.plan_id !== '',
+        is_stale: !!(v.is_stale_data || v.gps_is_stale),
+        gps_ts: _vehicleGpsTs(v),
+        source: source,
+      });
+    }
+
+    (opsVehicles || []).forEach(function (v) { pushCandidate(v, 'today-operations'); });
+    (filomVehicles || []).forEach(function (v) { pushCandidate(v, 'filom'); });
+
+    var winnerByPlate = {};
+    var winnerByBlankKey = {};
+
+    candidates.forEach(function (c) {
+      if (c.plateKey) {
+        var prev = winnerByPlate[c.plateKey];
+        if (!prev || _candidateBeats(c, prev)) {
+          winnerByPlate[c.plateKey] = c;
+        }
+      } else {
+        var blankKey = c.provider + ':' + c.external_id;
+        var prevBlank = winnerByBlankKey[blankKey];
+        if (!prevBlank || _candidateBeats(c, prevBlank)) {
+          winnerByBlankKey[blankKey] = c;
+        }
+      }
+    });
+
+    var winners = [];
+    Object.keys(winnerByPlate).forEach(function (plateKey) {
+      winners.push({
+        value: winnerByPlate[plateKey].external_id,
+        label: plateKey,
+        driver: winnerByPlate[plateKey].driver,
+        provider: winnerByPlate[plateKey].provider,
+        plan_id: winnerByPlate[plateKey].plan_id,
+      });
+    });
+
+    Object.keys(winnerByBlankKey).forEach(function (blankKey) {
+      var c = winnerByBlankKey[blankKey];
+      var ext = c.external_id;
+      var resolvedPlate = '';
+      candidates.forEach(function (x) {
+        if (x.external_id === ext && x.plateKey) resolvedPlate = x.plateKey;
+      });
+      if (resolvedPlate) return;
+      if (!c.plateKey) return;
+      winners.push({
+        value: c.external_id,
+        label: c.plateKey,
+        driver: c.driver,
+        provider: c.provider,
+        plan_id: c.plan_id,
+      });
+    });
+
+    winners.sort(function (a, b) {
+      return String(a.label).localeCompare(String(b.label), 'tr');
+    });
+
+    return [{ value: '', label: '— Araç seç —', driver: '', provider: '', plan_id: null }].concat(winners);
+  }
+
+  function vehicleUniqueOptionsToHtml(options) {
+    return (options || []).map(function (o) {
+      var attrs = ' value="' + o.value + '"';
+      if (o.driver) attrs += ' data-driver="' + o.driver + '"';
+      if (o.label && o.value) attrs += ' data-plate="' + o.label + '"';
+      if (o.value) attrs += ' data-provider="' + (o.provider || PLAN_PROVIDER_FILOM) + '"';
+      if (o.plan_id != null) attrs += ' data-plan-id="' + o.plan_id + '"';
+      return '<option' + attrs + '>' + o.label + '</option>';
+    }).join('');
+  }
+
   function _fetchWithTimeout(url, signal, ms) {
     var timeoutId;
     var timeoutPromise = new Promise(function (_, reject) {
@@ -1631,29 +1768,10 @@
     var reqSel = qs('atpReqArac');
     if (!sel && !reqSel) return;
 
-    var seen = {};
-    var opts = [{ value: '', label: '— Araç seç —' }];
-
-    /* Prefer ops vehicles (have plan context) */
-    (opsVehicles || []).forEach(function (v) {
-      var vid = String(v.arac_external_id || v.id || '');
-      if (!vid || seen[vid]) return;
-      seen[vid] = true;
-      var pl = safePlate(v);
-      opts.push({ value: vid, label: pl, driver: v.driver_name || v.driver });
-    });
-    /* Add filom vehicles not in ops */
-    (filomVehicles || []).forEach(function (v) {
-      var vid = String(v.id || '');
-      if (!vid || seen[vid]) return;
-      seen[vid] = true;
-      var pl = safePlate(v);
-      opts.push({ value: vid, label: pl, driver: v.driver_name });
-    });
-
-    var optHtml = opts.map(function (o) {
-      return '<option value="' + o.value + '"' + (o.driver ? ' data-driver="' + o.driver + '"' : '') + '>' + o.label + '</option>';
-    }).join('');
+    var liveCatalog = (filomVehicles && filomVehicles.length) ? filomVehicles : (lastVehicles || []);
+    var optHtml = vehicleUniqueOptionsToHtml(
+      buildUniquePhysicalVehicleOptions(liveCatalog, opsVehicles)
+    );
 
     if (sel) sel.innerHTML = optHtml;
     if (reqSel) reqSel.innerHTML = optHtml;
@@ -3558,11 +3676,14 @@
     function _qs(id) { return document.getElementById(id); }
 
     function _aracOpts() {
-      var src = _qs('atpReqArac');
       var dst = _qs('atpMultiArac');
-      if (!src || !dst) return;
-      if (dst.options.length > 1) return;
-      dst.innerHTML = src.innerHTML;
+      if (!dst) return;
+      var prev = dst.value;
+      var opsVehicles = (lastOpsData && lastOpsData.vehicles) ? lastOpsData.vehicles : [];
+      dst.innerHTML = vehicleUniqueOptionsToHtml(
+        buildUniquePhysicalVehicleOptions(lastVehicles, opsVehicles)
+      );
+      if (prev) dst.value = prev;
     }
 
     /* Find row by its uid attribute on the TR (BUG2 FIX: uid not index) */
