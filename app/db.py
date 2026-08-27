@@ -6,6 +6,7 @@ FORCED MOCK MODE.
 PLAN v2 (Korgun MSSQL) ve uretim_giris kendi baglantilarini kullanir.
 Bu dosya sadece Finans, Yonetim, Grafik, Ithalat, Auth, Audit, Belge icin SQLite saglar.
 """
+import os
 import sqlite3
 from contextlib import contextmanager
 from config import Config
@@ -14,7 +15,24 @@ from config import Config
 DB_MODE = 'mock'
 
 
+def _reject_canonical_rw_in_test_mode() -> None:
+    """Second-layer guard: refuse RW get_conn() to canonical when test guard is on."""
+    if os.environ.get('CPS_TEST_DB_GUARD', '').strip() != '1':
+        return
+    from tools.atp_test_db_guard import is_canonical_path
+
+    if is_canonical_path(Config.MOCK_DB_PATH):
+        from tools.nexgen_tmp_db import CANONICAL_DB_WRITE_FORBIDDEN_IN_TEST
+
+        raise RuntimeError(
+            f'{CANONICAL_DB_WRITE_FORBIDDEN_IN_TEST}: get_conn() refused for canonical DB '
+            f'while CPS_TEST_DB_GUARD=1 (path={Config.MOCK_DB_PATH!r}). '
+            f'Set CPS_MOCK_DB_PATH to a unique temp file.'
+        )
+
+
 def _sqlite_conn():
+    _reject_canonical_rw_in_test_mode()
     conn = sqlite3.connect(Config.MOCK_DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
