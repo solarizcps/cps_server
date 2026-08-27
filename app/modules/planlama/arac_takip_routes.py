@@ -15,12 +15,10 @@ from modules.planlama.arac_lokasyon_service import (
 from modules.planlama.arac_request_user_service import get_cps_user_by_id, search_cps_users
 from modules.planlama.arac_plan_service import (
     add_job_request,
-    build_whatsapp_plan_message,
     get_daily_plan_aggregate,
     get_tasks_for_session,
     move_task,
     reorder_tasks,
-    whatsapp_web_url,
 )
 
 arac_takip_bp = Blueprint(
@@ -290,10 +288,23 @@ def arac_takip_api_plana_al():
 @arac_takip_bp.route('/api/whatsapp', methods=['GET'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_whatsapp():
-    dto = _build_dto(tab='gunluk', plan_date=_parse_date(request.args.get('date')))
-    msg = build_whatsapp_plan_message(dto)
-    url = whatsapp_web_url(msg, request.args.get('phone', ''))
-    return jsonify({'ok': True, 'message': msg, 'whatsapp_url': url})
+    date_raw = (request.args.get('date') or '').strip()
+    vehicle_id = (request.args.get('vehicle_id') or request.args.get('arac_external_id') or '').strip()
+    if not date_raw or not vehicle_id:
+        return jsonify({'ok': False, 'code': 'INVALID_REQUEST', 'error': 'date ve vehicle_id zorunludur'}), 400
+    try:
+        plan_date = _parse_date(date_raw)
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'code': 'INVALID_REQUEST', 'error': 'Geçersiz tarih'}), 400
+    from modules.planlama.arac_whatsapp_message_service import build_whatsapp_payload
+    payload = build_whatsapp_payload(plan_date.isoformat(), vehicle_id, phone=request.args.get('phone', ''))
+    if payload is None:
+        return jsonify({'ok': False, 'code': 'PLAN_NOT_FOUND', 'error': 'Plan bulunamadı'}), 404
+    return jsonify({
+        'ok': True,
+        'message': payload['message'],
+        'whatsapp_url': payload['whatsapp_url'],
+    })
 
 
 @arac_takip_bp.route('/api/locations/search', methods=['GET'])

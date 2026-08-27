@@ -3515,11 +3515,29 @@
   /* ─── WhatsApp ─── */
   var btnWa = qs('atpBtnWhatsapp');
   if (btnWa) btnWa.addEventListener('click', function () {
-    fetch('/planlama/arac-takip/api/whatsapp?date=' + encodeURIComponent(planDate), { credentials: 'same-origin' })
-      .then(function (r) { return r.json(); })
+    var vid = vehicleId();
+    if (!vid) {
+      toast('WhatsApp planı için önce bir araç seçin.');
+      return;
+    }
+    var waUrl = '/planlama/arac-takip/api/whatsapp?date=' + encodeURIComponent(planDate)
+      + '&vehicle_id=' + encodeURIComponent(vid);
+    fetch(waUrl, { credentials: 'same-origin' })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          if (!r.ok) {
+            var errMsg = (j && (j.error || j.message)) ? (j.error || j.message) : 'WhatsApp bağlantısı oluşturulamadı.';
+            toast(errMsg);
+            return null;
+          }
+          return j;
+        });
+      })
       .then(function (j) {
-        if (j.url) window.open(j.url, '_blank');
-        else toast(j.message || 'WhatsApp bağlantısı oluşturulamadı.');
+        if (!j || !j.ok) return;
+        var openUrl = j.whatsapp_url || j.url;
+        if (openUrl) window.open(openUrl, '_blank', 'noopener');
+        else toast('WhatsApp bağlantısı oluşturulamadı.');
       }).catch(function () { toast('WhatsApp bağlantısı oluşturulamadı.'); });
   });
 
