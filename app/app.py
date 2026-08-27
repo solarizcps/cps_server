@@ -489,5 +489,15 @@ if __name__ == '__main__':
         _dbg = _dbg_env not in ('0', 'false', 'False', '')
     else:
         _dbg = Config.DEBUG
+    try:
+        from tools.cps_single_instance import (
+            CpsSingleInstanceError,
+            acquire_cps_single_instance_or_raise,
+        )
+        acquire_cps_single_instance_or_raise(Config.PORT)
+    except CpsSingleInstanceError as _guard_err:
+        print(f'  [BLOK] {_guard_err}')
+        import sys as _sys
+        _sys.exit(1)
     app.run(host=Config.HOST, port=Config.PORT, debug=_dbg)
 
