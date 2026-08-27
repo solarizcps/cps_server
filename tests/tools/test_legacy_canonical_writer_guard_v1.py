@@ -15,7 +15,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / 'app'
-CANONICAL = APP / 'mock_data.db'
+CANONICAL = Path(os.environ.get(
+    'CPS_CANONICAL_DB_SOURCE',
+    r'C:\Solariz_CPS_SERVER\app\mock_data.db',
+)).resolve()
 
 if str(APP) not in sys.path:
     sys.path.insert(0, str(APP))

@@ -19,9 +19,8 @@ import pytest
 APP = Path(__file__).resolve().parents[2] / 'app'
 MIGS = APP / 'migrations'
 sys.path.insert(0, str(APP))
-os.chdir(APP)
-os.environ['CPS_TEST_DB_GUARD'] = '1'
 
+from atp_canonical_forensic import assert_canonical_atp_unchanged, canonical_logical_snapshot
 from tools.nexgen_tmp_db import assert_resolved_db_is_tmp, canonical_db_path, sha256_file
 
 PHASE = 'ATP_MEHMET_MULTI_ADD_PERMISSION_IMPLEMENT_V1'
@@ -96,6 +95,7 @@ def env():
     if not os.path.isfile(live):
         live = canonical_db_path()
     sha_before = sha256_file(live)
+    logical_before = canonical_logical_snapshot(live)
     tmp_dir = tempfile.mkdtemp(prefix='atp_mehmet_perm_')
     db = os.path.join(tmp_dir, 'mock_data_test.db')
     shutil.copy2(live, db)
@@ -105,8 +105,8 @@ def env():
     os.environ['CPS_MOCK_DB_PATH'] = db
     import config as cfg
     cfg.Config.MOCK_DB_PATH = db
-    yield {'db': db, 'live': live, 'sha_before': sha_before, 'tmp_dir': tmp_dir}
-    assert sha256_file(live) == sha_before, 'Canonical source DB must not be modified'
+    yield {'db': db, 'live': live, 'sha_before': sha_before, 'logical_before': logical_before, 'tmp_dir': tmp_dir}
+    assert_canonical_atp_unchanged(live, logical_before)
     shutil.rmtree(tmp_dir, ignore_errors=True)
 
 

@@ -109,12 +109,12 @@ def _patch_route_google(side_effect_map: dict):
 def _build_test_app():
     """Build a minimal Flask app with auth stubbed out.
 
-    We patch modules.auth before touching the blueprint so that the
-    @yetki_gerekli decorator on the view function uses our stub.
+    Reload routes after patching auth so view decorators bind to stubs even if
+    a prior test module called importlib.reload(arac_takip_routes).
     """
     from functools import wraps
+    import importlib
 
-    # Stub auth so yetki_gerekli passes and session has a user.
     def _fake_yetki_gerekli(kod, action='can_view'):
         def deco(f):
             @wraps(f)
@@ -128,15 +128,11 @@ def _build_test_app():
         return True
 
     import modules.auth as _auth_mod
-    orig_req = _auth_mod.yetki_gerekli
-    orig_var = _auth_mod.yetki_var
     _auth_mod.yetki_gerekli = _fake_yetki_gerekli
     _auth_mod.yetki_var = _fake_yetki_var
 
-    # Also patch at the routes module level (it imported them at module load)
     import modules.planlama.arac_takip_routes as _routes_mod
-    _routes_mod.yetki_gerekli = _fake_yetki_gerekli
-    _routes_mod.yetki_var = _fake_yetki_var
+    importlib.reload(_routes_mod)
 
     from modules.planlama.arac_takip_routes import arac_takip_bp
     app = flask.Flask(__name__)

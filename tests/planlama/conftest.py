@@ -1,74 +1,72 @@
 # -*- coding: utf-8 -*-
-"""Conftest for tests/planlama — sys.path, Google dummy key, ATP DB write guard."""
+"""Conftest for tests/planlama — sys.path, Google dummy key, hygiene fixtures."""
 from __future__ import annotations
 
 import os
-import shutil
 import sys
 from pathlib import Path
 
 import pytest
 
-# repo_root/app
-_APP_DIR = str(Path(__file__).resolve().parents[2] / 'app')
-if _APP_DIR not in sys.path:
-    sys.path.insert(0, _APP_DIR)
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_APP_DIR = _REPO_ROOT / 'app'
+_PLANLAMA_S = str(_REPO_ROOT / 'tests' / 'planlama')
+for _p in (_APP_S := str(_APP_DIR), _PLANLAMA_S):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from atp_test_hygiene import capture_env_state, restore_env_state
+
+_CANONICAL_DB = Path(os.environ.get(
+    'CPS_CANONICAL_DB_SOURCE',
+    r'C:\Solariz_CPS_SERVER\app\mock_data.db',
+)).resolve()
+os.environ.setdefault('CPS_CANONICAL_DB_SOURCE', str(_CANONICAL_DB))
+
+# repo_root/app on sys.path — never rely on os.chdir(app)
 
 # Ensure a dummy Google key is present so UNCONFIGURED is not raised at import time.
 os.environ.setdefault('GOOGLE_ROUTES_API_KEY', 'TEST_DUMMY_KEY_conftest_00000000000000')
 
-from tools.atp_test_db_guard import (  # noqa: E402
-    bind_temp_db_path,
-    create_empty_temp_db,
-    install_atp_test_db_guard,
-    is_canonical_path,
-    uninstall_atp_test_db_guard,
-)
 
-
-@pytest.fixture(scope='session', autouse=True)
-def atp_planlama_db_guard_session():
-    """Session guard: block canonical writes; bind unique temp CPS_MOCK_DB_PATH."""
-    saved = {
-        'CPS_TEST_DB_GUARD': os.environ.get('CPS_TEST_DB_GUARD'),
-        'CPS_MOCK_DB_PATH': os.environ.get('CPS_MOCK_DB_PATH'),
-    }
-    import config
-
-    saved['Config_MOCK_DB_PATH'] = config.Config.MOCK_DB_PATH
-
-    existing_mock = (saved['CPS_MOCK_DB_PATH'] or '').strip()
-    if existing_mock and is_canonical_path(existing_mock):
-        pytest.fail(
-            f'CPS_MOCK_DB_PATH already points to canonical before tests: {existing_mock!r}'
-        )
-
-    os.environ['CPS_TEST_DB_GUARD'] = '1'
-    install_atp_test_db_guard()
-
-    temp_dir, temp_db = create_empty_temp_db(prefix='atp_planlama_pytest_')
-    bind_temp_db_path(temp_db)
-
-    ctx = {'temp_dir': temp_dir, 'temp_db': temp_db}
+@pytest.fixture(autouse=True)
+def atp_restore_process_hygiene(request):
+    """Per-test cwd + env restore (success and exception paths)."""
+    saved = capture_env_state()
+    yield
+    restore_env_state(saved)
     try:
-        yield ctx
-    finally:
-        config.Config.MOCK_DB_PATH = saved['Config_MOCK_DB_PATH']
-        if saved['CPS_MOCK_DB_PATH'] is None:
-            os.environ.pop('CPS_MOCK_DB_PATH', None)
-        else:
-            os.environ['CPS_MOCK_DB_PATH'] = saved['CPS_MOCK_DB_PATH']
+        os.chdir(saved['cwd'])
+    except OSError:
+        os.chdir(str(_REPO_ROOT))
 
-        if saved['CPS_TEST_DB_GUARD'] is None:
-            os.environ.pop('CPS_TEST_DB_GUARD', None)
-        else:
-            os.environ['CPS_TEST_DB_GUARD'] = saved['CPS_TEST_DB_GUARD']
-
-        uninstall_atp_test_db_guard()
-        shutil.rmtree(temp_dir, ignore_errors=True)
+    if request.node is not None:
+        request.node._atp_cwd_restored = os.getcwd() == saved['cwd']
 
 
-@pytest.fixture(scope='session', autouse=True)
-def atp_temp_db_session(atp_planlama_db_guard_session):  # noqa: PT004
-    """Override app/conftest.py heavy temp-db copy — planlama uses ATP guard instead."""
-    return atp_planlama_db_guard_session
+@pytest.fixture(autouse=True)
+def atp_restore_cwd_to_repo_root():
+    """Force repo root cwd after each test — defeats import-time os.chdir(APP) pollution."""
+    yield
+    os.chdir(str(_REPO_ROOT))
+
+
+@pytest.fixture(autouse=True)
+def atp_reset_google_route_options_app_cache():
+    """Mehmet tests reload routes; reset cached minimal Flask app in route-options tests."""
+    yield
+    for mod in list(sys.modules.values()):
+        if getattr(mod, '__file__', '') and mod.__file__ and mod.__file__.endswith(
+            'test_google_route_options_api.py',
+        ):
+            if hasattr(mod, '_APP'):
+                mod._APP = None
+            if hasattr(mod, '_APP_CLIENT'):
+                mod._APP_CLIENT = None
+
+
+@pytest.fixture(autouse=True)
+def atp_ensure_repo_cwd():
+    """Start each test from repo root so combined collection order cannot leak app/ cwd."""
+    os.chdir(str(_REPO_ROOT))
+    yield

@@ -14,8 +14,6 @@ import pytest
 
 APP = Path(__file__).resolve().parents[2] / 'app'
 sys.path.insert(0, str(APP))
-os.chdir(APP)
-os.environ['CPS_TEST_DB_GUARD'] = '1'
 
 from modules.planlama.arac_today_operations_service import (
     STATUS_CONTRACT_VERSION,
