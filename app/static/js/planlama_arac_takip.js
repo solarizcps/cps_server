@@ -29,6 +29,40 @@
   var dashboard = {};
   try { dashboard = JSON.parse(dashEl ? dashEl.textContent : '{}'); } catch (e) { dashboard = {}; }
 
+  var atpPermissions = dashboard.atp_permissions || {};
+
+  function syncAtpPermissions(src) {
+    if (src && src.atp_permissions) {
+      atpPermissions = src.atp_permissions;
+    }
+    applyAtpWriteUi();
+  }
+
+  function atpCanCreate() {
+    return !!(atpPermissions && atpPermissions.can_create);
+  }
+
+  function atpForbiddenToast(body) {
+    toast((body && body.error) ? body.error : 'Bu işlem için yetkiniz yok.');
+  }
+
+  function applyAtpWriteUi() {
+    var canCreate = atpCanCreate();
+    [
+      'atpBtnPlanaIsEkle', 'atpBtnPlanaIsEkleEmpty', 'atpBtnPlanOlusturEmpty',
+      'atpBtnPlanaIsEklePrs', 'atpBtnQuickPlan',
+      'atpMultiBtnSubmit', 'atpMultiBtnSubmitTop',
+    ].forEach(function (id) {
+      var el = qs(id);
+      if (!el) return;
+      el.disabled = !canCreate;
+      el.setAttribute('aria-disabled', canCreate ? 'false' : 'true');
+      el.title = canCreate ? '' : 'Bu işlem için yetkiniz yok';
+    });
+  }
+
+  applyAtpWriteUi();
+
   var planDate = root.getAttribute('data-date') || dashboard.date || new Date().toISOString().slice(0, 10);
   window.ATP_PLAN_DATE = planDate;
   var urlParams = new URLSearchParams(window.location.search);
@@ -4177,6 +4211,10 @@
     /* ── Submit ── */
     function _submit() {
       if (_submitInFlight) return;
+      if (!atpCanCreate()) {
+        toast('Bu işlem için yetkiniz yok.');
+        return;
+      }
       var arac = (_qs('atpMultiArac') || {}).value || '';
       var sofor = ((_qs('atpMultiSofor') || {}).value || '').trim();
       var tarih = (_qs('atpMultiTarih') || {}).value || '';
@@ -4257,9 +4295,16 @@
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rows: payloadRows, plan_tarihi: tarih, arac_external_id: arac }),
-      }).then(function (r) { return r.json(); }).then(function (j) {
+      }).then(function (r) {
+        return r.json().then(function (j) { return { status: r.status, body: j }; });
+      }).then(function (res) {
         _submitInFlight = false;
-        submitBtns.forEach(function (b) { if (b) b.disabled = false; });
+        submitBtns.forEach(function (b) { if (b) b.disabled = !atpCanCreate(); });
+        var j = res.body;
+        if (res.status === 403 || (j && j.code === 'FORBIDDEN')) {
+          atpForbiddenToast(j);
+          return;
+        }
         if (j.ok) {
           toast('✓ ' + j.ok_count + '/' + j.total + ' iş plana eklendi.');
           _closeModal('submit_ok');
@@ -4392,6 +4437,10 @@
   var _dailyMultiEntryBound = false;
 
   function _openDailyMultiModal(opts) {
+    if (!atpCanCreate()) {
+      toast('Bu işlem için yetkiniz yok.');
+      return false;
+    }
     if (typeof window.atpMultiOpen !== 'function') {
       console.error('[ATP] atpMultiOpen unavailable — multi modal controller failed to initialize');
       toast('Çoklu plan ekranı yüklenemedi. Sayfayı yenileyin.');

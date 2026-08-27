@@ -82,11 +82,70 @@ def _parse_date(raw: str | None) -> date:
 
 
 def _planlama_duzenle() -> bool:
+    """Legacy global planlama write — ATP route'ları _arac_takip_* helper kullanır."""
     return bool(
         yetki_var('planlama', 'can_update')
         or yetki_var('planlama', 'can_create')
         or yetki_var('planlama', 'can_manage')
     )
+
+
+_ATP_YETKI = 'planlama.arac_takip'
+_ATP_MANAGE_ACTIONS = frozenset({'cancel', 'iptal', 'delete', 'defer_next_day'})
+
+
+def _global_planlama_yazma(action: str) -> bool:
+    if action == 'create':
+        return yetki_var('planlama', 'can_create') or yetki_var('planlama', 'can_manage')
+    if action == 'update':
+        return yetki_var('planlama', 'can_update') or yetki_var('planlama', 'can_manage')
+    if action == 'manage':
+        return yetki_var('planlama', 'can_manage')
+    return False
+
+
+def _arac_takip_yazma(action: str) -> bool:
+    if action == 'create':
+        return (
+            yetki_var(_ATP_YETKI, 'can_create')
+            or yetki_var(_ATP_YETKI, 'can_manage')
+        )
+    if action == 'update':
+        return (
+            yetki_var(_ATP_YETKI, 'can_update')
+            or yetki_var(_ATP_YETKI, 'can_manage')
+        )
+    if action == 'manage':
+        return yetki_var(_ATP_YETKI, 'can_manage')
+    return False
+
+
+def _arac_takip_olustur() -> bool:
+    return _global_planlama_yazma('create') or _arac_takip_yazma('create')
+
+
+def _arac_takip_guncelle() -> bool:
+    return _global_planlama_yazma('update') or _arac_takip_yazma('update')
+
+
+def _arac_takip_yonet() -> bool:
+    return _global_planlama_yazma('manage') or _arac_takip_yazma('manage')
+
+
+def _atp_forbidden():
+    return jsonify({
+        'ok': False,
+        'error': 'Bu işlem için yetkiniz yok.',
+        'code': 'FORBIDDEN',
+    }), 403
+
+
+def get_atp_permissions() -> dict:
+    return {
+        'can_create': _arac_takip_olustur(),
+        'can_update': _arac_takip_guncelle(),
+        'can_manage': _arac_takip_yonet(),
+    }
 
 
 def _build_dto(tab: str | None = None, plan_date: date | None = None) -> dict:
@@ -96,13 +155,15 @@ def _build_dto(tab: str | None = None, plan_date: date | None = None) -> dict:
     vehicle_id = request.args.get('vehicle_id') or None
     driver_id = request.args.get('driver_id') or None
     tasks = get_tasks_for_session(uid, d.isoformat(), vehicle_id)
-    return get_arac_dashboard_dto(
+    dto = get_arac_dashboard_dto(
         plan_date=d,
         active_tab=tab,
         vehicle_id=vehicle_id,
         driver_id=driver_id,
         daily_tasks=tasks,
     )
+    dto['atp_permissions'] = get_atp_permissions()
+    return dto
 
 
 @arac_takip_bp.route('/', methods=['GET'])
@@ -149,8 +210,8 @@ def arac_takip_api_day_plan_summary():
 @arac_takip_bp.route('/api/reorder', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_reorder():
-    if not _planlama_duzenle():
-        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    if not _arac_takip_guncelle():
+        return _atp_forbidden()
     body = request.get_json(silent=True) or {}
     plan_date = _parse_date(body.get('date') or request.args.get('date'))
     uid = _uid()
@@ -179,8 +240,8 @@ def arac_takip_api_talepler_bekleyen():
 @arac_takip_bp.route('/api/talepler/plana-al', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_plana_al():
-    if not _planlama_duzenle():
-        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    if not _arac_takip_olustur():
+        return _atp_forbidden()
     from modules.planlama.arac_takip_repo import assign_to_plan, tables_ready
     if not tables_ready():
         return jsonify({'ok': False, 'error': 'Tablolar hazır değil'}), 503
@@ -269,8 +330,8 @@ def arac_takip_api_maps_resolve():
 @arac_takip_bp.route('/api/locations/from-maps', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_location_from_maps():
-    if not _planlama_duzenle():
-        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    if not _arac_takip_olustur():
+        return _atp_forbidden()
     from modules.planlama.arac_takip_repo import create_or_resolve_kayitli_yer, tables_ready
     if not tables_ready():
         return jsonify({'ok': False, 'error': 'Tablolar hazır değil'}), 503
@@ -324,8 +385,8 @@ def arac_takip_api_base_get():
 @arac_takip_bp.route('/api/operasyon/base', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_base_save():
-    if not _planlama_duzenle():
-        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    if not _arac_takip_guncelle():
+        return _atp_forbidden()
     from modules.planlama.arac_operasyon_ayar_repo import save_base_location, operasyon_ayar_ready
     from modules.planlama.arac_location_resolver import resolve_base_location
     if not operasyon_ayar_ready():
@@ -344,8 +405,8 @@ def arac_takip_api_base_save():
 @arac_takip_bp.route('/api/plan-items/konum', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_plan_item_konum():
-    if not _planlama_duzenle():
-        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    if not _arac_takip_guncelle():
+        return _atp_forbidden()
     from modules.planlama.arac_lokasyon_service import MAPS_COORD_USER_ERROR, parse_maps_coords
     from modules.planlama.arac_takip_repo import (
         save_talep_konum_with_master,
@@ -456,8 +517,8 @@ def arac_takip_api_route_plan():
 @arac_takip_bp.route('/api/route/apply', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_route_apply():
-    if not _planlama_duzenle():
-        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    if not _arac_takip_guncelle():
+        return _atp_forbidden()
     body = request.get_json(silent=True) or {}
     plan_date = _parse_date(body.get('date') or request.args.get('date'))
     vehicle_id = body.get('vehicle_id') or request.args.get('vehicle_id')
@@ -648,8 +709,8 @@ def arac_takip_api_plana_is_ekle_batch():
     Çoklu iş ekleme — tümü-veya-hiç (all-or-nothing) güvenli mod.
     Herhangi bir satırda eksik firma/is/konum varsa hiçbir satır eklenmez.
     """
-    if not _planlama_duzenle():
-        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    if not _arac_takip_olustur():
+        return _atp_forbidden()
     from modules.planlama.arac_add_to_plan_service import add_job_to_plan_atomic
     from modules.planlama.arac_today_operations_service import get_today_vehicle_operations
     from modules.planlama.arac_takip_repo import tables_ready
@@ -711,8 +772,8 @@ def arac_takip_api_plana_is_ekle_batch():
 @arac_takip_bp.route('/api/plana-is-ekle', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_plana_is_ekle():
-    if not _planlama_duzenle():
-        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    if not _arac_takip_olustur():
+        return _atp_forbidden()
     from modules.planlama.arac_add_to_plan_service import add_job_to_plan_atomic
     from modules.planlama.arac_today_operations_service import get_today_vehicle_operations
     from modules.planlama.arac_takip_repo import tables_ready
@@ -759,8 +820,16 @@ def arac_takip_api_plan_job_detail(plan_is_id: int):
 @arac_takip_bp.route('/api/plan-job/<int:plan_is_id>/change', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_plan_job_change(plan_is_id: int):
-    if not _planlama_duzenle():
-        return jsonify({'ok': False, 'error': 'Yetkisiz'}), 403
+    body = request.get_json(silent=True) or {}
+    action = (body.get('action') or '').strip().lower()
+    if action == 'iptal':
+        action = 'cancel'
+    if action in _ATP_MANAGE_ACTIONS:
+        if not _arac_takip_yonet():
+            return _atp_forbidden()
+    elif action and action != 'reorder_info':
+        if not _arac_takip_guncelle():
+            return _atp_forbidden()
     from modules.planlama.arac_plan_change_service import (
         PlanChangeError,
         PlanChangeForbidden,
@@ -771,7 +840,6 @@ def arac_takip_api_plan_job_change(plan_is_id: int):
     from modules.planlama.arac_takip_repo import tables_ready
     if not tables_ready():
         return jsonify({'ok': False, 'error': 'Tablolar hazır değil'}), 503
-    body = request.get_json(silent=True) or {}
     try:
         result = apply_plan_job_change(plan_is_id, _uid(), body)
         plan_date = _parse_date(body.get('plan_tarihi') or request.args.get('date'))
@@ -809,6 +877,8 @@ def arac_takip_api_plan_job_change(plan_is_id: int):
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_plan_departure_time():
     """Araç planı çıkış saatini kaydet ve durak ETA'larını hesapla (atomic)."""
+    if not _arac_takip_guncelle():
+        return _atp_forbidden()
     from modules.planlama.arac_departure_service import (
         DepartureValidationError,
         save_departure_and_compute_eta,
@@ -896,6 +966,8 @@ def arac_takip_api_plan_job_desired_time():
     from modules.planlama.arac_dashboard_service import get_arac_dashboard_dto
     from modules.planlama.arac_takip_repo import tables_ready
 
+    if not _arac_takip_guncelle():
+        return _atp_forbidden()
     if not tables_ready():
         return jsonify({'ok': False, 'error': 'Tablolar hazır değil', 'code': 'TABLES_NOT_READY'}), 503
 
