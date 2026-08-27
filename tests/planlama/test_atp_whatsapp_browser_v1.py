@@ -140,17 +140,31 @@ def browser_pages(browser_env):
             page.add_init_script(
                 """
                 window.__waOpened = [];
+                window.__waPopupUrls = [];
                 window.open = function(url) {
-                  window.__waOpened.push(url);
-                  const el = document.createElement('pre');
-                  el.id = 'atp-wa-test-preview';
-                  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;max-height:40vh;overflow:auto;background:#111;color:#0f0;z-index:99999;padding:8px;font-size:11px;';
-                  try {
-                    const text = decodeURIComponent((url.split('text=')[1] || ''));
-                    el.textContent = text;
-                  } catch (e) { el.textContent = url; }
-                  document.body.appendChild(el);
-                  return null;
+                  window.__waOpened.push(url || 'about:blank');
+                  const popup = {
+                    closed: false,
+                    close: function() { this.closed = true; },
+                    location: {
+                      replace: function(nextUrl) {
+                        window.__waPopupUrls.push(nextUrl);
+                        window.__waOpened.push(nextUrl);
+                        let el = document.getElementById('atp-wa-test-preview');
+                        if (!el) {
+                          el = document.createElement('pre');
+                          el.id = 'atp-wa-test-preview';
+                          el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;max-height:40vh;overflow:auto;background:#111;color:#0f0;z-index:99999;padding:8px;font-size:11px;';
+                          document.body.appendChild(el);
+                        }
+                        try {
+                          const text = decodeURIComponent((nextUrl.split('text=')[1] || ''));
+                          el.textContent = text;
+                        } catch (e) { el.textContent = nextUrl; }
+                      }
+                    }
+                  };
+                  return popup;
                 };
                 """
             )
@@ -165,8 +179,15 @@ class TestWhatsAppBrowserV1:
         for vp, page in browser_pages['pages'].items():
             _login(page)
             _open_plan(page)
+            body_before = page.inner_text('body')
+            assert 'Sürücü: Ali (Üretim Operatörü)' not in body_before
+            assert 'GÜNLÜK ARAÇ PROGRAMI' not in body_before
             page.click('#atpBtnWhatsapp')
             page.wait_for_timeout(2000)
+            opened = page.evaluate('window.__waOpened')
+            assert opened and opened[0] == 'about:blank'
+            popup_urls = page.evaluate('window.__waPopupUrls')
+            assert popup_urls and popup_urls[0].startswith('https://wa.me/?text=')
             preview = page.locator('#atp-wa-test-preview')
             preview.wait_for(state='attached', timeout=15000)
             text = preview.inner_text()
@@ -177,6 +198,9 @@ class TestWhatsAppBrowserV1:
             assert 'Solariz Fabrika' in text
             assert 'Tahmini dönüş:' in text
             assert '08:51' not in text
+            assert 'Ali (Üretim Operatörü)' not in text
+            body_after = page.inner_text('body')
+            assert 'Sürücü: Ali (Üretim Operatörü)' not in body_after.replace(text, '')
             page.screenshot(path=str(OUT_DIR / f'whatsapp_{vp}.png'), full_page=True)
 
         assert decoded_messages['1920'] == decoded_messages['1366']

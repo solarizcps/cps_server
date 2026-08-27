@@ -10,6 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+import urllib.parse
 
 import pytest
 
@@ -19,7 +20,7 @@ sys.path.insert(0, str(APP))
 sys.path.insert(0, str(APP.parent / 'tests' / 'planlama'))
 
 from atp_canonical_forensic import assert_canonical_atp_unchanged, canonical_logical_snapshot
-from atp_plan2_fixture import PLAN_DATE, VEHICLE, insert_factory_base, seed_plan2_fixture
+from atp_plan2_fixture import PLAN_DATE, PLAN_ID, VEHICLE, insert_factory_base, seed_plan2_fixture
 from tools.nexgen_tmp_db import assert_resolved_db_is_tmp
 
 CANONICAL_SOURCE = Path(os.environ.get(
@@ -150,6 +151,10 @@ def _prepare_plan(env, *, vehicle: str = VEHICLE, plan_date: str = PLAN_DATE) ->
     con.close()
 
 
+def _decode_message(url: str) -> str:
+    return urllib.parse.unquote(url.split('text=', 1)[1])
+
+
 class TestWhatsAppApiV1:
     def test_missing_vehicle_id_400(self, client):
         con = sqlite3.connect(client.application.config.get('TESTING') and os.environ['CPS_MOCK_DB_PATH'])
@@ -180,13 +185,16 @@ class TestWhatsAppApiV1:
         con = sqlite3.connect(env['db'])
         _login(client, _user(con, 1))
         con.close()
-        with patch('modules.planlama.arac_timeline_service.build_timeline_for_plan', return_value={'estimated_return_time': '21:00'}):
+        with patch('modules.planlama.arac_timeline_service.build_timeline_for_plan', return_value={'estimated_return_time': '21:00', 'timeline_complete': True, 'status': 'HESAPLANDI', 'plan_departure_time': '19:00', 'estimated_total_seconds': 3600.0}):
             r = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={VEHICLE}')
         assert r.status_code == 200
         body = r.get_json()
         assert body['ok'] is True
         assert body['whatsapp_url'].startswith('https://wa.me/?text=')
-        assert '34 MOR 049' in body['message']
+        assert 'message' not in body
+        assert body['vehicle_external_id'] == VEHICLE
+        assert body['plan_id'] == PLAN_ID
+        assert '34 MOR 049' in _decode_message(body['whatsapp_url'])
 
     def test_multi_vehicle_isolation(self, client, env):
         _prepare_plan(env, vehicle=VEHICLE)
@@ -194,13 +202,15 @@ class TestWhatsAppApiV1:
         con = sqlite3.connect(env['db'])
         _login(client, _user(con, 1))
         con.close()
-        with patch('modules.planlama.arac_timeline_service.build_timeline_for_plan', return_value={'estimated_return_time': '21:00'}):
+        with patch('modules.planlama.arac_timeline_service.build_timeline_for_plan', return_value={'estimated_return_time': '21:00', 'timeline_complete': True, 'status': 'HESAPLANDI', 'plan_departure_time': '19:00', 'estimated_total_seconds': 3600.0}):
             r1 = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={VEHICLE}')
             r2 = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={OTHER_VEHICLE}')
-        assert '34 MOR 049' in r1.get_json()['message']
-        assert 'Other Firma' not in r1.get_json()['message']
-        assert 'Other Firma' in r2.get_json()['message']
-        assert '34 MOR 049' not in r2.get_json()['message']
+        m1 = _decode_message(r1.get_json()['whatsapp_url'])
+        m2 = _decode_message(r2.get_json()['whatsapp_url'])
+        assert '34 MOR 049' in m1
+        assert 'Other Firma' not in m1
+        assert 'Other Firma' in m2
+        assert '34 MOR 049' not in m2
 
     def test_mehmet_admin_same_payload(self, client, env):
         _prepare_plan(env)
@@ -208,12 +218,12 @@ class TestWhatsAppApiV1:
         admin = _user(con, 1)
         mehmet = _user(con, 31)
         con.close()
-        with patch('modules.planlama.arac_timeline_service.build_timeline_for_plan', return_value={'estimated_return_time': '21:00'}):
+        with patch('modules.planlama.arac_timeline_service.build_timeline_for_plan', return_value={'estimated_return_time': '21:00', 'timeline_complete': True, 'status': 'HESAPLANDI', 'plan_departure_time': '19:00', 'estimated_total_seconds': 3600.0}):
             _login(client, admin)
             r_admin = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={VEHICLE}')
             _login(client, mehmet)
             r_mehmet = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={VEHICLE}')
-        assert r_admin.get_json()['message'] == r_mehmet.get_json()['message']
+        assert r_admin.get_json()['whatsapp_url'] == r_mehmet.get_json()['whatsapp_url']
 
     def test_erhan_403(self, client, env):
         _prepare_plan(env)

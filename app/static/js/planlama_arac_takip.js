@@ -3512,12 +3512,36 @@
   if (initTab === 'haftalik') loadWeekly(0);
   if (initTab === 'gecmis') loadHistory();
 
-  /* ─── WhatsApp ─── */
+  /* ─── WhatsApp (canonical API only — no legacy preview/builder) ─── */
+  function removeLegacyWhatsappPreview() {
+    var legacy = qs('atpWhatsappLegacyPreview');
+    if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
+    document.querySelectorAll('[data-atp-whatsapp-legacy-preview]').forEach(function (el) {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    });
+  }
+  removeLegacyWhatsappPreview();
+
+  function closeWhatsappPopup(popup) {
+    try {
+      if (popup && !popup.closed) popup.close();
+    } catch (e) { /* ignore */ }
+  }
+
+  function isValidWhatsappUrl(url) {
+    return typeof url === 'string' && /^https:\/\//.test(url);
+  }
+
   var btnWa = qs('atpBtnWhatsapp');
   if (btnWa) btnWa.addEventListener('click', function () {
     var vid = vehicleId();
     if (!vid) {
-      toast('WhatsApp planı için önce bir araç seçin.');
+      toast('WhatsApp için önce bir araç planı seçin.');
+      return;
+    }
+    var popup = window.open('about:blank', '_blank');
+    if (!popup) {
+      toast('Tarayıcı WhatsApp penceresini engelledi. Açılır pencerelere izin verin.');
       return;
     }
     var waUrl = '/planlama/arac-takip/api/whatsapp?date=' + encodeURIComponent(planDate)
@@ -3525,20 +3549,32 @@
     fetch(waUrl, { credentials: 'same-origin' })
       .then(function (r) {
         return r.json().then(function (j) {
-          if (!r.ok) {
-            var errMsg = (j && (j.error || j.message)) ? (j.error || j.message) : 'WhatsApp bağlantısı oluşturulamadı.';
-            toast(errMsg);
-            return null;
-          }
-          return j;
+          return { httpOk: r.ok, body: j || {} };
         });
       })
-      .then(function (j) {
-        if (!j || !j.ok) return;
-        var openUrl = j.whatsapp_url || j.url;
-        if (openUrl) window.open(openUrl, '_blank', 'noopener');
-        else toast('WhatsApp bağlantısı oluşturulamadı.');
-      }).catch(function () { toast('WhatsApp bağlantısı oluşturulamadı.'); });
+      .then(function (res) {
+        var j = res.body;
+        if (!res.httpOk || !j.ok) {
+          closeWhatsappPopup(popup);
+          toast(j.error || 'WhatsApp planı hazırlanamadı.');
+          return;
+        }
+        if (!isValidWhatsappUrl(j.whatsapp_url)) {
+          closeWhatsappPopup(popup);
+          toast('WhatsApp planı hazırlanamadı.');
+          return;
+        }
+        try {
+          popup.location.replace(j.whatsapp_url);
+        } catch (e) {
+          closeWhatsappPopup(popup);
+          toast('WhatsApp planı hazırlanamadı.');
+        }
+      })
+      .catch(function () {
+        closeWhatsappPopup(popup);
+        toast('WhatsApp planı hazırlanamadı.');
+      });
   });
 
   /* ─── Base location button — focus mini map preview ─── */

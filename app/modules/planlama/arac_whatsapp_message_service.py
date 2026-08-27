@@ -425,6 +425,16 @@ def load_whatsapp_plan_context(plan_date: str, vehicle_id: str) -> dict[str, Any
     }
 
 
+def _whatsapp_order_ids(stops: list[dict]) -> list[str]:
+    ids: list[str] = []
+    for stop in stops:
+        raw = stop.get('plan_item_id') or stop.get('id')
+        if raw is None:
+            continue
+        ids.append(str(raw))
+    return ids
+
+
 def build_whatsapp_payload(
     plan_date: str,
     vehicle_id: str,
@@ -440,4 +450,39 @@ def build_whatsapp_payload(
         'message': message,
         'whatsapp_url': whatsapp_web_url(message, phone),
         'context': context,
+    }
+
+
+def build_whatsapp_api_response(
+    plan_date: str,
+    vehicle_id: str,
+    *,
+    phone: str = '',
+) -> dict[str, Any]:
+    """Public /api/whatsapp body — no plain-text message field."""
+    payload = build_whatsapp_payload(plan_date, vehicle_id, phone=phone)
+    if payload is None:
+        return {
+            'ok': False,
+            'code': 'PLAN_NOT_FOUND',
+            'error': 'Plan bulunamadı',
+        }
+
+    context = payload.get('context') or {}
+    stops = context.get('stops') or []
+    whatsapp_url = (payload.get('whatsapp_url') or '').strip()
+    if not whatsapp_url.startswith('https://'):
+        return {
+            'ok': False,
+            'code': 'WHATSAPP_URL_INVALID',
+            'error': 'WhatsApp planı hazırlanamadı.',
+        }
+
+    return {
+        'ok': True,
+        'whatsapp_url': whatsapp_url,
+        'vehicle_external_id': str(context.get('vehicle_external_id') or vehicle_id),
+        'plan_id': context.get('plan_id'),
+        'stop_count': len(stops),
+        'order_ids': _whatsapp_order_ids(stops),
     }

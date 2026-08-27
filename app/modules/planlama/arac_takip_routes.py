@@ -296,15 +296,17 @@ def arac_takip_api_whatsapp():
         plan_date = _parse_date(date_raw)
     except (TypeError, ValueError):
         return jsonify({'ok': False, 'code': 'INVALID_REQUEST', 'error': 'Geçersiz tarih'}), 400
-    from modules.planlama.arac_whatsapp_message_service import build_whatsapp_payload
-    payload = build_whatsapp_payload(plan_date.isoformat(), vehicle_id, phone=request.args.get('phone', ''))
-    if payload is None:
-        return jsonify({'ok': False, 'code': 'PLAN_NOT_FOUND', 'error': 'Plan bulunamadı'}), 404
-    return jsonify({
-        'ok': True,
-        'message': payload['message'],
-        'whatsapp_url': payload['whatsapp_url'],
-    })
+    from modules.planlama.arac_whatsapp_message_service import build_whatsapp_api_response
+    body = build_whatsapp_api_response(
+        plan_date.isoformat(),
+        vehicle_id,
+        phone=request.args.get('phone', ''),
+    )
+    if not body.get('ok'):
+        code = body.get('code') or 'WHATSAPP_ERROR'
+        status = 404 if code == 'PLAN_NOT_FOUND' else 500
+        return jsonify(body), status
+    return jsonify(body)
 
 
 @arac_takip_bp.route('/api/locations/search', methods=['GET'])

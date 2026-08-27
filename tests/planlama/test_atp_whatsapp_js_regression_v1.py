@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 MAIN = (ROOT / 'app' / 'static' / 'js' / 'planlama_arac_takip.js').read_text(encoding='utf-8')
+BLOCK = MAIN[MAIN.find('/* ─── WhatsApp'):MAIN.find('/* ─── Base location button')]
 
 
 def test_whatsapp_fetch_includes_vehicle_id():
@@ -13,22 +14,29 @@ def test_whatsapp_fetch_includes_vehicle_id():
     assert 'vehicleId()' in MAIN
 
 
-def test_whatsapp_url_key_primary():
-    assert 'j.whatsapp_url' in MAIN
-    assert 'j.url' in MAIN
+def test_whatsapp_url_key_only_no_legacy_url():
+    assert 'j.whatsapp_url' in BLOCK
+    assert 'j.url' not in BLOCK
 
 
 def test_no_vehicle_toast_without_fetch():
-    idx = MAIN.find("toast('WhatsApp planı için önce bir araç seçin.'")
+    idx = MAIN.find("toast('WhatsApp için önce bir araç planı seçin.'")
     fetch_idx = MAIN.find("fetch(waUrl", idx)
-    assert idx != -1 and fetch_idx > idx
+    popup_idx = MAIN.find("window.open('about:blank'", idx)
+    assert idx != -1
+    assert fetch_idx == -1 or popup_idx == -1 or popup_idx < fetch_idx
 
 
-def test_backend_error_not_replaced_by_message_body():
-    block = MAIN[MAIN.find('/* ─── WhatsApp ─── */'):MAIN.find('/* ─── Base location button')]
-    assert 'j.error' in block or 'j.message' in block
-    assert "if (!r.ok)" in block
+def test_popup_opens_before_fetch():
+    assert "window.open('about:blank', '_blank')" in BLOCK
+    assert 'popup.location.replace(j.whatsapp_url)' in BLOCK
 
 
-def test_window_open_noopener():
-    assert "window.open(openUrl, '_blank', 'noopener')" in MAIN
+def test_backend_error_closes_popup():
+    assert 'closeWhatsappPopup(popup)' in BLOCK
+    assert 'j.error' in BLOCK
+    assert 'j.message' not in BLOCK
+
+
+def test_legacy_preview_removal_hook():
+    assert 'removeLegacyWhatsappPreview' in MAIN
