@@ -6731,7 +6731,13 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
         toast((res.d && res.d.mesaj) || 'Onaya gönderilemedi');
         return;
       }
-      toast((res.d.talep_no || 'Talep') + ' Yönetim Onay Merkezi’ne gönderildi.');
+      toast(
+        (res.d && res.d.mesaj) || (
+          (res.d.talep_no || 'Talep')
+          + ' yönetim onayına gönderildi. Mehmet\'in Müşteri Temsilcisi Talepleri ekranında '
+          + '«Yönetim Onayı Bekliyor» durumuyla görüntülenecek.'
+        )
+      );
       closeModal('siparis');
       setTimeout(function(){ location.reload(); }, 900);
     }).catch(function(){

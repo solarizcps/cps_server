@@ -1138,8 +1138,10 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
                     durumlar = [x.strip() for x in durumlar_raw.split(',') if x.strip()]
                 # boş durumlar= → tüm durumlar (filtre yok)
             elif not durum:
-                # F4/F5B varsayılan kuyruk (kısmi numune dahil)
-                durumlar = ['YENI', 'ISLEME_ALINDI', 'KISMEN_NUMUNEYE_DONUSTU']
+                # F4/F5B varsayılan kuyruk — yönetim onayı bekleyenler görünür, işlem kapalı
+                durumlar = [
+                    'ONAY_BEKLIYOR', 'YENI', 'ISLEME_ALINDI', 'KISMEN_NUMUNEYE_DONUSTU',
+                ]
             kayitlar = talep_listele(
                 con,
                 durum=durum,
@@ -1155,13 +1157,16 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
                 offset=request.args.get('offset', default=0, type=int),
             )
             sc = talep_sayaclari(con)
+            onay_bek_say = int(con.execute(
+                "SELECT COUNT(*) FROM nexgen_musteri_temsilcisi_talep WHERE durum='ONAY_BEKLIYOR'",
+            ).fetchone()[0])
             from modules.nexgen.onay_service import mehmet_okunmamis_yeni_sayisi
             seen = session.get('mtt_ux_kuyruk_seen')
             return jsonify({
                 'ok': True,
                 'kayitlar': kayitlar,
                 'sayaclar': sc,
-                'kuyruk_sayisi': kuyruk_sayaci(con),
+                'kuyruk_sayisi': kuyruk_sayaci(con) + onay_bek_say,
                 'okunmamis_yeni': mehmet_okunmamis_yeni_sayisi(con, seen),
             })
         except MusteriTemsilcisiTalepError as e:

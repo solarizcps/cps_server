@@ -636,7 +636,8 @@
                  placeholder="Talep no, açıklama ara…" oninput="mttFiltreDebounce()">
         </div>
         <select id="mtt-fil-durum" class="pzm-fil-sel" onchange="mttListeYukle()">
-          <option value="YENI,ISLEME_ALINDI,KISMEN_NUMUNEYE_DONUSTU" selected>Kuyruk (Yeni + İşlemde + Kısmi)</option>
+          <option value="ONAY_BEKLIYOR,YENI,ISLEME_ALINDI,KISMEN_NUMUNEYE_DONUSTU" selected>Kuyruk (Onay Bekleyen + Yeni + İşlemde + Kısmi)</option>
+          <option value="ONAY_BEKLIYOR">Yönetim Onayı Bekliyor</option>
           <option value="YENI">Yeni</option>
           <option value="ISLEME_ALINDI">İşleme Alındı</option>
           <option value="KISMEN_NUMUNEYE_DONUSTU">Kısmen Numuneye Dönüştü</option>
@@ -8871,13 +8872,14 @@ function mttFiltreDebounce() {
 
 function mttFiltreSifirla() {
   var a = $id('mtt-ara'); if (a) a.value = '';
-  var d = $id('mtt-fil-durum'); if (d) d.value = 'YENI,ISLEME_ALINDI,KISMEN_NUMUNEYE_DONUSTU';
+  var d = $id('mtt-fil-durum'); if (d) d.value = 'ONAY_BEKLIYOR,YENI,ISLEME_ALINDI,KISMEN_NUMUNEYE_DONUSTU';
   var t = $id('mtt-fil-tur'); if (t) t.value = '';
   mttListeYukle();
 }
 
 function mttDurumBadge(durum) {
   var map = {
+    ONAY_BEKLIYOR: 'mtt-badge-onay-bek',
     YENI: 'mtt-badge-yeni',
     ISLEME_ALINDI: 'mtt-badge-islem',
     EKSIK_BILGI: 'mtt-badge-eksik',
@@ -8885,6 +8887,7 @@ function mttDurumBadge(durum) {
     IPTAL: 'mtt-badge-iptal'
   };
   var etiket = {
+    ONAY_BEKLIYOR: 'Yönetim Onayı Bekliyor',
     YENI: 'Yeni', ISLEME_ALINDI: 'İşlemde', EKSIK_BILGI: 'Eksik Bilgi',
     REDDEDILDI: 'Reddedildi', IPTAL: 'İptal',
     SIPARISE_DONUSTU: 'Siparişe Dönüştü', NUMUNEYE_DONUSTU: 'Numuneye Dönüştü',
@@ -8901,7 +8904,7 @@ window.mttListeYukle = function(opts) {
   var tur = (($id('mtt-fil-tur') || {}).value || '');
   var url = '/nexgen/api/musteri-temsilcisi-talep?limit=100';
   if (durum) url += '&durumlar=' + encodeURIComponent(durum);
-  else url += '&durumlar=' + encodeURIComponent('YENI,ISLEME_ALINDI,KISMEN_NUMUNEYE_DONUSTU');
+  else url += '&durumlar=' + encodeURIComponent('ONAY_BEKLIYOR,YENI,ISLEME_ALINDI,KISMEN_NUMUNEYE_DONUSTU');
   if (tur) url += '&talep_turu=' + encodeURIComponent(tur);
   if (q) url += '&q=' + encodeURIComponent(q);
   fetch(url, { credentials: 'same-origin' })
@@ -9047,8 +9050,8 @@ window.mttBuildAksiyonBand = function(t) {
   var hint = '';
 
   if (t.durum === 'ONAY_BEKLIYOR') {
-    hint = 'Yönetim onayı bekleniyor.';
-    return hint ? ('<span class="mtt-sticky-aksiyon-hint">' + mttEsc(hint) + '</span>') : '';
+    hint = 'Talep yönetim onayından sonra işleme alınabilir.';
+    return '<span class="mtt-sticky-aksiyon-hint" title="' + mttEsc(hint) + '">' + mttEsc(hint) + '</span>';
   }
 
   if (t.durum === 'YENI') {
@@ -9152,7 +9155,7 @@ window.mttDetayRender = function mttDetayRender(t) {
   var onayBadge = yonetimOnayli
     ? '<span class="mtt-chip mtt-badge-onay-green">\u2713 Y\u00f6netim Onayl\u0131</span>'
     : (t.durum === 'ONAY_BEKLIYOR'
-      ? '<span class="mtt-chip mtt-badge-onay-bek">Onay Bekliyor</span>'
+      ? '<span class="mtt-chip mtt-badge-onay-bek">Y\u00f6netim Onay\u0131 Bekliyor</span>'
       : '');
   var _onc = (t.oncelik || '').toUpperCase();
   var acilBadge = (_onc === 'ACIL' || _onc === 'KRITIK')
@@ -9320,7 +9323,7 @@ window.mttDetayRender = function mttDetayRender(t) {
   if (t.durum === 'YENI') siradakiAciklama = 'Bu talebi sahiplenerek i\u015fleme ba\u015flay\u0131n.';
   else if (t.durum === 'ISLEME_ALINDI' && isNumune) siradakiAciklama = 'Numune talebini olu\u015fturmaya haz\u0131rs\u0131n\u0131z.';
   else if (t.durum === 'ISLEME_ALINDI' && isSiparis) siradakiAciklama = 'Sipari\u015fe d\u00f6n\u00fc\u015ft\u00fcrmeye haz\u0131rs\u0131n\u0131z.';
-  else if (t.durum === 'ONAY_BEKLIYOR') siradakiAciklama = 'Y\u00f6netim onay\u0131 bekleniyor, \u015fu an aksiyon al\u0131namaz.';
+  else if (t.durum === 'ONAY_BEKLIYOR') siradakiAciklama = 'Talep y\u00f6netim onay\u0131ndan sonra i\u015fleme al\u0131nabilir.';
   else if (t.durum === 'KISMEN_NUMUNEYE_DONUSTU') siradakiAciklama = 'Kalan kalemleri numuneye d\u00f6n\u00fc\u015ft\u00fcr\u00fcn.';
   var siradakiHtml =
     '<div class="mtt-v3-siradaki">' +
