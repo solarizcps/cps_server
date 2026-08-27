@@ -2,11 +2,45 @@
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppDir = Join-Path $Root 'app'
-$Py = if ($env:CPS_PYTHON) { $env:CPS_PYTHON } else { 'C:\Users\LENOVO\AppData\Local\Python\pythoncore-3.14-64\python.exe' }
 $LogDir = Join-Path $Root 'logs'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $OutLog = Join-Path $LogDir 'cps_8080.out.log'
 $ErrLog = Join-Path $LogDir 'cps_8080.err.log'
+
+function Resolve-CpsPython314 {
+    $candidate = $null
+
+    if ($env:CPS_PYTHON_EXE) {
+        $candidate = $env:CPS_PYTHON_EXE.Trim()
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            Write-Host "CPS_PYTHON_EXE not found, falling back to py -3.14: $candidate"
+            $candidate = $null
+        }
+    }
+
+    if (-not $candidate) {
+        $raw = & py -3.14 -c "import sys; print(sys.executable)" 2>$null
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($raw)) {
+            Write-Error 'Could not resolve Python 3.14. Set CPS_PYTHON_EXE to a valid python.exe or install Python 3.14 with the py launcher.'
+            exit 1
+        }
+        $candidate = ($raw -replace "`r", '').Trim()
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            Write-Error "py -3.14 resolved path does not exist: $candidate"
+            exit 1
+        }
+    }
+
+    $verOut = & $candidate -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>$null
+    if ($LASTEXITCODE -ne 0 -or ($verOut.Trim() -ne '3.14')) {
+        Write-Error "Python executable is not 3.14: $candidate (reported $($verOut.Trim()))"
+        exit 1
+    }
+
+    return $candidate
+}
+
+$Py = Resolve-CpsPython314
 
 $saved = @{}
 foreach ($key in @('CPS_TEST_DB_GUARD', 'CPS_MOCK_DB_PATH', 'CPS_CANONICAL_DB_SOURCE', 'FLASK_DEBUG')) {

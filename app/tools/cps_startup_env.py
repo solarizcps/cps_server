@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import os
 import socket
-from typing import Mapping, MutableMapping
+import subprocess
+from typing import Callable, Mapping, MutableMapping
 
 from tools.cps_single_instance import CpsSingleInstanceError
 
@@ -112,3 +113,66 @@ def spawn_env_probe_command(python_exe: str) -> list[str]:
         'print("|".join(f"{k}={os.environ.get(k)!r}" for k in keys))'
     )
     return [python_exe, '-c', code]
+
+
+def normalize_executable_path(raw: str) -> str:
+    """Trim launcher output whitespace/newlines — no user-specific paths."""
+    return raw.replace('\r', '').strip()
+
+
+def query_python_version(exe: str, *, timeout: float = 15.0) -> tuple[int, int]:
+    """Return (major, minor) for an on-disk Python executable."""
+    proc = subprocess.run(
+        [exe, '-c', 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise ValueError(f'Could not query Python version from {exe!r}')
+    parts = normalize_executable_path(proc.stdout).split('.')
+    if len(parts) < 2:
+        raise ValueError(f'Unexpected Python version output from {exe!r}: {proc.stdout!r}')
+    return int(parts[0]), int(parts[1])
+
+
+def require_python314_executable(exe: str) -> str:
+    """Validate executable exists on disk and reports Python 3.14."""
+    path = normalize_executable_path(exe)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f'Python executable not found: {path}')
+    major, minor = query_python_version(path)
+    if (major, minor) != (3, 14):
+        raise ValueError(f'Python 3.14 required, got {major}.{minor} from {path}')
+    return path
+
+
+def _default_py314_launcher() -> str | None:
+    proc = subprocess.run(
+        ['py', '-3.14', '-c', 'import sys; print(sys.executable)'],
+        capture_output=True,
+        text=True,
+        timeout=15.0,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    raw = normalize_executable_path(proc.stdout)
+    return raw or None
+
+
+def resolve_python_executable(
+    explicit: str | None = None,
+    *,
+    py_launcher: Callable[[], str | None] | None = None,
+) -> str:
+    """Resolve Python 3.14: CPS_PYTHON_EXE override, then py -3.14 launcher."""
+    if explicit:
+        candidate = normalize_executable_path(explicit)
+        if os.path.isfile(candidate):
+            return require_python314_executable(candidate)
+    resolved = (py_launcher or _default_py314_launcher)()
+    if resolved:
+        return require_python314_executable(resolved)
+    raise RuntimeError('Could not resolve Python 3.14 executable; set CPS_PYTHON_EXE or install py -3.14')
