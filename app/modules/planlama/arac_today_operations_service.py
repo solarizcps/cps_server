@@ -36,6 +36,276 @@ VISIT_LABELS = {
 
 APPROACHING_M = 500.0
 
+STATUS_CONTRACT_VERSION = 'ATP_LIVE_STATUS_V1'
+
+PLAN_TRIP_STATUS_LABELS = {
+    'PLANLANDI': 'Planlandı',
+    'YOLDA': 'Yolda',
+    'KONUMA_YAKLASIYOR': 'Konuma yaklaşıyor',
+    'VARILDI': 'Varıldı',
+    'SONUC_BEKLIYOR': 'Sonuç bekliyor',
+    'TAMAMLANDI': 'Tamamlandı',
+    'GECIKIYOR': 'Gecikiyor',
+}
+
+VEHICLE_PHYSICAL_LABELS = {
+    'HAREKETLI': 'Araç hareketli',
+    'DURAN': 'Araç duruyor',
+    'GPS_ESKI': 'GPS eski',
+    'BILINMIYOR': 'GPS bilinmiyor',
+}
+
+_ACTIVE_ROUTE_STATES = frozenset({
+    'ON_ROUTE', 'DEVIATING', 'DEVIATION_CANDIDATE', 'RECOVERY_CANDIDATE',
+})
+
+_TRIP_START_EVENTS = frozenset({
+    'ROTA_SAPMA_BASLADI', 'ROTA_GERI_DONDU', 'KONUMA_VARILDI',
+    'KONUMDAN_AYRILDI', 'GEOFENCE_GIRIS', 'ZIYARET_SONUC_BEKLIYOR',
+})
+
+
+def _parse_plan_date(plan_date: str):
+    return datetime.strptime(plan_date[:10], '%Y-%m-%d').date()
+
+
+def _physical_status_alias(vehicle_physical_status: str) -> str:
+    if vehicle_physical_status == 'HAREKETLI':
+        return 'Hareketli'
+    if vehicle_physical_status == 'DURAN':
+        return 'Duruyor'
+    return '—'
+
+
+def _resolve_vehicle_physical_status(
+    gps_row: dict | None,
+    *,
+    filom: dict | None,
+    gps_db: dict | None,
+    stale: bool,
+) -> str:
+    if stale or not gps_row:
+        return 'GPS_ESKI'
+    raw = None
+    if gps_db and isinstance(gps_db, dict):
+        raw = gps_db.get('activity_status')
+    elif filom:
+        raw = filom.get('activity_status') or filom.get('activity_label')
+    elif isinstance(gps_row, dict):
+        raw = gps_row.get('activity_status')
+    text = str(raw or '').strip()
+    upper = text.upper()
+    if upper in ('HAREKETLI', 'MOVING') or text in ('Hareketli', 'Hareket halinde'):
+        return 'HAREKETLI'
+    if upper in ('DURAN', 'STOPPED', 'ROLANTI') or text in ('Duran', 'Duruyor'):
+        return 'DURAN'
+    spd = 0.0
+    try:
+        spd = float((gps_row or {}).get('speed_kmh') or 0)
+    except (TypeError, ValueError):
+        spd = 0.0
+    if spd > 5:
+        return 'HAREKETLI'
+    if spd >= 0 and (gps_row or {}).get('speed_kmh') is not None:
+        return 'DURAN'
+    return 'BILINMIYOR'
+
+
+def _plan_has_trip_start_events(plan_id: int, plan_date: str) -> bool:
+    from modules.planlama.arac_takip_repo import get_conn, tablo_var_mi
+    if not tablo_var_mi('arac_plan_olay'):
+        return False
+    placeholders = ','.join('?' * len(_TRIP_START_EVENTS))
+    con = get_conn()
+    try:
+        row = con.execute(
+            f"""
+            SELECT 1 FROM arac_plan_olay
+            WHERE plan_id=? AND date(olay_zamani)=?
+              AND olay_turu IN ({placeholders})
+            LIMIT 1
+            """,
+            (int(plan_id), plan_date, *_TRIP_START_EVENTS),
+        ).fetchone()
+        return bool(row)
+    finally:
+        con.close()
+
+
+def _is_trip_started(
+    plan_date: str,
+    plan_id: int | None,
+    vehicle_items: list[dict],
+    route_state: str | None,
+    *,
+    local_today,
+) -> bool:
+    """Verified trip start — cikis_saati alone or GPS speed does NOT qualify."""
+    if plan_date != local_today.isoformat():
+        return False
+    for it in vehicle_items:
+        if not _is_active_plan_item(it):
+            continue
+        if (it.get('status') or '').upper() == 'BASLADI':
+            return True
+        if (it.get('visit_state') or 'OUTSIDE') in ('ARRIVED', 'DEPARTED_PENDING'):
+            return True
+    if (route_state or '') in _ACTIVE_ROUTE_STATES:
+        return True
+    if plan_id and _plan_has_trip_start_events(int(plan_id), plan_date):
+        return True
+    return False
+
+
+def _is_approaching_stop(gps_row: dict | None, item: dict | None) -> bool:
+    if not gps_row or not item:
+        return False
+    try:
+        lat = float(gps_row['latitude'])
+        lng = float(gps_row['longitude'])
+        slat = float(item['latitude'])
+        slng = float(item['longitude'])
+    except (KeyError, TypeError, ValueError):
+        return False
+    from modules.planlama.arac_geo_distance import haversine_m
+    return haversine_m(lat, lng, slat, slng) <= APPROACHING_M
+
+
+def _past_plan_trip_status(vehicle_items: list[dict]) -> str:
+    active = [it for it in vehicle_items if _is_active_plan_item(it)]
+    if active and all((it.get('status') or '').upper() == 'TAMAMLANDI' for it in active):
+        return 'TAMAMLANDI'
+    for it in active:
+        vs = it.get('visit_state') or 'OUTSIDE'
+        st = (it.get('status') or '').upper()
+        if vs == 'DEPARTED_PENDING' and st != 'TAMAMLANDI':
+            return 'SONUC_BEKLIYOR'
+    for it in active:
+        if (it.get('visit_state') or '') == 'ARRIVED':
+            return 'VARILDI'
+    for it in active:
+        if (it.get('status') or '').upper() == 'BASLADI':
+            return 'YOLDA'
+    return 'PLANLANDI'
+
+
+def _item_is_late(item: dict, plan_date: str, now: datetime) -> bool:
+    pt = item.get('planned_time')
+    st = (item.get('status') or 'PLANLANDI').upper()
+    if not pt or st not in ('PLANLANDI', 'BASLADI'):
+        return False
+    try:
+        planned_dt = datetime.strptime(f'{plan_date} {pt[:5]}', '%Y-%m-%d %H:%M')
+    except ValueError:
+        return False
+    return planned_dt < now - timedelta(minutes=15)
+
+
+def _compute_item_plan_trip_status(
+    plan_date: str,
+    *,
+    local_today,
+    trip_started: bool,
+    item: dict,
+    vehicle_physical: str,
+    now: datetime,
+) -> tuple[str, str]:
+    pd = _parse_plan_date(plan_date)
+    if pd > local_today:
+        return 'PLANLANDI', 'FUTURE_PLAN'
+    if pd < local_today:
+        st = (item.get('status') or 'PLANLANDI').upper()
+        vs = item.get('visit_state') or 'OUTSIDE'
+        if st == 'TAMAMLANDI':
+            return 'TAMAMLANDI', 'PAST_PLAN'
+        if vs == 'DEPARTED_PENDING':
+            return 'SONUC_BEKLIYOR', 'PAST_PLAN'
+        if vs == 'ARRIVED':
+            return 'VARILDI', 'PAST_PLAN'
+        if st == 'BASLADI':
+            return 'YOLDA', 'PAST_PLAN'
+        return 'PLANLANDI', 'PAST_PLAN'
+    st = (item.get('status') or 'PLANLANDI').upper()
+    if st == 'TAMAMLANDI':
+        return 'TAMAMLANDI', 'ITEM_COMPLETE'
+    if not trip_started:
+        return 'PLANLANDI', 'DEPARTURE_NOT_STARTED'
+    vs = item.get('visit_state') or 'OUTSIDE'
+    if vs == 'DEPARTED_PENDING':
+        return 'SONUC_BEKLIYOR', 'VISIT_DEPARTED'
+    if vs == 'ARRIVED':
+        return 'VARILDI', 'VISIT_ARRIVED'
+    if _item_is_late(item, plan_date, now):
+        return 'GECIKIYOR', 'PLANNED_TIME_PASSED'
+    if st in ('BASLADI', 'YOLDA'):
+        return 'YOLDA', 'ITEM_STARTED'
+    if vs == 'OUTSIDE' and vehicle_physical == 'HAREKETLI':
+        return 'YOLDA', 'EN_ROUTE'
+    return 'PLANLANDI', 'TRIP_STARTED_WAITING'
+
+
+def _pick_approach_target(vehicle_items: list[dict], next_item: dict | None) -> dict | None:
+    """Next stop with coordinates for proximity check."""
+    active = [it for it in vehicle_items if _is_active_plan_item(it)]
+    for it in active:
+        if (it.get('visit_state') or 'OUTSIDE') != 'OUTSIDE':
+            continue
+        if it.get('latitude') is not None and it.get('longitude') is not None:
+            return it
+    if next_item and next_item.get('latitude') is not None and next_item.get('longitude') is not None:
+        return next_item
+    return None
+
+
+def _compute_vehicle_plan_trip_status(
+    plan_date: str,
+    *,
+    local_today,
+    trip_started: bool,
+    vehicle_items: list[dict],
+    vehicle_physical: str,
+    gps_row: dict | None,
+    next_item: dict | None,
+    now: datetime,
+) -> tuple[str, bool, str]:
+    pd = _parse_plan_date(plan_date)
+    if pd > local_today:
+        return 'PLANLANDI', False, 'FUTURE_PLAN'
+    if pd < local_today:
+        return _past_plan_trip_status(vehicle_items), False, 'PAST_PLAN'
+
+    active = [it for it in vehicle_items if _is_active_plan_item(it)]
+    if active and all((it.get('status') or '').upper() == 'TAMAMLANDI' for it in active):
+        return 'TAMAMLANDI', True, 'ALL_COMPLETE'
+
+    if not trip_started:
+        return 'PLANLANDI', False, 'DEPARTURE_NOT_STARTED'
+
+    if any(
+        (it.get('visit_state') or '') == 'DEPARTED_PENDING'
+        and (it.get('status') or '').upper() != 'TAMAMLANDI'
+        for it in active
+    ):
+        return 'SONUC_BEKLIYOR', True, 'VISIT_RESULT_PENDING'
+
+    if any((it.get('visit_state') or '') == 'ARRIVED' for it in active):
+        return 'VARILDI', True, 'AT_STOP'
+
+    approach_target = _pick_approach_target(vehicle_items, next_item)
+    if _is_approaching_stop(gps_row, approach_target):
+        return 'KONUMA_YAKLASIYOR', True, 'APPROACHING'
+
+    if any(_item_is_late(it, plan_date, now) for it in active):
+        return 'GECIKIYOR', True, 'PLANNED_TIME_PASSED'
+
+    if vehicle_physical == 'HAREKETLI':
+        return 'YOLDA', True, 'GPS_MOVING'
+
+    if any((it.get('status') or '').upper() in ('BASLADI', 'YOLDA') for it in active):
+        return 'YOLDA', True, 'ITEMS_STARTED'
+
+    return 'PLANLANDI', True, 'TRIP_STARTED_IDLE'
+
 
 def _fmt_hhmm(ts: str | None) -> str | None:
     if not ts:
@@ -279,6 +549,37 @@ def _build_alerts(
     return alerts
 
 
+_MOVING_KPI_STATUSES = frozenset({'YOLDA', 'KONUMA_YAKLASIYOR'})
+
+
+def _compute_plan_kpi(
+    plan_date: str,
+    *,
+    local_today,
+    vehicles: list[dict],
+) -> tuple[int, int]:
+    """Canonical Aktif Araç / Hareket Halinde — ATP_LIVE_STATUS_V1."""
+    pd = _parse_plan_date(plan_date)
+    if pd > local_today:
+        return 0, 0
+
+    active_vids: set[str] = set()
+    moving_vids: set[str] = set()
+    for v in vehicles:
+        vid = str(v.get('arac_external_id') or '')
+        if not vid:
+            continue
+        pts = (v.get('plan_trip_status') or 'PLANLANDI').upper()
+        if pts != 'TAMAMLANDI':
+            active_vids.add(vid)
+        if pd == local_today:
+            if v.get('trip_started') and pts in _MOVING_KPI_STATUSES:
+                moving_vids.add(vid)
+        elif pts in _MOVING_KPI_STATUSES:
+            moving_vids.add(vid)
+    return len(active_vids), len(moving_vids)
+
+
 def get_today_vehicle_operations(
     plan_date: str,
     *,
@@ -318,96 +619,12 @@ def get_today_vehicle_operations(
             filom_kpi = None
 
     filom_by_id = {str(v.get('id')): v for v in filom_vehicles if v.get('id')}
-    active_filom = [v for v in filom_vehicles if v.get('activity_status') != 'PASIF']
-    moving = [v for v in active_filom if v.get('activity_status') in ('HAREKETLI', 'MOVING') or (v.get('speed_kmh') or 0) > 5]
 
     _gps_ready = gps_tables_ready()
+    local_today = now.date()
     vehicles_out: list[dict] = []
     map_vehicles: list[dict] = []
     stale_count = 0
-
-    for plan_v in aggregate.get('vehicles') or []:
-        vid = str(plan_v.get('arac_external_id') or '')
-        plan_id = plan_v.get('plan_id')
-        filom = filom_by_id.get(vid)
-        gps_db = get_latest_gps_snapshot(vid) if _gps_ready else None
-        gps_row = gps_db or (filom and {
-            'latitude': filom.get('latitude'),
-            'longitude': filom.get('longitude'),
-            'gps_timestamp': filom.get('last_seen_at'),
-            'is_stale': filom.get('is_stale_data'),
-            'speed_kmh': filom.get('speed_kmh'),
-        })
-        stale = _gps_stale(gps_row if isinstance(gps_row, dict) else None, now)
-        if stale:
-            stale_count += 1
-
-        route_state = 'NO_ACTIVE_PLAN'
-        deviation_m = None
-        max_deviation_m = None
-        deviation_started_at = None
-        if deviation_tables_ready() and plan_id:
-            dev = get_deviation_state(int(plan_id))
-            if dev:
-                route_state = dev.get('state') or route_state
-                deviation_m = dev.get('current_deviation_m')
-                max_deviation_m = dev.get('max_deviation_m')
-                deviation_started_at = dev.get('deviation_started_at')
-
-        physical = '—'
-        if gps_db and not stale:
-            # Prefer sqlite GPS activity_status (direct from DB, most up-to-date)
-            db_act = gps_db.get('activity_status') if isinstance(gps_db, dict) else None
-            physical = db_act or '—'
-        elif filom:
-            physical = filom.get('activity_label') or filom.get('status_label') or filom.get('activity_status') or '—'
-        elif gps_row and not stale:
-            spd = (gps_row.get('speed_kmh') if isinstance(gps_row, dict) else None) or 0
-            physical = 'Hareket halinde' if spd and float(spd) > 5 else 'Duruyor'
-
-        gps_age = _gps_age_seconds(gps_row if isinstance(gps_row, dict) else None, now)
-        vehicles_out.append({
-            'plan_id': plan_id,
-            'arac_external_id': vid,
-            'plate': plan_v.get('arac_plaka_snapshot'),
-            'driver': plan_v.get('sofor_adi_snapshot'),
-            'driver_name': plan_v.get('sofor_adi_snapshot'),
-            'cikis_saati': plan_v.get('cikis_saati'),
-            'departure_time': plan_v.get('cikis_saati'),
-            'progress_completed': plan_v.get('progress_completed', 0),
-            'progress_total': plan_v.get('progress_total', 0),
-            'progress_label': plan_v.get('progress_label', '0/0'),
-            'next_stop': plan_v.get('next_stop_label') or (plan_v.get('next_item') or {}).get('company_name'),
-            'next_stop_label': plan_v.get('next_stop_label'),
-            'next_order_no': plan_v.get('next_order_no'),
-            'next_display_order_no': plan_v.get('next_display_order_no'),
-            'next_time': plan_v.get('next_time'),
-            'physical_status': physical,
-            'physical_source': 'filom' if filom else ('sqlite' if gps_db else None),
-            'route_state': route_state,
-            'route_status_label': _route_status_label(route_state, deviation_m),
-            'current_deviation_m': deviation_m,
-            'deviation_m': deviation_m,
-            'max_deviation_m': max_deviation_m,
-            'deviation_started_at': deviation_started_at,
-            'latest_gps': gps_row if isinstance(gps_row, dict) else None,
-            'gps_stale': stale,
-            'gps_is_stale': stale,
-            'gps_timestamp': (gps_row or {}).get('gps_timestamp') if isinstance(gps_row, dict) else None,
-            'gps_last_seen_at': (gps_row or {}).get('gps_timestamp') if isinstance(gps_row, dict) else None,
-            'gps_age_seconds': gps_age,
-            'gps_source': 'sqlite' if gps_db else ('filom' if filom else None),
-        })
-
-        if gps_row and isinstance(gps_row, dict) and gps_row.get('latitude') is not None:
-            map_vehicles.append({
-                'id': vid,
-                'plate': plan_v.get('arac_plaka_snapshot'),
-                'lat': float(gps_row['latitude']),
-                'lng': float(gps_row['longitude']),
-                'stale': stale,
-                'selected': False,
-            })
 
     items_out: list[dict] = []
     for item in aggregate.get('items') or []:
@@ -453,6 +670,138 @@ def get_today_vehicle_operations(
         })
 
     active_items_out = [it for it in items_out if _is_active_plan_item(it)]
+    trip_started_by_vid: dict[str, bool] = {}
+
+    for plan_v in aggregate.get('vehicles') or []:
+        vid = str(plan_v.get('arac_external_id') or '')
+        plan_id = plan_v.get('plan_id')
+        filom = filom_by_id.get(vid)
+        gps_db = get_latest_gps_snapshot(vid) if _gps_ready else None
+        gps_row = gps_db or (filom and {
+            'latitude': filom.get('latitude'),
+            'longitude': filom.get('longitude'),
+            'gps_timestamp': filom.get('last_seen_at'),
+            'is_stale': filom.get('is_stale_data'),
+            'speed_kmh': filom.get('speed_kmh'),
+        })
+        stale = _gps_stale(gps_row if isinstance(gps_row, dict) else None, now)
+        if stale:
+            stale_count += 1
+
+        route_state = 'NO_ACTIVE_PLAN'
+        deviation_m = None
+        max_deviation_m = None
+        deviation_started_at = None
+        if deviation_tables_ready() and plan_id:
+            dev = get_deviation_state(int(plan_id))
+            if dev:
+                route_state = dev.get('state') or route_state
+                deviation_m = dev.get('current_deviation_m')
+                max_deviation_m = dev.get('max_deviation_m')
+                deviation_started_at = dev.get('deviation_started_at')
+
+        vehicle_physical = _resolve_vehicle_physical_status(
+            gps_row if isinstance(gps_row, dict) else None,
+            filom=filom,
+            gps_db=gps_db if isinstance(gps_db, dict) else None,
+            stale=stale,
+        )
+        physical = _physical_status_alias(vehicle_physical)
+
+        vid_items = [
+            it for it in active_items_out
+            if str(it.get('arac_external_id') or '') == vid
+        ]
+        trip_started = _is_trip_started(
+            plan_date, plan_id, vid_items, route_state, local_today=local_today,
+        )
+        trip_started_by_vid[vid] = trip_started
+        next_item = plan_v.get('next_item')
+        plan_trip_status, trip_started_flag, status_reason = _compute_vehicle_plan_trip_status(
+            plan_date,
+            local_today=local_today,
+            trip_started=trip_started,
+            vehicle_items=vid_items,
+            vehicle_physical=vehicle_physical,
+            gps_row=gps_row if isinstance(gps_row, dict) else None,
+            next_item=next_item,
+            now=now,
+        )
+
+        gps_age = _gps_age_seconds(gps_row if isinstance(gps_row, dict) else None, now)
+        vehicles_out.append({
+            'plan_id': plan_id,
+            'arac_external_id': vid,
+            'plate': plan_v.get('arac_plaka_snapshot'),
+            'driver': plan_v.get('sofor_adi_snapshot'),
+            'driver_name': plan_v.get('sofor_adi_snapshot'),
+            'cikis_saati': plan_v.get('cikis_saati'),
+            'departure_time': plan_v.get('cikis_saati'),
+            'progress_completed': plan_v.get('progress_completed', 0),
+            'progress_total': plan_v.get('progress_total', 0),
+            'progress_label': plan_v.get('progress_label', '0/0'),
+            'next_stop': plan_v.get('next_stop_label') or (next_item or {}).get('company_name'),
+            'next_stop_label': plan_v.get('next_stop_label'),
+            'next_order_no': plan_v.get('next_order_no'),
+            'next_display_order_no': plan_v.get('next_display_order_no'),
+            'next_time': plan_v.get('next_time'),
+            'vehicle_physical_status': vehicle_physical,
+            'vehicle_physical_label': VEHICLE_PHYSICAL_LABELS.get(
+                vehicle_physical, VEHICLE_PHYSICAL_LABELS['BILINMIYOR'],
+            ),
+            'plan_trip_status': plan_trip_status,
+            'plan_trip_status_label': PLAN_TRIP_STATUS_LABELS.get(
+                plan_trip_status, plan_trip_status,
+            ),
+            'trip_started': trip_started_flag,
+            'status_reason': status_reason,
+            'physical_status': physical,
+            'physical_source': 'filom' if filom else ('sqlite' if gps_db else None),
+            'route_state': route_state,
+            'route_status_label': _route_status_label(route_state, deviation_m),
+            'current_deviation_m': deviation_m,
+            'deviation_m': deviation_m,
+            'max_deviation_m': max_deviation_m,
+            'deviation_started_at': deviation_started_at,
+            'latest_gps': gps_row if isinstance(gps_row, dict) else None,
+            'gps_stale': stale,
+            'gps_is_stale': stale,
+            'gps_timestamp': (gps_row or {}).get('gps_timestamp') if isinstance(gps_row, dict) else None,
+            'gps_last_seen_at': (gps_row or {}).get('gps_timestamp') if isinstance(gps_row, dict) else None,
+            'gps_age_seconds': gps_age,
+            'gps_source': 'sqlite' if gps_db else ('filom' if filom else None),
+        })
+
+        if gps_row and isinstance(gps_row, dict) and gps_row.get('latitude') is not None:
+            map_vehicles.append({
+                'id': vid,
+                'plate': plan_v.get('arac_plaka_snapshot'),
+                'lat': float(gps_row['latitude']),
+                'lng': float(gps_row['longitude']),
+                'stale': stale,
+                'selected': False,
+            })
+
+    vehicle_physical_by_vid = {
+        str(v.get('arac_external_id') or ''): v.get('vehicle_physical_status', 'BILINMIYOR')
+        for v in vehicles_out
+    }
+    for it in active_items_out:
+        vid = str(it.get('arac_external_id') or '')
+        vphys = vehicle_physical_by_vid.get(vid, 'BILINMIYOR')
+        started = trip_started_by_vid.get(vid, False)
+        pts, reason = _compute_item_plan_trip_status(
+            plan_date,
+            local_today=local_today,
+            trip_started=started,
+            item=it,
+            vehicle_physical=vphys,
+            now=now,
+        )
+        it['plan_trip_status'] = pts
+        it['plan_trip_status_label'] = PLAN_TRIP_STATUS_LABELS.get(pts, pts)
+        it['status_reason'] = reason
+        it['trip_started'] = started and plan_date == local_today.isoformat()
 
     # Vehicle visit summary from active items only
     for v in vehicles_out:
@@ -481,11 +830,15 @@ def get_today_vehicle_operations(
         if a.get('severity') in ('warning', 'danger')
     )
 
+    aktif_arac, hareket_halinde = _compute_plan_kpi(
+        plan_date, local_today=local_today, vehicles=vehicles_out,
+    )
+
     kpi = {
-        'aktif_arac': (filom_kpi or {}).get('aktif_arac') if filom_kpi else (len(active_filom) if filom_vehicles else None),
-        'aktif_arac_source': 'filom' if filom_kpi or filom_vehicles else None,
-        'hareket_halinde': (filom_kpi or {}).get('hareket_halinde') if filom_kpi else (len(moving) if filom_vehicles else None),
-        'hareket_source': 'filom' if filom_kpi or filom_vehicles else None,
+        'aktif_arac': aktif_arac,
+        'aktif_arac_source': 'canonical_plan_trip',
+        'hareket_halinde': hareket_halinde,
+        'hareket_source': 'canonical_plan_trip',
         'toplam_is': aggregate.get('operational_total_count', 0),
         'toplam_is_source': 'canonical',
         'tamamlandi': aggregate.get('completed_count', 0),
@@ -515,6 +868,7 @@ def get_today_vehicle_operations(
     return {
         'ok': True,
         'plan_date': plan_date,
+        'status_contract_version': STATUS_CONTRACT_VERSION,
         'data_source': 'merged',
         'kpi': kpi,
         'vehicles': vehicles_out,

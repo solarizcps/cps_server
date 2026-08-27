@@ -402,22 +402,34 @@
   }
 
   /* ─── Vehicle cards (gunluk) ─── */
+  function planTripBadgeCls(tripStatus) {
+    var st = (tripStatus || 'PLANLANDI').toUpperCase();
+    if (st === 'TAMAMLANDI') return 'badge-green';
+    if (st === 'GECIKIYOR' || st === 'SONUC_BEKLIYOR') return 'badge-orange';
+    if (st === 'VARILDI' || st === 'KONUMA_YAKLASIYOR' || st === 'YOLDA') return 'badge-blue';
+    return 'badge-gray';
+  }
+
   function routeStateBadge(v) {
-    if (v.gps_is_stale || v.gps_stale || v.is_stale_data) return '<span class="badge badge-stale">GPS Eski</span>';
     if (v.route_state === 'DEVIATING') return '<span class="badge badge-orange">⚠ Sapma</span>';
-    if (v.route_state === 'ON_ROUTE') return '<span class="badge badge-green">● Rotada</span>';
-    /* Prefer sqlite GPS activity_status (more real-time) over Filom physical_status */
-    var gpsAct = (v.latest_gps || {}).activity_status || '';
-    var act = gpsAct || v.physical_status || v.activity_status || '';
-    if (act === 'HAREKETLI') return '<span class="badge badge-green">● Yolda</span>';
-    if (act === 'ROLANTI') return '<span class="badge badge-orange">○ Rölanti</span>';
-    if (act === 'DURAN') return '<span class="badge badge-gray">⏸ Duran</span>';
-    /* Map text physical_status values */
-    if (act === 'Hareket halinde') return '<span class="badge badge-green">● Yolda</span>';
-    if (act === 'Duruyor') return '<span class="badge badge-gray">⏸ Duran</span>';
-    var lbl = v.activity_status_label || v.route_status_label || act;
-    if (lbl && lbl !== 'NO_ACTIVE_PLAN') return '<span class="badge badge-gray">' + fmtVal(lbl) + '</span>';
-    return '<span class="badge badge-gray">—</span>';
+    var trip = (v.plan_trip_status || 'PLANLANDI').toUpperCase();
+    var lbl = v.plan_trip_status_label || trip;
+    if (trip === 'TAMAMLANDI') return '<span class="badge badge-green">✓ ' + fmtVal(lbl) + '</span>';
+    if (trip === 'GECIKIYOR') return '<span class="badge badge-orange">⏱ ' + fmtVal(lbl) + '</span>';
+    if (trip === 'SONUC_BEKLIYOR') return '<span class="badge badge-orange">⏳ ' + fmtVal(lbl) + '</span>';
+    if (trip === 'VARILDI') return '<span class="badge badge-blue">📍 ' + fmtVal(lbl) + '</span>';
+    if (trip === 'KONUMA_YAKLASIYOR') return '<span class="badge badge-blue">→ ' + fmtVal(lbl) + '</span>';
+    if (trip === 'YOLDA') return '<span class="badge badge-green">● ' + fmtVal(lbl) + '</span>';
+    return '<span class="badge badge-gray">' + fmtVal(lbl) + '</span>';
+  }
+
+  function vehicleGpsTelemetryLabel(v) {
+    var ps = (v.vehicle_physical_status || '').toUpperCase();
+    if (v.gps_is_stale || v.gps_stale || ps === 'GPS_ESKI') return 'GPS eski';
+    if (v.vehicle_physical_label) return v.vehicle_physical_label;
+    if (ps === 'HAREKETLI') return 'Araç şu anda hareketli';
+    if (ps === 'DURAN') return 'Araç duruyor';
+    return 'GPS bekleniyor';
   }
 
   function progressPct(done, total) {
@@ -434,6 +446,12 @@
     });
     return vehicles.map(function (v) {
       var out = Object.assign({}, v);
+      var preservedTrip = {
+        plan_trip_status: out.plan_trip_status,
+        plan_trip_status_label: out.plan_trip_status_label,
+        trip_started: out.trip_started,
+        status_reason: out.status_reason,
+      };
       var f = filom[String(v.arac_external_id || '')];
       if (!f) return out;
       if (!out.gps_last_seen_at && !out.gps_timestamp) {
@@ -444,9 +462,6 @@
         out.gps_is_stale = f.is_stale_data;
         out.gps_stale = f.is_stale_data;
       }
-      if (!out.physical_status || out.physical_status === '—') {
-        out.physical_status = f.activity_status || f.activity_label || f.status_label;
-      }
       if (!out.latest_gps && f.latitude != null) {
         out.latest_gps = {
           latitude: f.latitude,
@@ -454,7 +469,23 @@
           gps_timestamp: f.last_seen_at,
           activity_status: f.activity_status,
         };
+      } else if (out.latest_gps && f.activity_status) {
+        out.latest_gps = Object.assign({}, out.latest_gps, {
+          activity_status: f.activity_status,
+          gps_timestamp: out.latest_gps.gps_timestamp || f.last_seen_at,
+        });
       }
+      if (!out.gps_is_stale && !out.gps_stale) {
+        var act = (f.activity_status || '').toUpperCase();
+        var moving = act === 'HAREKETLI' || act === 'MOVING' || (f.speed_kmh || 0) > 5;
+        out.vehicle_physical_status = moving ? 'HAREKETLI' : 'DURAN';
+        out.vehicle_physical_label = moving ? 'Araç hareketli' : 'Araç duruyor';
+        out.physical_status = moving ? 'Hareketli' : 'Duruyor';
+      }
+      out.plan_trip_status = preservedTrip.plan_trip_status;
+      out.plan_trip_status_label = preservedTrip.plan_trip_status_label;
+      out.trip_started = preservedTrip.trip_started;
+      out.status_reason = preservedTrip.status_reason;
       return out;
     });
   }
@@ -518,32 +549,14 @@
       if (deviating && v.deviation_m != null) {
         var km = (Number(v.deviation_m) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
         detailRows += '<div class="vcard-detail-row warn"><span class="icon">⚠️</span><span>Rotadan ' + km + ' km saptı</span></div>';
-        if (visitLbl) {
-          detailRows += '<div class="vcard-detail-row warn"><span class="icon">📍</span><span>' + fmtVal(visitLbl) + '</span></div>';
-        }
       } else if (!planEmpty && v.route_state === 'ON_ROUTE') {
         detailRows += '<div class="vcard-detail-row" style="color:var(--green);font-weight:600"><span class="icon">✅</span><span>Rotada</span></div>';
-        if (visitLbl) {
-          detailRows += '<div class="vcard-detail-row"><span class="icon">📍</span><span>' + fmtVal(visitLbl) + '</span></div>';
-        }
-      } else if (!planEmpty) {
-        var act2 = v.physical_status || v.activity_status || '';
-        if (act2 === 'HAREKETLI') {
-          detailRows += '<div class="vcard-detail-row" style="color:var(--green);font-weight:600"><span class="icon">✅</span><span>Hareketli</span></div>';
-        } else if (act2 === 'ROLANTI') {
-          detailRows += '<div class="vcard-detail-row" style="color:var(--orange);font-weight:600"><span class="icon">○</span><span>Rölanti</span></div>';
-        }
-        if (visitLbl) {
-          detailRows += '<div class="vcard-detail-row"><span class="icon">📍</span><span>' + fmtVal(visitLbl) + '</span></div>';
-        }
-      } else {
-        var act3 = v.physical_status || v.activity_status || '';
-        if (act3 === 'HAREKETLI') {
-          detailRows += '<div class="vcard-detail-row" style="color:var(--green);font-weight:600"><span class="icon">✅</span><span>Hareketli</span></div>';
-        } else if (act3 === 'ROLANTI') {
-          detailRows += '<div class="vcard-detail-row" style="color:var(--orange);font-weight:600"><span class="icon">○</span><span>Rölanti</span></div>';
-        }
       }
+      if (visitLbl) {
+        detailRows += '<div class="vcard-detail-row"><span class="icon">📍</span><span>' + fmtVal(visitLbl) + '</span></div>';
+      }
+      detailRows += '<div class="vcard-detail-row"><span class="icon" style="opacity:.7">🚗</span>' +
+        '<span style="color:var(--gray)">' + fmtVal(vehicleGpsTelemetryLabel(v)) + '</span></div>';
       var gpsStatusLbl = stale ? 'GPS Eski' : (gpsTs ? 'GPS Güncel' : 'GPS bekleniyor');
       detailRows += '<div class="vcard-detail-row"><span class="icon" style="opacity:.7">📡</span>' +
         '<span style="color:var(--gray)">' + gpsStatusLbl +
@@ -976,6 +989,15 @@
   }
 
   function buildVisitLabel(it) {
+    if (it.plan_trip_status && it.plan_trip_status_label) {
+      var trip = (it.plan_trip_status || '').toUpperCase();
+      if (trip === 'PLANLANDI') return it.visit_label || 'Henüz varmadı';
+      if (trip === 'YOLDA' || trip === 'KONUMA_YAKLASIYOR') {
+        var etaCanon = fmtTime(it.eta_time || it.tahmini_varis_saati);
+        return etaCanon ? ('Güncel tahmin ' + etaCanon) : it.plan_trip_status_label;
+      }
+      return it.plan_trip_status_label;
+    }
     var raw = it.visit_label || '';
     var state = it.visit_state || '';
     var status = (it.status || '').toUpperCase();
@@ -1139,8 +1161,8 @@
   function makeJobRow(it) {
     var dotCls = jobDotClass(it.status, it.visit_state);
     var visCls = visitRowClass(it.visit_state);
-    var badgeCls = planBadgeCls(it.status, it.visit_state);
-    var statusLabel = fmtVal(it.status_label);
+    var badgeCls = planTripBadgeCls(it.plan_trip_status || it.status);
+    var statusLabel = fmtVal(it.plan_trip_status_label || it.status_label);
     var visitLabel = fmtVal(buildVisitLabel(it));
     var isLate = !!it.is_late;
     var itemId = it.id ? String(it.id) : '';
@@ -1654,12 +1676,8 @@
       aktif_arac: null, hareket_halinde: null,
       toplam_is: 0, tamamlandi: 0, devam_ediyor: 0, sorunlu: 0,
     }, opsKpi || {});
-    if (filomData && filomData.vehicles) {
-      var fKpi = filomData.filom_kpi || {};
-      if (kpi.aktif_arac == null) kpi.aktif_arac = fKpi.aktif_arac != null ? fKpi.aktif_arac : filomData.vehicles.length;
-      if (kpi.hareket_halinde == null) kpi.hareket_halinde = fKpi.hareket_halinde != null ? fKpi.hareket_halinde : 0;
-    }
-    ['aktif_arac','hareket_halinde','toplam_is','tamamlandi','devam_ediyor','sorunlu'].forEach(function (k) {
+    /* ATP_LIVE_STATUS_V1: aktif/hareket KPI canonical ops DTO — Filom merge yok */
+    ['aktif_arac', 'hareket_halinde', 'toplam_is', 'tamamlandi', 'devam_ediyor', 'sorunlu'].forEach(function (k) {
       if (kpi[k] == null) kpi[k] = 0;
     });
     return kpi;
