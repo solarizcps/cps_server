@@ -91,7 +91,7 @@ def _planlama_duzenle() -> bool:
 
 
 _ATP_YETKI = 'planlama.arac_takip'
-_ATP_MANAGE_ACTIONS = frozenset({'cancel', 'iptal', 'delete', 'defer_next_day'})
+_ATP_MANAGE_ACTIONS = frozenset({'delete', 'defer_next_day'})
 
 
 def _global_planlama_yazma(action: str) -> bool:
@@ -138,6 +138,28 @@ def _atp_forbidden():
         'error': 'Bu işlem için yetkiniz yok.',
         'code': 'FORBIDDEN',
     }), 403
+
+
+def _missing_stop_coordinate_items(active: list[dict], routable: list[dict]) -> list[dict]:
+    """Safe summary for MISSING_STOP_COORDINATES — no raw address/coordinate values."""
+    routable_ids = {str(t.get('id')) for t in routable}
+    items: list[dict] = []
+    for task in active:
+        tid = str(task.get('id'))
+        if tid in routable_ids:
+            continue
+        reason = 'coordinates_unresolved'
+        if not task.get('kayitli_yer_id'):
+            reason = 'no_location_link'
+        elif not task.get('has_coordinates'):
+            reason = 'snapshot_and_master_missing'
+        items.append({
+            'plan_is_id': task.get('plan_item_id'),
+            'company_name': task.get('company_name') or '',
+            'kayitli_yer_id': task.get('kayitli_yer_id'),
+            'reason': reason,
+        })
+    return items
 
 
 def get_atp_permissions() -> dict:
@@ -824,13 +846,17 @@ def arac_takip_api_plan_job_change(plan_is_id: int):
     action = (body.get('action') or '').strip().lower()
     if action == 'iptal':
         action = 'cancel'
-    if action in _ATP_MANAGE_ACTIONS:
+    if action == 'cancel':
+        if not _arac_takip_guncelle():
+            return _atp_forbidden()
+    elif action in _ATP_MANAGE_ACTIONS:
         if not _arac_takip_yonet():
             return _atp_forbidden()
     elif action and action != 'reorder_info':
         if not _arac_takip_guncelle():
             return _atp_forbidden()
     from modules.planlama.arac_plan_change_service import (
+        PlanChangeConflict,
         PlanChangeError,
         PlanChangeForbidden,
         apply_plan_job_change,
@@ -861,6 +887,12 @@ def arac_takip_api_plan_job_change(plan_is_id: int):
         })
     except PlanChangeForbidden as exc:
         return jsonify({'ok': False, 'error': str(exc), 'code': 'FORBIDDEN'}), 403
+    except PlanChangeConflict as exc:
+        return jsonify({
+            'ok': False,
+            'error': str(exc),
+            'code': getattr(exc, 'code', 'CANCEL_NOT_ALLOWED'),
+        }), 409
     except PlanChangeError as exc:
         return jsonify({'ok': False, 'error': str(exc)}), 400
     except Exception as exc:
@@ -1156,7 +1188,8 @@ def arac_takip_api_plan_google_route_options():
         return jsonify({
             'ok': False,
             'error': 'Aktif durakların koordinatı eksik',
-            'code': 'MISSING_COORDINATES',
+            'code': 'MISSING_STOP_COORDINATES',
+            'missing_items': _missing_stop_coordinate_items(active, routable),
         }), 422
 
     # ── Base / fabrika ────────────────────────────────────────────────────────
@@ -1166,8 +1199,8 @@ def arac_takip_api_plan_google_route_options():
     if not base.get('has_coordinates'):
         return jsonify({
             'ok': False,
-            'error': 'Başlangıç/fabrika koordinatı tanımlanmamış',
-            'code': 'MISSING_COORDINATES',
+            'error': 'Fabrika başlangıç noktası ve koordinatı tanımlanmamış',
+            'code': 'NO_BASE',
         }), 422
 
     # ── Suggested order: mevcut Rota Kararı servisi (ORS matrix) ─────────────

@@ -36,6 +36,18 @@ VALID_ACTIONS = frozenset({
 
 VISIT_ACTIVE = frozenset({'ARRIVED', 'DEPARTED_PENDING'})
 
+CANCEL_BLOCKED_MSG = (
+    'Başlamış veya ziyaret sürecine girmiş iş plan dışına alınamaz.'
+)
+
+_CANCEL_BLOCKING_EVENTS = frozenset({
+    'FABRIKADAN_AYRILDI',
+    'DURAGA_YAKLASIYOR',
+    'KONUMA_VARILDI',
+    'KONUMDAN_AYRILDI',
+    'ZIYARET_SONUC_BEKLIYOR',
+})
+
 
 class PlanChangeError(ValueError):
     pass
@@ -43,6 +55,14 @@ class PlanChangeError(ValueError):
 
 class PlanChangeForbidden(PermissionError):
     pass
+
+
+class PlanChangeConflict(Exception):
+    """Business state blocks cancel — HTTP 409."""
+
+    def __init__(self, message: str, code: str = 'CANCEL_NOT_ALLOWED') -> None:
+        super().__init__(message)
+        self.code = code
 
 
 def change_tables_ready() -> bool:
@@ -84,7 +104,68 @@ def _has_gps_events(con: sqlite3.Connection, plan_is_id: int, plan_id: int | Non
     return False
 
 
-def _allowed_actions(ctx: dict) -> dict[str, bool | str]:
+def _has_cancel_blocking_events(
+    con: sqlite3.Connection,
+    plan_is_id: int,
+    plan_id: int | None,
+) -> bool:
+    if not tablo_var_mi('arac_plan_olay'):
+        return False
+    events = tuple(_CANCEL_BLOCKING_EVENTS)
+    placeholders = ','.join('?' * len(events))
+    row = con.execute(
+        f"""
+        SELECT 1 FROM arac_plan_olay
+        WHERE (
+            plan_is_id=?
+            OR (plan_id=? AND (plan_is_id IS NULL OR plan_is_id=?))
+        )
+          AND olay_turu IN ({placeholders})
+        LIMIT 1
+        """,
+        (int(plan_is_id), int(plan_id or 0), int(plan_is_id), *events),
+    ).fetchone()
+    return bool(row)
+
+
+def _assert_cancel_allowed(ctx: dict, con: sqlite3.Connection) -> None:
+    st = (ctx.get('status') or 'PLANLANDI').upper()
+    visit = (ctx.get('visit_state') or 'OUTSIDE').upper()
+
+    if st in INACTIVE_PLAN_STATUSES:
+        raise PlanChangeConflict('Bu kayıt artık aktif planda değil.', 'INACTIVE')
+    if st == 'TAMAMLANDI':
+        raise PlanChangeConflict(CANCEL_BLOCKED_MSG, 'TAMAMLANDI')
+    if st == 'BASLADI':
+        raise PlanChangeConflict(CANCEL_BLOCKED_MSG, 'BASLADI')
+    if visit in ('APPROACHING', 'ARRIVED', 'DEPARTED_PENDING'):
+        raise PlanChangeConflict(CANCEL_BLOCKED_MSG, visit)
+    if ctx.get('arrived_at') or ctx.get('departed_at'):
+        raise PlanChangeConflict(CANCEL_BLOCKED_MSG, 'VISIT_ACTIVE')
+
+    plan_is_id = ctx.get('plan_item_id') or ctx.get('id')
+    plan_id = ctx.get('plan_id')
+    if plan_is_id and _has_cancel_blocking_events(con, int(plan_is_id), plan_id):
+        raise PlanChangeConflict(CANCEL_BLOCKED_MSG, 'BLOCKING_EVENT')
+
+    if plan_id and ctx.get('plan_tarihi'):
+        from modules.planlama.arac_today_operations_service import _plan_has_trip_start_events
+        if _plan_has_trip_start_events(int(plan_id), str(ctx['plan_tarihi'])[:10]):
+            raise PlanChangeConflict(CANCEL_BLOCKED_MSG, 'TRIP_STARTED')
+
+    if st != 'PLANLANDI':
+        raise PlanChangeConflict(CANCEL_BLOCKED_MSG, 'NOT_PLANLANDI')
+
+
+def _cancel_allowed_soft(ctx: dict, con: sqlite3.Connection) -> tuple[bool, str | None]:
+    try:
+        _assert_cancel_allowed(ctx, con)
+        return True, None
+    except PlanChangeConflict as exc:
+        return False, str(exc)
+
+
+def _allowed_actions(ctx: dict, con: sqlite3.Connection | None = None) -> dict[str, bool | str]:
     st = (ctx.get('status') or 'PLANLANDI').upper()
     visit = (ctx.get('visit_state') or 'OUTSIDE').upper()
     has_visit = visit in VISIT_ACTIVE or bool(ctx.get('arrived_at'))
@@ -108,6 +189,7 @@ def _allowed_actions(ctx: dict) -> dict[str, bool | str]:
             'transfer_vehicle': False,
             'defer_next_day': False,
             'cancel': False,
+            'cancel_disabled_reason': 'Bu iş tamamlandığı için değiştirilemez.',
             'complete': False,
             'reorder_info': False,
             'notes': notes,
@@ -116,11 +198,19 @@ def _allowed_actions(ctx: dict) -> dict[str, bool | str]:
             'lock_reason': 'Bu iş tamamlandığı için değiştirilemez.',
         }
 
+    cancel_ok = False
+    cancel_disabled_reason = None
+    if not inactive and con is not None:
+        cancel_ok, cancel_disabled_reason = _cancel_allowed_soft(ctx, con)
+    elif not inactive and st == 'PLANLANDI':
+        cancel_ok = True
+
     return {
         'bind_location': (not inactive and not has_visit and not has_coords),
         'transfer_vehicle': (st == 'PLANLANDI' and not has_visit and not inactive),
         'defer_next_day': (st in ('PLANLANDI', 'BASLADI') and not inactive),
-        'cancel': (st in ('PLANLANDI', 'BASLADI') and not inactive),
+        'cancel': cancel_ok,
+        'cancel_disabled_reason': cancel_disabled_reason,
         'complete': (not inactive and (visit == 'DEPARTED_PENDING' or st == 'BASLADI')),
         'reorder_info': True,
         'notes': notes,
@@ -171,7 +261,7 @@ def _fetch_context(con: sqlite3.Connection, plan_is_id: int) -> dict:
         'has_gps_events': _has_gps_events(con, int(plan_is_id), int(row['plan_header_id'])),
         'status_label': PLAN_ITEM_STATUS.get(task['status'], task['status']),
     }
-    ctx['allowed_actions'] = _allowed_actions(ctx)
+    ctx['allowed_actions'] = _allowed_actions(ctx, con)
     return ctx
 
 
@@ -321,13 +411,17 @@ def apply_plan_job_change(plan_is_id: int, user_id: int, payload: dict) -> dict:
 
         ctx = _fetch_context(con, int(plan_is_id))
         allowed = ctx['allowed_actions']
-        if not allowed.get(action):
+
+        if action == 'cancel':
+            if not reason or len(reason) < 2:
+                raise PlanChangeError('Neden alanı zorunlu (min 2 karakter)')
+            _assert_cancel_allowed(ctx, con)
+        elif action == 'defer_next_day' and not reason:
+            raise PlanChangeError('Neden alanı zorunlu')
+        elif not allowed.get(action):
             if mapped_from_delete:
                 raise PlanChangeError('Bu iş silinemez; iptal olarak kapatabilirsiniz.')
             raise PlanChangeForbidden(f'Bu işlem şu an izinli değil: {action}')
-
-        if action in ('cancel', 'defer_next_day') and not reason:
-            raise PlanChangeError('Neden alanı zorunlu')
 
         now = _now_iso()
         result_extra: dict[str, Any] = {'action': action, 'plan_is_id': int(plan_is_id)}

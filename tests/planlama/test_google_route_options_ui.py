@@ -259,6 +259,20 @@ def test_error_copy_503_auth_rate_limit():
     assert "Google rota kotası doldu. Daha sonra tekrar deneyin." in EXPLAINER
 
 
+def test_coordinate_gate_error_messages():
+    assert "c === 'NO_BASE'" in EXPLAINER
+    assert 'Fabrika başlangıç noktası ve koordinatı tanımlanmalıdır.' in EXPLAINER
+    assert "c === 'MISSING_STOP_COORDINATES'" in EXPLAINER
+    assert "c === 'MISSING_COORDINATES'" in EXPLAINER
+    assert 'Aktif durakların koordinatı eksik.' in EXPLAINER
+
+
+def test_main_prefers_backend_error_over_generic():
+    chunk = MAIN[MAIN.find('google-route-options'): MAIN.find('google-route-options') + 2500]
+    assert 'backendErr' in chunk or 'gd.error' in chunk
+    assert 'googleHttpErrorMessage(gres.status, code)' in chunk
+
+
 def test_google_source_strip_locked_layout_kept():
     assert 'Mesafe ve saatler: Google Routes trafik tahmini' in HTML
     assert 'Sıra önerisi: CPS rota motoru' in HTML

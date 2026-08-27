@@ -40,6 +40,13 @@ PLAN_ID = 41
 _URL = '/planlama/arac-takip/api/plan/google-route-options'
 
 BASE = {'latitude': 40.9928283, 'longitude': 28.6947341, 'has_coordinates': True}
+NO_BASE = {'latitude': None, 'longitude': None, 'has_coordinates': False, 'configured': False}
+
+PLAN2_STOP = [
+    {'id': 'pi-2', 'plan_item_id': 2, 'order_no': 1, 'status': 'PLANLANDI', 'priority': 'NORMAL',
+     'company_name': 'şahin taban', 'job_title': 'mal alıcak',
+     'latitude': 41.0473976, 'longitude': 28.6385286, 'has_coordinates': True, 'kayitli_yer_id': 5},
+]
 
 STOPS_3 = [
     {'id': 1, 'order_no': 1, 'status': 'PLANLANDI', 'priority': 'NORMAL',
@@ -159,6 +166,7 @@ def _client():
 def _post(body: dict, *, google_key=True, plan_row=PLAN_ROW,
           tasks=None, route_dto=None,
           tables=True,
+          base=None,
           google_fast=None, google_free=None):
     """POST to the endpoint with standard mocks applied.
 
@@ -170,6 +178,7 @@ def _post(body: dict, *, google_key=True, plan_row=PLAN_ROW,
         PROFILE_TRAFFIC_FREE, drive_s=21070.0, static_s=16325.0)
     _tasks = tasks if tasks is not None else STOPS_3
     _route_dto = route_dto if route_dto is not None else ROUTE_DTO_SAME
+    _base = base if base is not None else BASE
 
     with patch('modules.planlama.arac_takip_repo.tables_ready', return_value=tables), \
          patch('modules.planlama.road_routing.env_loader.google_routes_key_present',
@@ -178,7 +187,7 @@ def _post(body: dict, *, google_key=True, plan_row=PLAN_ROW,
          patch('modules.planlama.arac_plan_service.get_tasks_for_session', return_value=_tasks), \
          patch('modules.planlama.arac_operasyon_ayar_repo.operasyon_ayar_ready', return_value=True), \
          patch('modules.planlama.arac_operasyon_ayar_repo.get_active_base', return_value={}), \
-         patch('modules.planlama.arac_location_resolver.resolve_base_location', return_value=BASE), \
+         patch('modules.planlama.arac_location_resolver.resolve_base_location', return_value=_base), \
          patch('modules.planlama.road_routing.route_planner_service.build_plan_route_dto',
                return_value=_route_dto), \
          _patch_route_google({PROFILE_TRAFFIC_FAST: fast, PROFILE_TRAFFIC_FREE: free}):
@@ -282,13 +291,35 @@ class TestPlanValidation(unittest.TestCase):
         self.assertEqual(resp.status_code, 422)
         self.assertEqual(resp.get_json()['code'], 'NO_ACTIVE_STOPS')
 
-    def test_api07_missing_coordinates_returns_422(self):
-        """T-API07: Stops have no coordinates → 422 MISSING_COORDINATES."""
-        no_coord = [{**s, 'has_coordinates': False, 'latitude': None, 'longitude': None}
+    def test_api07_missing_stop_coordinates_returns_422(self):
+        """T-API07: Stops have no coordinates → 422 MISSING_STOP_COORDINATES."""
+        no_coord = [{**s, 'has_coordinates': False, 'latitude': None, 'longitude': None,
+                     'plan_item_id': s.get('plan_item_id', s['id']), 'kayitli_yer_id': None}
                     for s in STOPS_3]
         resp = _post(_valid_body(), tasks=no_coord)
         self.assertEqual(resp.status_code, 422)
-        self.assertEqual(resp.get_json()['code'], 'MISSING_COORDINATES')
+        data = resp.get_json()
+        self.assertEqual(data['code'], 'MISSING_STOP_COORDINATES')
+        self.assertEqual(data['error'], 'Aktif durakların koordinatı eksik')
+        self.assertIn('missing_items', data)
+        self.assertEqual(len(data['missing_items']), 3)
+        self.assertEqual(data['missing_items'][0]['reason'], 'no_location_link')
+
+    def test_api07b_no_base_with_routable_stops_returns_422(self):
+        """T-API07b: Routable stops but no factory base → 422 NO_BASE."""
+        resp = _post(_valid_body(), tasks=PLAN2_STOP, base=NO_BASE)
+        self.assertEqual(resp.status_code, 422)
+        data = resp.get_json()
+        self.assertEqual(data['code'], 'NO_BASE')
+        self.assertIn('Fabrika başlangıç noktası', data['error'])
+
+    def test_api07c_plan2_snapshot_coords_gate_pass(self):
+        """T-API07c: Plan-2-like single stop + base → coordinate gate PASS (200)."""
+        resp = _post(_valid_body(), tasks=PLAN2_STOP, base=BASE,
+                      route_dto={'status': 'OK', 'suggested': {'full_task_ids': ['pi-2']},
+                                 'current': {}, 'gain': {}})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json()['ok'])
 
     def test_api08_google_key_not_configured_returns_503(self):
         """T-API08: google_routes_key_present() False → 503 GOOGLE_ROUTES_NOT_CONFIGURED."""

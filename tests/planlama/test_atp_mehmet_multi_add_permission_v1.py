@@ -265,7 +265,7 @@ class TestAtpMehmetPermissionV1:
         )
         assert r2.status_code == 200
 
-    def test_t11_manage_cancel_forbidden(self, env, client, vehicle_patch):
+    def test_t11_mehmet_cancel_planlandi_200(self, env, client, vehicle_patch):
         con = sqlite3.connect(env['db'])
         _login(client, _user(con, 31))
         loc = _loc(con)
@@ -274,10 +274,37 @@ class TestAtpMehmetPermissionV1:
         plan_is_id = r.get_json()['results'][0]['plan_is_id']
         r2 = client.post(
             f'/planlama/arac-takip/api/plan-job/{plan_is_id}/change',
-            json={'action': 'cancel', 'reason': 'test iptal', 'plan_tarihi': PLAN_DATE},
+            json={
+                'action': 'cancel',
+                'reason': 'test iptal',
+                'plan_tarihi': PLAN_DATE,
+                'client_submit_id': f't11_{uuid.uuid4().hex[:8]}',
+            },
         )
-        assert r2.status_code == 403
-        assert r2.get_json()['code'] == 'FORBIDDEN'
+        assert r2.status_code == 200
+        body = r2.get_json()
+        assert body.get('ok') is True
+        assert body.get('message') == 'İş plan dışına alındı.'
+        con = sqlite3.connect(env['db'])
+        con.row_factory = sqlite3.Row
+        durum = con.execute(
+            'SELECT durum FROM arac_gunluk_plan_is WHERE id=?', (plan_is_id,),
+        ).fetchone()['durum']
+        audit = con.execute(
+            """
+            SELECT action, reason, created_by, old_durum, new_durum
+            FROM arac_plan_is_degisim WHERE plan_is_id=? ORDER BY id DESC LIMIT 1
+            """,
+            (plan_is_id,),
+        ).fetchone()
+        row_count = con.execute(
+            'SELECT COUNT(*) c FROM arac_gunluk_plan_is WHERE id=?', (plan_is_id,),
+        ).fetchone()['c']
+        con.close()
+        assert durum == 'IPTAL'
+        assert row_count == 1
+        assert audit and audit['action'] == 'cancel' and audit['created_by'] == 31
+        assert audit['old_durum'] == 'PLANLANDI' and audit['new_durum'] == 'IPTAL'
 
     def test_t12_ui_permissions_in_page(self, env, client):
         con = sqlite3.connect(env['db'])

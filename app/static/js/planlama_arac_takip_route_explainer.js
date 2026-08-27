@@ -1205,6 +1205,8 @@
       return 'Google rota kotası doldu. Daha sonra tekrar deneyin.';
     }
     if (c === 'NO_ACTIVE_STOPS') return 'Bu planda aktif durak yok.';
+    if (c === 'NO_BASE') return 'Fabrika başlangıç noktası ve koordinatı tanımlanmalıdır.';
+    if (c === 'MISSING_STOP_COORDINATES') return 'Aktif durakların koordinatı eksik.';
     if (c === 'MISSING_COORDINATES') return 'Aktif durakların koordinatı eksik.';
     if (c === 'PLAN_NOT_FOUND') return 'Plan bulunamadı.';
     if (c === 'VEHICLE_PLAN_MISMATCH') return 'Araç ile plan eşleşmiyor.';

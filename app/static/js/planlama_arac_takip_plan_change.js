@@ -5,6 +5,7 @@
   'use strict';
 
   var INACTIVE = { IPTAL: 1, ERTELENDI: 1, GIDILEMEDI: 1 };
+  var CANCEL_BLOCKED_MSG = 'Başlamış veya ziyaret sürecine girmiş iş plan dışına alınamaz.';
   var _state = {
     planItemId: null,
     detail: null,
@@ -125,11 +126,16 @@
       { v: 'cancel', l: 'İptal Et (Plan Dışına Al)', key: 'cancel' },
       { v: 'reorder_info', l: 'Saat/Sıra Değiştir (bilgi)', key: 'reorder_info' },
     ];
+    var cancelDisabledReason = allowed && allowed.cancel_disabled_reason;
     sel.innerHTML = opts.map(function (o) {
       if (o.placeholder) {
         return '<option value="_none" selected disabled>— Aksiyon seç —</option>';
       }
       var ok = allowed && allowed[o.key];
+      if (o.key === 'cancel' && !ok && cancelDisabledReason) {
+        return '<option value="' + o.v + '" disabled title="' + esc(cancelDisabledReason) + '">' +
+          esc(o.l) + ' — ' + esc(cancelDisabledReason) + '</option>';
+      }
       if (!ok) return '';
       return '<option value="' + o.v + '">' + esc(o.l) + '</option>';
     }).join('');
@@ -434,6 +440,13 @@
       return;
     }
     if (!validate(action)) return;
+    if (action === 'cancel') {
+      var allowed = (_state.detail && _state.detail.allowed_actions) || {};
+      if (!allowed.cancel) {
+        showWarn(allowed.cancel_disabled_reason || CANCEL_BLOCKED_MSG);
+        return;
+      }
+    }
     _state.submitting = true;
     _state.clientSubmitId = uuid();
     var payload = buildPayload(action);
@@ -447,7 +460,12 @@
       return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; });
     }).then(function (res) {
       if (!res.ok || !res.j || !res.j.ok) {
-        throw new Error((res.j && res.j.error) || ('İşlem başarısız (' + res.status + ')'));
+        var errMsg = (res.j && res.j.error) || ('İşlem başarısız (' + res.status + ')');
+        if (res.status === 409) {
+          showWarn(errMsg);
+          return;
+        }
+        throw new Error(errMsg);
       }
       applyOpsRefresh(res.j);
       if (res.j.message && window.toast) window.toast(res.j.message);

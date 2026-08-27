@@ -2706,9 +2706,11 @@
         var gd = gres.data || {};
         var code = gd.code || gd.error_code || '';
         if (!gres.ok || gd.ok === false) {
-          var gMsg = (window.AtpRouteExplainer && AtpRouteExplainer.googleHttpErrorMessage)
-            ? AtpRouteExplainer.googleHttpErrorMessage(gres.status, code)
-            : (gd.error || 'Google rota hesabı tamamlanamadı.');
+          var backendErr = gd.error && String(gd.error).trim();
+          var gMsg = backendErr
+            || ((window.AtpRouteExplainer && AtpRouteExplainer.googleHttpErrorMessage)
+              ? AtpRouteExplainer.googleHttpErrorMessage(gres.status, code)
+              : 'Google rota hesabı tamamlanamadı.');
           _setMsg(gMsg, true);
           return;
         }
