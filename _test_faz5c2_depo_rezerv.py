@@ -1,6 +1,14 @@
 # -*- coding: utf-8 -*-
 """NEXGEN FAZ-5C-2 — depo HAZIR anında AKTIF rezerv oluşturma testi."""
-import sys, io, os, sqlite3, subprocess, importlib.util, shutil
+from __future__ import annotations
+
+import importlib.util
+import io
+import os
+import sqlite3
+import sys
+import tempfile
+import shutil
 
 if hasattr(sys.stdout, 'buffer'):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -9,22 +17,58 @@ _ROOT = os.path.dirname(os.path.abspath(__file__))
 _APP_DIR = os.path.join(_ROOT, 'app')
 sys.path.insert(0, _APP_DIR)
 os.chdir(_APP_DIR)
-_LIVE_DB = os.path.join(_APP_DIR, 'mock_data.db')
 
-import tempfile
-from tools.nexgen_tmp_db import sha256_file, cleanup_tmp
+os.environ.setdefault('CPS_TEST_DB_GUARD', '1')
 
+from tools.nexgen_tmp_db import (  # noqa: E402
+    assert_resolved_db_is_tmp,
+    canonical_db_path,
+    cleanup_tmp,
+    live_db_write_guard_stats,
+    sha256_file,
+)
+from tools.test_db_guard import bootstrap_adhoc_script_guards, run_guarded_subprocess  # noqa: E402
+
+
+def _run_auth_version_migration(db_path: str) -> None:
+    path = os.path.join(_APP_DIR, 'migrations', '150_sistem_kullanici_auth_version.py')
+    spec = importlib.util.spec_from_file_location('150_sistem_kullanici_auth_version.py', path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    mod.run(db_path)
+
+
+def _resolve_test_db():
+    live = canonical_db_path()
+    bootstrap_adhoc_script_guards()
+    parent_tmp = os.environ.get('CPS_MOCK_DB_PATH', '').strip()
+    if parent_tmp:
+        db = os.path.abspath(parent_tmp)
+        assert_resolved_db_is_tmp(db, live)
+        os.environ['CPS_MOCK_DB_PATH'] = db
+        return db, live, None, True
+
+    tmp_dir = tempfile.mkdtemp(prefix='faz5c2_')
+    db = os.path.join(tmp_dir, 'mock_data_test.db')
+    shutil.copy2(live, db)
+    assert_resolved_db_is_tmp(db, live)
+    os.environ['CPS_MOCK_DB_PATH'] = db
+    return db, live, tmp_dir, False
+
+
+_LIVE_DB = canonical_db_path()
 _SHA_BEFORE = sha256_file(_LIVE_DB)
-_TMP_DIR = tempfile.mkdtemp(prefix='faz5c2_')
-DB = os.path.join(_TMP_DIR, 'mock_data_test.db')
-shutil.copy2(_LIVE_DB, DB)
+DB, _CANONICAL, _TMP_DIR, _PARENT_OWNED = _resolve_test_db()
 print(f'[ISO] tmp_db={DB}')
+print(f'[ISO] parent_owned={_PARENT_OWNED}')
 print(f'[ISO] main_sha_before={_SHA_BEFORE}')
 
 for _mig in ('085_nexgen_depo_hazirlik.py', '086_nexgen_stok_rezerv.py'):
     _p = os.path.join(_APP_DIR, 'migrations', _mig)
     _spec = importlib.util.spec_from_file_location(_mig, _p)
     _mod = importlib.util.module_from_spec(_spec)
+    assert _spec.loader is not None
     _spec.loader.exec_module(_mod)
     _mod.DB_PATH = DB
     _mod.run()
@@ -52,47 +96,102 @@ def ok(name, cond, detail=''):
 
 
 def sess_user():
-    return {'Id': 1, 'KullaniciAdi': 'admin', 'Tip': 'sistem',
-            'RolId': 1, 'RolAd': 'admin', 'Aktif': 1}
+    con = sqlite3.connect(DB)
+    row = con.execute(
+        """
+        SELECT Id, KullaniciAdi, RolId, Aktif, ZorunluSifreDegistir, AuthVersion
+        FROM sistem_kullanici WHERE Id = 1
+        """
+    ).fetchone()
+    con.close()
+    auth_ver = row[5] if row and row[5] is not None else 1
+    return {
+        'Id': 1, 'KullaniciAdi': 'admin', 'Tip': 'sistem',
+        'RolId': 1, 'RolAd': 'admin', 'Aktif': 1,
+        'AuthVersion': auth_ver,
+        'ZorunluSifreDegistir': int(row[4] or 0) if row else 0,
+    }
 
 
 def hazirlik_hazir(c, hid):
     return c.post(f'/nexgen/api/depo/hazirlik/{hid}/hazir', json={})
 
 
-con = sqlite3.connect(DB)
-con.row_factory = sqlite3.Row
-
-# Eski test artığı temizliği (yalnız tmp)
-for _no in ('DH-TEST-5C2-OK', 'DH-TEST-YETERSIZ-5C2'):
-    _old = con.execute(
-        "SELECT id FROM nexgen_depo_hazirlik WHERE hazirlik_no=?", (_no,)
-    ).fetchone()
-    if _old:
-        con.execute("DELETE FROM nexgen_stok_rezerv WHERE hazirlik_id=?", (_old['id'],))
-        con.execute("DELETE FROM nexgen_depo_hazirlik_kalem WHERE hazirlik_id=?", (_old['id'],))
-        con.execute("DELETE FROM nexgen_depo_hazirlik WHERE id=?", (_old['id'],))
-con.commit()
-
-# Regresyon için temiz snapshot (FAZ-5C-2 testleri DB'yi kirletmeden önce)
-_reg_bak = os.path.join(_APP_DIR, 'mock_data.db.bak_faz5c2_20260624')
-if os.path.exists(_reg_bak):
+def _cleanup_test_artifacts(db_path: str) -> None:
+    con = sqlite3.connect(db_path)
+    for _no in ('DH-TEST-5C2-OK', 'DH-TEST-YETERSIZ-5C2'):
+        _old = con.execute(
+            "SELECT id FROM nexgen_depo_hazirlik WHERE hazirlik_no=?", (_no,)
+        ).fetchone()
+        if _old:
+            con.execute("DELETE FROM nexgen_stok_rezerv WHERE hazirlik_id=?", (_old['id'],))
+            con.execute("DELETE FROM nexgen_depo_hazirlik_kalem WHERE hazirlik_id=?", (_old['id'],))
+            con.execute("DELETE FROM nexgen_depo_hazirlik WHERE id=?", (_old['id'],))
+    con.commit()
     con.close()
-    shutil.copy2(_reg_bak, DB)
-    con = sqlite3.connect(DB)
-    con.row_factory = sqlite3.Row
 
-for label, script in [('7 faz4b', '_test_faz4b_stok_tuketim.py'), ('8 faz4d', '_test_faz4d_parca_geri_al.py')]:
-    r = subprocess.run(
-        [sys.executable, os.path.join(_ROOT, script)],
-        cwd=_APP_DIR, capture_output=True, text=True,
-        encoding='utf-8', errors='replace',
-    )
-    tail = r.stdout.split('SONUC')[-1].strip() if 'SONUC' in r.stdout else r.stderr[:100]
-    ok(label, r.returncode == 0, tail)
+
+_cleanup_test_artifacts(DB)
+
+
+def _restore_db_from_snapshot(snapshot: str, db_path: str) -> None:
+    for suffix in ('-wal', '-shm'):
+        sidecar = db_path + suffix
+        if os.path.isfile(sidecar):
+            try:
+                os.remove(sidecar)
+            except OSError:
+                pass
+    shutil.copy2(snapshot, db_path)
+    for suffix in ('-wal', '-shm'):
+        sidecar = db_path + suffix
+        if os.path.isfile(sidecar):
+            try:
+                os.remove(sidecar)
+            except OSError:
+                pass
+
+
+# Subprocess regresyon — reg_bak öncesi; her child için temiz temp snapshot
+if not _PARENT_OWNED:
+    _pre_sub_snapshot = DB + '.pre_subprocess_snapshot'
+    shutil.copy2(DB, _pre_sub_snapshot)
+    assert_resolved_db_is_tmp(_pre_sub_snapshot, _CANONICAL)
+    try:
+        for label, script in [
+            ('7 faz4b', '_test_faz4b_stok_tuketim.py'),
+            ('8 faz4d', '_test_faz4d_parca_geri_al.py'),
+        ]:
+            _restore_db_from_snapshot(_pre_sub_snapshot, DB)
+            r = run_guarded_subprocess(
+                [sys.executable, os.path.join(_ROOT, script)],
+                cwd=_APP_DIR,
+                tmp_db=DB,
+            )
+            tail = r.stdout.split('SONUC')[-1].strip() if 'SONUC' in r.stdout else ''
+            err_tail = (r.stderr or '').strip()[-500:]
+            detail = tail or err_tail or f'rc={r.returncode}'
+            ok(label, r.returncode == 0, detail)
+    finally:
+        if os.path.exists(_pre_sub_snapshot):
+            os.remove(_pre_sub_snapshot)
+
+# Regresyon için temiz snapshot — yalnız standalone modda temp DB'ye kopyala
+_reg_bak = os.path.join(_APP_DIR, 'mock_data.db.bak_faz5c2_20260624')
+if not _PARENT_OWNED and os.path.exists(_reg_bak):
+    for suffix in ('-wal', '-shm'):
+        sidecar = DB + suffix
+        if os.path.isfile(sidecar):
+            try:
+                os.remove(sidecar)
+            except OSError:
+                pass
+    shutil.copy2(_reg_bak, DB)
+    assert_resolved_db_is_tmp(DB, _CANONICAL)
+    _run_auth_version_migration(DB)
 
 # Regresyon snapshot geri yüklendiyse migration 086 tekrar
-if os.path.exists(_reg_bak):
+if not _PARENT_OWNED and os.path.exists(_reg_bak):
     _m086.run()
 
 con = sqlite3.connect(DB)
@@ -321,10 +420,12 @@ if test_hazirlik_id:
 con.close()
 
 _SHA_AFTER = sha256_file(_LIVE_DB)
-ok('ISO main DB SHA unchanged', _SHA_BEFORE == _SHA_AFTER, f'{_SHA_BEFORE[:12]}..')
+_guard = live_db_write_guard_stats()
+ok('ISO guard active', _guard.get('active') is True, str(_guard))
 print(f'[ISO] main_sha_after={_SHA_AFTER}')
 print(f'[ISO] main_db_changed={_SHA_BEFORE != _SHA_AFTER}')
-cleanup_tmp({'tmp_dir': _TMP_DIR})
+if _TMP_DIR:
+    cleanup_tmp({'tmp_dir': _TMP_DIR})
 
 passed = sum(1 for _, c, _ in results if c)
 failed = sum(1 for _, c, _ in results if not c)

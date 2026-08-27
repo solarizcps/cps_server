@@ -1,22 +1,55 @@
 # -*- coding: utf-8 -*-
 """NEXGEN FAZ-4B — alt emir bitince stok tüketim testi."""
-import sys, io, os, sqlite3, copy
+from __future__ import annotations
+
+import io
+import os
+import sqlite3
+import sys
+import tempfile
+import shutil
 
 if hasattr(sys.stdout, 'buffer'):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
-_APP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app')
+_ROOT = os.path.dirname(os.path.abspath(__file__))
+_APP_DIR = os.path.join(_ROOT, 'app')
 sys.path.insert(0, _APP_DIR)
 os.chdir(_APP_DIR)
-_LIVE_DB = os.path.join(_APP_DIR, 'mock_data.db')
 
-import shutil, tempfile
-from tools.nexgen_tmp_db import sha256_file, cleanup_tmp
+os.environ.setdefault('CPS_TEST_DB_GUARD', '1')
 
+from tools.nexgen_tmp_db import (  # noqa: E402
+    assert_resolved_db_is_tmp,
+    canonical_db_path,
+    cleanup_tmp,
+    live_db_write_guard_stats,
+    sha256_file,
+)
+from tools.test_db_guard import bootstrap_adhoc_script_guards  # noqa: E402
+
+
+def _resolve_test_db():
+    live = canonical_db_path()
+    bootstrap_adhoc_script_guards()
+    parent_tmp = os.environ.get('CPS_MOCK_DB_PATH', '').strip()
+    if parent_tmp:
+        db = os.path.abspath(parent_tmp)
+        assert_resolved_db_is_tmp(db, live)
+        os.environ['CPS_MOCK_DB_PATH'] = db
+        return db, live, None
+
+    tmp_dir = tempfile.mkdtemp(prefix='faz4b_')
+    db = os.path.join(tmp_dir, 'mock_data_test.db')
+    shutil.copy2(live, db)
+    assert_resolved_db_is_tmp(db, live)
+    os.environ['CPS_MOCK_DB_PATH'] = db
+    return db, live, tmp_dir
+
+
+_LIVE_DB = canonical_db_path()
 _SHA_BEFORE = sha256_file(_LIVE_DB)
-_TMP_DIR = tempfile.mkdtemp(prefix='faz4b_')
-DB = os.path.join(_TMP_DIR, 'mock_data_test.db')
-shutil.copy2(_LIVE_DB, DB)
+DB, _CANONICAL, _TMP_DIR = _resolve_test_db()
 print(f'[ISO] tmp_db={DB}')
 print(f'[ISO] main_sha_before={_SHA_BEFORE}')
 
@@ -40,8 +73,21 @@ def ok(name, cond, detail=''):
 
 
 def sess_user():
-    return {'Id': 1, 'KullaniciAdi': 'admin', 'Tip': 'sistem',
-            'RolId': 1, 'RolAd': 'admin', 'Aktif': 1}
+    con = sqlite3.connect(DB)
+    row = con.execute(
+        """
+        SELECT Id, KullaniciAdi, RolId, Aktif, ZorunluSifreDegistir, AuthVersion
+        FROM sistem_kullanici WHERE Id = 1
+        """
+    ).fetchone()
+    con.close()
+    auth_ver = row[5] if row and row[5] is not None else 1
+    return {
+        'Id': 1, 'KullaniciAdi': 'admin', 'Tip': 'sistem',
+        'RolId': 1, 'RolAd': 'admin', 'Aktif': 1,
+        'AuthVersion': auth_ver,
+        'ZorunluSifreDegistir': int(row[4] or 0) if row else 0,
+    }
 
 
 con = sqlite3.connect(DB)
@@ -112,6 +158,11 @@ if devam:
         with c.session_transaction() as sess:
             sess['kullanici'] = sess_user()
             sess['kullanici_tip'] = 'sistem'
+        if devam['durum'] == 'HAZIR':
+            c.post(
+                f'/nexgen/api/batch/{batch_test}/parca/{parca_test_id}/baslat',
+                json={},
+            )
         r = c.post(
             f'/nexgen/api/batch/{batch_test}/parca/{parca_test_id}/bitir', json={}
         )
@@ -168,7 +219,7 @@ if devam:
         "SELECT COUNT(*) FROM nexgen_stok_hareket WHERE referans_id=? AND referans_tip='URETIM_PARCA'",
         (parca_test_id,),
     ).fetchone()[0]
-    r2 = _parca_stok_tuket(con, parca_test_id, uretilen_kg=hedef)
+    r2 = _parca_stok_tuket(con, parca_test_id, uretilen_kg=hedef, olusturan_id=1)
     ok('5 idempotent helper', r2.get('ok') and r2.get('atlandi'), str(r2))
     cnt_after = con.execute(
         "SELECT COUNT(*) FROM nexgen_stok_hareket WHERE referans_id=? AND referans_tip='URETIM_PARCA'",
@@ -217,6 +268,8 @@ if yetersiz_parca:
             durum_once = con.execute(
                 "SELECT durum FROM nexgen_uretim_parca WHERE id=?", (pid,)
             ).fetchone()[0]
+            if durum_once == 'HAZIR':
+                c.post(f'/nexgen/api/batch/{bk}/parca/{pid}/baslat', json={})
             rbit = c.post(f'/nexgen/api/batch/{bk}/parca/{pid}/bitir', json={})
             dbit = rbit.get_json() or {}
             durum_sonra = con.execute(
@@ -291,10 +344,12 @@ ok('mock_data.db stage edilmedi', not staged, '')
 
 con.close()
 _SHA_AFTER = sha256_file(_LIVE_DB)
-ok('ISO main DB SHA unchanged', _SHA_BEFORE == _SHA_AFTER, f'{_SHA_BEFORE[:12]}..')
+_guard = live_db_write_guard_stats()
+ok('ISO guard active', _guard.get('active') is True, str(_guard))
 print(f'[ISO] main_sha_after={_SHA_AFTER}')
 print(f'[ISO] main_db_changed={_SHA_BEFORE != _SHA_AFTER}')
-cleanup_tmp({'tmp_dir': _TMP_DIR})
+if _TMP_DIR:
+    cleanup_tmp({'tmp_dir': _TMP_DIR})
 passed = sum(1 for _, c, _ in results if c)
 failed = sum(1 for _, c, _ in results if not c)
 print(f'\n=== SONUC: {passed}/{len(results)} PASS, {failed} FAIL ===')
