@@ -966,6 +966,23 @@ def update_plan_item_eta_conn(
     )
 
 
+def clear_plan_item_etas_conn(con: sqlite3.Connection, plan_id: int) -> int:
+    """
+    Clear stale ETA values for all items in a plan — caller-owned connection.
+
+    Yalnız tahmini_varis_saati temizlenir; visit/geofence alanlarına dokunulmaz.
+    Returns rows updated. No-op when column missing.
+    """
+    cols = [r[1] for r in con.execute('PRAGMA table_info(arac_gunluk_plan_is)').fetchall()]
+    if 'tahmini_varis_saati' not in cols:
+        return 0
+    cur = con.execute(
+        'UPDATE arac_gunluk_plan_is SET tahmini_varis_saati=NULL WHERE plan_id=?',
+        (int(plan_id),),
+    )
+    return int(cur.rowcount or 0)
+
+
 def get_plan_vehicle_meta(plan_date: str, arac_external_id: str) -> dict | None:
     """Plan row vehicle snapshot for URL hydrate (external_id may differ from Filom id)."""
     if not tables_ready() or not arac_external_id:
@@ -1515,6 +1532,75 @@ def update_kayitli_yer_coordinates(
         con.close()
 
 
+def _geofence_table_exists_conn(con: sqlite3.Connection) -> bool:
+    return bool(con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='arac_plan_is_ziyaret_durum'",
+    ).fetchone())
+
+
+def _get_visit_state_conn(con: sqlite3.Connection, plan_is_id: int) -> dict | None:
+    if not _geofence_table_exists_conn(con):
+        return None
+    row = con.execute(
+        'SELECT * FROM arac_plan_is_ziyaret_durum WHERE plan_is_id=?',
+        (int(plan_is_id),),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def _load_plan_items_for_order_policy_conn(
+    con: sqlite3.Connection,
+    plan_id: int,
+) -> list[dict]:
+    """Load existing plan items in canonical sira order for U1 route policy."""
+    rows = con.execute(
+        'SELECT id, durum FROM arac_gunluk_plan_is WHERE plan_id=? ORDER BY sira',
+        (int(plan_id),),
+    ).fetchall()
+    tasks: list[dict] = []
+    for row in rows:
+        task: dict = {
+            'plan_item_id': int(row['id']),
+            'status': row['durum'],
+        }
+        visit = _get_visit_state_conn(con, int(row['id']))
+        if visit:
+            if visit.get('state'):
+                task['visit_state'] = visit['state']
+            if visit.get('arrived_at'):
+                task['arrived_at'] = visit['arrived_at']
+            if visit.get('departed_at'):
+                task['departed_at'] = visit['departed_at']
+        tasks.append(task)
+    return tasks
+
+
+def resolve_plan_insert_sira_conn(
+    con: sqlite3.Connection,
+    plan_id: int,
+    oncelik: str | None,
+    explicit_sira: int | None = None,
+) -> int:
+    """
+    Resolve 1-based sira for a new plan item on an open connection.
+
+    ACIL → U1 safe insert index; other priorities → append (MAX+1).
+    Explicit sira always wins when provided.
+    """
+    if explicit_sira is not None:
+        return int(explicit_sira)
+    priority = (oncelik or 'NORMAL').strip().upper()
+    if priority == 'ACIL':
+        from modules.planlama.arac_route_order_policy import compute_first_safe_insert_index
+        tasks = _load_plan_items_for_order_policy_conn(con, plan_id)
+        return compute_first_safe_insert_index(tasks) + 1
+    max_sira = con.execute(
+        'SELECT COALESCE(MAX(sira), 0) AS ms FROM arac_gunluk_plan_is WHERE plan_id=?',
+        (int(plan_id),),
+    ).fetchone()['ms']
+    return int(max_sira) + 1
+
+
 def assign_to_plan(
     session_user_id: int,
     talep_id: int,
@@ -1578,11 +1664,9 @@ def assign_to_plan(
             )
             plan_id = int(cur.lastrowid)
 
-        max_sira = con.execute(
-            'SELECT COALESCE(MAX(sira),0) ms FROM arac_gunluk_plan_is WHERE plan_id=?',
-            (plan_id,),
-        ).fetchone()['ms']
-        new_sira = int(sira) if sira else int(max_sira) + 1
+        new_sira = resolve_plan_insert_sira_conn(
+            con, plan_id, talep['oncelik'], sira,
+        )
 
         conflict = con.execute(
             'SELECT id FROM arac_gunluk_plan_is WHERE plan_id=? AND sira=?',
@@ -1614,6 +1698,10 @@ def assign_to_plan(
             """,
             (plan_id, int(talep_id), new_sira, use_saat, now, session_user_id),
         )
+        from modules.planlama.arac_plan_rota_snapshot_service import (
+            invalidate_plan_route_state_after_acil_insert_conn,
+        )
+        invalidate_plan_route_state_after_acil_insert_conn(con, plan_id, talep['oncelik'])
         con.execute(
             """
             UPDATE arac_is_talebi

@@ -2,6 +2,7 @@
 """Plan rota snapshot — persist applied route geometry (GeoJSON) for a plan day."""
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime
 from typing import Any
 
@@ -22,6 +23,47 @@ from modules.planlama.arac_takip_repo import PLAN_PROVIDER_FILOM
 
 def _now_str() -> str:
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _plan_rota_snapshot_table_exists_conn(con: sqlite3.Connection) -> bool:
+    return bool(con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='arac_plan_rota_snapshot'",
+    ).fetchone())
+
+
+def invalidate_active_plan_route_snapshot_conn(
+    con: sqlite3.Connection,
+    plan_id: int,
+) -> int:
+    """
+    Deactivate active route snapshots for one plan on caller-owned connection.
+
+    Returns number of rows updated. No-op when table missing or no active row.
+    """
+    if not _plan_rota_snapshot_table_exists_conn(con):
+        return 0
+    cur = con.execute(
+        'UPDATE arac_plan_rota_snapshot SET is_active=0 WHERE plan_id=? AND is_active=1',
+        (int(plan_id),),
+    )
+    return int(cur.rowcount or 0)
+
+
+def invalidate_plan_route_state_after_acil_insert_conn(
+    con: sqlite3.Connection,
+    plan_id: int,
+    oncelik: str | None,
+) -> None:
+    """
+    ACIL sıra değişimi sonrası stale snapshot/ETA temizliği — aynı transaction.
+
+    Yalnız ACIL önceliğinde çalışır; rota motoru veya ETA hesabı yapmaz.
+    """
+    if (oncelik or 'NORMAL').strip().upper() != 'ACIL':
+        return
+    invalidate_active_plan_route_snapshot_conn(con, plan_id)
+    from modules.planlama.arac_takip_repo import clear_plan_item_etas_conn
+    clear_plan_item_etas_conn(con, plan_id)
 
 
 def build_stop_order_from_tasks(
