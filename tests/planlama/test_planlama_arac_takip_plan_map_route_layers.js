@@ -218,6 +218,37 @@ function routeLine(geometry) {
   return geometry.map((p) => [p[0], p[1]]);
 }
 
+function identicalDenseFixture() {
+  return denseOrsFixture();
+}
+
+function differentDenseFixture() {
+  return denseOrsFixture().map((p, i) => [p[0] + (i * 0.00001), p[1] + (i * 0.000008)]);
+}
+
+function sameDistanceDifferentPathFixture() {
+  const base = denseOrsFixture();
+  const alt = base.map((p) => [p[0], p[1]]);
+  const last = alt.length - 1;
+  alt[last] = [alt[last][0] + 0.0005, alt[last][1] + 0.0003];
+  return alt;
+}
+
+function dashedSuggestedLayers(AtpPlanMap) {
+  return AtpPlanMap._testLayerKinds().filter((l) => l.dashArray === '10 6');
+}
+
+function totalActivePolylineLayers(AtpPlanMap) {
+  return AtpPlanMap._testLayerKinds().filter((l) => l.kind === 'current' || l.kind === 'suggested' || l.kind === 'halo').length;
+}
+
+function setLastRoute(sandbox, currentGeom, suggestedGeom) {
+  sandbox.AtpRoute.getLastRoute = () => ({
+    current: { geometry: routeLine(currentGeom || []) },
+    suggested: { geometry: routeLine(suggestedGeom != null ? suggestedGeom : []) },
+  });
+}
+
 test('RL01 first current route → 1 halo + 1 current', () => {
   const { AtpPlanMap } = loadPlanMapModule();
   AtpPlanMap.ensurePlanMap();
@@ -428,4 +459,227 @@ test('RL18 optimizer current/suggested separation preserved', () => {
   assert.equal(AtpPlanMap.hasCurrentRoute(), true);
   assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
   AtpPlanMap._testReset();
+});
+
+test('RL19 identical current/suggested → current=1 halo=1', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const geom = identicalDenseFixture();
+  AtpPlanMap.setCurrentRouteGeometry(geom);
+  AtpPlanMap.setSuggestedRouteGeometry(geom);
+  assert.equal(AtpPlanMap.routeLayerCount(), 1);
+  assert.equal(AtpPlanMap.haloLayerCount(), 1);
+  assert.equal(AtpPlanMap.hasCurrentRoute(), true);
+  AtpPlanMap._testReset();
+});
+
+test('RL20 identical current/suggested → suggested=0 suggested halo=0', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const geom = identicalDenseFixture();
+  AtpPlanMap.setCurrentRouteGeometry(geom);
+  AtpPlanMap.setSuggestedRouteGeometry(geom);
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  assert.equal(dashedSuggestedLayers(AtpPlanMap).length, 0);
+  AtpPlanMap._testReset();
+});
+
+test('RL21 identical second render → suggested does not return', () => {
+  const { AtpPlanMap, sandbox } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const geom = identicalDenseFixture();
+  setLastRoute(sandbox, geom, geom);
+  AtpPlanMap.setCurrentRouteGeometry(geom);
+  AtpPlanMap.setSuggestedRouteGeometry(geom);
+  AtpPlanMap.setSuggestedRouteGeometry(geom);
+  AtpPlanMap.syncRouteFromLast();
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  assert.equal(AtpPlanMap.routeLayerCount(), 1);
+  AtpPlanMap._testReset();
+});
+
+test('RL22 identical date roundtrip → suggested stays suppressed', () => {
+  const { AtpPlanMap, sandbox } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const geom = identicalDenseFixture();
+  setLastRoute(sandbox, geom, geom);
+  AtpPlanMap.renderPlanMap(samplePayload({ plan_date: '2026-09-01' }));
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  AtpPlanMap.renderPlanMap(samplePayload({ plan_date: '2026-09-02' }));
+  AtpPlanMap.renderPlanMap(samplePayload({ plan_date: '2026-09-01' }));
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  assert.equal(AtpPlanMap.routeLayerCount(), 1);
+  AtpPlanMap._testReset();
+});
+
+test('RL23 identical vehicle roundtrip → suggested stays suppressed', () => {
+  const { AtpPlanMap, sandbox } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const geom = identicalDenseFixture();
+  setLastRoute(sandbox, geom, geom);
+  AtpPlanMap.renderPlanMap(samplePayload({ vehicle_id: 991002 }));
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  AtpPlanMap.renderPlanMap(samplePayload({ vehicle_id: 991003 }));
+  setLastRoute(sandbox, geom, geom);
+  AtpPlanMap.renderPlanMap(samplePayload({ vehicle_id: 991002 }));
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  AtpPlanMap._testReset();
+});
+
+test('RL24 different suggested compare → green dashed suggested drawn', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(denseOrsFixture());
+  AtpPlanMap.setSuggestedRouteGeometry(differentDenseFixture());
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), true);
+  assert.equal(AtpPlanMap.routeLayerCount(), 2);
+  assert.equal(AtpPlanMap.haloLayerCount(), 2);
+  assert.equal(dashedSuggestedLayers(AtpPlanMap).length, 1);
+  AtpPlanMap._testReset();
+});
+
+test('RL25 same distance different geometry → suggested preserved', () => {
+  const { AtpPlanMap, pure } = loadPlanMapModule();
+  const current = denseOrsFixture();
+  const suggested = sameDistanceDifferentPathFixture();
+  assert.equal(pure.isIdenticalRouteGeometry(current, suggested), false);
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(current);
+  AtpPlanMap.setSuggestedRouteGeometry(suggested);
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), true);
+  AtpPlanMap._testReset();
+});
+
+test('RL26 current signature change re-evaluates identical compare', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const suggested = differentDenseFixture();
+  AtpPlanMap.setCurrentRouteGeometry(denseOrsFixture());
+  AtpPlanMap.setSuggestedRouteGeometry(suggested);
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), true);
+  AtpPlanMap.setCurrentRouteGeometry(suggested);
+  AtpPlanMap.setSuggestedRouteGeometry(suggested);
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  AtpPlanMap._testReset();
+});
+
+test('RL27 suggested empty → old suggested cleared', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(denseOrsFixture());
+  AtpPlanMap.setSuggestedRouteGeometry(differentDenseFixture());
+  AtpPlanMap.setSuggestedRouteGeometry([]);
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  AtpPlanMap._testReset();
+});
+
+test('RL28 current empty → old current and halo cleared', () => {
+  const { AtpPlanMap, sandbox } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  setLastRoute(sandbox, denseOrsFixture(), differentDenseFixture());
+  AtpPlanMap.renderPlanMap(samplePayload());
+  assert.equal(AtpPlanMap.hasCurrentRoute(), true);
+  setLastRoute(sandbox, [], []);
+  AtpPlanMap.syncRouteFromLast();
+  assert.equal(AtpPlanMap.hasCurrentRoute(), false);
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  assert.equal(AtpPlanMap.haloLayerCount(), 0);
+  AtpPlanMap._testReset();
+});
+
+test('RL29 sparse suggested → not drawn', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(denseOrsFixture());
+  AtpPlanMap.setSuggestedRouteGeometry(sparseLongChordFixture());
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  AtpPlanMap._testReset();
+});
+
+test('RL30 dense identical ORS fixture → dedup suggested overlay', () => {
+  const { AtpPlanMap, sandbox } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const geom = identicalDenseFixture();
+  setLastRoute(sandbox, geom, geom);
+  AtpPlanMap.renderPlanMap(samplePayload());
+  assert.equal(AtpPlanMap.getCurrentRoutePointCount(), geom.length);
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  assert.equal(totalActivePolylineLayers(AtpPlanMap), 2);
+  AtpPlanMap._testReset();
+});
+
+test('RL31 identical path input geometries are not mutated', () => {
+  const { AtpPlanMap, pure } = loadPlanMapModule();
+  const current = identicalDenseFixture();
+  const suggested = current.map((p) => [p[0], p[1]]);
+  const copyCur = JSON.stringify(current);
+  const copySug = JSON.stringify(suggested);
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(current);
+  AtpPlanMap.setSuggestedRouteGeometry(suggested);
+  pure.geometrySignature(current);
+  pure.geometrySignature(suggested);
+  assert.equal(JSON.stringify(current), copyCur);
+  assert.equal(JSON.stringify(suggested), copySug);
+  AtpPlanMap._testReset();
+});
+
+test('RL32 identical dedup preserves halo lifecycle without orphans', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const geom = identicalDenseFixture();
+  AtpPlanMap.setCurrentRouteGeometry(geom);
+  AtpPlanMap.setSuggestedRouteGeometry(geom);
+  AtpPlanMap.setSuggestedRouteGeometry(differentDenseFixture());
+  AtpPlanMap.setSuggestedRouteGeometry(geom);
+  assert.equal(AtpPlanMap.haloLayerCount(), 1);
+  assert.equal(AtpPlanMap.orphanHaloCount(), 0);
+  AtpPlanMap._testReset();
+});
+
+test('RL33 stale seq guard still blocks identical suggested replay', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.renderPlanMap(samplePayload({ vehicle_id: 200, plan_date: '2026-09-01' }));
+  const activeSeq = AtpPlanMap.getRouteContextSeq();
+  const geom = identicalDenseFixture();
+  AtpPlanMap.setCurrentRouteGeometry(geom, { contextSeq: activeSeq });
+  AtpPlanMap.setSuggestedRouteGeometry(geom, { contextSeq: activeSeq - 1 });
+  assert.equal(AtpPlanMap.hasCurrentRoute(), true);
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  AtpPlanMap._testReset();
+});
+
+test('RL34 dashArray 10 6 preserved for different suggested route', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(denseOrsFixture());
+  AtpPlanMap.setSuggestedRouteGeometry(differentDenseFixture());
+  const dashed = dashedSuggestedLayers(AtpPlanMap);
+  assert.equal(dashed.length, 1);
+  assert.equal(dashed[0].dashArray, '10 6');
+  assert.equal(dashed[0].color, '#16a34a');
+  AtpPlanMap._testReset();
+});
+
+test('RL35 Öneri=Mevcut model → only two route SVG paths (current+halo)', () => {
+  const { AtpPlanMap, sandbox } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const geom = identicalDenseFixture();
+  setLastRoute(sandbox, geom, geom);
+  AtpPlanMap.renderPlanMap(samplePayload());
+  assert.equal(AtpPlanMap.routeLayerCount(), 1);
+  assert.equal(AtpPlanMap.haloLayerCount(), 1);
+  assert.equal(totalActivePolylineLayers(AtpPlanMap), 2);
+  assert.equal(dashedSuggestedLayers(AtpPlanMap).length, 0);
+  AtpPlanMap._testReset();
+});
+
+test('RL36 manual reorder optimizer GPS namespaces unaffected by U4F dedup', () => {
+  assert.ok(typeof MR.createState === 'function');
+  const src = require('node:fs').readFileSync(PLAN_MAP_PATH, 'utf8');
+  assert.ok(!src.includes('gpsHistory'));
+  assert.ok(!src.includes('ATP_MANUAL_REORDER'));
+  assert.ok(src.includes('isIdenticalRouteGeometry'));
+  assert.ok(!src.includes('AtpRouteOptimizer'));
 });

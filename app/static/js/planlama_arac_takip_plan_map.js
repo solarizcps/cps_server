@@ -70,6 +70,11 @@
     return pts.length + ':' + first[0] + ',' + first[1] + ':' + last[0] + ',' + last[1];
   }
 
+  function isIdenticalRouteGeometry(a, b) {
+    if (!a || !b) return false;
+    return geometrySignature(a) === geometrySignature(b);
+  }
+
   function routeGeometryMetrics(pts) {
     var totalM = 0;
     var maxM = 0;
@@ -262,6 +267,11 @@
     if (!isDrawableRouteGeometry(geometry)) return;
 
     var sig = geometrySignature(geometry);
+    var curSig = opts.currentSignature != null ? opts.currentSignature : lastDrawnCurrentSig;
+    if (curSig && sig === curSig) {
+      lastDrawnSuggestedSig = sig;
+      return;
+    }
     var latlngs = normalizeValidLatLngs(geometry).map(function (p) { return [p[0], p[1]]; });
     var sHalo = L.polyline(latlngs, {
       color: '#fff',
@@ -301,11 +311,19 @@
       fitMapToContent([]);
     }
 
+    var curGeom = route && route.current && route.current.geometry;
+    var cSig = isDrawableRouteGeometry(curGeom) ? geometrySignature(curGeom) : lastDrawnCurrentSig;
     var suggested = route && route.suggested && route.suggested.geometry;
     if (isDrawableRouteGeometry(suggested)) {
       var sSig = geometrySignature(suggested);
-      if (sSig !== lastDrawnSuggestedSig) {
-        setSuggestedRouteGeometry(suggested, { contextSeq: expectedSeq != null ? expectedSeq : routeContextSeq });
+      if (cSig && sSig === cSig) {
+        removeSuggestedRouteLayer();
+        lastDrawnSuggestedSig = sSig;
+      } else if (sSig !== lastDrawnSuggestedSig) {
+        setSuggestedRouteGeometry(suggested, {
+          contextSeq: expectedSeq != null ? expectedSeq : routeContextSeq,
+          currentSignature: cSig
+        });
       }
     } else {
       removeSuggestedRouteLayer();
@@ -598,6 +616,20 @@
     },
     getRouteContextKey: function () { return routeContextKey; },
     getRouteContextSeq: function () { return routeContextSeq; },
+    _testLayerKinds: function () {
+      if (!planMap || !planMap.__atpLayerRegistry) return [];
+      var out = [];
+      planMap.__atpLayerRegistry.forEach(function (layer) {
+        if (!planMap.hasLayer(layer)) return;
+        var opts = layer.opts || layer.options || {};
+        out.push({
+          kind: layer._atpKind || 'unknown',
+          dashArray: opts.dashArray || null,
+          color: opts.color || null,
+        });
+      });
+      return out;
+    },
     _testReset: function () {
       clearRouteLayers();
       clearPlanMarkers();
@@ -624,6 +656,7 @@
       haversineM: haversineM,
       normalizeValidLatLngs: normalizeValidLatLngs,
       geometrySignature: geometrySignature,
+      isIdenticalRouteGeometry: isIdenticalRouteGeometry,
       isDrawableRouteGeometry: isDrawableRouteGeometry,
       makeRouteContextKey: makeRouteContextKey
     }
