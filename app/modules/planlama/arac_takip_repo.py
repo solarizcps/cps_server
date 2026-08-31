@@ -1575,6 +1575,90 @@ def _load_plan_items_for_order_policy_conn(
     return tasks
 
 
+def get_plan_row_by_id_conn(con: sqlite3.Connection, plan_id: int) -> dict | None:
+    """Load one plan row on caller-owned connection."""
+    row = con.execute(
+        """
+        SELECT id, plan_tarihi, arac_provider, arac_external_id, arac_plaka_snapshot,
+               durum, updated_at, updated_by
+        FROM arac_gunluk_plan
+        WHERE id=?
+        """,
+        (int(plan_id),),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def load_manual_reorder_policy_tasks_conn(
+    con: sqlite3.Connection,
+    plan_id: int,
+) -> list[dict]:
+    """Canonical plan items with visit state and priority for U3B manual reorder."""
+    rows = con.execute(
+        """
+        SELECT pi.id, pi.sira, pi.durum, t.oncelik
+        FROM arac_gunluk_plan_is pi
+        JOIN arac_is_talebi t ON t.id = pi.is_talebi_id
+        WHERE pi.plan_id=?
+        ORDER BY pi.sira
+        """,
+        (int(plan_id),),
+    ).fetchall()
+    tasks: list[dict] = []
+    for row in rows:
+        task: dict = {
+            'id': f"pi-{int(row['id'])}",
+            'sira': int(row['sira']),
+            'order_no': int(row['sira']),
+            'status': row['durum'],
+            'priority': row['oncelik'] or 'NORMAL',
+        }
+        visit = _get_visit_state_conn(con, int(row['id']))
+        if visit:
+            if visit.get('state'):
+                task['visit_state'] = visit['state']
+            if visit.get('arrived_at'):
+                task['arrived_at'] = visit['arrived_at']
+            if visit.get('departed_at'):
+                task['departed_at'] = visit['departed_at']
+        tasks.append(task)
+    return tasks
+
+
+def reorder_plan_items_by_plan_id_conn(
+    con: sqlite3.Connection,
+    session_user_id: int,
+    plan_id: int,
+    task_ids: list[str],
+) -> None:
+    """UNIQUE(plan_id,sira) safe bulk reorder on open connection — no commit."""
+    items = con.execute(
+        'SELECT * FROM arac_gunluk_plan_is WHERE plan_id=? ORDER BY sira',
+        (int(plan_id),),
+    ).fetchall()
+    by_id = {f"pi-{r['id']}": r for r in items}
+    if set(task_ids) != set(by_id.keys()):
+        raise ValueError('Görev listesi plan ile uyuşmuyor')
+    ordered_rows = [by_id[tid] for tid in task_ids if tid in by_id]
+    if len(ordered_rows) != len(items):
+        raise ValueError('Eksik görev sırası')
+    now = _now_iso()
+    for row in ordered_rows:
+        con.execute(
+            'UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?',
+            (-int(row['id']), row['id']),
+        )
+    for i, row in enumerate(ordered_rows, start=1):
+        con.execute(
+            'UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?',
+            (i, row['id']),
+        )
+    con.execute(
+        'UPDATE arac_gunluk_plan SET updated_at=?, updated_by=? WHERE id=?',
+        (now, session_user_id, int(plan_id)),
+    )
+
+
 def resolve_plan_insert_sira_conn(
     con: sqlite3.Connection,
     plan_id: int,

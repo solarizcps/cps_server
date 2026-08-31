@@ -66,6 +66,24 @@ def invalidate_plan_route_state_after_acil_insert_conn(
     clear_plan_item_etas_conn(con, plan_id)
 
 
+def invalidate_plan_route_state_after_manual_reorder_conn(
+    con: sqlite3.Connection,
+    plan_id: int,
+) -> dict[str, int]:
+    """
+    Manuel reorder sonrası stale snapshot/ETA temizliği — aynı transaction.
+
+    Öncelik parametresi istemez. Commit/rollback yapmaz.
+    """
+    snapshots_deactivated = invalidate_active_plan_route_snapshot_conn(con, plan_id)
+    from modules.planlama.arac_takip_repo import clear_plan_item_etas_conn
+    etas_cleared = clear_plan_item_etas_conn(con, plan_id)
+    return {
+        'snapshots_deactivated': snapshots_deactivated,
+        'etas_cleared': etas_cleared,
+    }
+
+
 def build_stop_order_from_tasks(
     tasks: list[dict],
     eta_by_task: dict[str, dict] | None = None,

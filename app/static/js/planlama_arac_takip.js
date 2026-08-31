@@ -370,6 +370,14 @@
   var datePicker = qs('atpV2DatePicker');
   if (datePicker) {
     datePicker.addEventListener('change', function () {
+      if (window.AtpManualReorderUI && window.AtpManualReorderUI.guardDirtyNavigation &&
+          !window.AtpManualReorderUI.guardDirtyNavigation()) {
+        datePicker.value = planDate;
+        return;
+      }
+      if (window.AtpManualReorderUI && window.AtpManualReorderUI.cleanup) {
+        window.AtpManualReorderUI.cleanup();
+      }
       planDate = datePicker.value;
       var u = new URL(window.location.href);
       u.searchParams.set('tab', 'gunluk');
@@ -615,6 +623,16 @@
     return items.filter(function (it) {
       return String(it.arac_external_id) === String(extId) && isActivePlanItem(it);
     });
+  }
+
+  function planIdForVehicle(vid) {
+    var veh = findVehicleByExtId(vid);
+    if (veh && veh.plan_id != null && veh.plan_id !== '') return veh.plan_id;
+    var items = filterItemsForVehicle(vid, lastOpsData.items || []);
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].plan_id != null && items[i].plan_id !== '') return items[i].plan_id;
+    }
+    return null;
   }
 
   function compareOrderNo(a, b) {
@@ -923,6 +941,10 @@
 
   function openPlanRouteForVehicle(aracExternalId) {
     if (!aracExternalId) return;
+    if (window.AtpManualReorderUI && window.AtpManualReorderUI.guardNavigation &&
+        !window.AtpManualReorderUI.guardNavigation('vehicle', aracExternalId)) {
+      return;
+    }
     var extId = String(aracExternalId);
     _activeVehicleExtId = extId;
 
@@ -1615,6 +1637,9 @@
     html += '<div class="factory-row" style="margin-top:4px"><span class="fl">🏭</span><span class="factory-label">Bitiş: Fabrika Dönüş — ' + base + '</span></div>';
     wrap.innerHTML = html;
     if (title) title.textContent = 'Sıralı Duraklar' + (plate ? ' — ' + plate : '');
+    if (window.AtpManualReorderUI && window.AtpManualReorderUI.afterBaseRender) {
+      window.AtpManualReorderUI.afterBaseRender(tasks, plate);
+    }
   }
 
   /* ─── Empty day: show/hide correct view ─── */
@@ -2556,13 +2581,7 @@
     }
 
     function _planIdForVehicle(vid) {
-      var veh = findVehicleByExtId(vid);
-      if (veh && veh.plan_id != null && veh.plan_id !== '') return veh.plan_id;
-      var items = filterItemsForVehicle(vid, lastOpsData.items || []);
-      for (var i = 0; i < items.length; i++) {
-        if (items[i].plan_id != null && items[i].plan_id !== '') return items[i].plan_id;
-      }
-      return null;
+      return planIdForVehicle(vid);
     }
 
     function _planMapPayloadForVehicle(vid) {
@@ -4774,5 +4793,29 @@
       if (btn) { e.preventDefault(); _open(btn); }
     });
   }());
+
+  if (window.AtpManualReorderUI && window.AtpManualReorderUI.init) {
+    window.AtpManualReorderUI.init({
+      getMotor: function () { return window.ATP_MANUAL_REORDER; },
+      getPlanId: function () { return planIdForVehicle(_activeVehicleExtId); },
+      getVehicleId: function () { return _activeVehicleExtId; },
+      getPlanDate: _planDateForApi,
+      getTasksForVehicle: function (vid) {
+        return sortStopItems(filterItemsForVehicle(vid, lastOpsData.items || []));
+      },
+      getBaseLocation: function () {
+        return (dashboard.base_location && dashboard.base_location.base_name) || 'Fabrika — Tuzla OSB';
+      },
+      loadOps: loadOps,
+      toast: toast,
+      fmtVal: fmtVal,
+      isActivePlanItem: isActivePlanItem,
+      safePlate: safePlate,
+      findVehicleByExtId: findVehicleByExtId,
+      onDiscard: function (tasks, plate) {
+        renderStopList(tasks, plate);
+      },
+    });
+  }
 
 }());

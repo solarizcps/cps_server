@@ -4,7 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=71">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=73">
 {% endblock %}
 
 {% block content %}
@@ -245,7 +245,12 @@
             <div class="plan-rota-detail" id="atpPlanRotaDetail">
               {# Left: stop list #}
               <div>
-                <div style="font-size:12.5px;font-weight:700;color:#111827;margin-bottom:8px" id="atpStopListTitle">Sıralı Duraklar</div>
+                <div class="atp-stop-list-header">
+                  <div style="font-size:12.5px;font-weight:700;color:#111827;margin-bottom:0" id="atpStopListTitle">Sıralı Duraklar</div>
+                  <div id="atpManualReorderHeaderAction" class="atp-mr-header-action"></div>
+                </div>
+                <div id="atpManualReorderToolbar" class="atp-manual-reorder-toolbar" style="display:none"></div>
+                <div id="atpManualReorderMsg" class="atp-manual-reorder-msg" aria-live="polite"></div>
                 <div id="atpStopListWrap">
                   <div class="atp-v2-empty">Henüz planlanmış durak yok.</div>
                 </div>
@@ -1017,6 +1022,8 @@
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=11"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=92"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_manual_reorder.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_manual_reorder_ui.js') }}?v=2"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=93"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}

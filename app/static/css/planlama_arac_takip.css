@@ -417,6 +417,68 @@
 }
 #atpV2Root .factory-label { font-size:12px;font-weight:700;color:var(--gold-h); }
 
+/* ??? Manual reorder (U3D2) ??? */
+#atpV2Root .atp-stop-list-header {
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-bottom:8px;min-height:28px;
+}
+#atpV2Root .atp-mr-header-action { flex-shrink:0; }
+#atpV2Root .atp-manual-reorder-toolbar { margin:0 0 8px; }
+#atpV2Root .atp-mr-toolbar-row { display:flex;flex-wrap:wrap;gap:8px;align-items:center; }
+#atpV2Root .atp-mr-toolbar-edit {
+  justify-content:space-between;gap:10px;
+  padding:8px 10px;border-radius:var(--radius);
+  background:#fffdf5;border:1px solid #f6c343;
+}
+#atpV2Root .atp-mr-toolbar-hint {
+  font-size:11px;color:#374151;flex:1 1 180px;min-width:0;line-height:1.35;
+}
+#atpV2Root .atp-mr-toolbar-actions { display:flex;flex-wrap:wrap;gap:6px;flex-shrink:0; }
+#atpV2Root .atp-mr-toolbar-edit .btn-gold {
+  background:linear-gradient(180deg,#f6c343 0%,#f5b82e 100%);
+  border-color:#e5a817;color:#1f2937;font-weight:700;
+}
+#atpV2Root .atp-mr-btn-neutral {
+  background:#fff;border-color:#d1d5db;color:#374151;
+}
+#atpV2Root .atp-mr-dirty-info {
+  font-size:10.5px;color:#92400e;margin-top:4px;padding-left:2px;
+}
+#atpV2Root .atp-manual-reorder-msg { font-size:11px;min-height:0;margin-bottom:6px;color:var(--gray); }
+#atpV2Root .atp-manual-reorder-msg:empty { display:none;margin:0;min-height:0; }
+#atpV2Root .atp-manual-reorder-msg.is-loading { color:#92400e; }
+#atpV2Root .atp-manual-reorder-msg.is-error { color:#b91c1c;font-weight:600; }
+#atpV2Root .atp-mr-conflict-banner {
+  margin-top:6px;padding:8px 10px;border-radius:var(--radius);
+  background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-size:11.5px;
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+}
+#atpV2Root .atp-mr-conflict-text { flex:1 1 180px;min-width:0;line-height:1.35; }
+#atpV2Root .atp-mr-editing .stop-list { gap:4px; }
+#atpV2Root .atp-mr-stop-item.atp-mr-edit-mode { background:var(--gray-50);border-color:var(--gray-200); }
+#atpV2Root .atp-mr-controls { display:flex;align-items:center;gap:2px;flex-shrink:0;width:52px; }
+#atpV2Root .atp-mr-drag-handle {
+  cursor:grab;padding:0 2px;font-size:13px;line-height:1;color:#6b7280;user-select:none;
+}
+#atpV2Root .atp-mr-drag-handle:active { cursor:grabbing; }
+#atpV2Root .atp-mr-arrow {
+  width:20px;height:20px;padding:0;border:1px solid #d1d5db;border-radius:4px;
+  background:#fff;font-size:9px;line-height:1;cursor:pointer;color:#374151;
+}
+#atpV2Root .atp-mr-arrow:disabled { opacity:.35;cursor:not-allowed; }
+#atpV2Root .atp-mr-locked { color:#6b7280;font-size:12px;width:52px;justify-content:center; }
+#atpV2Root .atp-mr-factory-row .atp-mr-controls,
+#atpV2Root .atp-mr-factory-row .atp-mr-drag-handle,
+#atpV2Root .atp-mr-factory-row .atp-mr-arrow { display:none !important; }
+#atpV2Root .atp-mr-stop-item.atp-mr-dragging { opacity:.55; }
+#atpV2Root .atp-mr-stop-item.atp-mr-drop-before { box-shadow:inset 0 3px 0 #f5b82e; }
+#atpV2Root .atp-mr-stop-item.atp-mr-drop-after { box-shadow:inset 0 -3px 0 #f5b82e; }
+@media (max-width:900px) {
+  #atpV2Root .atp-mr-toolbar-edit { flex-direction:column;align-items:stretch; }
+  #atpV2Root .atp-mr-toolbar-actions { width:100%; }
+  #atpV2Root .atp-mr-arrow { width:24px;height:24px;font-size:10px; }
+}
+
 /* ??? Plan rota map (sa? s?tun) ? y?kseklik kontrol? ??? */
 #atpV2Root #atp-plan-map-container {
   position:relative;height:200px !important;max-height:200px !important;

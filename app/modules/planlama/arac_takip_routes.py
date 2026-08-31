@@ -247,6 +247,84 @@ def arac_takip_api_reorder():
     return jsonify({'ok': True, 'daily_tasks': tasks, 'dashboard': dto})
 
 
+@arac_takip_bp.route('/api/plan/manual-reorder-context', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_manual_reorder_context():
+    if not _arac_takip_guncelle():
+        return _atp_forbidden()
+    from modules.planlama.arac_manual_reorder_service import (
+        ManualReorderServiceError,
+        get_manual_reorder_context,
+    )
+    from modules.planlama.arac_takip_repo import tables_ready
+
+    if not tables_ready():
+        return jsonify({'ok': False, 'error': 'Tablolar hazır değil', 'code': 'TABLES_NOT_READY'}), 503
+
+    plan_id = request.args.get('plan_id', type=int)
+    plan_date = request.args.get('date')
+    vehicle_id = request.args.get('vehicle_id') or request.args.get('arac_external_id')
+    try:
+        payload = get_manual_reorder_context(
+            plan_id,
+            plan_date=plan_date,
+            vehicle_id=vehicle_id,
+        )
+        return jsonify(payload)
+    except ManualReorderServiceError as exc:
+        return jsonify(exc.to_dict()), exc.http_status
+
+
+@arac_takip_bp.route('/api/plan/manual-reorder', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_manual_reorder():
+    if not _arac_takip_guncelle():
+        return _atp_forbidden()
+    from modules.planlama.arac_manual_reorder_service import (
+        ManualReorderServiceError,
+        apply_manual_reorder,
+    )
+    from modules.planlama.arac_takip_repo import tables_ready
+
+    if not tables_ready():
+        return jsonify({'ok': False, 'error': 'Tablolar hazır değil', 'code': 'TABLES_NOT_READY'}), 503
+
+    body = request.get_json(silent=True) or {}
+    plan_id = body.get('plan_id')
+    if plan_id is not None:
+        try:
+            plan_id = int(plan_id)
+        except (TypeError, ValueError):
+            return jsonify({
+                'ok': False,
+                'error': {'code': 'INVALID_REQUEST', 'message': 'plan_id geçersiz'},
+            }), 400
+
+    state_token = body.get('state_token')
+    ordered_item_ids = body.get('ordered_item_ids')
+    plan_date = body.get('date')
+    vehicle_id = body.get('vehicle_id') or body.get('arac_external_id')
+
+    try:
+        result = apply_manual_reorder(
+            _uid(),
+            plan_id,
+            state_token or '',
+            ordered_item_ids or [],
+            plan_date=plan_date,
+            vehicle_id=vehicle_id,
+        )
+        dto = get_arac_dashboard_dto(
+            plan_date=_parse_date(result.get('plan_date') or plan_date),
+            vehicle_id=result.get('vehicle_id') or vehicle_id,
+            daily_tasks=result.get('daily_tasks') or [],
+        )
+        result['dashboard'] = dto
+        return jsonify(result)
+    except ManualReorderServiceError as exc:
+        return jsonify(exc.to_dict()), exc.http_status
+
+
 @arac_takip_bp.route('/api/talepler/bekleyen', methods=['GET'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_talepler_bekleyen():
