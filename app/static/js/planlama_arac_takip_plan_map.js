@@ -1,4 +1,12 @@
-(function (global) {
+(function (root, factory) {
+  'use strict';
+  var api = factory();
+  if (typeof module === 'object' && module.exports) {
+    module.exports = api;
+  }
+  root.AtpPlanMap = api.AtpPlanMap;
+  root.__atpPlanMapPure = api.pure;
+}(typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : this, function () {
   'use strict';
 
   var planMap = null;
@@ -8,8 +16,91 @@
   var planSuggestedLayer = null;
   var planInitCount = 0;
   var lastPlanPayload = null;
+  var routeContextKey = '';
+  var routeContextSeq = 0;
+  var lastDrawnCurrentSig = null;
+  var lastDrawnSuggestedSig = null;
 
-  global.__atpPlanMapInits = 0;
+  var globalRef = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : this;
+  globalRef.__atpPlanMapInits = 0;
+
+  var EARTH_RADIUS_M = 6371000;
+  var DENSE_POINT_MIN = 12;
+  var MAX_SEGMENT_DENSE_M = 2500;
+  var SHORT_ROUTE_MAX_M = 3000;
+  var SPARSE_POINT_MAX = 8;
+  var SPARSE_SEGMENT_REJECT_M = 10000;
+  var SPARSE_TOTAL_REJECT_M = 15000;
+
+  function haversineM(a, b) {
+    var lat1 = Number(a[0]);
+    var lng1 = Number(a[1]);
+    var lat2 = Number(b[0]);
+    var lng2 = Number(b[1]);
+    if (!isFinite(lat1) || !isFinite(lng1) || !isFinite(lat2) || !isFinite(lng2)) return NaN;
+    var rLat1 = lat1 * Math.PI / 180;
+    var rLat2 = lat2 * Math.PI / 180;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLng = (lng2 - lng1) * Math.PI / 180;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(rLat1) * Math.cos(rLat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+
+  function normalizeValidLatLngs(geometry) {
+    if (!Array.isArray(geometry)) return [];
+    var out = [];
+    for (var i = 0; i < geometry.length; i++) {
+      var p = geometry[i];
+      if (!Array.isArray(p) || p.length < 2) continue;
+      var lat = Number(p[0]);
+      var lng = Number(p[1]);
+      if (!isFinite(lat) || !isFinite(lng)) continue;
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
+      out.push([lat, lng]);
+    }
+    return out;
+  }
+
+  function geometrySignature(geometry) {
+    var pts = normalizeValidLatLngs(geometry);
+    if (!pts.length) return '';
+    var first = pts[0];
+    var last = pts[pts.length - 1];
+    return pts.length + ':' + first[0] + ',' + first[1] + ':' + last[0] + ',' + last[1];
+  }
+
+  function routeGeometryMetrics(pts) {
+    var totalM = 0;
+    var maxM = 0;
+    for (var i = 1; i < pts.length; i++) {
+      var d = haversineM(pts[i - 1], pts[i]);
+      if (!isFinite(d)) return null;
+      totalM += d;
+      if (d > maxM) maxM = d;
+    }
+    return { totalM: totalM, maxM: maxM, pointCount: pts.length };
+  }
+
+  function isDrawableRouteGeometry(geometry) {
+    var pts = normalizeValidLatLngs(geometry);
+    if (pts.length < 2) return false;
+    var metrics = routeGeometryMetrics(pts);
+    if (!metrics) return false;
+    if (metrics.pointCount >= DENSE_POINT_MIN) return true;
+    if (metrics.maxM <= MAX_SEGMENT_DENSE_M) return true;
+    if (metrics.totalM <= SHORT_ROUTE_MAX_M) return true;
+    if (metrics.pointCount <= SPARSE_POINT_MAX && metrics.maxM > SPARSE_SEGMENT_REJECT_M) return false;
+    if (metrics.pointCount <= 6 && metrics.totalM > SPARSE_TOTAL_REJECT_M) return false;
+    return metrics.pointCount >= 8;
+  }
+
+  function makeRouteContextKey(payload) {
+    if (!payload) return '';
+    return String(payload.vehicle_id || '') + '|' +
+      String(payload.plan_date || payload.date || '') + '|' +
+      String(payload.plan_id || '');
+  }
 
   function esc(s) {
     if (s == null) return '';
@@ -27,7 +118,6 @@
     var txt = esc(label || 'B');
     var color = fill || '#1d4ed8';
     var stroke = strokeColor || '#fff';
-    /* 36×46 — slightly larger for visibility; white drop-shadow halo */
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="46" viewBox="0 0 36 46">' +
       '<filter id="sh"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="rgba(0,0,0,.45)"/></filter>' +
       '<g filter="url(#sh)">' +
@@ -53,7 +143,6 @@
 
   function stopIcon(orderNo) {
     var n = esc(orderNo != null ? orderNo : '?');
-    /* 34×44 amber pin with white number, drop-shadow */
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="44" viewBox="0 0 34 44">' +
       '<filter id="sh2"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="rgba(0,0,0,.40)"/></filter>' +
       '<g filter="url(#sh2)">' +
@@ -90,6 +179,33 @@
       '</div>';
   }
 
+  function removeLayerPair(layerRef) {
+    if (!planMap || !layerRef) return;
+    if (layerRef._halo && planMap.hasLayer(layerRef._halo)) {
+      planMap.removeLayer(layerRef._halo);
+    }
+    if (planMap.hasLayer(layerRef)) {
+      planMap.removeLayer(layerRef);
+    }
+    layerRef._halo = null;
+  }
+
+  function removeCurrentRouteLayer() {
+    if (planRouteLayer) {
+      removeLayerPair(planRouteLayer);
+      planRouteLayer = null;
+    }
+    lastDrawnCurrentSig = null;
+  }
+
+  function removeSuggestedRouteLayer() {
+    if (planSuggestedLayer) {
+      removeLayerPair(planSuggestedLayer);
+      planSuggestedLayer = null;
+    }
+    lastDrawnSuggestedSig = null;
+  }
+
   function clearPlanMarkers() {
     if (!planMap) return;
     planMarkers.forEach(function (mk) { planMap.removeLayer(mk); });
@@ -97,28 +213,24 @@
   }
 
   function clearRouteLayers() {
-    if (!planMap) return;
-    if (planRouteLayer) {
-      if (planRouteLayer._halo && planMap.hasLayer(planRouteLayer._halo)) planMap.removeLayer(planRouteLayer._halo);
-      planMap.removeLayer(planRouteLayer);
-      planRouteLayer = null;
-    }
-    if (planSuggestedLayer) {
-      if (planSuggestedLayer._halo && planMap.hasLayer(planSuggestedLayer._halo)) planMap.removeLayer(planSuggestedLayer._halo);
-      planMap.removeLayer(planSuggestedLayer);
-      planSuggestedLayer = null;
-    }
+    removeCurrentRouteLayer();
+    removeSuggestedRouteLayer();
   }
 
-  function setCurrentRouteGeometry(geometry) {
+  function setCurrentRouteGeometry(geometry, opts) {
     if (!ensurePlanMap()) return;
-    if (planRouteLayer) {
-      if (planMap.hasLayer(planRouteLayer)) planMap.removeLayer(planRouteLayer);
-      planRouteLayer = null;
+    opts = opts || {};
+    if (opts.contextSeq != null && opts.contextSeq !== routeContextSeq) return;
+
+    removeCurrentRouteLayer();
+
+    if (!isDrawableRouteGeometry(geometry)) {
+      fitMapToContent([]);
+      return;
     }
-    if (!geometry || !geometry.length) return;
-    var latlngs = geometry.map(function (p) { return [p[0], p[1]]; });
-    /* white halo layer underneath for contrast against map tiles */
+
+    var sig = geometrySignature(geometry);
+    var latlngs = normalizeValidLatLngs(geometry).map(function (p) { return [p[0], p[1]]; });
     var halo = L.polyline(latlngs, {
       color: '#fff',
       weight: 11,
@@ -135,21 +247,22 @@
       lineCap: 'round'
     }).addTo(planMap);
     planRouteLayer._halo = halo;
+    lastDrawnCurrentSig = sig;
     if (planRouteLayer.bringToFront) planRouteLayer.bringToFront();
     fitMapToContent(latlngs);
   }
 
-  function setSuggestedRouteGeometry(geometry) {
+  function setSuggestedRouteGeometry(geometry, opts) {
     if (!ensurePlanMap()) return;
-    if (planSuggestedLayer) {
-      if (planSuggestedLayer._halo && planMap.hasLayer(planSuggestedLayer._halo)) {
-        planMap.removeLayer(planSuggestedLayer._halo);
-      }
-      planMap.removeLayer(planSuggestedLayer);
-      planSuggestedLayer = null;
-    }
-    if (!geometry || !geometry.length) return;
-    var latlngs = geometry.map(function (p) { return [p[0], p[1]]; });
+    opts = opts || {};
+    if (opts.contextSeq != null && opts.contextSeq !== routeContextSeq) return;
+
+    removeSuggestedRouteLayer();
+
+    if (!isDrawableRouteGeometry(geometry)) return;
+
+    var sig = geometrySignature(geometry);
+    var latlngs = normalizeValidLatLngs(geometry).map(function (p) { return [p[0], p[1]]; });
     var sHalo = L.polyline(latlngs, {
       color: '#fff',
       weight: 9,
@@ -166,13 +279,37 @@
       lineCap: 'round'
     }).addTo(planMap);
     planSuggestedLayer._halo = sHalo;
+    lastDrawnSuggestedSig = sig;
     if (planSuggestedLayer.bringToFront) planSuggestedLayer.bringToFront();
   }
 
   function clearSuggestedRouteGeometry() {
-    if (!planMap || !planSuggestedLayer) return;
-    planMap.removeLayer(planSuggestedLayer);
-    planSuggestedLayer = null;
+    removeSuggestedRouteLayer();
+  }
+
+  function syncRouteFromLast(expectedSeq) {
+    if (expectedSeq != null && expectedSeq !== routeContextSeq) return;
+    var route = globalRef.AtpRoute && globalRef.AtpRoute.getLastRoute && globalRef.AtpRoute.getLastRoute();
+    var geom = route && route.current && route.current.geometry;
+    if (isDrawableRouteGeometry(geom)) {
+      var sig = geometrySignature(geom);
+      if (sig !== lastDrawnCurrentSig) {
+        setCurrentRouteGeometry(geom, { contextSeq: expectedSeq != null ? expectedSeq : routeContextSeq });
+      }
+    } else {
+      removeCurrentRouteLayer();
+      fitMapToContent([]);
+    }
+
+    var suggested = route && route.suggested && route.suggested.geometry;
+    if (isDrawableRouteGeometry(suggested)) {
+      var sSig = geometrySignature(suggested);
+      if (sSig !== lastDrawnSuggestedSig) {
+        setSuggestedRouteGeometry(suggested, { contextSeq: expectedSeq != null ? expectedSeq : routeContextSeq });
+      }
+    } else {
+      removeSuggestedRouteLayer();
+    }
   }
 
   function syncPlanMapSize(cb) {
@@ -200,10 +337,10 @@
       if (ll && ll.length) geomLatLngs = ll.map(function (p) { return [p.lat, p.lng]; });
     }
     if (!geomLatLngs || !geomLatLngs.length) {
-      var lastR = global.AtpRoute && global.AtpRoute.getLastRoute && global.AtpRoute.getLastRoute();
+      var lastR = globalRef.AtpRoute && globalRef.AtpRoute.getLastRoute && globalRef.AtpRoute.getLastRoute();
       var g = lastR && lastR.current && lastR.current.geometry;
-      if (g && g.length) {
-        setCurrentRouteGeometry(g);
+      if (isDrawableRouteGeometry(g)) {
+        setCurrentRouteGeometry(g, { contextSeq: routeContextSeq });
         return true;
       }
     } else {
@@ -223,6 +360,11 @@
     if (!planMap) return;
     var bounds = [];
     planMarkers.forEach(function (mk) { bounds.push(mk.getLatLng()); });
+    if (planRouteLayer && planMap.hasLayer(planRouteLayer) && planRouteLayer.getLatLngs) {
+      planRouteLayer.getLatLngs().forEach(function (p) {
+        bounds.push(L.latLng(p.lat, p.lng));
+      });
+    }
     (extraLatLngs || []).forEach(function (p) {
       if (p && p.length >= 2) bounds.push(L.latLng(p[0], p[1]));
     });
@@ -231,7 +373,6 @@
       planMap.setView(bounds[0], 13, { animate: false });
       return;
     }
-    /* clamp padding: tight routes need less zoom-out; enforce sensible min/max */
     var boundsObj = L.latLngBounds(bounds);
     var span = Math.max(
       Math.abs(boundsObj.getNorth() - boundsObj.getSouth()),
@@ -266,7 +407,7 @@
     planTileLayer.addTo(planMap);
 
     planInitCount += 1;
-    global.__atpPlanMapInits = planInitCount;
+    globalRef.__atpPlanMapInits = planInitCount;
 
     planMap.whenReady(function () {
       syncPlanMapSize(function () {
@@ -297,8 +438,8 @@
     var btn = document.getElementById('atpBtnBaseFromCompleteness');
     if (btn) {
       btn.onclick = function () {
-        if (global.AtpLocationModals && global.AtpLocationModals.openBaseModal) {
-          global.AtpLocationModals.openBaseModal(base || {});
+        if (globalRef.AtpLocationModals && globalRef.AtpLocationModals.openBaseModal) {
+          globalRef.AtpLocationModals.openBaseModal(base || {});
         }
       };
     }
@@ -332,6 +473,10 @@
   function renderPlanMap(payload) {
     lastPlanPayload = payload || lastPlanPayload;
     if (!lastPlanPayload) return;
+    routeContextKey = makeRouteContextKey(lastPlanPayload);
+    routeContextSeq += 1;
+    var mySeq = routeContextSeq;
+
     updateEmptyState(lastPlanPayload);
     updateCompleteness(lastPlanPayload.completeness, lastPlanPayload.base);
     if (!ensurePlanMap()) return;
@@ -351,7 +496,6 @@
 
     (lastPlanPayload.stops || []).forEach(function (stop) {
       if (!stop.has_coordinates || stop.latitude == null || stop.longitude == null) return;
-      /* Pin label: display_order_no (1-based active sequential) with canonical order_no fallback */
       var pinLabel = stop.display_order_no != null && stop.display_order_no !== ''
         ? stop.display_order_no
         : stop.order_no;
@@ -363,21 +507,7 @@
       addPlanMarker(mk, 'stop');
     });
 
-    var lastR = global.AtpRoute && global.AtpRoute.getLastRoute && global.AtpRoute.getLastRoute();
-    var routeGeom = (lastR && lastR.current && lastR.current.geometry) || [];
-    if (routeGeom.length) {
-      if (!planRouteLayer || !planMap.hasLayer(planRouteLayer)) setCurrentRouteGeometry(routeGeom);
-      else fitMapToContent(routeGeom);
-    } else {
-      fitMapToContent([]);
-    }
-  }
-
-  function syncRouteFromLast() {
-    var route = global.AtpRoute && global.AtpRoute.getLastRoute && global.AtpRoute.getLastRoute();
-    if (route && route.current && route.current.geometry && route.current.geometry.length) {
-      setCurrentRouteGeometry(route.current.geometry);
-    }
+    syncRouteFromLast(mySeq);
   }
 
   function onPlanTabShown() {
@@ -385,11 +515,23 @@
     if (!planMap) ensurePlanMap();
     syncPlanMapSize(function () {
       if (lastPlanPayload) renderPlanMap(lastPlanPayload);
-      syncRouteFromLast();
+      else syncRouteFromLast(routeContextSeq);
     });
   }
 
-  global.AtpPlanMap = {
+  function countOrphanHalos() {
+    if (!planMap || !planMap.__atpLayerRegistry) return 0;
+    var linked = {};
+    if (planRouteLayer && planRouteLayer._halo) linked[planRouteLayer._halo._atpId] = true;
+    if (planSuggestedLayer && planSuggestedLayer._halo) linked[planSuggestedLayer._halo._atpId] = true;
+    var orphans = 0;
+    planMap.__atpLayerRegistry.forEach(function (layer) {
+      if (layer._atpKind === 'halo' && planMap.hasLayer(layer) && !linked[layer._atpId]) orphans += 1;
+    });
+    return orphans;
+  }
+
+  var AtpPlanMap = {
     ensurePlanMap: ensurePlanMap,
     onPlanTabShown: onPlanTabShown,
     renderPlanMap: renderPlanMap,
@@ -398,6 +540,7 @@
     clearSuggestedRouteGeometry: clearSuggestedRouteGeometry,
     clearRouteLayers: clearRouteLayers,
     focusCurrentRoute: focusCurrentRoute,
+    syncRouteFromLast: syncRouteFromLast,
     mapInstanceCount: function () { return planInitCount; },
     hasInstance: function () { return planMap !== null; },
     markerCount: function () { return planMarkers.length; },
@@ -411,12 +554,23 @@
     },
     routeLayerCount: function () {
       var n = 0;
-      if (planRouteLayer) n += 1;
-      if (planSuggestedLayer) n += 1;
+      if (planRouteLayer && planMap && planMap.hasLayer(planRouteLayer)) n += 1;
+      if (planSuggestedLayer && planMap && planMap.hasLayer(planSuggestedLayer)) n += 1;
       return n;
     },
-    hasCurrentRoute: function () { return planRouteLayer !== null; },
-    hasSuggestedRoute: function () { return planSuggestedLayer !== null; },
+    haloLayerCount: function () {
+      var n = 0;
+      if (planRouteLayer && planRouteLayer._halo && planMap && planMap.hasLayer(planRouteLayer._halo)) n += 1;
+      if (planSuggestedLayer && planSuggestedLayer._halo && planMap && planMap.hasLayer(planSuggestedLayer._halo)) n += 1;
+      return n;
+    },
+    orphanHaloCount: countOrphanHalos,
+    hasCurrentRoute: function () {
+      return !!(planRouteLayer && planMap && planMap.hasLayer(planRouteLayer));
+    },
+    hasSuggestedRoute: function () {
+      return !!(planSuggestedLayer && planMap && planMap.hasLayer(planSuggestedLayer));
+    },
     getMarkerRegistry: function () {
       var base = lastPlanPayload && lastPlanPayload.base;
       var stops = (lastPlanPayload && lastPlanPayload.stops) || [];
@@ -441,6 +595,37 @@
     },
     getCurrentRoutePointCount: function () {
       return planRouteLayer && planRouteLayer.getLatLngs ? planRouteLayer.getLatLngs().length : 0;
+    },
+    getRouteContextKey: function () { return routeContextKey; },
+    getRouteContextSeq: function () { return routeContextSeq; },
+    _testReset: function () {
+      clearRouteLayers();
+      clearPlanMarkers();
+      planMap = null;
+      planTileLayer = null;
+      planInitCount = 0;
+      lastPlanPayload = null;
+      routeContextKey = '';
+      routeContextSeq = 0;
+      lastDrawnCurrentSig = null;
+      lastDrawnSuggestedSig = null;
+      globalRef.__atpPlanMapInits = 0;
+      var el = document.getElementById('atpPlanLeafletMap');
+      if (el) {
+        delete el._leaflet_id;
+        el.innerHTML = '';
+      }
     }
   };
-})(window);
+
+  return {
+    AtpPlanMap: AtpPlanMap,
+    pure: {
+      haversineM: haversineM,
+      normalizeValidLatLngs: normalizeValidLatLngs,
+      geometrySignature: geometrySignature,
+      isDrawableRouteGeometry: isDrawableRouteGeometry,
+      makeRouteContextKey: makeRouteContextKey
+    }
+  };
+}));
