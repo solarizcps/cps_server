@@ -770,6 +770,33 @@ def arac_takip_api_plan_timeline():
     return jsonify(dto)
 
 
+@arac_takip_bp.route('/api/history-plans', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_history_plans():
+    from modules.planlama.arac_plan_gps_trail_service import list_history_plans
+    dto = list_history_plans(
+        baslangic=request.args.get('baslangic') or request.args.get('from'),
+        bitis=request.args.get('bitis') or request.args.get('to'),
+        arac_external_id=request.args.get('vehicle_id') or request.args.get('arac'),
+        sofor_id=request.args.get('sofor_id') or request.args.get('driver_id'),
+        limit=int(request.args.get('limit') or 100),
+    )
+    return jsonify(dto)
+
+
+@arac_takip_bp.route('/api/plan-gps-trail', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_plan_gps_trail():
+    from modules.planlama.arac_plan_gps_trail_service import PlanGpsTrailError, get_plan_gps_trail
+    plan_id = request.args.get('plan_id', type=int)
+    if not plan_id:
+        return jsonify({'ok': False, 'error': 'plan_id zorunlu'}), 400
+    try:
+        return jsonify(get_plan_gps_trail(plan_id))
+    except PlanGpsTrailError as exc:
+        return jsonify({'ok': False, 'error': exc.message}), exc.code
+
+
 _SENTINEL_RE = __import__('re').compile(r'^[\s\-\u2014\u2013]+$')
 
 

@@ -3445,23 +3445,37 @@
     var bitis = (qs('atpHistBitis') || {}).value || '';
     var arac = (qs('atpHistArac') || {}).value || '';
     var sofor = (qs('atpHistSofor') || {}).value || '';
-    body.innerHTML = '<tr><td colspan="8" class="hist-empty">Yükleniyor…</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="hist-empty">Yükleniyor…</td></tr>';
 
-    /* Use dashboard history_rows (SSR) or fetch */
-    var rows = dashboard.history_rows || [];
-    if (rows.length) {
-      renderHistoryRows(rows);
-    } else {
-      /* No dedicated history endpoint; show empty state */
-      body.innerHTML = '<tr><td colspan="8" class="hist-empty">Geçmiş plan verisi bulunamadı.</td></tr>';
-    }
+    var url = '/planlama/arac-takip/api/history-plans?limit=100';
+    if (baslangic) url += '&baslangic=' + encodeURIComponent(baslangic);
+    if (bitis) url += '&bitis=' + encodeURIComponent(bitis);
+    if (arac) url += '&vehicle_id=' + encodeURIComponent(arac);
+    if (sofor) url += '&sofor_id=' + encodeURIComponent(sofor);
+
+    fetch(url, { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok && d.rows && d.rows.length) {
+          renderHistoryRows(d.rows);
+          return;
+        }
+        var rows = dashboard.history_rows || [];
+        if (rows.length) renderHistoryRows(rows);
+        else body.innerHTML = '<tr><td colspan="9" class="hist-empty">Geçmiş plan verisi bulunamadı.</td></tr>';
+      })
+      .catch(function () {
+        var rows = dashboard.history_rows || [];
+        if (rows.length) renderHistoryRows(rows);
+        else body.innerHTML = '<tr><td colspan="9" class="hist-empty">Geçmiş plan yüklenemedi.</td></tr>';
+      });
   }
 
   function renderHistoryRows(rows) {
     var body = qs('atpHistBody');
     if (!body) return;
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="8" class="hist-empty">Kayıt yok.</td></tr>';
+      body.innerHTML = '<tr><td colspan="9" class="hist-empty">Kayıt yok.</td></tr>';
       return;
     }
     var MONTHS = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
@@ -3469,16 +3483,36 @@
       var d = new Date((r.date || '') + 'T00:00:00');
       var dateLbl = isNaN(d) ? r.date : d.getDate() + ' ' + MONTHS[d.getMonth()];
       var stCls = r.status === 'TAMAMLANDI' ? 'badge-green' : (r.status === 'KISMI' ? 'badge-orange' : 'badge-red');
+      var planId = r.plan_id;
+      var gpsBtn = r.has_gps_history
+        ? ('<button type="button" class="btn btn-gold btn-xs atp-hist-gps-btn" data-plan-id="' + planId + '">GPS Geçmişi</button>')
+        : ('<button type="button" class="btn btn-outline btn-xs" disabled title="GPS geçmişi yok">GPS Geçmişi</button>');
       return '<tr>' +
         '<td style="font-weight:600">' + dateLbl + '</td>' +
         '<td>' + fmtVal(r.vehicle) + '</td>' +
         '<td>' + fmtVal(r.driver) + '</td>' +
         '<td>' + fmtVal(r.total_jobs) + '</td>' +
         '<td style="color:' + (r.completed >= r.total_jobs ? 'var(--green)' : 'var(--orange)') + ';font-weight:600">' + fmtVal(r.completed) + '</td>' +
-        '<td>' + fmtVal(r.total_km) + ' km</td>' +
+        '<td>' + fmtVal(r.total_km != null ? r.total_km + ' km' : '—') + '</td>' +
         '<td><span class="badge ' + stCls + '">' + fmtVal(r.status_label) + '</span></td>' +
-        '<td><button class="btn btn-outline btn-xs">Görüntüle</button></td></tr>';
+        '<td>' + gpsBtn + '</td></tr>';
     }).join('');
+
+    body.querySelectorAll('.atp-hist-gps-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var pid = parseInt(btn.getAttribute('data-plan-id'), 10);
+        if (!pid || !window.AtpGpsHistory) return;
+        window.AtpGpsHistory.open(pid, { returnTab: 'gecmis' });
+      });
+    });
+  }
+
+  var bcHist = qs('atpGpsBcHistory');
+  if (bcHist) {
+    bcHist.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (window.AtpGpsHistory) window.AtpGpsHistory.close();
+    });
   }
 
   var btnHistFiltrele = qs('atpBtnHistFiltrele');

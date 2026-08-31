@@ -1122,59 +1122,63 @@
 
         }
 
-        var reload = _hooks.reloadAfterApply;
+        if (res.status < 200 || res.status >= 300) {
 
-        if (typeof reload === 'function') {
+          _applyInFlight = false;
 
-          var reloadResult = reload(vehicleId, appliedTaskIds);
+          updateRouteButtons(lastRoute);
 
-          if (reloadResult && typeof reloadResult.then === 'function') {
+          notify('Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.');
 
-            reloadResult.then(function (verified) {
-
-              _applyInFlight = false;
-
-              if (lastRoute) updateRouteButtons(lastRoute);
-
-              if (verified) notify('Önerilen sıra uygulandı.');
-
-              else notify('Sıra kaydedildi ancak ekran doğrulanamadı. Lütfen yenileyin.');
-
-            }).catch(function () {
-
-              _applyInFlight = false;
-
-              if (lastRoute) updateRouteButtons(lastRoute);
-
-              notify('Sıra kaydedildi ancak ekran doğrulanamadı. Lütfen yenileyin.');
-
-            });
-
-            return;
-
-          }
+          return;
 
         }
 
-        _applyInFlight = false;
+        var reload = _hooks.reloadAfterApply;
 
-        fetchPlanRoute(planDate, vehicleId, _hooks.onDashboard, {
+        if (typeof reload !== 'function') {
 
-          expectedVehicleId: vehicleId,
+          _applyInFlight = false;
 
-          onStale: function (vid) {
+          updateRouteButtons(lastRoute);
 
-            return typeof _hooks.isStaleVehicle === 'function' && _hooks.isStaleVehicle(vid);
+          notify('Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.');
 
-          },
+          return;
 
-          onComplete: function () {
+        }
 
-            if (lastRoute) updateRouteButtons(lastRoute);
+        var reloadResult = reload(vehicleId, appliedTaskIds);
 
-            notify('Önerilen sıra uygulandı.');
+        if (!reloadResult || typeof reloadResult.then !== 'function') {
 
-          }
+          _applyInFlight = false;
+
+          updateRouteButtons(lastRoute);
+
+          notify('Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.');
+
+          return;
+
+        }
+
+        reloadResult.then(function (verified) {
+
+          _applyInFlight = false;
+
+          if (lastRoute) updateRouteButtons(lastRoute);
+
+          if (verified) notify('Önerilen sıra uygulandı.');
+
+          else notify('Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.');
+
+        }).catch(function () {
+
+          _applyInFlight = false;
+
+          if (lastRoute) updateRouteButtons(lastRoute);
+
+          notify('Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.');
 
         });
 

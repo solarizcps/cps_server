@@ -5,6 +5,7 @@
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=73">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip_gps_history.css') }}?v=1">
 {% endblock %}
 
 {% block content %}
@@ -401,6 +402,76 @@
           <tr><td colspan="8" class="hist-empty">Geçmiş plan verisi yükleniyor…</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  {# ══════════════════════════════════════════════════════
+     GPS GEÇMİŞİ — V3 full-page (Geçmiş Planlar → detay)
+  ══════════════════════════════════════════════════════ #}
+  <div id="atpPanelGpsHistory" class="atp-panel" aria-hidden="true">
+    <div class="atp-gps-bc">
+      <nav class="atp-gps-bc-nav" aria-label="Breadcrumb">
+        <span>Araç Takip</span><span class="sep">›</span>
+        <a href="#" id="atpGpsBcHistory">Geçmiş Planlar</a><span class="sep">›</span>
+        <span class="current">GPS Geçmişi</span>
+      </nav>
+      <button type="button" class="btn btn-outline btn-sm" id="atpGpsBtnBack">← Geçmiş Planlara Dön</button>
+    </div>
+
+    <div class="kpi-band atp-gps-kpi" id="atpGpsKpiBand">
+      <div class="kpi ok"><div class="kpi-icon">🛣️</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiActualKm">—</div><div class="kpi-label">Toplam yol (gerçek)</div></div></div>
+      <div class="kpi"><div class="kpi-icon">📐</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiPlanKm">—</div><div class="kpi-label">Planlanan yol</div></div></div>
+      <div class="kpi err"><div class="kpi-icon">⚠️</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiDevCount">0</div><div class="kpi-label">Sapma sayısı</div></div></div>
+      <div class="kpi warn"><div class="kpi-icon">⏱️</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiDevMin">—</div><div class="kpi-label">Sapmada geçen süre</div></div></div>
+      <div class="kpi"><div class="kpi-icon">🅿️</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiDwell">—</div><div class="kpi-label">Durak bekleme</div></div></div>
+      <div class="kpi warn"><div class="kpi-icon">📡</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiQuality">—</div><div class="kpi-label">GPS veri kalitesi</div></div></div>
+    </div>
+
+    <div class="atp-date-bar atp-gps-filters">
+      <label for="atpGpsFilterDate">Tarih:</label>
+      <input type="date" class="atp-date-inp" id="atpGpsFilterDate" readonly>
+      <label for="atpGpsFilterVehicle">Araç:</label>
+      <select class="atp-date-inp" id="atpGpsFilterVehicle" style="width:150px" disabled></select>
+      <span id="atpGpsFilterChips" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto"></span>
+    </div>
+
+    <div id="atpGpsHistoryLoading" style="padding:24px;text-align:center;color:var(--gray)">GPS geçmişi yükleniyor…</div>
+    <div id="atpGpsHistoryBody" class="atp-gps-body" style="display:none">
+      <div class="atp-gps-map-col" id="atpGpsMapCol">
+        <div class="atp-gps-map-head">
+          <h3>Harita — Plan vs Gerçekleşen</h3>
+          <div class="atp-gps-legend">
+            <span><i class="leg-plan"></i>Planlanan</span>
+            <span><i class="leg-act"></i>Gerçek iz</span>
+            <span><i class="leg-dev"></i>Sapma</span>
+            <span><i class="leg-gap"></i>Veri boşluğu</span>
+          </div>
+        </div>
+        <div id="atpGpsHistoryMap"></div>
+        <div class="atp-gps-playback">
+          <div class="atp-gps-playback-row">
+            <span id="atpGpsPlayTime" style="min-width:52px;font-weight:600;color:#111">—</span>
+            <input type="range" class="slider" id="atpGpsPlaySlider" min="0" max="100" value="0">
+            <span id="atpGpsPlaySpeed" style="min-width:52px;text-align:right">0 km/s</span>
+          </div>
+          <div class="atp-gps-playback-ctrl">
+            <button type="button" class="btn btn-orange btn-xs" id="atpGpsBtnPlay">▶ Oynat</button>
+            <button type="button" class="btn btn-outline btn-xs" id="atpGpsBtnStop">⏹</button>
+            <button type="button" class="speed-btn active" data-speed="1">1×</button>
+            <button type="button" class="speed-btn" data-speed="2">2×</button>
+            <button type="button" class="speed-btn" data-speed="4">4×</button>
+          </div>
+        </div>
+      </div>
+      <aside class="atp-gps-side">
+        <div class="atp-gps-side-hdr" id="atpGpsSideHdr">Araç Özeti</div>
+        <div class="atp-gps-vehicle-block" id="atpGpsVehicleBlock"></div>
+        <div class="atp-gps-quality" id="atpGpsQualityNote" style="display:none"></div>
+        <div class="atp-gps-timeline-wrap">
+          <div class="atp-gps-timeline-hdr">Zaman Çizelgesi</div>
+          <ul class="atp-gps-timeline" id="atpGpsTimeline"></ul>
+        </div>
+      </aside>
     </div>
   </div>
 
@@ -1022,6 +1093,7 @@
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=11"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_gps_history.js') }}?v=1"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_manual_reorder.js') }}?v=1"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_manual_reorder_ui.js') }}?v=2"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=93"></script>
