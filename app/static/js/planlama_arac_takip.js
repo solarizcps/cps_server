@@ -982,12 +982,14 @@
   function jobDotClass(status, visitState) {
     if (status === 'TAMAMLANDI') return 'dot-green';
     if (visitState === 'ARRIVED') return 'dot-blue';
+    if (visitState === 'APPROACHING') return 'dot-orange';
     if (status === 'BASLADI' || visitState === 'DEPARTED_PENDING') return 'dot-orange';
     return 'dot-gray';
   }
 
   function visitRowClass(visitState) {
     if (!visitState || visitState === 'NOT_VISITED') return 'visit-text gray';
+    if (visitState === 'APPROACHING') return 'visit-text approaching';
     if (visitState === 'ARRIVED') return 'visit-text';
     if (visitState === 'DEPARTED' || visitState === 'DEPARTED_PENDING') return 'visit-text';
     return 'visit-text gray';
@@ -1011,6 +1013,16 @@
   }
 
   function buildVisitLabel(it) {
+    var state = (it.visit_state || '').toUpperCase();
+    var arr = fmtTime(it.arrived_at);
+    var dep = fmtTime(it.departed_at);
+    if (state === 'APPROACHING') return 'Yaklaşıyor';
+    if (state === 'DEPARTED_PENDING') {
+      if (arr && dep) return arr + ' Varış · ' + dep + ' Ayrılış · Sonuç bekleniyor';
+      if (dep) return dep + ' Ayrılış · Sonuç bekleniyor';
+      return 'Ayrılış · Sonuç bekleniyor';
+    }
+    if (state === 'ARRIVED' && arr) return arr + ' Vardı · Konumda';
     if (it.plan_trip_status && it.plan_trip_status_label) {
       var trip = (it.plan_trip_status || '').toUpperCase();
       if (trip === 'PLANLANDI') return it.visit_label || 'Henüz varmadı';
@@ -1021,16 +1033,11 @@
       return it.plan_trip_status_label;
     }
     var raw = it.visit_label || '';
-    var state = it.visit_state || '';
     var status = (it.status || '').toUpperCase();
-    if (raw && raw !== 'DEPARTED' && raw !== 'ARRIVED' && raw !== 'OUTSIDE') return raw;
-    var arr = fmtTime(it.arrived_at);
-    var dep = fmtTime(it.departed_at);
+    if (raw && raw !== 'DEPARTED' && raw !== 'ARRIVED' && raw !== 'OUTSIDE' && raw !== 'APPROACHING') return raw;
     /* Tamamlandı: vardı / ayrıldı / süre */
     if (state === 'DEPARTED' && arr && dep) return arr + ' Vardı · ' + dep + ' Ayrıldı';
     if (state === 'DEPARTED' && arr) return arr + ' Vardı · Ayrıldı';
-    /* Durakta */
-    if (state === 'ARRIVED' && arr) return arr + ' Vardı · Konumda';
     /* Yolda: show current ETA if available */
     if (status === 'BASLADI' || status === 'YOLDA') {
       var eta = fmtTime(it.eta_time || it.tahmini_varis_saati);

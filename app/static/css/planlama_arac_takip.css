@@ -236,6 +236,7 @@
 #atpV2Root .dot-green { background:var(--green); }
 #atpV2Root .dot-orange { background:var(--orange); }
 #atpV2Root .dot-blue { background:var(--blue); }
+#atpV2Root .visit-text.approaching { color:var(--orange); font-weight:600; }
 #atpV2Root .dot-gray { background:#9ca3af; }
 #atpV2Root .dot-red { background:var(--red); }
 
