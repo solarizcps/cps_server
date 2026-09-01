@@ -391,13 +391,7 @@
       planMap.setView(bounds[0], 13, { animate: false });
       return;
     }
-    var boundsObj = L.latLngBounds(bounds);
-    var span = Math.max(
-      Math.abs(boundsObj.getNorth() - boundsObj.getSouth()),
-      Math.abs(boundsObj.getEast() - boundsObj.getWest())
-    );
-    var pad = span < 0.01 ? 0.25 : 0.12;
-    planMap.fitBounds(boundsObj.pad(pad), { animate: false, maxZoom: 15, minZoom: 10 });
+    planMap.fitBounds(L.latLngBounds(bounds).pad(0.12), { animate: false, maxZoom: 13 });
   }
 
   function ensurePlanMap() {

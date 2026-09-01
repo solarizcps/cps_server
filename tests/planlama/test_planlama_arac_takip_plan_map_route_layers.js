@@ -24,13 +24,17 @@ function createMockLeaflet() {
   function latLngBounds(points) {
     var lats = points.map((p) => p.lat);
     var lngs = points.map((p) => p.lng);
-    return {
+    var boundsObj = {
       getNorth: () => Math.max(...lats),
       getSouth: () => Math.min(...lats),
       getEast: () => Math.max(...lngs),
       getWest: () => Math.min(...lngs),
-      pad: () => this,
+      pad(fraction) {
+        boundsObj._padFraction = fraction;
+        return boundsObj;
+      },
     };
+    return boundsObj;
   }
 
   function polyline(latlngs, opts) {
@@ -94,8 +98,23 @@ function createMockLeaflet() {
       },
       whenReady(fn) { fn(); },
       invalidateSize() {},
-      setView() { return mapObj; },
-      fitBounds() { return mapObj; },
+      _zoom: 11,
+      setView(_center, zoom) {
+        mapObj._zoom = zoom;
+        return mapObj;
+      },
+      getZoom() { return mapObj._zoom; },
+      fitBounds(_bounds, opts) {
+        mapObj._lastFitBounds = {
+          opts: Object.assign({}, opts || {}),
+          padFraction: _bounds && _bounds._padFraction,
+          pointCount: Array.isArray(_bounds) ? _bounds.length : null,
+        };
+        if (opts && typeof opts.maxZoom === 'number') {
+          mapObj._zoom = Math.min(mapObj._zoom, opts.maxZoom);
+        }
+        return mapObj;
+      },
     };
     return mapObj;
   }
@@ -154,6 +173,13 @@ function loadPlanMapModule() {
   sandbox.L = createMockLeaflet();
   sandbox.AtpRoute = { getLastRoute: () => null };
 
+  let capturedMap = null;
+  const origMapFactory = sandbox.L.map;
+  sandbox.L.map = function (...args) {
+    capturedMap = origMapFactory(...args);
+    return capturedMap;
+  };
+
   const code = require('node:fs').readFileSync(PLAN_MAP_PATH, 'utf8');
   vm.runInNewContext(code, sandbox, { filename: PLAN_MAP_PATH });
 
@@ -162,6 +188,7 @@ function loadPlanMapModule() {
     AtpPlanMap: exported.AtpPlanMap || sandbox.AtpPlanMap,
     pure: exported.pure || sandbox.__atpPlanMapPure,
     sandbox,
+    getMap: () => capturedMap,
   };
 }
 
@@ -188,6 +215,49 @@ function shortLocalFixture() {
     [40.994, 28.696],
     [40.995, 28.697],
   ];
+}
+
+function istanbulTightFixture() {
+  const wps = [
+    [41.015, 28.975],
+    [41.045, 29.015],
+    [41.025, 29.085],
+    [41.010, 29.040],
+  ];
+  const out = [];
+  for (let i = 0; i < wps.length - 1; i++) {
+    const a = wps[i];
+    const b = wps[i + 1];
+    for (let t = 0; t < 120; t++) {
+      const f = t / 119;
+      out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+    }
+  }
+  return out;
+}
+
+function wideMetroFixture() {
+  const wps = [
+    [40.9928283, 28.6947341],
+    [40.825, 29.372],
+    [40.9940286, 28.7003232],
+    [40.9928283, 28.6947341],
+  ];
+  const out = [];
+  for (let i = 0; i < wps.length - 1; i++) {
+    const a = wps[i];
+    const b = wps[i + 1];
+    for (let t = 0; t < 80; t++) {
+      const f = t / 79;
+      out.push([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]);
+    }
+  }
+  return out;
+}
+
+function lastFit(map) {
+  assert.ok(map && map._lastFitBounds, 'fitBounds should have been called');
+  return map._lastFitBounds;
 }
 
 function samplePayload(overrides) {
@@ -682,4 +752,167 @@ test('RL36 manual reorder optimizer GPS namespaces unaffected by U4F dedup', () 
   assert.ok(!src.includes('ATP_MANUAL_REORDER'));
   assert.ok(src.includes('isIdenticalRouteGeometry'));
   assert.ok(!src.includes('AtpRouteOptimizer'));
+});
+
+test('RL37 tight Istanbul route fitBounds maxZoom = 13', () => {
+  const { AtpPlanMap, getMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(istanbulTightFixture());
+  const fit = lastFit(getMap());
+  assert.equal(fit.opts.maxZoom, 13);
+  AtpPlanMap._testReset();
+});
+
+test('RL38 fitBounds has no minZoom constraint', () => {
+  const { AtpPlanMap, getMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(istanbulTightFixture());
+  const fit = lastFit(getMap());
+  assert.equal(fit.opts.minZoom, undefined);
+  AtpPlanMap._testReset();
+});
+
+test('RL39 fitBounds uses fixed pad 0.12', () => {
+  const { AtpPlanMap, getMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(shortLocalFixture());
+  const fit = lastFit(getMap());
+  assert.equal(fit.padFraction, 0.12);
+  AtpPlanMap._testReset();
+});
+
+test('RL40 1920 viewport effective zoom ≤13 after tight fit', () => {
+  const { AtpPlanMap, getMap, sandbox } = loadPlanMapModule();
+  sandbox.document.getElementById('atpPlanLeafletMap').offsetWidth = 1920;
+  sandbox.document.getElementById('atpPlanLeafletMap').offsetHeight = 500;
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(istanbulTightFixture());
+  const map = getMap();
+  assert.ok(map.getZoom() <= 13);
+  assert.equal(lastFit(map).opts.maxZoom, 13);
+  AtpPlanMap._testReset();
+});
+
+test('RL41 1366 viewport effective zoom ≤13 after tight fit', () => {
+  const { AtpPlanMap, getMap, sandbox } = loadPlanMapModule();
+  sandbox.document.getElementById('atpPlanLeafletMap').offsetWidth = 1366;
+  sandbox.document.getElementById('atpPlanLeafletMap').offsetHeight = 400;
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(istanbulTightFixture());
+  const map = getMap();
+  assert.ok(map.getZoom() <= 13);
+  assert.equal(lastFit(map).opts.maxZoom, 13);
+  AtpPlanMap._testReset();
+});
+
+test('RL42 wide metro route fitBounds still capped at maxZoom 13', () => {
+  const { AtpPlanMap, getMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(wideMetroFixture());
+  const fit = lastFit(getMap());
+  assert.equal(fit.opts.maxZoom, 13);
+  assert.equal(fit.padFraction, 0.12);
+  AtpPlanMap._testReset();
+});
+
+test('RL43 route geometry included in fitBounds after setCurrentRouteGeometry', () => {
+  const { AtpPlanMap, getMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const geom = istanbulTightFixture();
+  AtpPlanMap.setCurrentRouteGeometry(geom);
+  assert.ok(getMap()._lastFitBounds);
+  assert.equal(AtpPlanMap.getCurrentRoutePointCount(), geom.length);
+  AtpPlanMap._testReset();
+});
+
+test('RL44 current route visible after zoom restore fit', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(denseOrsFixture());
+  assert.equal(AtpPlanMap.hasCurrentRoute(), true);
+  assert.equal(AtpPlanMap.routeLayerCount(), 1);
+  AtpPlanMap._testReset();
+});
+
+test('RL45 Öneri=Mevcut → dashed suggested=0 after zoom restore', () => {
+  const { AtpPlanMap, sandbox } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const geom = identicalDenseFixture();
+  setLastRoute(sandbox, geom, geom);
+  AtpPlanMap.renderPlanMap(samplePayload());
+  assert.equal(dashedSuggestedLayers(AtpPlanMap).length, 0);
+  AtpPlanMap._testReset();
+});
+
+test('RL46 different suggested compare still draws green dashed overlay', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(denseOrsFixture());
+  AtpPlanMap.setSuggestedRouteGeometry(differentDenseFixture());
+  assert.equal(dashedSuggestedLayers(AtpPlanMap).length, 1);
+  AtpPlanMap._testReset();
+});
+
+test('RL47 halo current=1 orphan=0 after zoom restore', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(denseOrsFixture());
+  assert.equal(AtpPlanMap.haloLayerCount(), 1);
+  assert.equal(AtpPlanMap.orphanHaloCount(), 0);
+  AtpPlanMap._testReset();
+});
+
+test('RL48 date/vehicle roundtrip stale suggested=0', () => {
+  const { AtpPlanMap, sandbox } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  const geom = identicalDenseFixture();
+  setLastRoute(sandbox, geom, geom);
+  AtpPlanMap.renderPlanMap(samplePayload({ vehicle_id: 183, plan_date: '2026-09-01' }));
+  AtpPlanMap.renderPlanMap(samplePayload({ vehicle_id: 49, plan_date: '2026-09-01' }));
+  setLastRoute(sandbox, geom, geom);
+  AtpPlanMap.renderPlanMap(samplePayload({ vehicle_id: 183, plan_date: '2026-09-01' }));
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  assert.equal(dashedSuggestedLayers(AtpPlanMap).length, 0);
+  AtpPlanMap._testReset();
+});
+
+test('RL49 sparse suggested guard still blocks draw after zoom restore', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(denseOrsFixture());
+  AtpPlanMap.setSuggestedRouteGeometry(sparseLongChordFixture());
+  assert.equal(AtpPlanMap.hasSuggestedRoute(), false);
+  AtpPlanMap._testReset();
+});
+
+test('RL50 geometry inputs not mutated by zoom restore path', () => {
+  const { AtpPlanMap } = loadPlanMapModule();
+  const geom = istanbulTightFixture();
+  const copy = JSON.stringify(geom);
+  AtpPlanMap.ensurePlanMap();
+  AtpPlanMap.setCurrentRouteGeometry(geom);
+  AtpPlanMap.setSuggestedRouteGeometry(geom.map((p) => [p[0], p[1]]));
+  assert.equal(JSON.stringify(geom), copy);
+  AtpPlanMap._testReset();
+});
+
+test('RL51 live tracking map namespace not referenced in plan_map zoom restore', () => {
+  const src = require('node:fs').readFileSync(PLAN_MAP_PATH, 'utf8');
+  const mapJs = require('node:fs').readFileSync(
+    path.resolve(__dirname, '../../app/static/js/planlama_arac_takip_map.js'),
+    'utf8',
+  );
+  assert.ok(!src.includes('AtpLiveMap'));
+  assert.ok(mapJs.includes('tile.openstreetmap.org'));
+  assert.ok(src.includes('maxZoom: 13'));
+  assert.ok(!src.includes('maxZoom: 15'));
+});
+
+test('RL52 GPS manual reorder optimizer modules unchanged by zoom restore', () => {
+  const src = require('node:fs').readFileSync(PLAN_MAP_PATH, 'utf8');
+  assert.ok(src.includes('isIdenticalRouteGeometry'));
+  assert.ok(src.includes('isDrawableRouteGeometry'));
+  assert.ok(!src.includes('ATP_MANUAL_REORDER'));
+  assert.ok(!src.includes('AtpRouteOptimizer'));
+  assert.ok(typeof MR.createState === 'function');
 });
