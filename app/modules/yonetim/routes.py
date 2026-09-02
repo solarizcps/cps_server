@@ -274,6 +274,33 @@ def log_liste():
                            kullanicilar=qr.kullanici_liste())
 
 
+# ============== SURUM GECMISI (READ-ONLY) ==============
+@yonetim_bp.route('/surum-gecmisi')
+@yetki_gerekli('yonetim', 'can_view')
+def surum_gecmisi():
+    from services.release_history_service import build_page_context
+
+    detail_allowed = False
+    kullanici = session.get('kullanici')
+    if kullanici and (is_superadmin(kullanici) or yetki_var('yonetim.log', 'can_view')):
+        detail_allowed = True
+
+    detail_module = request.args.get('modul') if detail_allowed else None
+    detail_phase = request.args.get('faz') if detail_allowed else None
+
+    ctx = build_page_context(
+        module_query=request.args.get('q') or '',
+        status=request.args.get('status') or '',
+        deployment=request.args.get('deploy') or '',
+        detail_module=detail_module,
+        detail_phase=detail_phase,
+    )
+    ctx['detail_allowed'] = detail_allowed
+    return render_template('yonetim/surum_gecmisi.html', **ctx)
+
+
+
+
 # ============== BELGE ==============
 @yonetim_bp.route('/belge/<int:belge_id>')
 def belge_indir(belge_id):
