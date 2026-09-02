@@ -104,6 +104,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
     def musteri_pazarlama_sayfa():
         from flask import request as _req
         u, yk = _yetki_kontrol()
+        pazarlamaci_ad = u.get('KullaniciAdi') or ''
         con = db_fn()
         try:
             uid = kullanici_id_fn()
@@ -134,6 +135,14 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
                 ).fetchone()
                 if _rv_row and _rv_row['durum'] == 'REVIZYON_ISTENDI':
                     t_revizyon_id = _rv_int
+            pazarlamaci_ad = (u.get('AdSoyad') or '').strip()
+            if not pazarlamaci_ad:
+                _pad_row = con.execute(
+                    'SELECT AdSoyad FROM sistem_kullanici WHERE Id=?', (int(uid),),
+                ).fetchone()
+                pazarlamaci_ad = (_pad_row['AdSoyad'] if _pad_row else '') or ''
+            if not pazarlamaci_ad:
+                pazarlamaci_ad = u.get('KullaniciAdi') or ''
         finally:
             con.close()
         return render_template(
@@ -142,6 +151,7 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
             ozet=ozet,
             v2=v2,
             kullanici_ad=u.get('KullaniciAdi') or '',
+            pazarlamaci_ad=pazarlamaci_ad,
             gorusme_tipleri=GORUSME_TIPLERI,
             gorusme_tipleri_all=GORUSME_TIPLERI_ALL,
             sonuc_tipleri=SONUC_TIPLERI,
@@ -682,6 +692,41 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
         finally:
             con.close()
 
+    @bp.route('/api/musteri-pazarlama/siparis-mtt-onaya', methods=['POST'])
+    @login_gerekli
+    def api_mo_siparis_mtt_onaya():
+        """Sipariş popup → görüşme + MTT SIPARIS + nexgen_onay (tek TX)."""
+        _yetki_kontrol()
+        from modules.nexgen.musteri_temsilcisi_talep_service import (
+            MusteriTemsilcisiTalepError,
+            siparis_popup_mtt_onaya_gonder,
+        )
+        payload = request.get_json(silent=True) or {}
+        con = db_fn()
+        try:
+            out = siparis_popup_mtt_onaya_gonder(
+                con, payload, kullanici_id_fn(),
+                kullanici_yetkileri(session.get('kullanici') or {}),
+            )
+            if not out.get('onay_id') or not out.get('talep_id') or not out.get('talep_no'):
+                return jsonify({
+                    'ok': False,
+                    'mesaj': 'Onay kaydı oluşmadan success verilemez.',
+                }), 500
+            if (
+                out.get('talep_durum') != 'ONAY_BEKLIYOR'
+                or out.get('onay_durum') != 'ONAY_BEKLIYOR'
+            ):
+                return jsonify({
+                    'ok': False,
+                    'mesaj': 'Talep/onay durumu beklenen sözleşmeye uymuyor.',
+                }), 500
+            return jsonify(out)
+        except MusteriTemsilcisiTalepError as e:
+            return jsonify({'ok': False, 'mesaj': e.mesaj, **e.ekstra}), e.kod
+        finally:
+            con.close()
+
     @bp.route('/api/musteri-pazarlama/siparis-talep', methods=['POST'])
     @login_gerekli
     def api_mo_siparis_taslak():
@@ -690,9 +735,8 @@ def register_musteri_pazarlama_routes(bp, db_fn, kullanici_id_fn):
         return jsonify({
             'ok': False,
             'mesaj': (
-                'Bu yol kapatıldı. Sipariş talebini görüşme üzerinden MTT + '
-                'NexGen Onay akışına gönderin '
-                '(POST /nexgen/api/musteri-pazarlama/gorusme + talep).'
+                'Bu yol kapatıldı. Sipariş talebini '
+                'POST /nexgen/api/musteri-pazarlama/siparis-mtt-onaya ile gönderin.'
             ),
             'kod': 'LEGACY_MO_SIPARIS_TASLAK_KAPALI',
         }), 410

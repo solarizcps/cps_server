@@ -1026,7 +1026,7 @@
             <div class="mp-fld"><label for="mp-st-siparis-no">Sipariş No</label>
               <input type="text" id="mp-st-siparis-no" class="mp-readonly" readonly value="(Otomatik)"></div>
             <div class="mp-fld"><label for="mp-st-pazarlamaci">Pazarlamacı</label>
-              <input type="text" id="mp-st-pazarlamaci" class="mp-readonly" readonly value="{{ kullanici_ad|e }}"></div>
+              <input type="text" id="mp-st-pazarlamaci" class="mp-readonly" readonly value="{{ pazarlamaci_ad|e }}"></div>
           </div>
           <div class="mp-fld mp-st-pad"><label for="mp-st-genel-not">Genel Talep Notu</label>
             <textarea id="mp-st-genel-not" name="genel_not" rows="2" placeholder="Genel talep notu…"></textarea></div>
@@ -6249,10 +6249,7 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
   }
 
   function mpStParseNum(raw) {
-    var v = String(raw || '').trim().replace(',', '.');
-    if (!v) return null;
-    var n = parseFloat(v);
-    return isNaN(n) ? null : n;
+    return parseTrTonaj(raw);
   }
 
   function mpStFormatTutar(n) {
@@ -6554,7 +6551,14 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
   function siparisMttOnayaPayload() {
     var p = siparisPayload();
     if (p.kalem_error) return { error: p.kalem_error, el: p.kalem_error_el };
+    if (!p.cari_id) return { error: 'Cari zorunlu.', el: document.getElementById('mp-s-cari') };
+    if (!p.para_birimi) return { error: 'Para birimi zorunlu.', el: document.getElementById('mp-st-para-birimi') };
+    if (!p.odeme_sekli) return { error: 'Ödeme şekli zorunlu.', el: document.getElementById('mp-st-odeme') };
+    if (!p.teslim_sekli) return { error: 'Teslim şekli zorunlu.', el: document.getElementById('mp-st-teslim') };
+    if (!p.istenen_termin) return { error: 'Talep edilen termin zorunlu.', el: document.getElementById('mp-st-termin') };
+    if (!p.siparis_onceligi) return { error: 'Sipariş önceliği zorunlu.', el: document.getElementById('mp-st-oncelik') };
     var kalemler = p.kalemler || [];
+    if (!kalemler.length) return { error: 'En az bir kalem zorunlu.', el: document.getElementById('mp-st-kalem-tbody') };
     var odeme = (p.odeme_sekli || '').toString().toUpperCase();
     if (odeme === 'PESIN' || odeme === 'PEŞİN') odeme = 'NAKIT';
     var pb = (p.para_birimi || 'USD').toUpperCase();
@@ -6562,66 +6566,36 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     var oncelikUi = (p.siparis_onceligi || 'NORMAL').toUpperCase();
     var oncelikTalep = oncelikUi;
     if (['DUSUK', 'NORMAL', 'YUKSEK', 'ACIL'].indexOf(oncelikTalep) < 0) oncelikTalep = 'NORMAL';
-    var oncelikGorusme = oncelikUi === 'YUKSEK' ? 'KRITIK' : oncelikUi;
-    if (['NORMAL', 'ACIL', 'KRITIK'].indexOf(oncelikGorusme) < 0) oncelikGorusme = 'NORMAL';
-    var genelNot = (p.genel_not || '').trim();
-    var musteriNot = (p.musteri_notu || '').trim();
-    var aciklama = genelNot || musteriNot || 'Sipariş talebi';
-    if (p.istenen_termin) aciklama = (aciklama + ' | Termin: ' + p.istenen_termin).slice(0, 500);
-    if (p.teslim_sekli) aciklama = (aciklama + ' | Teslim: ' + mpStTeslimLabel(p.teslim_sekli)).slice(0, 500);
-    var kdvMeta = 'KDV:' + (p.kdv_durumu || 'GAYRI') + '|oran:' + (p.kdv_orani || 0) +
-      '|ara:' + Math.round((p.ara_toplam || 0) * 1000) / 1000 +
-      '|kdv:' + Math.round((p.kdv_tutari || 0) * 1000) / 1000 +
-      '|genel:' + Math.round((p.genel_toplam || 0) * 1000) / 1000 + '|pb:' + pb;
-    aciklama = (aciklama + ' | ' + kdvMeta).slice(0, 500);
-    var kisa = (musteriNot || genelNot || aciklama).toString().slice(0, 400);
-    if (p.cek_alinacak_tarih && odeme === 'CEK') {
-      kisa = (kisa + ' | Çek alınacak: ' + p.cek_alinacak_tarih).slice(0, 400);
+    var idem = p.idempotency_key || siparisIdemKey;
+    if (!idem) {
+      idem = (crypto.randomUUID ? crypto.randomUUID() : ('MO-SIP-MTT-' + Date.now()));
+      siparisIdemKey = idem;
     }
-    var ilkFiyat = kalemler.length ? kalemler[0].verilen_fiyat : null;
-    var idem = 'MO-SIP-MTT-' + Date.now() + '-' + Math.random().toString(16).slice(2, 10);
-    var mttKalemler = kalemler.map(function(k){
-      return {
-        sira_no: k.sira_no,
-        urun_aciklama: k.urun_aciklama,
-        urun_ailesi: k.urun_ailesi,
-        renk_aciklama: k.renk_aciklama,
-        miktar_kg: k.miktar_kg,
-        konusulan_tonaj: null,
-        verilen_fiyat: k.verilen_fiyat,
-        para_birimi: pb,
-        odeme_tipi: odeme,
-        vade_gun: odeme === 'NAKIT' || odeme === 'KREDI_KARTI' ? 0 : null,
-        cek_vade_gun: odeme === 'CEK' ? cekGun : null,
-        kalem_notu: k.kalem_notu,
-        iskonto_orani: 0,
-        kalem_tutari: k.kalem_tutari
-      };
-    });
     return {
-      cari_id: parseInt(p.cari_id, 10),
-      gorusme_tipi: 'Telefon',
-      sonuc_tipi: 'Sipariş Verecek',
-      kisa_not: kisa,
-      oncelik: oncelikGorusme,
-      kaynak: 'MUSTERI_OPERASYONU',
       idempotency_key: idem,
-      fiyat_verildi: 1,
-      verilen_fiyat: ilkFiyat,
-      fiyat_para_birimi: pb,
-      fiyat_birimi: 'KG',
-      konusulan_tonaj: null,
-      odeme_tipi: odeme,
-      vade_gun: odeme === 'NAKIT' || odeme === 'KREDI_KARTI' ? 0 : null,
+      cari_id: parseInt(p.cari_id, 10),
+      para_birimi: pb,
+      odeme_sekli: odeme,
+      teslim_sekli: p.teslim_sekli,
+      istenen_termin: p.istenen_termin,
+      siparis_onceligi: oncelikTalep,
+      genel_not: (p.genel_not || '').trim(),
+      musteri_notu: (p.musteri_notu || '').trim(),
+      onay_notu: (p.onay_notu || '').trim(),
+      kdv_durumu: p.kdv_durumu,
+      kdv_orani: p.kdv_orani,
+      ara_toplam: p.ara_toplam,
+      kdv_tutari: p.kdv_tutari,
+      genel_toplam: p.genel_toplam,
       cek_vade_gun: odeme === 'CEK' ? cekGun : null,
-      talep: {
-        talep_turu: 'SIPARIS',
-        oncelik: oncelikTalep,
-        aciklama: aciklama.slice(0, 500),
-        musteri_notu: musteriNot || genelNot || '',
-        kalemler: mttKalemler
-      }
+      cek_alinacak_tarih: p.cek_alinacak_tarih || null,
+      kalemler: kalemler
     };
+  }
+
+  function siparisMttResponseOk(d) {
+    return !!(d && d.ok && d.talep_id && d.talep_no && d.onay_id && d.onay_no
+      && d.talep_durum === 'ONAY_BEKLIYOR' && d.onay_durum === 'ONAY_BEKLIYOR');
   }
 
   function renderSiparisOzet(ozet) {
@@ -6716,10 +6690,10 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     }
     var onayNot = document.getElementById('mp-siparis-ozet-onay-notu');
     if (onayNot && onayNot.value) {
-      body.kisa_not = (body.kisa_not + ' | Onay: ' + onayNot.value).slice(0, 400);
-      if (body.talep) body.talep.aciklama = (body.talep.aciklama + ' | ' + onayNot.value).slice(0, 500);
+      body.onay_notu = ((body.onay_notu || '') + ' ' + onayNot.value).trim();
     }
-    fetch('/nexgen/api/musteri-pazarlama/gorusme', {
+    btn.textContent = 'Gönderiliyor…';
+    fetch('/nexgen/api/musteri-pazarlama/siparis-mtt-onaya', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body)
@@ -6727,22 +6701,23 @@ a.mp-v2-erisim-btn { text-decoration: none; color: inherit; }
     .then(function(res){
       siparisSubmitting = false;
       btn.disabled = false;
-      if (!res.d.ok || !res.d.talep_id) {
+      btn.textContent = 'Merkezi Onaya Gönder';
+      if (!siparisMttResponseOk(res.d)) {
+        mpStShowHata((res.d && res.d.mesaj) || 'Onaya gönderilemedi');
         toast((res.d && res.d.mesaj) || 'Onaya gönderilemedi');
         return;
       }
       toast(
-        (res.d && res.d.mesaj) || (
-          (res.d.talep_no || 'Talep')
-          + ' yönetim onayına gönderildi. Mehmet\'in Müşteri Temsilcisi Talepleri ekranında '
-          + '«Yönetim Onayı Bekliyor» durumuyla görüntülenecek.'
-        )
+        (res.d.mesaj || 'Talebiniz yönetim onayına gönderildi.')
+        + '\nTalep No: ' + res.d.talep_no
+        + '\nYönetim Merkezi > Onay Merkezi (/nexgen/yonetim/#onay)'
       );
       closeModal('siparis');
       setTimeout(function(){ location.reload(); }, 900);
     }).catch(function(){
       siparisSubmitting = false;
       btn.disabled = false;
+      btn.textContent = 'Merkezi Onaya Gönder';
       toast('Bağlantı hatası');
     });
   });
