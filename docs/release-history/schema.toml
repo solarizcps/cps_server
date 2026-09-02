@@ -1,0 +1,75 @@
+# CPS release history canonical schema (V1).
+# Validated by tools/validate_release_history.py using stdlib tomllib only.
+
+schema_version = 1
+
+[required_fields]
+fields = [
+    "schema_version",
+    "module",
+    "version",
+    "phase_code",
+    "title",
+    "status",
+    "date",
+    "summary",
+    "source_type",
+    "commit_sha",
+    "test_result",
+    "db_write",
+    "server_restart",
+    "push_status",
+]
+
+[list_fields]
+fields = [
+    "changes",
+    "changed_files",
+    "locked_rules",
+    "tests",
+    "known_issues",
+    "next_steps",
+]
+
+[optional_fields]
+fields = [
+    "root_cause",
+    "migration",
+    "evidence_summary",
+    "live_version",
+    "local_version",
+    "deployment_status",
+    "approved_by",
+    "breaking_rules",
+]
+
+[status_enum]
+values = ["TASLAK", "TEST", "ONAYLANDI", "KILITLI", "GERI_ALINDI"]
+
+[module_allowlist]
+modules = [
+    "nexgen.mo",
+    "nexgen.etiket",
+    "planlama.atp",
+    "planlama.aps",
+    "finans",
+    "cari360",
+    "server",
+    "test.infra",
+]
+
+[fragment]
+type_extension = "release"
+filename_pattern = "{module}.{phase_code}.release"
+
+[validation]
+commit_sha_pattern = "^[0-9a-fA-F]{7,40}$"
+forbidden_path_tokens = [
+    "_audit_out",
+    "mock_data.db",
+    "temp_dbs",
+    "Users/",
+    "Users\\",
+    "/home/",
+    "AppData/",
+]

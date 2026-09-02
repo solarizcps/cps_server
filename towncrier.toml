@@ -1,0 +1,11 @@
+[tool.towncrier]
+directory = "changes/fragments"
+filename = "CHANGELOG.md"
+title = "Solariz CPS Geliştirme Geçmişi"
+issue_format = ""
+underlines = ["-", ""]
+
+[[tool.towncrier.type]]
+directory = "release"
+name = "Geliştirmeler"
+showcontent = true
