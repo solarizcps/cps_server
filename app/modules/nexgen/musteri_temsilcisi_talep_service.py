@@ -2188,3 +2188,294 @@ def numune_popup_mtt_onaya_gonder(
         ),
         'kayit': out.get('kayit'),
     }
+
+
+_TESLIM_SEKLI_LABELS = {
+    'FABRIKA_TESLIM': 'Fabrika Teslim',
+    'MUSTERIYE_SEVK': 'Müşteriye Sevk',
+}
+
+_URUN_AILE_LABELS = {
+    'TERLIK': 'Terlik',
+    'TABAN': 'Taban',
+    'DOKME': 'Dökme',
+}
+
+
+def _validate_siparis_popup_header(p: dict) -> dict[str, Any]:
+    """MO Sipariş popup üst alanları — TX öncesi zorunlu doğrulama."""
+    hatalar: list[dict] = []
+    try:
+        cari_id = int(p.get('cari_id') or 0) or None
+    except (TypeError, ValueError):
+        cari_id = None
+    if not cari_id:
+        hatalar.append({'alan': 'cari_id', 'mesaj': 'Cari zorunlu.'})
+
+    idem = (p.get('idempotency_key') or '').strip()
+    if not idem:
+        hatalar.append({'alan': 'idempotency_key', 'mesaj': 'idempotency_key zorunlu.'})
+
+    para = (p.get('para_birimi') or '').strip().upper()
+    if para == 'TL':
+        para = 'TRY'
+    if not para:
+        hatalar.append({'alan': 'para_birimi', 'mesaj': 'Para birimi zorunlu.'})
+
+    odeme = (p.get('odeme_sekli') or p.get('odeme_tipi') or '').strip().upper()
+    if odeme in ('PESIN', 'PEŞİN', 'PEŞIN'):
+        odeme = 'NAKIT'
+    if not odeme:
+        hatalar.append({'alan': 'odeme_sekli', 'mesaj': 'Ödeme şekli zorunlu.'})
+
+    teslim = (p.get('teslim_sekli') or '').strip()
+    if not teslim:
+        hatalar.append({'alan': 'teslim_sekli', 'mesaj': 'Teslim şekli zorunlu.'})
+
+    termin = (p.get('istenen_termin') or '').strip()
+    if not termin:
+        hatalar.append({'alan': 'istenen_termin', 'mesaj': 'Talep edilen termin zorunlu.'})
+
+    oncelik = (p.get('siparis_onceligi') or p.get('oncelik') or '').strip().upper()
+    if not oncelik:
+        hatalar.append({'alan': 'siparis_onceligi', 'mesaj': 'Sipariş önceliği zorunlu.'})
+    if oncelik not in ONCELIKLER:
+        oncelik = 'NORMAL'
+
+    cek_gun: int | None = None
+    if odeme == 'CEK':
+        try:
+            cek_gun = int(p.get('cek_vade_gun') or 0) or None
+        except (TypeError, ValueError):
+            cek_gun = None
+        if not cek_gun or cek_gun <= 0:
+            hatalar.append({
+                'alan': 'cek_vade_gun',
+                'mesaj': 'Çek seçildi — çek vade gün zorunlu.',
+            })
+
+    kalemler_raw = p.get('kalemler') or []
+    if not kalemler_raw:
+        hatalar.append({'alan': 'kalemler', 'mesaj': 'En az bir kalem zorunlu.'})
+
+    if hatalar:
+        _raise_alan_hatalari(hatalar)
+
+    return {
+        'cari_id': cari_id,
+        'idempotency_key': idem,
+        'para_birimi': para,
+        'odeme_sekli': odeme,
+        'teslim_sekli': teslim,
+        'istenen_termin': termin,
+        'oncelik_talep': oncelik,
+        'oncelik_gorusme': 'KRITIK' if oncelik == 'YUKSEK' else oncelik,
+        'cek_vade_gun': cek_gun,
+        'cek_alinacak_tarih': (p.get('cek_alinacak_tarih') or '').strip() or None,
+    }
+
+
+def _normalize_siparis_popup_kalemler(
+    raw_list: list,
+    para_birimi: str,
+    odeme: str,
+    cek_gun: int | None,
+) -> list[dict]:
+    """Popup kalem satırları — TR sayı normalizasyonu + zorunlu alan."""
+    from modules.nexgen.mo_gorusme_service import _parse_konusulan_tonaj
+
+    aile_map = {'TERLIK': 'TERLIK', 'TABAN': 'TABAN', 'DOKME': 'DOKME', 'DÖKME': 'DOKME'}
+    kalemler: list[dict] = []
+    hatalar: list[dict] = []
+
+    for i, raw in enumerate(raw_list):
+        if not isinstance(raw, dict):
+            continue
+        sira = int(raw.get('sira_no') or i + 1)
+        urun = (raw.get('urun_ailesi') or raw.get('urun') or '').strip().upper()
+        urun = aile_map.get(urun, urun)
+        renk = (raw.get('renk_aciklama') or raw.get('renk') or '').strip()
+        kg = _parse_konusulan_tonaj(raw.get('miktar_kg'))
+        fiyat = _parse_konusulan_tonaj(raw.get('verilen_fiyat'))
+        prefix = f'{sira}. kalemde'
+
+        if not urun:
+            hatalar.append({
+                'alan': f'kalem.{sira}.urun_ailesi',
+                'kalem_sira': sira,
+                'mesaj': f'{prefix} Ürün tipi zorunlu.',
+            })
+        if not renk:
+            hatalar.append({
+                'alan': f'kalem.{sira}.renk_aciklama',
+                'kalem_sira': sira,
+                'mesaj': f'{prefix} Müşteri rengi zorunlu.',
+            })
+        if kg is None or kg <= 0:
+            hatalar.append({
+                'alan': f'kalem.{sira}.miktar_kg',
+                'kalem_sira': sira,
+                'mesaj': f'{prefix} Miktar kg pozitif olmalı.',
+            })
+        if fiyat is None or fiyat <= 0:
+            hatalar.append({
+                'alan': f'kalem.{sira}.verilen_fiyat',
+                'kalem_sira': sira,
+                'mesaj': f'{prefix} Birim fiyat zorunlu.',
+            })
+
+        urun_aciklama = (raw.get('urun_aciklama') or '').strip()
+        if not urun_aciklama and urun and renk:
+            urun_aciklama = f"{_URUN_AILE_LABELS.get(urun, urun)} — {renk}"
+
+        notu = (raw.get('kalem_notu') or raw.get('not') or '').strip() or None
+        tut = float(kg or 0) * float(fiyat or 0)
+        kalemler.append({
+            'sira_no': sira,
+            'urun_aciklama': urun_aciklama,
+            'urun_ailesi': urun,
+            'renk_aciklama': renk,
+            'miktar_kg': kg,
+            'konusulan_tonaj': None,
+            'verilen_fiyat': fiyat,
+            'para_birimi': para_birimi,
+            'odeme_tipi': odeme,
+            'vade_gun': 0 if odeme in ('NAKIT', 'KREDI_KARTI') else None,
+            'cek_vade_gun': cek_gun if odeme == 'CEK' else None,
+            'kalem_notu': notu,
+            'iskonto_orani': 0,
+            'kalem_tutari': tut,
+        })
+
+    if hatalar:
+        _raise_alan_hatalari(hatalar)
+    if not kalemler:
+        raise MusteriTemsilcisiTalepError('En az bir kalem zorunlu.', 400)
+    return kalemler
+
+
+def _build_siparis_popup_aciklama(p: dict, hdr: dict, pb: str) -> str:
+    genel = (p.get('genel_not') or '').strip()
+    musteri = (p.get('musteri_notu') or '').strip()
+    aciklama = genel or musteri or 'Sipariş talebi'
+    termin = hdr.get('istenen_termin')
+    if termin:
+        aciklama = f'{aciklama} | Termin: {termin}'
+    teslim = hdr.get('teslim_sekli')
+    if teslim:
+        teslim_lbl = _TESLIM_SEKLI_LABELS.get(teslim, teslim)
+        aciklama = f'{aciklama} | Teslim: {teslim_lbl}'
+    kdv_durumu = (p.get('kdv_durumu') or 'GAYRI').strip().upper()
+    kdv_orani = p.get('kdv_orani') or 0
+    ara = p.get('ara_toplam') or 0
+    kdv_t = p.get('kdv_tutari') or 0
+    genel_t = p.get('genel_toplam') or 0
+    kdv_meta = (
+        f'KDV:{kdv_durumu}|oran:{kdv_orani}|ara:{ara}|kdv:{kdv_t}|genel:{genel_t}|pb:{pb}'
+    )
+    return (aciklama + ' | ' + kdv_meta).strip()[:500]
+
+
+def _assert_siparis_mtt_onay_response(out: dict) -> None:
+    """Dedicated endpoint — eksik alan varsa success verilmez."""
+    zorunlu = ('gorusme_id', 'talep_id', 'talep_no', 'onay_id', 'onay_no')
+    eksik = [k for k in zorunlu if not out.get(k)]
+    if eksik:
+        raise MusteriTemsilcisiTalepError(
+            'Yanıt eksik — talep yönetim onayına gönderilemedi.',
+            500,
+            {'eksik_alanlar': eksik},
+        )
+    if out.get('talep_durum') != 'ONAY_BEKLIYOR' or out.get('onay_durum') != 'ONAY_BEKLIYOR':
+        raise MusteriTemsilcisiTalepError(
+            'Talep/onay durumu ONAY_BEKLIYOR değil — işlem tamamlanamadı.',
+            500,
+            {
+                'talep_durum': out.get('talep_durum'),
+                'onay_durum': out.get('onay_durum'),
+            },
+        )
+
+
+def siparis_popup_mtt_onaya_gonder(
+    con: sqlite3.Connection,
+    payload: dict,
+    kullanici_id: int,
+    yk: set[str] | frozenset[str] | None = None,
+) -> dict[str, Any]:
+    """
+    MO Sipariş popup → tek TX: görüşme + MTT SIPARIS + kalem + nexgen_onay.
+    nexgen_planlama_siparis / onay_talep yazılmaz.
+    """
+    p = payload or {}
+    hdr = _validate_siparis_popup_header(p)
+    pb = hdr['para_birimi']
+    odeme = hdr['odeme_sekli']
+    kalemler = _normalize_siparis_popup_kalemler(
+        p.get('kalemler') or [],
+        pb,
+        odeme,
+        hdr.get('cek_vade_gun'),
+    )
+
+    genel = (p.get('genel_not') or '').strip()
+    musteri = (p.get('musteri_notu') or '').strip()
+    onay_notu = (p.get('onay_notu') or '').strip()
+    aciklama = _build_siparis_popup_aciklama(p, hdr, pb)
+    kisa = (musteri or genel or aciklama).strip()[:400]
+    if hdr.get('cek_alinacak_tarih') and odeme == 'CEK':
+        kisa = (kisa + f" | Çek alınacak: {hdr['cek_alinacak_tarih']}").strip()[:400]
+    if onay_notu:
+        kisa = (kisa + f' | Onay: {onay_notu}').strip()[:400]
+        aciklama = (aciklama + ' | ' + onay_notu).strip()[:500]
+
+    ilk_fiyat = kalemler[0].get('verilen_fiyat') if kalemler else None
+    idem = hdr['idempotency_key']
+
+    g_payload: dict[str, Any] = {
+        'cari_id': hdr['cari_id'],
+        'gorusme_tipi': (p.get('gorusme_tipi') or 'Telefon').strip() or 'Telefon',
+        'sonuc_tipi': 'Sipariş Verecek',
+        'kisa_not': kisa,
+        'oncelik': hdr['oncelik_gorusme'],
+        'kaynak': 'MUSTERI_OPERASYONU',
+        'idempotency_key': idem,
+        'fiyat_verildi': 1,
+        'verilen_fiyat': ilk_fiyat,
+        'fiyat_para_birimi': pb,
+        'fiyat_birimi': 'KG',
+        'konusulan_tonaj': None,
+        'odeme_tipi': odeme,
+        'vade_gun': 0 if odeme in ('NAKIT', 'KREDI_KARTI') else None,
+        'cek_vade_gun': hdr.get('cek_vade_gun') if odeme == 'CEK' else None,
+        'talep': {
+            'talep_turu': 'SIPARIS',
+            'oncelik': hdr['oncelik_talep'],
+            'aciklama': aciklama,
+            'musteri_notu': musteri or genel or '',
+            'kalemler': kalemler,
+        },
+    }
+
+    out = kaydet_gorusme_opsiyonel_talep(con, g_payload, kullanici_id, yk)
+    if not out.get('talep_olusturuldu') or not out.get('onay_id'):
+        raise MusteriTemsilcisiTalepError(
+            'Sipariş talebi onay kaydı oluşmadan tamamlanamaz.', 500,
+        )
+
+    resp = {
+        'ok': True,
+        'gorusme_id': out.get('gorusme_id'),
+        'talep_id': out.get('talep_id'),
+        'talep_no': out.get('talep_no'),
+        'talep_turu': out.get('talep_turu') or 'SIPARIS',
+        'talep_durum': out.get('talep_durum'),
+        'onay_id': out.get('onay_id'),
+        'onay_no': out.get('onay_no'),
+        'onay_durum': out.get('onay_durum'),
+        'onay_turu': out.get('onay_turu'),
+        'idempotent': bool(out.get('idempotent')),
+        'mesaj': 'Talebiniz yönetim onayına gönderildi.',
+    }
+    _assert_siparis_mtt_onay_response(resp)
+    return resp
