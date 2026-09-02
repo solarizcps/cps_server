@@ -161,9 +161,13 @@ def _route_ctx(*, permissions: set[str] | None = None, superadmin: bool = False)
             return True
         return (kod + ":" + action) in perms
 
+    def _kullanici_yetkileri(_user_dict):
+        return set(perms)
+
     patches = [
         patch("app.sistem_session_gecerli_mi", return_value=True),
-        patch("app.kullanici_yetkileri", return_value=perms),
+        patch("app.kullanici_yetkileri", side_effect=_kullanici_yetkileri),
+        patch("modules.auth.kullanici_yetkileri", side_effect=_kullanici_yetkileri),
         patch("modules.auth.yetki_var", side_effect=_yetki_var),
         patch("modules.auth.is_superadmin", return_value=superadmin),
         patch("modules.yonetim.routes.yetki_var", side_effect=_yetki_var),
@@ -178,7 +182,7 @@ def _route_ctx(*, permissions: set[str] | None = None, superadmin: bool = False)
             item.stop()
 
 
-def test_t10_authorized_route_200():
+def test_t10_authorized_route_200(route_db_isolation):
     client = _make_client()
     _admin_session(client)
     with _route_ctx(permissions={"*"}, superadmin=True):
@@ -186,7 +190,7 @@ def test_t10_authorized_route_200():
     assert resp.status_code == 200
 
 
-def test_t11_unauthorized_route_403():
+def test_t11_unauthorized_route_403(route_db_isolation):
     client = _make_client()
     _admin_session(client)
     with _route_ctx(permissions=set(), superadmin=False):
@@ -201,7 +205,7 @@ def test_t12_unauthenticated_redirect():
     assert "/giris" in (resp.location or "")
 
 
-def test_t13_detail_permission_guard():
+def test_t13_detail_permission_guard(route_db_isolation):
     client = _make_client()
     _admin_session(client)
     with _route_ctx(permissions={"yonetim:can_view"}, superadmin=False):
@@ -214,7 +218,7 @@ def test_t13_detail_permission_guard():
     assert "Kilitli Kurallar" not in body
 
 
-def test_t14_template_output_contains_bootstrap_fields():
+def test_t14_template_output_contains_bootstrap_fields(route_db_isolation):
     client = _make_client()
     _admin_session(client)
     with _route_ctx(permissions={"*"}, superadmin=True):
@@ -254,7 +258,7 @@ def test_t16_v1_pytest_suite_still_passes():
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
-def test_t17_no_db_write_on_page_load():
+def test_t17_no_db_write_on_page_load(route_db_isolation):
     db_path = APP / "mock_data.db"
     if not db_path.is_file():
         pytest.skip("canonical db not present")
@@ -380,3 +384,96 @@ def test_t24_normal_canonical_record_still_loads(fixture_root, service_mod):
     assert skipped == 0
     assert len(records) == 1
     assert records[0].phase_code == "NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1"
+
+
+def _write_deploy_kpi_record(
+    fixture_root: Path,
+    *,
+    module: str,
+    phase_code: str,
+    version: str,
+    push_status: str,
+    deployment_status: str,
+) -> None:
+    text = _canonical_toml_text()
+    text = (
+        text.replace("nexgen.mo", module)
+        .replace("NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1", phase_code)
+        .replace("v1.3.0", version)
+        .replace('push_status = "LOCAL_COMMITTED_NOT_PUSHED"', f'push_status = "{push_status}"')
+        .replace(
+            'deployment_status = "LOCAL_COMMITTED_NOT_PUSHED"',
+            f'deployment_status = "{deployment_status}"',
+        )
+    )
+    record_dir = fixture_root / "changes" / "records" / module
+    record_dir.mkdir(parents=True, exist_ok=True)
+    record_path = record_dir / f"{phase_code}.toml"
+    record_path.write_text(text, encoding="utf-8")
+    frag = fixture_root / "changes" / "fragments" / f"{module}.{phase_code}.release"
+    frag.write_text(f"{phase_code} deploy fixture\n", encoding="utf-8")
+
+
+def _copy_deploy_kpi_fixture(tmp: Path) -> None:
+    _copy_canonical_fixture(tmp)
+    _write_deploy_kpi_record(
+        tmp,
+        module="nexgen.mo",
+        phase_code="DEPLOY_KPI_WAIT_A",
+        version="v1.0.0",
+        push_status="LOCAL_COMMITTED_NOT_PUSHED",
+        deployment_status="LOCAL_COMMITTED_NOT_PUSHED",
+    )
+    _write_deploy_kpi_record(
+        tmp,
+        module="cps.release.history",
+        phase_code="DEPLOY_KPI_WAIT_B",
+        version="v1.0.0",
+        push_status="PUSHED_NOT_DEPLOYED",
+        deployment_status="PUSHED_NOT_DEPLOYED",
+    )
+    for idx, module in enumerate(("planlama.atp", "server", "test.infra"), start=1):
+        _write_deploy_kpi_record(
+            tmp,
+            module=module,
+            phase_code=f"DEPLOY_KPI_UNKNOWN_{idx}",
+            version="v1.0.0",
+            push_status="DEPLOYMENT_UNKNOWN",
+            deployment_status="DEPLOYMENT_UNKNOWN",
+        )
+
+
+def test_t25_deploy_kpi_counts_local_vs_unknown(service_mod, tmp_path):
+    fixture_root = tmp_path / "deploy_kpi_fixture"
+    _copy_deploy_kpi_fixture(fixture_root)
+
+    records, skipped = service_mod.load_release_records(fixture_root)
+    ctx = service_mod.build_page_context(fixture_root)
+    summary = ctx["summary"]
+
+    assert skipped == 0
+    assert summary["total_records"] == len(records)
+    assert summary["deploy_waiting_modules"] == 2
+    assert summary["deploy_unknown_modules"] == 3
+
+    _write_deploy_kpi_record(
+        fixture_root,
+        module="finans",
+        phase_code="DEPLOY_KPI_EXTRA",
+        version="v1.0.0",
+        push_status="DEPLOYMENT_UNKNOWN",
+        deployment_status="DEPLOYMENT_UNKNOWN",
+    )
+    records_after_add, skipped_after_add = service_mod.load_release_records(fixture_root)
+    ctx_after_add = service_mod.build_page_context(fixture_root)
+    assert skipped_after_add == 0
+    assert len(records_after_add) == len(records) + 1
+    assert ctx_after_add["summary"]["total_records"] == len(records_after_add)
+
+    bad = fixture_root / "changes/records/finans/BROKEN.toml"
+    bad.write_text("invalid toml [[[\n", encoding="utf-8")
+    records_after_bad, skipped_after_bad = service_mod.load_release_records(fixture_root)
+    ctx_after_bad = service_mod.build_page_context(fixture_root)
+    assert skipped_after_bad >= 1
+    assert len(records_after_bad) == len(records_after_add)
+    assert ctx_after_bad["summary"]["total_records"] == len(records_after_bad)

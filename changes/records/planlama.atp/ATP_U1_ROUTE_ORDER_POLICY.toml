@@ -1,0 +1,38 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.1.0"
+phase_code = "ATP_U1_ROUTE_ORDER_POLICY"
+title = "Güvenli rota sıralama politikası eklendi."
+status = "KILITLI"
+date = "2026-08-30"
+summary = "Görev taşıma kilitleri ve güvenli ekleme indeksi birim testleriyle doğrulandı."
+source_type = "commit"
+commit_sha = "4e586aed2f42f3ff883faabf70b64886f7348161"
+test_result = "Birim testleri PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary 4e586ae; cda6498 duplicate."
+changes = [
+  "Rota sıralama politikası modülü eklendi.",
+  "Taşıma kilidi kuralları tanımlandı.",
+]
+changed_files = [
+  "app/modules/planlama/arac_route_order_policy.py",
+  "tests/planlama/test_arac_route_order_policy.py",
+]
+locked_rules = [
+  "Tamamlanmış görevler taşınamaz.",
+]
+tests = [
+  "Policy birim testleri",
+]
+known_issues = [
+]
+next_steps = [
+  "Acil iş ekleme fazı.",
+]
+related_commits = [
+  "cda6498876c6986391225b22f9276f4632742f9c",
+]

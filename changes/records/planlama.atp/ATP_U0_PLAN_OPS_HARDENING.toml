@@ -1,0 +1,40 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.0.1"
+phase_code = "ATP_U0_PLAN_OPS_HARDENING"
+title = "Plan operasyonları ve canlı durum sertleştirildi."
+status = "KILITLI"
+date = "2026-08-27"
+summary = "Planlama rol izinleri, aktif plan canlı durum kapsamı ve planlı iptal kuralları iyileştirildi."
+source_type = "commit"
+commit_sha = "ca4612c058750a6dc7809d7155272efaaa81640c"
+test_result = "Regresyon PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary ca4612c; ilişkili f77c35f, 95afa3a."
+changes = [
+  "Planlama rol araç izinleri genişletildi.",
+  "Canlı durum aktif plan seferleriyle sınırlandı.",
+  "Planlı iptal ve eksik konum ayrımı netleştirildi.",
+]
+changed_files = [
+  "app/modules/planlama/arac_takip_routes.py",
+]
+locked_rules = [
+  "Canlı durum yalnız aktif plan seferlerini kapsar.",
+]
+tests = [
+  "Rol izin",
+  "Canlı durum kapsamı",
+]
+known_issues = [
+]
+next_steps = [
+  "WhatsApp rota bildirimi.",
+]
+related_commits = [
+  "f77c35f4a0da3239b304fd933179642e9fd4cf47",
+  "95afa3ab12fbd2b29c254a327b52c71e1ced18f2",
+]

@@ -1,0 +1,39 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.2.0"
+phase_code = "ATP_U2A_U2B_ACIL_INSERT_LOCK"
+title = "Acil iş ekleme ve rota durumu kilidi tamamlandı."
+status = "KILITLI"
+date = "2026-08-30"
+summary = "Atomik acil iş ekleme ve rota state invalidation pytest ile doğrulandı."
+source_type = "commit"
+commit_sha = "d5d318182dd7462a693c881e5bf3e99a24748b50"
+test_result = "Pytest PASS (42 test)"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit d5d3181; 5 dosya Git diff."
+changes = [
+  "Atomik acil ekleme servisi eklendi.",
+  "Rota snapshot invalidation uygulandı.",
+]
+changed_files = [
+  "app/modules/planlama/arac_add_to_plan_service.py",
+  "app/modules/planlama/arac_plan_rota_snapshot_service.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "tests/planlama/test_arac_acil_atomic_insert.py",
+  "tests/planlama/test_arac_acil_route_state_invalidation.py",
+]
+locked_rules = [
+  "Acil ekleme atomik olmalıdır.",
+]
+tests = [
+  "Atomik insert (24)",
+  "State invalidation (18)",
+]
+known_issues = [
+]
+next_steps = [
+  "Manuel sıralama fazı (U3B).",
+]

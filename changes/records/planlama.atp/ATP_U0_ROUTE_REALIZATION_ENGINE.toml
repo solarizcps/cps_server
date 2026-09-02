@@ -1,0 +1,44 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v0.2.0"
+phase_code = "ATP_U0_ROUTE_REALIZATION_ENGINE"
+title = "Planlanan ve gerçekleşen rota motoru tamamlandı."
+status = "KILITLI"
+date = "2026-08-26"
+summary = "Plan değişikliği kapanışı, migration 182 repo ve planlı-gerçek rota motoru servis/test paketiyle doğrulandı."
+source_type = "commit"
+commit_sha = "bdd65624e47bb1a9ba56b0df8956ef98ca24cce8"
+test_result = "Servis testleri PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary bdd65624; ilişkili f8896fd2, 9dd15b08, 8e90b945, 1b3e9b87."
+changes = [
+  "Planlı-gerçek rota servis modelleri eklendi.",
+  "Migration 182 plan değişikliği kapanışı tamamlandı.",
+  "Popup wiring ve planless harita sözleşmesi düzeltildi.",
+]
+changed_files = [
+  "app/modules/planlama/arac_route_realization_models.py",
+  "app/modules/planlama/arac_route_realization_service.py",
+  "tests/planlama/test_arac_route_realization_service.py",
+]
+locked_rules = [
+  "Plan değişikliği tek canonical repo yolunu kullanır.",
+  "Planless gün harita sözleşmesi korunur.",
+]
+tests = [
+  "Rota realization servis testleri",
+]
+known_issues = [
+]
+next_steps = [
+  "Çoklu ekleme kimlik fazına geçiş.",
+]
+related_commits = [
+  "f8896fd23a474fa1cac52f885155cac11e1fed91",
+  "9dd15b08a128e7e5bb005de8c3905f2227f5836c",
+  "8e90b945f0793ae00c5eb10c916ecd447246bc47",
+  "1b3e9b879be789af84439550cafa335521e4466b",
+]

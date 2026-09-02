@@ -1,0 +1,56 @@
+schema_version = 1
+module = "cps.release.history"
+version = "v1.1.0"
+phase_code = "BACKFILL_CPS_RELEASE_HISTORY_A0FC538"
+title = "Salt okunur CPS geliştirme geçmişi merkezi eklendi."
+status = "KILITLI"
+date = "2026-09-02"
+summary = "Yönetim menüsü altında canonical TOML kayıtlarını listeleyen ve detay gösteren salt okunur sürüm geçmişi ekranı devreye alındı; V2 test paketi ile doğrulandı."
+source_type = "commit"
+commit_sha = "a0fc5380331c7c2a0c6cdd4d060c2053f2545757"
+test_result = "V1+V2 24/24 PASS"
+db_write = false
+server_restart = false
+push_status = "LOCAL_COMMITTED_NOT_PUSHED"
+deployment_status = "LOCAL_COMMITTED_NOT_PUSHED"
+
+changes = [
+    "Salt okunur release_history_service eklendi.",
+    "Yönetim sürüm geçmişi rotası ve şablonu oluşturuldu.",
+    "Liste görünümü yonetim:can_view, detay yonetim.log:can_view veya superadmin ile korundu.",
+    "Yönetim menüsüne Geliştirme Geçmişi bağlantısı eklendi.",
+    "V2 UI test paketi eklendi.",
+]
+
+changed_files = [
+    "app/services/release_history_service.py",
+    "app/modules/yonetim/routes.py",
+    "app/templates/yonetim/surum_gecmisi.html",
+    "app/templates/base.html",
+    "app/templates/yonetim/panel.html",
+    "tests/tools/test_release_history_ui_v2.py",
+]
+
+locked_rules = [
+    "Ekran yalnız GET ile salt okunur çalışır.",
+    "Detay görünümü Audit Log yetkisi veya superadmin gerektirir.",
+    "Kayıtlar yalnız changes/records altından okunur.",
+]
+
+tests = [
+    "V2 canonical kayıt yükleme",
+    "Modül toplama ve filtreleme",
+    "Yetkisiz erişim 403",
+    "Detay yetki koruması",
+    "Şablon alan görünürlüğü",
+    "Sayfa yüklemesinde DB yazımı yok",
+]
+
+known_issues = []
+
+next_steps = [
+    "Güvenlik hardening fazı.",
+    "Son 7 gün backfill.",
+]
+
+evidence_summary = "Commit a0fc538; test_release_history_ui_v2.py 24 test PASS."

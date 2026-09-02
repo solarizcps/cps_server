@@ -12,7 +12,7 @@ test_result = "T1-T22 ALL PASS"
 db_write = false
 server_restart = false
 push_status = "LOCAL_COMMITTED_NOT_PUSHED"
-deployment_status = "LOCAL_READY_FOR_MONDAY_DEPLOY"
+deployment_status = "LOCAL_COMMITTED_NOT_PUSHED"
 evidence_summary = "End-to-end regression lock completed on isolated temp database; header and management visibility verified."
 
 changes = [

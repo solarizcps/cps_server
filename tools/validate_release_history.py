@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -57,6 +58,7 @@ def validate(root: Path | None = None) -> tuple[list[str], list[str]]:
     type_extension = fragment_cfg["type_extension"]
     sha_pattern = re.compile(schema["validation"]["commit_sha_pattern"])
     forbidden_tokens: list[str] = schema["validation"]["forbidden_path_tokens"]
+    optional_list_fields: list[str] = list(schema.get("optional_list_fields", {}).get("fields", []))
 
     errors: list[str] = []
     info: list[str] = []
@@ -107,6 +109,38 @@ def validate(root: Path | None = None) -> tuple[list[str], list[str]]:
 
         if commit_sha is not None and not sha_pattern.match(str(commit_sha)):
             errors.append(f"{rel}: invalid commit_sha '{commit_sha}'")
+
+        def _git_commit_exists(sha: str) -> bool:
+            if base != ROOT:
+                return True
+            proc = subprocess.run(
+                ["git", "cat-file", "-t", sha],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+            return proc.returncode == 0 and proc.stdout.strip() == "commit"
+
+        if commit_sha is not None and sha_pattern.match(str(commit_sha)):
+            if not _git_commit_exists(str(commit_sha)):
+                errors.append(f"{rel}: commit_sha not found in git: {commit_sha}")
+
+        for opt_field in optional_list_fields:
+            values = data.get(opt_field)
+            if values is None:
+                continue
+            if not isinstance(values, list):
+                errors.append(f"{rel}: optional field '{opt_field}' must be a list")
+                continue
+            for item in values:
+                if not isinstance(item, str):
+                    errors.append(f"{rel}: {opt_field} entries must be strings")
+                    continue
+                if not sha_pattern.match(item):
+                    errors.append(f"{rel}: invalid {opt_field} sha '{item}'")
+                    continue
+                if not _git_commit_exists(item):
+                    errors.append(f"{rel}: {opt_field} sha not found in git: {item}")
 
         if module is not None and version is not None:
             key = (str(module), str(version))

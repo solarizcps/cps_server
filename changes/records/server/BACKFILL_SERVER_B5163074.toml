@@ -1,0 +1,34 @@
+schema_version = 1
+module = "server"
+version = "v1.1.0"
+phase_code = "BACKFILL_SERVER_B5163074"
+title = "Sunucu Python yürütücüsü host bazlı çözümlendi."
+status = "KILITLI"
+date = "2026-08-27"
+summary = "Python executable host ortamına göre güvenli çözümlenir."
+source_type = "commit"
+commit_sha = "b5163074c80c08be20f047f50752434995be2042"
+test_result = "Startup guard PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit b5163074."
+changes = [
+  "Host bazlı Python çözümlemesi eklendi.",
+]
+changed_files = [
+  "app/tools/cps_startup_env.py",
+  "tests/tools/test_cps_startup_env_guard_v1.py",
+]
+locked_rules = [
+  "Yanlış interpreter ile başlatma engellenir.",
+]
+tests = [
+  "Startup env guard",
+]
+known_issues = [
+]
+next_steps = [
+  "Dağıtım doğrulaması.",
+]

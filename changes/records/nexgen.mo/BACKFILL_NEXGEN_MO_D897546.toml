@@ -1,0 +1,49 @@
+schema_version = 1
+module = "nexgen.mo"
+version = "v1.2.0"
+phase_code = "BACKFILL_NEXGEN_MO_D897546"
+title = "Planlama ekranında onay bekleyen MTT talepleri görünür hale getirildi."
+status = "KILITLI"
+date = "2026-08-27"
+summary = "Müşteri Operasyonu tarafından oluşturulan onay bekleyen MTT talepleri planlama ekranında ve pazarlama merkezinde görünür yapıldı; izole veritabanı regresyon testleriyle doğrulandı."
+source_type = "commit"
+commit_sha = "d897546319780b754343e1c04364807b375ac725"
+test_result = "T1-T10 ALL PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+
+changes = [
+    "Planlama rolü için bekleyen MTT talep listesi API ve şablon görünürlüğü eklendi.",
+    "Pazarlama merkezi ekranında onay bekleyen talepler filtrelenebilir hale getirildi.",
+    "Erhan tarafından oluşturulan taleplerin Mehmet planlama görünümüne düşmesi sağlandı.",
+]
+
+changed_files = [
+    "app/modules/nexgen/musteri_pazarlama_routes.py",
+    "app/templates/nexgen/musteri_pazarlama.html",
+    "app/templates/nexgen/pazarlama_merkezi.html",
+    "app/test_nexgen_erhan_mtt_pending_visible_v1.py",
+]
+
+locked_rules = [
+    "Onay bekleyen MTT talepleri planlama rolünde görünür olmalıdır.",
+    "Mevcut sipariş ve görüşme akışları bozulmamalıdır.",
+    "Regresyon testleri izole geçici veritabanı üzerinde çalışır.",
+]
+
+tests = [
+    "T1-T10 izole veritabanı regresyon paketi",
+    "Planlama görünürlük API doğrulaması",
+    "Pazarlama merkezi filtre davranışı",
+]
+
+known_issues = []
+
+next_steps = [
+    "Doğrudan sipariş onay akışı fazı ile birlikte uçtan uca kilit tamamlanacak.",
+]
+
+root_cause = "Planlama ekranı onay bekleyen MTT taleplerini listelemiyordu."
+evidence_summary = "Commit d897546; test_nexgen_erhan_mtt_pending_visible_v1.py T1-T10 geçici DB regresyonu."

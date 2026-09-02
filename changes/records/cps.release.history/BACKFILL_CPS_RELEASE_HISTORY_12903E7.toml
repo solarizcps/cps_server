@@ -1,0 +1,56 @@
+schema_version = 1
+module = "cps.release.history"
+version = "v1.0.0"
+phase_code = "BACKFILL_CPS_RELEASE_HISTORY_12903E7"
+title = "Canonical sürüm geçmişi altyapısı kuruldu."
+status = "KILITLI"
+date = "2026-09-02"
+summary = "Towncrier fragment ve TOML kayıt hibrit yapısı, şema tanımı ve salt okunur doğrulayıcı aracı eklendi; V1 test paketi ile doğrulandı."
+source_type = "commit"
+commit_sha = "12903e705b6e86b29a675f2e0e92adee2a80a1c2"
+test_result = "V1 validator 7/7 PASS"
+db_write = false
+server_restart = false
+push_status = "LOCAL_COMMITTED_NOT_PUSHED"
+deployment_status = "LOCAL_COMMITTED_NOT_PUSHED"
+
+changes = [
+    "Canonical TOML kayıt dizin yapısı tanımlandı.",
+    "Towncrier fragment eşleme kuralı eklendi.",
+    "Şema allowlist ve doğrulama kuralları yazıldı.",
+    "Salt okunur validate_release_history aracı eklendi.",
+    "Bootstrap nexgen.mo kaydı oluşturuldu.",
+]
+
+changed_files = [
+    "towncrier.toml",
+    "docs/release-history/schema.toml",
+    "docs/release-history/README.md",
+    "tools/validate_release_history.py",
+    "tests/tools/test_validate_release_history_v1.py",
+    "changes/records/nexgen.mo/NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1.toml",
+    "changes/fragments/nexgen.mo.NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1.release",
+]
+
+locked_rules = [
+    "Kayıtlar changes/records altında modül bazlı tutulur.",
+    "Her TOML kaydının eşleşen fragment dosyası olmalıdır.",
+    "Towncrier yalnız geliştirme ortamında kullanılır.",
+]
+
+tests = [
+    "V1 validator geçerli kayıt",
+    "Yinelenen sürüm reddi",
+    "Eksik alan reddi",
+    "Mutlak yol reddi",
+    "Eksik fragment reddi",
+    "Validator betik çıkış kodu",
+]
+
+known_issues = []
+
+next_steps = [
+    "V2 read-only CPS ekranı.",
+]
+
+evidence_summary = "Commit 12903e7; test_validate_release_history_v1.py V1 paketi."

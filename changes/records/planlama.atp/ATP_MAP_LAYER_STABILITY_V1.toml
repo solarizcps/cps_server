@@ -1,0 +1,44 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.5.0"
+phase_code = "ATP_MAP_LAYER_STABILITY_V1"
+title = "Harita katman yaşam döngüsü stabilize edildi."
+status = "KILITLI"
+date = "2026-09-01"
+summary = "Plan harita katman lifecycle, özdeş overlay gizleme ve viewport restore düzeltmeleri node:test ile doğrulandı."
+source_type = "commit"
+commit_sha = "015aed7f5f9a9a67021a4d87c445d70504f195e1"
+test_result = "node:test 18 primary PASS; 36 cumulative (related commits) PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary 015aed7f; related 8834836e (overlay hide), 1192a797 (viewport restore) — her üç commit aynı node:test dosyasını genişletir."
+changes = [
+  "Katman lifecycle stabilize edildi.",
+  "Özdeş overlay gizlendi.",
+  "Viewport restore eklendi.",
+]
+changed_files = [
+  "app/static/js/planlama_arac_takip_plan_map.js",
+  "tests/planlama/test_planlama_arac_takip_plan_map_route_layers.js",
+]
+locked_rules = [
+  "Özdeş overlay gösterilmez.",
+  "Son iyi viewport geri yüklenir.",
+]
+tests = [
+  "Route layer lifecycle node:test (18 primary)",
+  "Overlay hide node:test (related 8834836e)",
+  "Viewport restore node:test (related 1192a797)",
+  "Cumulative node:test 36",
+]
+known_issues = [
+]
+next_steps = [
+  "GPS geofence sertleştirme (P3).",
+]
+related_commits = [
+  "8834836e1aec6c19aa62747df30e1d7dd0315096",
+  "1192a7976d4b0c687a586829bf8e92d66f902b70",
+]

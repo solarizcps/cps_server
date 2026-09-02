@@ -1,0 +1,45 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.4.0"
+phase_code = "ATP_GPS_HISTORY_TRAIL_V1"
+title = "GPS geçmişi trail API ve plan-harita senkronu"
+status = "KILITLI"
+date = "2026-08-31"
+summary = "GPS Geçmişi trail read-only API, plan satırı birleşimi ve harita katman senkronu tamamlandı."
+source_type = "commit"
+commit_sha = "90faf34190a5728723d8391598d3514860f3bd46"
+test_result = "GPS trail 10 test PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit 90faf34; GPS geçmişi trail servisi — U3C manual reorder API ile karıştırılmaz."
+changes = [
+  "GPS trail servisi eklendi.",
+  "GPS geçmişi UI ve harita senkronu bağlandı.",
+  "Plan-harita route katmanları güncellendi.",
+]
+changed_files = [
+  "app/modules/planlama/arac_plan_gps_trail_service.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/static/css/planlama_arac_takip_gps_history.css",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_gps_history.js",
+  "app/static/js/planlama_arac_takip_map.js",
+  "app/static/js/planlama_arac_takip_plan_map.js",
+  "app/static/js/planlama_arac_takip_route.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/test_atp_plan_gps_trail_v1.py",
+]
+locked_rules = [
+  "GPS trail plan satırı ile eşleşmelidir.",
+  "Trail API read-only kalır.",
+]
+tests = [
+  "GPS trail pytest (10)",
+]
+known_issues = [
+]
+next_steps = [
+  "Harita katman stabilizasyonu.",
+]

@@ -3,7 +3,7 @@
 
 {% block head %}
 <style>
-.rh-kpi-grid { display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:10px; margin-bottom:14px; }
+.rh-kpi-grid { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:10px; margin-bottom:14px; }
 .rh-kpi { background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:12px 14px; box-shadow:var(--shadow-sm); }
 .rh-kpi .lbl { font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1.1px; }
 .rh-kpi .val { font-size:22px; font-weight:700; margin-top:4px; color:var(--text1); }
@@ -66,6 +66,7 @@
   <div class="rh-kpi"><div class="lbl">Kilitli Modül</div><div class="val">{{ summary.locked_modules }}</div></div>
   <div class="rh-kpi"><div class="lbl">Devam / Taslak</div><div class="val">{{ summary.in_progress_modules }}</div></div>
   <div class="rh-kpi"><div class="lbl">Deploy Bekleyen</div><div class="val">{{ summary.deploy_waiting_modules }}</div></div>
+  <div class="rh-kpi"><div class="lbl">Deploy Bilinmiyor</div><div class="val">{{ summary.deploy_unknown_modules }}</div></div>
   <div class="rh-kpi"><div class="lbl">Açık Sorun</div><div class="val">{{ summary.open_issues }}</div></div>
   <div class="rh-kpi"><div class="lbl">Toplam Kayıt</div><div class="val">{{ summary.total_records }}</div></div>
 </div>

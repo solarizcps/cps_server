@@ -1,0 +1,38 @@
+schema_version = 1
+module = "test.infra"
+version = "v1.2.0"
+phase_code = "BACKFILL_TEST_INFRA_C9FAEA9B"
+title = "Test başlangıcı ve canonical izolasyon sertleştirildi."
+status = "KILITLI"
+date = "2026-08-27"
+summary = "Temiz startup, canonical izolasyon ve ATP test hijyeni güçlendirildi."
+source_type = "commit"
+commit_sha = "c9faea9b1050a389c2f4c3122fdec674a0e5f39b"
+test_result = "Hijyen paketi PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit c9faea9b."
+changes = [
+  "Canonical izolasyon zorunlu kılındı.",
+  "Startup guard eklendi.",
+  "ATP hijyen testleri eklendi.",
+]
+changed_files = [
+  "tests/conftest.py",
+  "tests/planlama/atp_test_hygiene.py",
+]
+locked_rules = [
+  "Test guard olmadan canonical erişim engellenir.",
+]
+tests = [
+  "DB guard",
+  "Startup guard",
+  "Hijyen",
+]
+known_issues = [
+]
+next_steps = [
+  "Legacy izolasyon sürdürülecek.",
+]

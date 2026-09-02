@@ -1,0 +1,52 @@
+schema_version = 1
+module = "test.infra"
+version = "v1.1.0"
+phase_code = "BACKFILL_TEST_INFRA_804DA47"
+title = "Legacy test betikleri canonical veritabanından izole edildi."
+status = "KILITLI"
+date = "2026-08-27"
+summary = "Kök dizindeki legacy test betiklerinin canonical mock veritabanına erişimi engellendi; araçlar pytest paketi ile doğrulandı."
+source_type = "commit"
+commit_sha = "804da479ea18c43259abb3ef33240500cdc55530"
+test_result = "test_legacy_canonical_writer_guard_v1 PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+
+changes = [
+    "Legacy test betiklerine canonical yazım koruması eklendi.",
+    "Araçlar pytest ortamı yapılandırması güncellendi.",
+    "Legacy canonical yazıcı koruma testi eklendi.",
+]
+
+changed_files = [
+    "_db_test_seed.py",
+    "_test_faz4b_stok_tuketim.py",
+    "_test_faz4d_parca_geri_al.py",
+    "_test_faz5c2_depo_rezerv.py",
+    "_test_faz5c3_kullanilabilir_stok.py",
+    "_test_renk_merkezi_canli1.py",
+    "tests/tools/conftest.py",
+    "tests/tools/pytest.ini",
+    "tests/tools/test_legacy_canonical_writer_guard_v1.py",
+]
+
+locked_rules = [
+    "Legacy kök betikleri canonical mock veritabanına yazamaz.",
+    "Pytest araçları ortamında koruma zorunludur.",
+]
+
+tests = [
+    "Legacy yazıcı engeli",
+    "Pytest conftest koruması",
+    "Canonical SHA değişmezlik kontrolü",
+]
+
+known_issues = []
+
+next_steps = [
+    "Yeni testler yalnız pytest paketleri altında konumlandırılacak.",
+]
+
+evidence_summary = "Commit 804da47; test_legacy_canonical_writer_guard_v1.py doğrulama paketi."

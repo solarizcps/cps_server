@@ -1,0 +1,37 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.0.2"
+phase_code = "ATP_U0_WHATSAPP_ROUTE_NOTIFY"
+title = "Uygulanan rota WhatsApp bildirimi tamamlandı."
+status = "KILITLI"
+date = "2026-08-27"
+summary = "Uygulanan rota detayları WhatsApp ile iletilir; legacy fallback kaldırıldı."
+source_type = "commit"
+commit_sha = "80dd27943c4420789f38731805fa67ee7371e999"
+test_result = "Pytest PASS (38 + 16 legacy)"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary 80dd279 (38 pytest); related e4abd03 legacy fallback kaldırma (16 pytest)."
+changes = [
+  "WhatsApp rota detay mesajı eklendi.",
+  "Legacy fallback kaldırıldı.",
+]
+changed_files = [
+  "app/modules/planlama/arac_takip_routes.py",
+]
+locked_rules = [
+  "Legacy fallback kullanılmaz.",
+]
+tests = [
+  "WhatsApp payload",
+]
+known_issues = [
+]
+next_steps = [
+  "Güvenli rota sıralama politikası.",
+]
+related_commits = [
+  "e4abd0344145f827db0cf95ac0242ae9baa2ad54",
+]

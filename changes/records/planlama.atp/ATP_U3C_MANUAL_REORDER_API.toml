@@ -1,0 +1,58 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.3.1"
+phase_code = "ATP_U3C_MANUAL_REORDER_API"
+title = "Manuel rota sıralama API'si ve atomik uygulama"
+status = "KILITLI"
+date = "2026-08-31"
+summary = "U3C backend/API katmanı: state token, fail-closed validation, BEGIN IMMEDIATE atomik apply ve snapshot invalidation tek commit içinde U3B ile birlikte geldi."
+source_type = "commit"
+commit_sha = "7244b90e21ade00c4ba641c962825ff948274bcb"
+test_result = "Manual reorder API 68 test PASS; JS parity testleri PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit 7244b90; U3B policy ile aynı SHA — tek commit hem U3B policy hem U3C backend/API/UI wiring taşır."
+changes = [
+  "Manuel reorder servisi ve API uçları eklendi.",
+  "State token ve atomik apply akışı bağlandı.",
+  "UI/JS manual reorder wiring tamamlandı.",
+]
+changed_files = [
+  "app/modules/planlama/arac_manual_reorder_service.py",
+  "app/modules/planlama/arac_plan_rota_snapshot_service.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_manual_reorder.js",
+  "app/static/js/planlama_arac_takip_manual_reorder_ui.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/_parity_helper.py",
+  "tests/planlama/test_arac_manual_reorder_api.py",
+  "tests/planlama/test_planlama_arac_takip_manual_reorder.js",
+  "tests/planlama/test_planlama_arac_takip_manual_reorder_parity.js",
+  "tests/planlama/test_planlama_arac_takip_manual_reorder_ui.js",
+]
+locked_rules = [
+  "State token kontrolü zorunludur.",
+  "Fail-closed validation reddedilir.",
+  "BEGIN IMMEDIATE atomik apply kullanılır.",
+  "Segment sınırı aşılamaz.",
+  "Task set eşleşmesi zorunludur.",
+  "Kilitli görev hareketi engellenir.",
+  "Plan state conflict reddedilir.",
+  "Snapshot invalidate uygulanır.",
+  "ETA clear uygulanır.",
+]
+tests = [
+  "Manual reorder API pytest (68)",
+  "Manual reorder JS parity",
+  "Manual reorder UI JS",
+]
+known_issues = [
+]
+next_steps = [
+  "GPS geçmişi trail fazına geçiş.",
+]

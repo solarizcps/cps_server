@@ -1,0 +1,46 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.6.0"
+phase_code = "ATP_GPS_GEOFENCE_P3"
+title = "GPS geofence ziyaret takibi sertleştirildi (P3)."
+status = "KILITLI"
+date = "2026-09-01"
+summary = "Geofence ziyaret state machine (GPS P3) güvenlik kurallarıyla sertleştirildi; production kod sözleşmesi P3 etiketini kullanır."
+source_type = "commit"
+commit_sha = "8952aaa8d22236f72377e67bb5ab42b058e21449"
+test_result = "Geofence pytest 38 PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit 8952aaa; arac_geofence_service/repo GPS P3 sözleşmesi."
+changes = [
+  "Geofence ziyaret state machine sertleştirildi.",
+  "Geofence A2/A3 regresyon test paketi genişletildi.",
+]
+changed_files = [
+  "app/modules/planlama/arac_geofence_repo.py",
+  "app/modules/planlama/arac_geofence_service.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip.js",
+  "tests/planlama/atp_geofence_a3_common.py",
+  "tests/planlama/test_atp_geofence_a2_v1.py",
+  "tests/planlama/test_atp_geofence_a3_1_sanity_v1.py",
+  "tests/planlama/test_atp_geofence_a3_browser_v1.py",
+  "tests/planlama/test_atp_geofence_a3_integration_v1.py",
+  "tests/planlama/test_atp_geofence_a3_out_of_order_v1.py",
+]
+locked_rules = [
+  "Geofence olayları doğrulanmış koordinatlarda işlenir.",
+  "Ziyaret state machine sırası korunur.",
+]
+tests = [
+  "Geofence A2 pytest (27)",
+  "Geofence A3 integration pytest (10)",
+  "Geofence out-of-order pytest (1)",
+]
+known_issues = [
+]
+next_steps = [
+  "Sonraki ATP bakım fazları.",
+]

@@ -44,3 +44,9 @@ CPS read-only ekranı (`/yonetim/surum-gecmisi`) bu kayıtları okuyacak; V1 yal
 | `MAX_LIST_ITEMS` | 500 | Liste alanları güvenli kırpma |
 
 Symlink, root dışı `resolve()` yolu ve normal olmayan dosyalar skip edilir. Skip/hata durumunda gerçek dosya yolu UI'ya yansımaz.
+
+Modül kimliği `cps.release.history` — runtime loader regex yalnız `[a-z0-9.]+` kabul ettiği için alt çizgisiz noktalı form kullanılır.
+
+Deploy durumları: `LOCAL_COMMITTED_NOT_PUSHED`, `PUSHED_NOT_DEPLOYED`, `DEPLOYED_VERIFIED`, `DEPLOYMENT_UNKNOWN`. Kanıt yoksa `DEPLOYMENT_UNKNOWN` kullanılır.
+
+Opsiyonel `related_commits` listesi gruplanmış faz kanıt SHA'larını taşır; validator Git'te varlığını doğrular.

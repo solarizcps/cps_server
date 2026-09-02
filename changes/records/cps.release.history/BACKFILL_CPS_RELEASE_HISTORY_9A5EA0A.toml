@@ -1,0 +1,55 @@
+schema_version = 1
+module = "cps.release.history"
+version = "v1.1.1"
+phase_code = "BACKFILL_CPS_RELEASE_HISTORY_9A5EA0A"
+title = "Sürüm geçmişi dosya yükleme güvenliği sertleştirildi."
+status = "KILITLI"
+date = "2026-09-02"
+summary = "Symlink ve root dışı yol kaçışı engellendi; kayıt sayısı, TOML boyutu, metin ve liste limitleri eklendi; hardening test paketi ile doğrulandı."
+source_type = "commit"
+commit_sha = "9a5ea0af75be2a135ee2b2e5bb6854ed4f049a8e"
+test_result = "V1+V2+hardening 31/31 PASS"
+db_write = false
+server_restart = false
+push_status = "LOCAL_COMMITTED_NOT_PUSHED"
+deployment_status = "LOCAL_COMMITTED_NOT_PUSHED"
+
+changes = [
+    "Symlink ve resolve containment kontrolü eklendi.",
+    "MAX_RECORDS=1000 deterministik kayıt sınırı tanımlandı.",
+    "MAX_TOML_BYTES=262144 dosya boyutu sınırı eklendi.",
+    "MAX_TEXT_LENGTH=20000 metin kırpma uygulandı.",
+    "MAX_LIST_ITEMS=500 liste kırpma uygulandı.",
+    "Hardening testleri t18-t24 eklendi.",
+]
+
+changed_files = [
+    "app/services/release_history_service.py",
+    "docs/release-history/README.md",
+    "tests/tools/test_release_history_ui_v2.py",
+]
+
+locked_rules = [
+    "Symlink kayıtlar atlanır.",
+    "Root dışı resolve edilmiş yollar atlanır.",
+    "Limit aşımında sayfa çökmez; kayıt güvenli şekilde atlanır veya kırpılır.",
+]
+
+tests = [
+    "Symlink skip",
+    "Root dışı yol skip",
+    "Oversized TOML skip",
+    "1001 kayıt deterministik sınır",
+    "Uzun metin kırpma",
+    "501 liste öğesi kırpma",
+    "Canonical kayıt yüklenmeye devam eder",
+]
+
+known_issues = []
+
+next_steps = [
+    "Son 7 gün backfill kayıtları.",
+    "Görsel onay sonrası commit.",
+]
+
+evidence_summary = "Commit 9a5ea0a; test_release_history_ui_v2.py 31 test PASS."

@@ -36,7 +36,11 @@ STATUS_LABELS: dict[str, str] = {
 
 DEPLOY_WAIT_STATUSES = frozenset({
     "LOCAL_COMMITTED_NOT_PUSHED",
-    "LOCAL_READY_FOR_MONDAY_DEPLOY",
+    "PUSHED_NOT_DEPLOYED",
+})
+
+DEPLOY_UNKNOWN_STATUSES = frozenset({
+    "DEPLOYMENT_UNKNOWN",
 })
 
 MAX_RECORDS = 1000
@@ -211,13 +215,30 @@ def _short_sha(value: str) -> str:
 
 
 def _deploy_label(deployment_status: str, push_status: str) -> str:
-    if deployment_status in DEPLOY_WAIT_STATUSES or push_status in DEPLOY_WAIT_STATUSES:
+    dep = (deployment_status or "").strip().upper()
+    push = (push_status or "").strip().upper()
+    if dep in DEPLOY_WAIT_STATUSES or push in DEPLOY_WAIT_STATUSES:
         return "Yerelde hazır · Server aktarımı bekliyor"
+    if dep in DEPLOY_UNKNOWN_STATUSES or push in DEPLOY_UNKNOWN_STATUSES:
+        return "Deploy durumu bilinmiyor"
+    if dep == "DEPLOYED_VERIFIED":
+        return "Sunucuda doğrulandı"
     if deployment_status:
         return deployment_status.replace("_", " ")
     if push_status:
         return push_status.replace("_", " ")
     return "—"
+
+
+def _module_deploy_pending(item: ModuleSummary) -> bool:
+    dep = (item.deployment_status or "").upper()
+    return dep in DEPLOY_WAIT_STATUSES
+
+
+def _module_deploy_unknown(item: ModuleSummary) -> bool:
+    dep = (item.deployment_status or "").upper()
+    push = (item.deploy_label or "").lower()
+    return dep in DEPLOY_UNKNOWN_STATUSES or "bilinmiyor" in push
 
 
 def _module_label(module: str) -> str:
@@ -358,16 +379,15 @@ def aggregate_modules(records: list[ReleaseRecord]) -> list[ModuleSummary]:
 def build_summary_counts(records: list[ReleaseRecord], modules: list[ModuleSummary]) -> dict[str, int]:
     locked_modules = sum(1 for item in modules if item.status == "KILITLI")
     in_progress = sum(1 for item in modules if item.status in {"TASLAK", "TEST"})
-    deploy_waiting = sum(
-        1 for item in modules
-        if item.deployment_status in DEPLOY_WAIT_STATUSES or "Server aktarımı" in item.deploy_label
-    )
+    deploy_waiting = sum(1 for item in modules if _module_deploy_pending(item))
+    deploy_unknown = sum(1 for item in modules if _module_deploy_unknown(item))
     open_issues = sum(len(record.known_issues) for record in records)
     return {
         "total_modules": len(modules),
         "locked_modules": locked_modules,
         "in_progress_modules": in_progress,
         "deploy_waiting_modules": deploy_waiting,
+        "deploy_unknown_modules": deploy_unknown,
         "open_issues": open_issues,
         "total_records": len(records),
         "invalid_records": 0,
@@ -393,10 +413,11 @@ def filter_modules(
             continue
         if deployment:
             dep_val = (item.deployment_status or "").upper()
-            push_like = "LOCAL" in dep_val or dep_val in DEPLOY_WAIT_STATUSES
-            if deployment == "LOCAL_WAIT" and not push_like and "Server aktarımı" not in item.deploy_label:
+            if deployment == "LOCAL_WAIT" and not _module_deploy_pending(item):
                 continue
-            if deployment not in {"LOCAL_WAIT"} and dep_val != deployment:
+            if deployment == "DEPLOYMENT_UNKNOWN" and not _module_deploy_unknown(item):
+                continue
+            if deployment not in {"LOCAL_WAIT", "DEPLOYMENT_UNKNOWN"} and dep_val != deployment:
                 continue
         filtered.append(item)
     return filtered

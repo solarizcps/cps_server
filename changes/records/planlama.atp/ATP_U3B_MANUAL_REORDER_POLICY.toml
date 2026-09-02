@@ -1,0 +1,38 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.3.0"
+phase_code = "ATP_U3B_MANUAL_REORDER_POLICY"
+title = "Manuel rota sıralama politikası kilitlendi."
+status = "KILITLI"
+date = "2026-08-31"
+summary = "U3B policy katmanı: arac_route_order_policy.py içinde manuel reorder doğrulama kuralları pytest ile kilitlendi."
+source_type = "commit"
+commit_sha = "7244b90e21ade00c4ba641c962825ff948274bcb"
+test_result = "Manual reorder policy 48 test PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit 7244b90; U3B policy katmanı. Aynı commit U3C API kaydında da primary SHA olarak kullanılır."
+changes = [
+  "Manuel reorder validation modülü eklendi.",
+  "Segment, kilitli görev ve fail-closed durum kuralları tanımlandı.",
+]
+changed_files = [
+  "app/modules/planlama/arac_route_order_policy.py",
+  "tests/planlama/test_arac_manual_reorder_policy.py",
+]
+locked_rules = [
+  "Tamamlanmış/başlamış/varış/ayrılış kilitli görevler taşınamaz.",
+  "Segment sınırı ihlali reddedilir.",
+  "Bilinmeyen plan veya visit durumu fail-closed reddedilir.",
+  "Kilitli görevlerin göreli sırası korunmalıdır.",
+]
+tests = [
+  "Manual reorder policy pytest (48)",
+]
+known_issues = [
+]
+next_steps = [
+  "Manuel rota sıralama API fazına geçiş (U3C).",
+]

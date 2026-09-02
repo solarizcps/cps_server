@@ -1,0 +1,47 @@
+schema_version = 1
+module = "test.infra"
+version = "v1.0.0"
+phase_code = "BACKFILL_TEST_INFRA_28943F3"
+title = "Araç Takip testlerinde canonical veritabanı yazımı engellendi."
+status = "KILITLI"
+date = "2026-08-27"
+summary = "Araç Takip pytest paketlerinin canonical mock veritabanına yazmasını engelleyen koruma katmanı eklendi ve testlerle doğrulandı."
+source_type = "commit"
+commit_sha = "28943f3e5a7f32409d3e5ae47ddad2924b550504"
+test_result = "test_atp_db_guard_v1 PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+
+changes = [
+    "Veritabanı bağlantı katmanına test yazım koruması eklendi.",
+    "Araç Takip test koruma aracı tanımlandı.",
+    "Planlama pytest ortamına koruma fixture entegrasyonu yapıldı.",
+]
+
+changed_files = [
+    "app/db.py",
+    "app/tools/atp_test_db_guard.py",
+    "tests/planlama/conftest.py",
+    "tests/planlama/test_atp_db_guard_v1.py",
+]
+
+locked_rules = [
+    "ATP testleri canonical mock veritabanına yazamaz.",
+    "Koruma fixture olmadan yazım denemesi engellenir.",
+]
+
+tests = [
+    "Canonical yazım engeli",
+    "Geçici veritabanı izinli yazım",
+    "Fixture entegrasyonu",
+]
+
+known_issues = []
+
+next_steps = [
+    "Legacy test betikleri için ayrı izolasyon fazı.",
+]
+
+evidence_summary = "Commit 28943f3; test_atp_db_guard_v1.py doğrulama paketi."

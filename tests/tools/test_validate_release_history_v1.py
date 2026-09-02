@@ -150,3 +150,11 @@ def test_t7_towncrier_build_temp_output():
         assert "Sipariş Talebi" in proc.stdout or "Geliştirmeler" in proc.stdout
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_t8_cps_release_history_module_in_allowlist(validator_mod):
+    schema_path = ROOT / "docs/release-history/schema.toml"
+    text = schema_path.read_text(encoding="utf-8")
+    assert "cps.release.history" in text
+    errors, _ = validator_mod.validate(ROOT)
+    assert not any("cps.release.history" in err and "not in allowlist" in err for err in errors)

@@ -1,0 +1,46 @@
+schema_version = 1
+module = "server"
+version = "v1.0.0"
+phase_code = "BACKFILL_SERVER_959EBF9"
+title = "Yinelenen CPS örneği başlangıcı engellendi."
+status = "KILITLI"
+date = "2026-08-27"
+summary = "Aynı portta birden fazla CPS örneğinin çalışmasını önleyen tek örnek koruması eklendi; regresyon testleri ile doğrulandı."
+source_type = "commit"
+commit_sha = "959ebf908441f0e69d1c40948e6cb115597c09eb"
+test_result = "Regresyon testleri PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+
+changes = [
+    "Tek örnek koruması modülü eklendi.",
+    "Uygulama başlangıcında port çakışması kontrolü devreye alındı.",
+    "Yinelenen süreç tespit edildiğinde güvenli çıkış sağlandı.",
+]
+
+changed_files = [
+    "app/app.py",
+    "app/tools/cps_single_instance.py",
+    "tests/tools/test_cps_single_instance_guard_v1.py",
+]
+
+locked_rules = [
+    "Aynı portta ikinci CPS örneği başlatılamaz.",
+    "Koruma başlangıçta devreye girer.",
+]
+
+tests = [
+    "Port meşgul senaryosu",
+    "Serbest port başlangıcı",
+    "Koruma modülü yeniden yükleme",
+]
+
+known_issues = []
+
+next_steps = [
+    "Sunucu ortamında dağıtım prosedürü ile birlikte doğrulama.",
+]
+
+evidence_summary = "Commit 959ebf9; test_cps_single_instance_guard_v1.py regresyon paketi."
