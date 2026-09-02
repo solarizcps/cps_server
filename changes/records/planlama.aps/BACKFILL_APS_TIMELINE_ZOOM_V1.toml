@@ -1,0 +1,42 @@
+schema_version = 1
+module = "planlama.aps"
+version = "v0.4.0"
+phase_code = "BACKFILL_APS_TIMELINE_ZOOM_V1"
+title = "APS timeline zoom ve Türkçe ölçek parity kilitlendi."
+status = "ONAYLANDI"
+date = "2026-08-18"
+summary = "Pilot timeline zoom, viewport ve Türkçe zaman ölçeği parity düzeltmeleri commitlendi."
+source_type = "commit"
+commit_sha = "6c8310748d8a62f8dd4c1833b0bc4592d7cf158c"
+test_result = "Commit doğrulandı; otomatik test yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit 6c83107."
+changes = [
+  "Timeline zoom davranışı düzeltildi.",
+  "Türkçe ölçek etiketleri parity yapıldı.",
+
+]
+changed_files = [
+  "app/static/css/aps_pilot.css",
+  "app/static/js/aps_pilot.js",
+  "app/templates/planlama/aps_pilot.html",
+
+]
+locked_rules = [
+  "Zoom viewport deterministik kalır.",
+  "Türkçe zaman ölçeği tutarlıdır.",
+
+]
+tests = [
+  "Manuel zoom regresyon",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Manuel enjeksiyon planlama parity.",
+
+]

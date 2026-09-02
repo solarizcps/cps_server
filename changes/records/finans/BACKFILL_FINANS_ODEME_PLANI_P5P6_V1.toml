@@ -1,0 +1,50 @@
+schema_version = 1
+module = "finans"
+version = "v1.0.0"
+phase_code = "BACKFILL_FINANS_ODEME_PLANI_P5P6_V1"
+title = "Ödeme planı phase 5-6 ledger ve ayar kapanışı."
+status = "ONAYLANDI"
+date = "2026-08-21"
+summary = "Canonical supplier ledger parity, phase 5 filtre parity ve phase 6d tedarikçi ödeme ayarları commitlendi."
+source_type = "commit"
+commit_sha = "f4811e39627963dfa3e4f824bb89d4c0f47907c9"
+test_result = "lock_finans_odeme_plani_regression script mevcut"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary f4811e3; related 0943168 phase5, c056c04 phase6d."
+changes = [
+  "Ledger parity kilitlendi.",
+  "Phase 5 filtre parity.",
+  "Phase 6d ödeme ayarları kapatıldı.",
+
+]
+changed_files = [
+  "app/lock_finans_odeme_plani_regression.py",
+  "app/modules/finans/routes.py",
+  "app/modules/finans/services/cari_hareket_ledger_service.py",
+  "app/modules/finans/services/korgun_finance_adapter.py",
+  "app/templates/finans/_odeme_plani_styles.inc.html",
+  "app/templates/finans/odeme_plani.html",
+
+]
+locked_rules = [
+  "Ledger canonical parity korunur.",
+  "Phase 5 filtreleri deterministiktir.",
+
+]
+tests = [
+  "lock_finans_odeme_plani_regression",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Sonraki finans bakım fazları.",
+
+]
+related_commits = [
+  "0943168ae2c7d1dca85ae6a930033961a9cd3844",
+  "c056c04ebe6e915a3e990d8e547e9193dbddbb83",
+]

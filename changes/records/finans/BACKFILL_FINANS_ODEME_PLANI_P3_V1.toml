@@ -1,0 +1,54 @@
+schema_version = 1
+module = "finans"
+version = "v0.3.0"
+phase_code = "BACKFILL_FINANS_ODEME_PLANI_P3_V1"
+title = "Tedarikçi ödeme planı vaat ve takip fazı kilitlendi."
+status = "ONAYLANDI"
+date = "2026-08-20"
+summary = "Ödeme planı vaat, iletişim ve konsolide tedarikçi görünümü migration 170-172 ile commitlendi."
+source_type = "commit"
+commit_sha = "3eb886d86ec1df8e78d0dafa208f69255912f4d4"
+test_result = "lock_finans_odeme_plani_regression script mevcut"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary 3eb886d; related 9c24f78 consolidated views."
+changes = [
+  "Ödeme planı vaat servisi eklendi.",
+  "Tedarikçi takip migration 172.",
+  "Konsolide filtre görünümü.",
+
+]
+changed_files = [
+  "app/lock_finans_odeme_plani_regression.py",
+  "app/migrations/170_odeme_plani_ibrahim_view.py",
+  "app/migrations/171_odeme_plani_p3a_ops.py",
+  "app/modules/finans/routes.py",
+  "app/modules/finans/services/korgun_finance_adapter.py",
+  "app/modules/finans/services/odeme_plani_ops_repo.py",
+  "app/modules/finans/services/odeme_plani_ops_service.py",
+  "app/modules/finans/services/odeme_plani_service.py",
+  "app/modules/finans/services/odeme_plani_yetki.py",
+  "app/templates/base.html",
+  "app/templates/finans/odeme_plani.html",
+
+]
+locked_rules = [
+  "Vaat kayıtları canonical adapter üzerinden okunur.",
+  "Tedarikçi takip filtresi deterministiktir.",
+
+]
+tests = [
+  "lock_finans_odeme_plani_regression",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Ödeme planı phase 5-6 kapanış.",
+
+]
+related_commits = [
+  "9c24f786851464125d96fe5512580b395dee3fb0",
+]

@@ -1,0 +1,46 @@
+schema_version = 1
+module = "planlama.aps"
+version = "v0.2.0"
+phase_code = "BACKFILL_APS_P4A5_DRAG_GHOST_V1"
+title = "APS P4A.5.2 drag ghost etkileşimi kilitlendi."
+status = "ONAYLANDI"
+date = "2026-08-18"
+summary = "Pilot timeline drag ghost ve dikey kaynak sürükleme süresi parity düzeltmeleri commitlendi."
+source_type = "commit"
+commit_sha = "78119a304ba702d1b06b58e22fa7698c9e124c1e"
+test_result = "Browser acceptance harness mevcut; pytest yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary 78119a3; related 15d63ec vertical drag duration."
+changes = [
+  "Drag ghost etkileşimi eklendi.",
+  "Dikey sürükleme süresi parity düzeltildi.",
+
+]
+changed_files = [
+  "app/_browser_aps_p4a_5_2_ghost_drag_v1.py",
+  "app/static/css/aps_pilot.css",
+  "app/static/js/aps_pilot.js",
+  "app/templates/planlama/aps_pilot.html",
+
+]
+locked_rules = [
+  "Ghost preview gerçek süreyi yansıtır.",
+  "Dikey drag duration parity korunur.",
+
+]
+tests = [
+  "Browser drag ghost harness",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Zoom timeline parity fazı.",
+
+]
+related_commits = [
+  "15d63ece40932766e41c55369bbdac0336748751",
+]

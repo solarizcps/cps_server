@@ -1,0 +1,41 @@
+schema_version = 1
+module = "cari360"
+version = "v1.0.0"
+phase_code = "BACKFILL_C360_SHIPMENT_HISTORY_V1"
+title = "Cari360 canonical sevkiyat geçmişi kilitlendi."
+status = "KILITLI"
+date = "2026-08-12"
+summary = "Sevkiyat geçmişi canonical parity pytest ile kilitlendi."
+source_type = "commit"
+commit_sha = "4c88b17c01ecbd2b7be3ffe3b2c8c560105d3a1a"
+test_result = "Sevkiyat regression script PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit 4c88b17."
+changes = [
+  "Canonical sevkiyat geçmişi eklendi.",
+  "Sevkiyat parity kilitlendi.",
+
+]
+changed_files = [
+  "app/modules/nexgen/cari360_ops_read_service.py",
+  "app/modules/nexgen/cari360_routes.py",
+  "app/templates/nexgen/cari360_kart.html",
+
+]
+locked_rules = [
+  "Sevkiyat geçmişi canonical kaynaktan okunur.",
+
+]
+tests = [
+  "cari360 sevkiyat regression",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Commit edilmemiş C360-A1 worktree değişiklikleri ayrı faz olarak değerlendirilecek.",
+
+]

@@ -1,0 +1,50 @@
+schema_version = 1
+module = "cari360"
+version = "v0.1.0"
+phase_code = "BACKFILL_C360_MEETING_AGENDA_V1"
+title = "Cari360 ajanda ve ticari özet görüşme parity kilitlendi."
+status = "KILITLI"
+date = "2026-08-10"
+summary = "Müşteri görüşme ajanda sync ve ticari toplantı özeti pytest ile kilitlendi."
+source_type = "commit"
+commit_sha = "4e89b8e5389e7f4b6d34cfc1a7aa05459930ea01"
+test_result = "Ajanda sync pytest 3 dosya PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary 4e89b8e; related 5a55f8e commercial summary."
+changes = [
+  "Ajanda canonical sync eklendi.",
+  "Ticari görüşme özeti kilitlendi.",
+
+]
+changed_files = [
+  "app/modules/nexgen/cari360_timeline_service.py",
+  "app/modules/nexgen/mo_ajanda_service.py",
+  "app/modules/nexgen/mo_gorusme_service.py",
+  "app/modules/nexgen/musteri_temsilcisi_talep_service.py",
+  "tests/nexgen/MO_AJANDA_LOCK_MANIFEST.md",
+  "tests/nexgen/test_ajanda_canonical_sync.py",
+  "tests/nexgen/test_mo_gorusme_future_tarih_lock.py",
+
+]
+locked_rules = [
+  "Ajanda sync canonical kaynak kullanır.",
+  "Ticari özet görünürlük kuralları korunur.",
+
+]
+tests = [
+  "test_ajanda_canonical_sync",
+  "test_cari360_gorusme_ticari_display_lock",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Sipariş pagination fazı.",
+
+]
+related_commits = [
+  "5a55f8e5e3357eea0eefee166164536a48d00563",
+]

@@ -1,0 +1,48 @@
+schema_version = 1
+module = "cari360"
+version = "v0.4.0"
+phase_code = "BACKFILL_C360_CANONICAL_FOUNDATION_V1"
+title = "Cari360 canonical finans ve ticari veri temeli kilitlendi."
+status = "KILITLI"
+date = "2026-08-12"
+summary = "Canonical finance phase1, ticari/sevkiyat veri hizalama ve son alış vade parity commitlendi."
+source_type = "commit"
+commit_sha = "edc11c2883d8b0433482bb3ba4a4e6384fa38185"
+test_result = "Canonical finans regression scriptleri PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary edc11c2; related 7922ee8 commercial, d637b72 vade."
+changes = [
+  "Canonical finance phase1 kuruldu.",
+  "Ticari/sevkiyat veri hizalandı.",
+  "Son alış vade parity.",
+
+]
+changed_files = [
+  "app/modules/nexgen/cari360_finans_service.py",
+  "app/modules/nexgen/cari360_routes.py",
+  "app/modules/nexgen/mo_tahsilat_config.py",
+  "app/templates/nexgen/cari360_kart.html",
+
+]
+locked_rules = [
+  "Canonical finans kaynağı tek yoldur.",
+  "Ticari veri shipment ile eşleşir.",
+
+]
+tests = [
+  "cari360 finans canonical regression",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Numune takip fazı.",
+
+]
+related_commits = [
+  "7922ee81be1f295a39b3a945b73da9f4ce700820",
+  "d637b720258a3da255d52f325f35669c8e59237d",
+]

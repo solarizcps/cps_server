@@ -1,0 +1,62 @@
+schema_version = 1
+module = "planlama.aps"
+version = "v0.1.0"
+phase_code = "BACKFILL_APS_URETIM_PLAN_WORKFLOW_V1"
+title = "Üretim planlama iş akışı kilitlendi."
+status = "ONAYLANDI"
+date = "2026-08-17"
+summary = "Üretim plan repo/servis, migration 158-159 ve plan UI iş akışı commitlendi; detay popup related commit ile tamamlandı."
+source_type = "commit"
+commit_sha = "a08e51e5899caed28c48046c365fdfd9e3acacf4"
+test_result = "Üretim plan regression scriptleri mevcut; otomatik pytest paketi yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+root_cause = "Üretim planlama ekranında iş akışı ve detay popup ayrı commitlerle kademeli kilitlendi."
+evidence_summary = "Primary a08e51e; related 0be89ef detay popup."
+changes = [
+  "Üretim plan servis/repo eklendi.",
+  "Migration 158-159 uygulandı.",
+  "Plan UI iş akışı kilitlendi.",
+
+]
+changed_files = [
+  "app/_test_uretim_plan_dynamic_v1.py",
+  "app/_test_uretim_plan_enj_v1.py",
+  "app/_test_uretim_plan_fullroute_v1.py",
+  "app/_test_uretim_plan_model_p_v1.py",
+  "app/_test_uretim_plan_parity_v1.py",
+  "app/_test_uretim_plan_payda_v1.py",
+  "app/_test_uretim_plan_ui_v1.py",
+  "app/_test_uretim_plan_ui_visibility_v1.py",
+  "app/app.py",
+  "app/migrations/158_uretim_model_plan.py",
+  "app/migrations/159_uretim_plan_enj_kapasite.py",
+  "app/modules/planlama/uretim_plan_repo.py",
+  "app/modules/planlama/uretim_plan_routes.py",
+  "app/modules/planlama/uretim_plan_service.py",
+  "app/static/css/uretim_plan.css",
+  "app/static/js/uretim_plan.js",
+  "app/templates/base.html",
+  "app/templates/planlama/uretim_plan.html",
+
+]
+locked_rules = [
+  "Plan iş akışı deterministik ilerler.",
+  "Detay popup plan satırına bağlıdır.",
+
+]
+tests = [
+  "Uretim plan regression scriptleri",
+
+]
+known_issues = [
+]
+next_steps = [
+  "APS pilot drag/zoom fazına geçiş.",
+
+]
+related_commits = [
+  "0be89ef55322e5e3070b97102d3851169a09d575",
+]

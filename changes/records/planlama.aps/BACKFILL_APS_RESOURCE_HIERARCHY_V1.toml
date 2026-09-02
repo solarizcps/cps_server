@@ -1,0 +1,51 @@
+schema_version = 1
+module = "planlama.aps"
+version = "v0.3.0"
+phase_code = "BACKFILL_APS_RESOURCE_HIERARCHY_V1"
+title = "Enjeksiyon makine kaynak hiyerarşisi kilitlendi."
+status = "ONAYLANDI"
+date = "2026-08-18"
+summary = "Makine/resource hiyerarşi görünümü, indent spacing ve occupancy parity commitlendi."
+source_type = "commit"
+commit_sha = "4266bfafb6aafc1c24cf9eb365d26756e6c2bf12"
+test_result = "Browser hierarchy acceptance; otomatik pytest yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary 4266bfa; related e0f0180 indent, 4e70ff9 occupancy."
+changes = [
+  "Kaynak hiyerarşisi timeline servisine eklendi.",
+  "Indent spacing düzeltildi.",
+  "Occupancy parity uygulandı.",
+
+]
+changed_files = [
+  "app/_browser_aps_p4a_5_2_ghost_drag_v1.py",
+  "app/_browser_aps_p4a_5_3_zoom_accept_v1.py",
+  "app/_browser_aps_p4a_5_4_dayweek_acceptance.py",
+  "app/_browser_aps_p5_1_hierarchy_accept.py",
+  "app/modules/planlama/aps_enj_timeline_service.py",
+  "app/static/css/aps_pilot.css",
+  "app/static/js/aps_pilot.js",
+
+]
+locked_rules = [
+  "Hiyerarşi indent tutarlıdır.",
+  "Kaynak doluluk gösterimi parity korunur.",
+
+]
+tests = [
+  "Browser hierarchy acceptance",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Zoom timeline Türkçe ölçek fazı.",
+
+]
+related_commits = [
+  "e0f0180795165aecb1af259c84652e0da2a319ee",
+  "4e70ff98ca7e3bc4ee7caa873252d7d6556b8b58",
+]

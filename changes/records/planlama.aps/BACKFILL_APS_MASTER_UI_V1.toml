@@ -1,0 +1,48 @@
+schema_version = 1
+module = "planlama.aps"
+version = "v1.0.0"
+phase_code = "BACKFILL_APS_MASTER_UI_V1"
+title = "APS master UI genel plan entegrasyonu tamamlandı."
+status = "ONAYLANDI"
+date = "2026-08-19"
+summary = "APS pilot data servisleri, takvim sözleşmesi ve genel plan master UI commitlendi. Commit edilmemiş P5.8/Z2 zoom genişletmesi bu kaydın dışındadır."
+source_type = "commit"
+commit_sha = "2dad3a4b9ba91aaea9c712cc97918ffe2bc84a11"
+test_result = "Commit doğrulandı; otomatik test yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit 2dad3a4; son commitli APS fazı."
+changes = [
+  "APS pilot servisleri eklendi.",
+  "Takvim sözleşmesi tanımlandı.",
+  "Genel plan master UI bağlandı.",
+
+]
+changed_files = [
+  "app/modules/planlama/aps_calendar_contract.py",
+  "app/modules/planlama/aps_pilot_data_service.py",
+  "app/modules/planlama/aps_pilot_routes.py",
+  "app/modules/planlama/aps_plan_pilot_service.py",
+  "app/modules/planlama/aps_resource_calendar_service.py",
+  "app/modules/planlama/aps_resource_keys.py",
+  "app/modules/planlama/genel_plan_routes.py",
+  "app/templates/planlama/genel_plan.html",
+
+]
+locked_rules = [
+  "Pilot takvim sözleşmesi canonical kalır.",
+  "Master UI genel plan route kullanır.",
+
+]
+tests = [
+  "Master UI smoke",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Commit edilmemiş P5.8 anchor zoom ve Z2G timeline genişletmesi (working tree).",
+
+]

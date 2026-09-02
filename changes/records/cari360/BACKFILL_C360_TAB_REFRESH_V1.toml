@@ -1,0 +1,48 @@
+schema_version = 1
+module = "cari360"
+version = "v0.3.0"
+phase_code = "BACKFILL_C360_TAB_REFRESH_V1"
+title = "Cari360 tab refresh ve üretim geçmişi pagination kilitlendi."
+status = "KILITLI"
+date = "2026-08-11"
+summary = "Tab/summary refresh kilidi ve üretim geçmişi pagination pytest ile doğrulandı."
+source_type = "commit"
+commit_sha = "31cdae5c05f3cad61ed14e2d4251661896888149"
+test_result = "Refresh/uretim pytest 6 dosya PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary 31cdae5; related f374ae7 tab refresh."
+changes = [
+  "Tab refresh kilidi eklendi.",
+  "Üretim geçmişi pagination tamamlandı.",
+
+]
+changed_files = [
+  "app/modules/nexgen/cari360_ops_read_service.py",
+  "app/modules/nexgen/cari360_routes.py",
+  "app/templates/nexgen/cari360_kart.html",
+  "tests/nexgen/test_cari360_siparis_kalem_compact_expand_lock.py",
+  "tests/nexgen/test_cari360_siparis_kalem_contract.py",
+
+]
+locked_rules = [
+  "Tab verisi stale kalmaz.",
+  "Üretim geçmişi pagination deterministiktir.",
+
+]
+tests = [
+  "test_cari360_refresh_lock",
+  "test_cari360_siparis_kalem_contract",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Canonical finans faz 1.",
+
+]
+related_commits = [
+  "f374ae7c5993bd997c4f6e22104d6ddd10916764",
+]

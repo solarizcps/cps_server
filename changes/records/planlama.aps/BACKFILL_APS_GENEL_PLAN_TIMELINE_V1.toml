@@ -1,0 +1,44 @@
+schema_version = 1
+module = "planlama.aps"
+version = "v0.6.0"
+phase_code = "BACKFILL_APS_GENEL_PLAN_TIMELINE_V1"
+title = "Genel plan timeline ekranı eklendi."
+status = "ONAYLANDI"
+date = "2026-08-18"
+summary = "Canonical genel plan timeline route, CSS/JS ve template commitlendi."
+source_type = "commit"
+commit_sha = "f40bf4c3b1a3474f42aeb66946b7b541f06b2433"
+test_result = "Commit doğrulandı; otomatik test yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit f40bf4c."
+changes = [
+  "Genel plan route eklendi.",
+  "Timeline UI template bağlandı.",
+
+]
+changed_files = [
+  "app/app.py",
+  "app/modules/planlama/genel_plan_routes.py",
+  "app/static/css/genel_plan.css",
+  "app/static/js/genel_plan.js",
+  "app/templates/base.html",
+  "app/templates/planlama/genel_plan.html",
+
+]
+locked_rules = [
+  "Genel plan timeline read-only başlangıç sözleşmesi korunur.",
+
+]
+tests = [
+  "Timeline UI smoke",
+
+]
+known_issues = [
+]
+next_steps = [
+  "APS master UI entegrasyonu.",
+
+]

@@ -1,0 +1,50 @@
+schema_version = 1
+module = "cari360"
+version = "v0.2.0"
+phase_code = "BACKFILL_C360_ORDER_PAGINATION_V1"
+title = "Cari360 sipariş pagination ve filtre kilitlendi."
+status = "KILITLI"
+date = "2026-08-11"
+summary = "Sipariş pagination, sevkiyat drilldown ve filtre pytest ile kilitlendi."
+source_type = "commit"
+commit_sha = "96b8f3dc5bfb4ed98d280d099fca70c354ad18d8"
+test_result = "Pagination pytest 3 dosya PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary 96b8f3d; related 959728b order filters."
+changes = [
+  "Sipariş pagination eklendi.",
+  "Sevkiyat drilldown korundu.",
+  "Sipariş filtreleri kilitlendi.",
+
+]
+changed_files = [
+  "app/modules/nexgen/cari360_ops_read_service.py",
+  "app/modules/nexgen/cari360_routes.py",
+  "app/templates/nexgen/cari360_kart.html",
+  "app/templates/nexgen/sevkiyat_detay.html",
+  "tests/nexgen/test_cari360_kalem_sevkiyat_link_lock.py",
+  "tests/nexgen/test_cari360_siparis_pagination_lock.py",
+
+]
+locked_rules = [
+  "Pagination total count doğru hesaplanır.",
+  "Sevkiyat drilldown korunur.",
+
+]
+tests = [
+  "test_cari360_siparis_pagination_lock",
+  "test_cari360_siparis_filtre_lock",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Tab refresh ve üretim geçmişi.",
+
+]
+related_commits = [
+  "959728b204798185c3ddfc4f42ea29fea35c18f2",
+]

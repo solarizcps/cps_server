@@ -1,0 +1,48 @@
+schema_version = 1
+module = "cari360"
+version = "v0.5.0"
+phase_code = "BACKFILL_C360_SAMPLE_TRACKING_V1"
+title = "Cari360 numune takip ve görüşme sekmesi kilitlendi."
+status = "KILITLI"
+date = "2026-08-12"
+summary = "Numune tracking tab, semantics kilidi ve canonical meetings view pytest ile doğrulandı."
+source_type = "commit"
+commit_sha = "1d2ccc5d3a0f571ea4b64f5824a6b97914c52757"
+test_result = "Numune/gorusme regression scriptleri PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary 1d2ccc5; related d5f0c68 semantics, 916568c meetings."
+changes = [
+  "Numune tracking tab eklendi.",
+  "Tracking semantics kilitlendi.",
+  "Meetings view tamamlandı.",
+
+]
+changed_files = [
+  "app/modules/nexgen/cari360_ops_read_service.py",
+  "app/modules/nexgen/cari360_routes.py",
+  "app/templates/nexgen/cari360_kart.html",
+
+]
+locked_rules = [
+  "Numune semantics canonical kalır.",
+  "Görüşme sekmesi tam genişlikte gösterilir.",
+
+]
+tests = [
+  "cari360 numune regression",
+  "cari360 gorusme regression",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Sevkiyat geçmişi kilidi.",
+
+]
+related_commits = [
+  "d5f0c68a29000b5e5f02e7058a451f8debb6246d",
+  "916568cd351d0aaa826efce01d5486476488fc57",
+]

@@ -1,0 +1,72 @@
+schema_version = 1
+module = "finans"
+version = "v0.2.0"
+phase_code = "BACKFILL_FINANS_TAHSILAT_FX_V1"
+title = "Tahsilat manuel FX, çek vade ve taslak akışı kilitlendi."
+status = "KILITLI"
+date = "2026-08-16"
+summary = "Manuel kur, çek paketi, taslak düzenleme ve hydrate kilidi 17 pytest dosyasıyla doğrulandı."
+source_type = "commit"
+commit_sha = "2a71055cf807c04c48f2ae59561674b0ca1ab9dc"
+test_result = "Tahsilat pytest 17 dosya PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit 2a71055; 17 pytest dosyası."
+changes = [
+  "Manuel FX kilidi eklendi.",
+  "Taslak düzenleme hydrate kilitlendi.",
+  "Çek paketi hedef kilidi uygulandı.",
+
+]
+changed_files = [
+  "app/migrations/152_mo_tahsilat_cek_vade_kontrol.py",
+  "app/migrations/153_mo_sevkiyat_kalem_fiyat_snapshot.py",
+  "app/migrations/154_mo_tahsilat_sevkiyat_bagi.py",
+  "app/migrations/155_mo_tahsilat_tcmb_snapshot.py",
+  "app/modules/nexgen/mo_tahsilat_cek_service.py",
+  "app/modules/nexgen/mo_tahsilat_config.py",
+  "app/modules/nexgen/mo_tahsilat_kayit_service.py",
+  "app/modules/nexgen/mo_tahsilat_kur_service.py",
+  "app/modules/nexgen/mo_tahsilat_sevk_service.py",
+  "app/modules/nexgen/mo_vade_kontrol_config.py",
+  "app/modules/nexgen/mo_vade_kontrol_service.py",
+  "app/modules/nexgen/musteri_pazarlama_routes.py",
+  "app/modules/nexgen/onay_tahsilat_adapter.py",
+  "app/templates/nexgen/musteri_pazarlama.html",
+  "tests/nexgen/test_f5_hydrate_lock.py",
+  "tests/nexgen/test_fill_frozen_cek_paket_hedef_lock.py",
+  "tests/nexgen/test_fx_sevk_kalan_lock.py",
+  "tests/nexgen/test_manuel_kur_lock.py",
+  "tests/nexgen/test_mo_tahsilat_kayit_tcmb_write.py",
+  "tests/nexgen/test_mo_tahsilat_kur_service.py",
+  "tests/nexgen/test_mo_tahsilat_regression.py",
+  "tests/nexgen/test_mo_vade_kontrol_service.py",
+  "tests/nexgen/test_tahsilat_cek_vade_fallback_lock.py",
+  "tests/nexgen/test_tahsilat_close_reopen_reset_lock.py",
+  "tests/nexgen/test_tahsilat_context_reset_lock.py",
+  "tests/nexgen/test_tahsilat_draft_siparis_vade_lock.py",
+  "tests/nexgen/test_tahsilat_kayit_listesi_lock.py",
+  "tests/nexgen/test_tahsilat_modal_async_state_lock.py",
+  "tests/nexgen/test_tahsilat_taslak_duzenle_hydrate_lock.py",
+  "tests/nexgen/test_tahsilat_ui_rotuş_lock.py",
+  "tests/nexgen/test_yonetim_onay_state_lock.py",
+
+]
+locked_rules = [
+  "Manuel kur deterministik yazılır.",
+  "Taslak hydrate çift tetiklenmez.",
+  "Çek paketi hedefi korunur.",
+
+]
+tests = [
+  "Tahsilat FX/vade/taslak pytest paketi",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Tedarikçi ödeme planı fazı.",
+
+]

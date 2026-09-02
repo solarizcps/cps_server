@@ -1,0 +1,51 @@
+schema_version = 1
+module = "finans"
+version = "v0.1.0"
+phase_code = "BACKFILL_FINANS_TAHSILAT_VADE_V1"
+title = "Tahsilat çek vade ve due-date akışı kilitlendi."
+status = "KILITLI"
+date = "2026-08-10"
+summary = "Tahsilat modülünde çek vade ve due-date hesaplama akışı pytest ile kilitlendi."
+source_type = "commit"
+commit_sha = "fa2163d5a9ddfdf400467d05e99fb2de552690f3"
+test_result = "Tahsilat vade pytest 4 dosya PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit fa2163d; 4 pytest dosyası."
+changes = [
+  "Çek vade hesaplama kilitlendi.",
+  "Due-date akışı düzeltildi.",
+
+]
+changed_files = [
+  "app/_browser_faz_tahsilat_sevk_ui_1.py",
+  "app/_browser_faz_tahsilat_tcmb_try_ui_1.py",
+  "app/_browser_tahsilat_regression_runner.py",
+  "app/modules/nexgen/mo_tahsilat_kayit_service.py",
+  "app/modules/nexgen/mtt_donusum_service.py",
+  "app/modules/nexgen/pzm_siparis_write.py",
+  "tests/nexgen/TAHSILAT_LOCK_MANIFEST.md",
+  "tests/nexgen/test_mo_tahsilat_regression.py",
+  "tests/nexgen/test_pzm_cek_vade_db_lock.py",
+  "tests/nexgen/test_pzm_cek_vade_gun.py",
+
+]
+locked_rules = [
+  "Çek vade fallback deterministik hesaplanır.",
+  "Due-date akışı bozulmaz.",
+
+]
+tests = [
+  "test_pzm_cek_vade_db_lock",
+  "test_pzm_cek_vade_gun",
+  "test_mo_tahsilat_regression",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Manuel FX tahsilat fazı.",
+
+]

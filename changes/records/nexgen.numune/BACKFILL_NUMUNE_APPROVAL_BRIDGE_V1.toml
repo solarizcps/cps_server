@@ -1,0 +1,45 @@
+schema_version = 1
+module = "nexgen.numune"
+version = "v0.2.0"
+phase_code = "BACKFILL_NUMUNE_APPROVAL_BRIDGE_V1"
+title = "Numune talep onay ve dönüşüm köprüsü kilitlendi."
+status = "KILITLI"
+date = "2026-08-04"
+summary = "Talep onay/conversion core ve transactional order/sample bridge commitlendi; 7 faz test scripti mevcut."
+source_type = "commit"
+commit_sha = "d59399107c342482e03fe34dc85a87bebee247ee"
+test_result = "Numune/onay faz test scriptleri 7 dosya PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary d593991; related 8435632 transactional bridge."
+changes = [
+  "Onay/conversion core eklendi.",
+  "Transactional bridge bağlandı.",
+
+]
+changed_files = [
+  "app/modules/nexgen/mtt_donusum_service.py",
+  "app/modules/nexgen/musteri_temsilcisi_talep_service.py",
+  "app/modules/nexgen/onay_service.py",
+
+]
+locked_rules = [
+  "Onay akışı atomik transaction kullanır.",
+  "Numune-sipariş köprüsü deterministiktir.",
+
+]
+tests = [
+  "faz_mtt_f3-f5b numune test scriptleri",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Müşteri kimlik akış iyileştirmesi.",
+
+]
+related_commits = [
+  "8435632ac757613147d5097505eaf397526df5ce",
+]

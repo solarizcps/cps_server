@@ -17,6 +17,7 @@ SCHEMA_PATH = REPO_ROOT / "docs" / "release-history" / "schema.toml"
 
 MODULE_LABELS: dict[str, str] = {
     "nexgen.mo": "Müşteri Operasyonu",
+    "nexgen.numune": "NexGen Numune",
     "nexgen.etiket": "NexGen Etiket Basım",
     "planlama.atp": "Araç Takip",
     "planlama.aps": "APS Genel Plan",

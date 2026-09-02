@@ -1,0 +1,42 @@
+schema_version = 1
+module = "planlama.aps"
+version = "v0.5.0"
+phase_code = "BACKFILL_APS_ENJ_MANUAL_PLANNING_V1"
+title = "Manuel enjeksiyon planlama parity kilitlendi."
+status = "ONAYLANDI"
+date = "2026-08-18"
+summary = "Üretim plan ekranında manuel enjeksiyon planlama UI parity commitlendi."
+source_type = "commit"
+commit_sha = "260e3bb4b4da2207ffa4eab117b228d1b0337bd3"
+test_result = "Commit doğrulandı; otomatik test yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit 260e3bb."
+changes = [
+  "Manuel enjeksiyon planlama UI bağlandı.",
+  "Plan route ve template güncellendi.",
+
+]
+changed_files = [
+  "app/modules/planlama/uretim_plan_routes.py",
+  "app/static/css/uretim_plan.css",
+  "app/static/js/uretim_plan.js",
+  "app/templates/planlama/uretim_plan.html",
+
+]
+locked_rules = [
+  "Manuel planlama canonical route kullanır.",
+
+]
+tests = [
+  "Manuel planlama UI",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Genel plan timeline fazı.",
+
+]

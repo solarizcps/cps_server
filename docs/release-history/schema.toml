@@ -54,6 +54,7 @@ values = ["TASLAK", "TEST", "ONAYLANDI", "KILITLI", "GERI_ALINDI"]
 [module_allowlist]
 modules = [
     "nexgen.mo",
+    "nexgen.numune",
     "nexgen.etiket",
     "planlama.atp",
     "planlama.aps",

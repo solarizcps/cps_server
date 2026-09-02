@@ -1,0 +1,41 @@
+schema_version = 1
+module = "nexgen.numune"
+version = "v0.3.0"
+phase_code = "BACKFILL_NUMUNE_CUSTOMER_FLOW_V1"
+title = "Numune müşteri kimlik akışı iyileştirildi."
+status = "KILITLI"
+date = "2026-08-19"
+summary = "Sample request customer flow iyileştirmesi ve müşteri kimlik lock testi commitlendi."
+source_type = "commit"
+commit_sha = "fcdf1db8934dbc388ac9f2d2d02cf4b9f4f2954a"
+test_result = "test_numune_musteri_kimlik_lock PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit fcdf1db."
+changes = [
+  "Müşteri kimlik akışı iyileştirildi.",
+  "Numune talep formu güncellendi.",
+
+]
+changed_files = [
+  "app/modules/nexgen/musteri_temsilcisi_talep_service.py",
+  "app/templates/nexgen/musteri_pazarlama.html",
+  "tests/nexgen/test_numune_musteri_kimlik_lock.py",
+
+]
+locked_rules = [
+  "Müşteri kimlik doğrulaması zorunludur.",
+
+]
+tests = [
+  "test_numune_musteri_kimlik_lock",
+
+]
+known_issues = [
+]
+next_steps = [
+  "Sonraki numune bakım fazları.",
+
+]
