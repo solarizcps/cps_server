@@ -31,3 +31,16 @@ python -m towncrier check --compare-with HEAD
 ## V2
 
 CPS read-only ekranı (`/yonetim/surum-gecmisi`) bu kayıtları okuyacak; V1 yalnız altyapı kurar.
+
+## V2 güvenlik limitleri (runtime loader)
+
+`app/services/release_history_service.py` aşağıdaki sabit limitleri uygular:
+
+| Sabit | Değer | Davranış |
+|-------|-------|----------|
+| `MAX_RECORDS` | 1000 | Deterministik sıralı ilk 1000 aday dosya işlenir; fazlası skip |
+| `MAX_TOML_BYTES` | 256 KiB | Limit üstü dosya skip |
+| `MAX_TEXT_LENGTH` | 20_000 | Metin alanları güvenli kırpma |
+| `MAX_LIST_ITEMS` | 500 | Liste alanları güvenli kırpma |
+
+Symlink, root dışı `resolve()` yolu ve normal olmayan dosyalar skip edilir. Skip/hata durumunda gerçek dosya yolu UI'ya yansımaz.

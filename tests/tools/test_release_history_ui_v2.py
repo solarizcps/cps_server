@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -265,3 +266,117 @@ def test_t17_no_db_write_on_page_load():
     assert resp.status_code == 200
     after = db_path.stat().st_mtime
     assert after == before
+
+
+def _canonical_toml_text() -> str:
+    return (ROOT / "changes/records/nexgen.mo/NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1.toml").read_text(encoding="utf-8")
+
+
+def _write_bulk_record(fixture_root: Path, phase: str) -> None:
+    text = _canonical_toml_text().replace("NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1", phase)
+    path = fixture_root / "changes/records/nexgen.mo" / f"{phase}.toml"
+    path.write_text(text, encoding="utf-8")
+    frag = fixture_root / "changes/fragments" / f"nexgen.mo.{phase}.release"
+    frag.write_text("x\n", encoding="utf-8")
+
+
+def test_t18_symlink_record_skipped(fixture_root, service_mod, monkeypatch):
+    target = fixture_root / "changes/records/nexgen.mo/SYMLINK.toml"
+    target.write_text("placeholder\n", encoding="utf-8")
+    original = Path.is_symlink
+
+    def _is_symlink(self):
+        if self.name == "SYMLINK.toml":
+            return True
+        return original(self)
+
+    monkeypatch.setattr(Path, "is_symlink", _is_symlink)
+    records, skipped = service_mod.load_release_records(fixture_root)
+    assert all(r.phase_code != "SYMLINK" for r in records)
+    assert skipped >= 1
+
+
+def test_t19_resolved_path_outside_root_skipped(fixture_root, service_mod, monkeypatch):
+    outside = fixture_root / "outside_secret.toml"
+    outside.write_text("outside\n", encoding="utf-8")
+    escape = fixture_root / "changes/records/nexgen.mo/OUTSIDE.toml"
+    escape.write_text("escape\n", encoding="utf-8")
+    original = Path.resolve
+
+    def _resolve(self):
+        if self.name == "OUTSIDE.toml":
+            return outside.resolve()
+        return original(self)
+
+    monkeypatch.setattr(Path, "resolve", _resolve)
+    records, skipped = service_mod.load_release_records(fixture_root)
+    assert all(r.phase_code != "OUTSIDE" for r in records)
+    assert skipped >= 1
+    body = service_mod.build_page_context(fixture_root)
+    rendered = str(body)
+    assert "outside_secret" not in rendered
+
+
+def test_t20_oversized_toml_skipped(fixture_root, service_mod):
+    huge_phase = "HUGE_TOML"
+    path = fixture_root / "changes/records/nexgen.mo" / f"{huge_phase}.toml"
+    payload = _canonical_toml_text().replace("NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1", huge_phase)
+    path.write_text(payload, encoding="utf-8")
+    with path.open("ab") as handle:
+        handle.write(b"#" + b"x" * (service_mod.MAX_TOML_BYTES + 1))
+    records, skipped = service_mod.load_release_records(fixture_root)
+    assert all(r.phase_code != huge_phase for r in records)
+    assert skipped >= 1
+    assert len(records) == 1
+
+
+def test_t21_max_records_limit_deterministic(fixture_root, service_mod):
+    for i in range(service_mod.MAX_RECORDS):
+        _write_bulk_record(fixture_root, f"BULK_{i:04d}")
+    records, skipped = service_mod.load_release_records(fixture_root)
+    assert len(records) == service_mod.MAX_RECORDS
+    assert skipped >= 1
+    phases = {r.phase_code for r in records}
+    assert "NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1" not in phases
+    assert "BULK_0000" in phases
+    assert f"BULK_{service_mod.MAX_RECORDS - 1:04d}" in phases
+
+
+def test_t22_long_text_truncated_safely(fixture_root, service_mod):
+    record = fixture_root / "changes/records/nexgen.mo/NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1.toml"
+    long_text = "A" * (service_mod.MAX_TEXT_LENGTH + 500)
+    text = record.read_text(encoding="utf-8")
+    text = text.replace(
+        "Doğrudan Sipariş Talebi onay ve planlama akışı kilitlendi.",
+        long_text,
+    )
+    record.write_text(text, encoding="utf-8")
+    records, skipped = service_mod.load_release_records(fixture_root)
+    assert skipped == 0
+    assert len(records) == 1
+    assert len(records[0].title) == service_mod.MAX_TEXT_LENGTH
+
+
+def test_t23_list_items_capped_safely(fixture_root, service_mod):
+    record = fixture_root / "changes/records/nexgen.mo/NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1.toml"
+    items = ",\n".join(f'  "item {i}"' for i in range(service_mod.MAX_LIST_ITEMS + 1))
+    text = record.read_text(encoding="utf-8")
+    text = re.sub(
+        r"changes = \[.*?\]",
+        f"changes = [\n{items}\n]",
+        text,
+        count=1,
+        flags=re.DOTALL,
+    )
+    record.write_text(text, encoding="utf-8")
+    records, skipped = service_mod.load_release_records(fixture_root)
+    assert skipped == 0
+    assert len(records) == 1
+    assert len(records[0].changes) == service_mod.MAX_LIST_ITEMS
+
+
+def test_t24_normal_canonical_record_still_loads(fixture_root, service_mod):
+    records, skipped = service_mod.load_release_records(fixture_root)
+    assert skipped == 0
+    assert len(records) == 1
+    assert records[0].phase_code == "NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1"

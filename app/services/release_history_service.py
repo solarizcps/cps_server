@@ -39,6 +39,11 @@ DEPLOY_WAIT_STATUSES = frozenset({
     "LOCAL_READY_FOR_MONDAY_DEPLOY",
 })
 
+MAX_RECORDS = 1000
+MAX_TOML_BYTES = 256 * 1024
+MAX_TEXT_LENGTH = 20_000
+MAX_LIST_ITEMS = 500
+
 
 @dataclass
 class ReleaseRecord:
@@ -92,9 +97,66 @@ def _load_schema() -> dict[str, Any]:
         return tomllib.load(handle)
 
 
-def _load_toml(path: Path) -> dict[str, Any]:
-    with path.open("rb") as handle:
-        return tomllib.load(handle)
+def _load_toml(path: Path) -> dict[str, Any] | None:
+    try:
+        if path.stat().st_size > MAX_TOML_BYTES:
+            return None
+        with path.open("rb") as handle:
+            return tomllib.load(handle)
+    except OSError:
+        return None
+
+
+def _records_root(base: Path) -> Path | None:
+    records_dir = base / "changes" / "records"
+    if not records_dir.is_dir():
+        return None
+    try:
+        return records_dir.resolve()
+    except OSError:
+        return None
+
+
+def _is_safe_record_path(path: Path, records_root: Path) -> bool:
+    try:
+        if path.name.startswith("."):
+            return False
+        if path.suffix.lower() != ".toml":
+            return False
+        if path.is_symlink():
+            return False
+        if not path.is_file():
+            return False
+        resolved = path.resolve()
+        resolved.relative_to(records_root)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _collect_record_paths(records_dir: Path, records_root: Path) -> tuple[list[Path], int]:
+    skipped = 0
+    safe_paths: list[Path] = []
+
+    for path in sorted(records_dir.glob("**/*.toml")):
+        try:
+            rel_parts = path.relative_to(records_dir).parts
+        except ValueError:
+            skipped += 1
+            continue
+        if ".." in rel_parts:
+            skipped += 1
+            continue
+        if not _is_safe_record_path(path, records_root):
+            skipped += 1
+            continue
+        safe_paths.append(path)
+
+    overflow = max(0, len(safe_paths) - MAX_RECORDS)
+    if overflow:
+        skipped += overflow
+        safe_paths = safe_paths[:MAX_RECORDS]
+    return safe_paths, skipped
 
 
 def _is_forbidden_path(value: str, forbidden_tokens: list[str]) -> bool:
@@ -118,6 +180,8 @@ def _sanitize_text(value: Any, forbidden_tokens: list[str]) -> str:
     text = str(value or "").strip()
     if _is_forbidden_path(text, forbidden_tokens):
         return ""
+    if len(text) > MAX_TEXT_LENGTH:
+        text = text[:MAX_TEXT_LENGTH]
     return text
 
 
@@ -126,6 +190,8 @@ def _sanitize_list(values: Any, forbidden_tokens: list[str]) -> list[str]:
         return []
     out: list[str] = []
     for item in values:
+        if len(out) >= MAX_LIST_ITEMS:
+            break
         if not isinstance(item, str):
             continue
         clean = _sanitize_text(item, forbidden_tokens)
@@ -216,23 +282,20 @@ def load_release_records(base: Path | None = None) -> tuple[list[ReleaseRecord],
     forbidden_tokens = list(schema["validation"]["forbidden_path_tokens"])
     sha_pattern = re.compile(schema["validation"]["commit_sha_pattern"])
 
-    records_dir = root / "changes" / "records"
-    if not records_dir.is_dir():
+    records_root = _records_root(root)
+    if records_root is None:
         return [], 0
 
+    records_dir = root / "changes" / "records"
+    candidate_paths, skipped = _collect_record_paths(records_dir, records_root)
     valid: list[ReleaseRecord] = []
-    skipped = 0
 
-    for path in sorted(records_dir.glob("**/*.toml")):
+    for path in candidate_paths:
         try:
-            if path.name.startswith("."):
-                skipped += 1
-                continue
-            rel_parts = path.relative_to(records_dir).parts
-            if ".." in rel_parts:
-                skipped += 1
-                continue
             data = _load_toml(path)
+            if data is None:
+                skipped += 1
+                continue
         except Exception:
             skipped += 1
             continue
