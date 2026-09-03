@@ -200,7 +200,7 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
   {% if modules %}
     {% for item in modules %}
     {% set mod_tl = module_timelines.get(item.module, []) %}
-    {% set latest_rec = mod_tl[0] if mod_tl else none %}
+    {% set selected_rules = module_selected_rules.get(item.module) %}
     <div class="rh-module-block" data-module="{{ item.module }}" data-default-phase="{{ item.latest_phase }}" id="rh-mod-{{ item.module | replace('.', '-') }}">
       <div class="rh-row rh-module-row" data-module-row="{{ item.module }}">
         <div class="rh-cell">
@@ -283,12 +283,12 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
 
         <div class="rh-inline-lists">
           <div class="box">
-            <h4>Kilitli kurallar</h4>
-            <ul>{% if latest_rec and latest_rec.locked_rules %}{% for line in latest_rec.locked_rules[:8] %}<li>{{ line }}</li>{% endfor %}{% else %}<li>—</li>{% endif %}</ul>
+            <h4 data-rh-rules-heading>{% if selected_rules %}{{ selected_rules.heading }}{% else %}Kilitli kurallar{% endif %}</h4>
+            <ul data-rh-rules-list>{% if selected_rules and selected_rules.rules %}{% for line in selected_rules.rules[:8] %}<li>{{ line }}</li>{% endfor %}{% else %}<li>—</li>{% endif %}</ul>
           </div>
           <div class="box">
             <h4>Açık sorunlar</h4>
-            <ul>{% if latest_rec and latest_rec.known_issues %}{% for line in latest_rec.known_issues[:8] %}<li>{{ line }}</li>{% endfor %}{% else %}<li>—</li>{% endif %}</ul>
+            <ul data-rh-issues-list>{% if selected_rules and selected_rules.known_issues %}{% for line in selected_rules.known_issues[:8] %}<li>{{ line }}</li>{% endfor %}{% else %}<li>—</li>{% endif %}</ul>
           </div>
         </div>
 
@@ -328,12 +328,72 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
 </div>
 
 {% if detail_allowed %}
+<script type="application/json" id="rh-phase-rules-data">{{ module_phase_rules | tojson }}</script>
 <script>
 (function () {
   var blocks = Array.prototype.slice.call(document.querySelectorAll('.rh-module-block'));
   var scrollHost = document.querySelector('.rh-tablo-body') || document.querySelector('main');
   var scrollRestore = null;
   var suppressHistory = false;
+  var phaseRulesData = {};
+
+  (function loadPhaseRules() {
+    var el = document.getElementById('rh-phase-rules-data');
+    if (!el) return;
+    try {
+      phaseRulesData = JSON.parse(el.textContent || '{}');
+    } catch (err) {
+      phaseRulesData = {};
+    }
+  })();
+
+  function fillList(ul, items) {
+    while (ul.firstChild) {
+      ul.removeChild(ul.firstChild);
+    }
+    if (!items || !items.length) {
+      var emptyLi = document.createElement('li');
+      emptyLi.textContent = '—';
+      ul.appendChild(emptyLi);
+      return;
+    }
+    var limit = Math.min(items.length, 8);
+    for (var i = 0; i < limit; i++) {
+      var li = document.createElement('li');
+      li.textContent = items[i];
+      ul.appendChild(li);
+    }
+  }
+
+  function applyPhaseRules(block, moduleId, phaseCode) {
+    if (!block || !moduleId || !phaseCode) return;
+    var headingEl = block.querySelector('[data-rh-rules-heading]');
+    var rulesUl = block.querySelector('[data-rh-rules-list]');
+    var issuesUl = block.querySelector('[data-rh-issues-list]');
+    if (!headingEl || !rulesUl || !issuesUl) return;
+    var modData = phaseRulesData[moduleId];
+    var panel = modData && modData[phaseCode];
+    if (panel) {
+      headingEl.textContent = panel.heading || 'Kilitli kurallar';
+      fillList(rulesUl, panel.rules || []);
+      fillList(issuesUl, panel.known_issues || []);
+    } else {
+      headingEl.textContent = 'Kilitli kurallar';
+      fillList(rulesUl, []);
+      fillList(issuesUl, []);
+    }
+  }
+
+  function resetPhaseRules(block) {
+    if (!block) return;
+    var headingEl = block.querySelector('[data-rh-rules-heading]');
+    var rulesUl = block.querySelector('[data-rh-rules-list]');
+    var issuesUl = block.querySelector('[data-rh-issues-list]');
+    if (!headingEl || !rulesUl || !issuesUl) return;
+    headingEl.textContent = 'Kilitli kurallar';
+    fillList(rulesUl, []);
+    fillList(issuesUl, []);
+  }
 
   function scrollTop() {
     return scrollHost ? scrollHost.scrollTop : window.scrollY;
@@ -410,6 +470,7 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
         panel.removeAttribute('hidden');
       } else {
         panel.setAttribute('hidden', 'hidden');
+        resetPhaseRules(block);
         var hist = block.querySelector('.rh-history-panel');
         if (hist) hist.classList.remove('is-visible');
         var histBtn = block.querySelector('.rh-history-toggle');
@@ -433,6 +494,7 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
     scrollRestore = scrollTop();
     closeAll(moduleId);
     setBtnState(block, true);
+    var phase = modulePhase(block, opts.phase || '', !!opts.fromHistory);
     if (opts.showHistory) {
       var hist = block.querySelector('.rh-history-panel');
       if (hist) hist.classList.add('is-visible');
@@ -440,9 +502,9 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
       if (histBtn) histBtn.textContent = 'Sürüm geçmişi açık';
     }
     if (opts.updateUrl) {
-      var phase = modulePhase(block, opts.phase || '', !!opts.fromHistory);
       writeUrl(moduleId, phase, opts.urlMode || 'push');
     }
+    applyPhaseRules(block, moduleId, phase);
     if (opts.scroll) {
       var row = block.querySelector('.rh-module-row');
       if (row && scrollHost) {
@@ -498,7 +560,9 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
         var panel = block.querySelector('.rh-history-panel');
         if (panel) panel.classList.add('is-visible');
         histBtn.textContent = 'Sürüm geçmişi açık';
-        writeUrl(mod, modulePhase(block, parseUrlState().phase, true), 'push');
+        var histPhase = modulePhase(block, parseUrlState().phase, true);
+        writeUrl(mod, histPhase, 'push');
+        applyPhaseRules(block, mod, histPhase);
       }
     }
   });

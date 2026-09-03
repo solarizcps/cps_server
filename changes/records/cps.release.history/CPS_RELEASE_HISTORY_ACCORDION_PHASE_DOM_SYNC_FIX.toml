@@ -1,0 +1,44 @@
+schema_version = 1
+module = "cps.release.history"
+version = "v1.3.1"
+phase_code = "CPS_RELEASE_HISTORY_ACCORDION_PHASE_DOM_SYNC_FIX"
+title = "Seçili faz kuralları accordion detayına reload olmadan senkronlandı"
+status = "TEST"
+date = "2026-09-03"
+summary = "Seçili faz kuralları sayfa yenilenmeden accordion detayına senkronlandı."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "49/49 PASS; Adem gerçek ekran onayı"
+db_write = false
+server_restart = false
+push_status = "Push yapılmadı"
+deployment_status = "Deploy edilmedi"
+worktree_fingerprint = "87878312fee00ede"
+verification_date = "2026-09-03"
+verification_evidence = "Adem gerçek ekran onayı; P3 Test Edilen Kurallar + 2 madde; U1 Kilitli Kurallar; popstate/stale DOM/XSS doğrulandı"
+approved_by = "Adem Terzi"
+evidence_summary = "Adem gerçek ekran onayı; accordion Detay tıklaması reload olmadan doğru faz kuralları"
+current_work = "Commit bekliyor; metadata reconciliation ile SHA bağlanacak"
+changes = [
+  "module_phase_rules JSON index build_module_phase_rules_index ile üretildi.",
+  "Accordion JS applyPhaseRules ile heading/rules/known_issues textContent güncellenir.",
+  "popstate ve panel kapanışında resetPhaseRules stale DOM koruması.",
+  "tojson embed + innerHTML kullanılmaz.",
+]
+changed_files = [
+  "app/services/release_history_service.py",
+  "app/templates/yonetim/surum_gecmisi.html",
+  "tests/tools/test_release_history_inline_detail_ui_v1.py",
+  "changes/records/cps.release.history/CPS_RELEASE_HISTORY_ACCORDION_PHASE_DOM_SYNC_FIX.toml",
+  "changes/fragments/cps.release.history.CPS_RELEASE_HISTORY_ACCORDION_PHASE_DOM_SYNC_FIX.release",
+]
+locked_rules = [
+]
+tests = [
+  "test_release_history_inline_detail_ui_v1 (49/49 PASS)",
+]
+known_issues = [
+]
+next_steps = [
+  "Feature commit SHA metadata reconciliation.",
+]

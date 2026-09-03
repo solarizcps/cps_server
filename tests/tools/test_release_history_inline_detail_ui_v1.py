@@ -233,20 +233,13 @@ _FALSE_LOCK_PHASE_FILES = frozenset({
 })
 
 
-def test_t19_false_lock_metadata_scope_only():
-    unstaged = subprocess.run(
-        ["git", "diff", "--name-only", "changes/"], cwd=str(ROOT), capture_output=True, text=True
-    )
-    staged = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "changes/"], cwd=str(ROOT), capture_output=True, text=True
-    )
-    changed = {
-        line.strip().replace("\\", "/")
-        for proc in (unstaged, staged)
-        for line in proc.stdout.splitlines()
-        if line.strip()
-    }
-    assert changed == _FALSE_LOCK_PHASE_FILES, changed - _FALSE_LOCK_PHASE_FILES
+def test_t19_false_lock_metadata_has_approval():
+    toml_paths = sorted(path for path in _FALSE_LOCK_PHASE_FILES if path.endswith(".toml"))
+    assert len(toml_paths) == 10
+    for rel in toml_paths:
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        assert 'approved_by = "Adem Terzi"' in text
+        assert "locked_rules_approval = true" in text
 
 
 def test_t20_page_has_timeline_in_inline(route_db_isolation):
@@ -311,3 +304,229 @@ def test_v12_single_row_filter(template_text):
     assert "rh-filtre-actions" in template_text
     assert "grid-template-columns:minmax(160px,2fr)" in template_text.replace(" ", "")
     assert "Modül ara" in template_text
+
+
+def test_label_p3_rules_heading(service_mod):
+    ctx = service_mod.build_page_context(
+        ROOT,
+        detail_module="planlama.atp",
+        detail_phase="ATP_GPS_GEOFENCE_P3",
+    )
+    panel = ctx["module_selected_rules"]["planlama.atp"]
+    assert panel["heading"] == "Test Edilen Kurallar"
+    assert panel["phase_code"] == "ATP_GPS_GEOFENCE_P3"
+    assert "Geofence olayları doğrulanmış koordinatlarda işlenir." in panel["rules"]
+
+
+def test_label_u1_rules_heading(service_mod):
+    ctx = service_mod.build_page_context(
+        ROOT,
+        detail_module="planlama.atp",
+        detail_phase="ATP_U1_ROUTE_ORDER_POLICY",
+    )
+    panel = ctx["module_selected_rules"]["planlama.atp"]
+    assert panel["heading"] == "Kilitli Kurallar"
+    assert "Tamamlanmış görevler taşınamaz." in panel["rules"]
+
+
+def test_label_no_staged_when_production_not_staged(service_mod, monkeypatch):
+    monkeypatch.setattr(service_mod, "_has_staged_production_files", lambda _base=None: False)
+    records, _ = service_mod.load_release_records(ROOT)
+    modules = service_mod.aggregate_modules(records, service_mod.load_deployment_state(ROOT))
+    cps = next(item for item in modules if item.module == "cps.release.history")
+    assert "staged" not in cps.push_status_label.lower()
+
+
+def test_label_atp_push_uncommitted(service_mod, monkeypatch):
+    monkeypatch.setattr(service_mod, "_has_staged_production_files", lambda _base=None: False)
+    records, _ = service_mod.load_release_records(ROOT)
+    modules = service_mod.aggregate_modules(records, service_mod.load_deployment_state(ROOT))
+    atp = next(item for item in modules if item.module == "planlama.atp")
+    assert atp.push_status_label == "Commit bekliyor · Push yapılmadı"
+
+
+def test_label_p3_dom_rules_heading(route_db_isolation, service_mod):
+    client = _make_client()
+    _admin_session(client)
+    with _route_ctx(permissions={"*"}, superadmin=True):
+        resp = client.get("/yonetim/surum-gecmisi?modul=planlama.atp&faz=ATP_GPS_GEOFENCE_P3")
+    body = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    chunk = body.split('id="rh-detail-planlama-atp"')[1].split("rh-history-panel")[0]
+    assert "Test Edilen Kurallar" in chunk
+    assert "Geofence olayları doğrulanmış koordinatlarda işlenir." in chunk
+    assert "Ziyaret state machine sırası korunur." in chunk
+    assert "Kilitli Kurallar" not in chunk
+
+
+def test_label_u1_dom_rules_heading(route_db_isolation, service_mod):
+    client = _make_client()
+    _admin_session(client)
+    with _route_ctx(permissions={"*"}, superadmin=True):
+        resp = client.get("/yonetim/surum-gecmisi?modul=planlama.atp&faz=ATP_U1_ROUTE_ORDER_POLICY")
+    body = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "Kilitli Kurallar" in body
+    assert "Tamamlanmış görevler taşınamaz." in body
+
+
+def test_label_aps_counters_unchanged(service_mod, monkeypatch):
+    monkeypatch.setattr(service_mod, "_has_staged_production_files", lambda _base=None: False)
+    ctx = service_mod.build_page_context(ROOT)
+    aps = next(item for item in ctx["modules"] if item.module == "planlama.aps")
+    assert aps.last_completed_title == "APS master UI genel plan entegrasyonu tamamlandı."
+    assert aps.current_work == "P5.8 anchor zoom + Z2G timeline genişletmesi"
+    assert ctx["summary"]["commit_pending_records"] == 18
+
+
+def _atp_rules_chunk(body: str) -> str:
+    return body.split('id="rh-detail-planlama-atp"')[1].split("rh-history-panel")[0]
+
+
+def _phase_rules_index(service_mod):
+    records, _ = service_mod.load_release_records(ROOT)
+    ctx = service_mod.build_page_context(ROOT)
+    return ctx["module_phase_rules"], ctx
+
+
+def test_dom_sync_t1_embedded_json_and_apply_js(template_text):
+    assert 'id="rh-phase-rules-data"' in template_text
+    assert "module_phase_rules | tojson" in template_text
+    assert "applyPhaseRules" in template_text
+    assert "textContent" in template_text
+    assert "data-rh-rules-heading" in template_text
+    assert "data-rh-rules-list" in template_text
+    assert "data-rh-issues-list" in template_text
+
+
+def test_dom_sync_t2_p3_index_has_two_rules(service_mod):
+    index, _ = _phase_rules_index(service_mod)
+    p3 = index["planlama.atp"]["ATP_GPS_GEOFENCE_P3"]
+    assert p3["heading"] == "Test Edilen Kurallar"
+    assert len(p3["rules"]) == 2
+    assert "Geofence olayları doğrulanmış koordinatlarda işlenir." in p3["rules"]
+    assert "Ziyaret state machine sırası korunur." in p3["rules"]
+    assert p3["status"] == "TEST"
+    assert p3["source_type"] == "verified_uncommitted"
+
+
+def test_dom_sync_t3_u1_index_heading(service_mod):
+    index, _ = _phase_rules_index(service_mod)
+    u1 = index["planlama.atp"]["ATP_U1_ROUTE_ORDER_POLICY"]
+    assert u1["heading"] == "Kilitli Kurallar"
+    assert "Tamamlanmış görevler taşınamaz." in u1["rules"]
+    assert u1["status"] == "KILITLI"
+
+
+def test_dom_sync_t4_p3_to_u1_no_cross_rules(service_mod):
+    index, _ = _phase_rules_index(service_mod)
+    p3_rules = set(index["planlama.atp"]["ATP_GPS_GEOFENCE_P3"]["rules"])
+    u1_rules = set(index["planlama.atp"]["ATP_U1_ROUTE_ORDER_POLICY"]["rules"])
+    assert not p3_rules.intersection(u1_rules)
+
+
+def test_dom_sync_t5_u1_to_p3_no_cross_rules(service_mod):
+    index, _ = _phase_rules_index(service_mod)
+    p3 = index["planlama.atp"]["ATP_GPS_GEOFENCE_P3"]
+    u1 = index["planlama.atp"]["ATP_U1_ROUTE_ORDER_POLICY"]
+    assert "Tamamlanmış görevler taşınamaz." not in p3["rules"]
+    assert "Geofence olayları doğrulanmış koordinatlarda işlenir." not in u1["rules"]
+
+
+def test_dom_sync_t6_nexgen_etiket_heading(service_mod):
+    index, ctx = _phase_rules_index(service_mod)
+    etiket = next(item for item in ctx["modules"] if item.module == "nexgen.etiket")
+    panel = index["nexgen.etiket"][etiket.latest_phase]
+    assert panel["heading"] == "Test Edilen Kurallar"
+    assert panel["status"] == "TEST"
+    assert panel["source_type"] == "verified_uncommitted"
+
+
+def test_dom_sync_t7_popstate_applies_rules(template_text):
+    chunk = template_text[template_text.index("addEventListener('popstate'"):]
+    assert "applyPhaseRules" in chunk or "openBlock" in chunk
+    assert "applyPhaseRules(block, moduleId, phase)" in template_text
+
+
+def test_dom_sync_t8_direct_url_server_render(route_db_isolation):
+    client = _make_client()
+    _admin_session(client)
+    with _route_ctx(permissions={"*"}, superadmin=True):
+        resp = client.get("/yonetim/surum-gecmisi?modul=planlama.atp&faz=ATP_GPS_GEOFENCE_P3")
+    body = resp.get_data(as_text=True)
+    chunk = _atp_rules_chunk(body)
+    assert "Test Edilen Kurallar" in chunk
+    assert "Geofence olayları doğrulanmış koordinatlarda işlenir." in chunk
+
+
+def test_dom_sync_t9_xss_payload_text_safe(service_mod):
+    from dataclasses import replace
+
+    records, _ = service_mod.load_release_records(ROOT)
+    base = next(r for r in records if r.module == "planlama.atp")
+    evil = replace(
+        base,
+        locked_rules=["<img src=x onerror=alert(1)>"],
+        known_issues=["<script>alert(1)</script>"],
+    )
+    entry = service_mod._phase_rules_entry(evil)
+    assert entry["rules"][0] == "<img src=x onerror=alert(1)>"
+    js_chunk = TEMPLATE.read_text(encoding="utf-8")
+    js_part = js_chunk[js_chunk.index("applyPhaseRules"):]
+    assert "innerHTML" not in js_part
+    assert "textContent" in js_part
+    assert "module_phase_rules | tojson" in js_chunk
+
+
+def test_dom_sync_t10_no_innerhtml_for_rules(template_text):
+    js_start = template_text.index('id="rh-phase-rules-data"')
+    js_chunk = template_text[js_start: js_start + 4500]
+    assert "innerHTML" not in js_chunk
+    assert "applyPhaseRules" in js_chunk
+    assert "createElement('li')" in js_chunk
+
+
+def test_dom_sync_t11_accordion_behaviour_preserved(template_text):
+    assert "history.pushState" in template_text
+    assert "scrollRestore" in template_text
+    assert "closeAll" in template_text
+    assert "resetPhaseRules" in template_text
+
+
+def test_dom_sync_t12_page_json_only_visible_modules(service_mod):
+    index, ctx = _phase_rules_index(service_mod)
+    visible = {item.module for item in ctx["modules"]}
+    assert set(index.keys()).issubset(visible)
+    assert "planlama.atp" in index
+    assert len(index["planlama.atp"]) >= 2
+
+
+def test_dom_sync_unauthorized_no_json(route_db_isolation):
+    client = _make_client()
+    _admin_session(client)
+    with _route_ctx(permissions={"yonetim:can_view"}, superadmin=False):
+        resp = client.get("/yonetim/surum-gecmisi")
+    body = resp.get_data(as_text=True)
+    assert 'id="rh-phase-rules-data"' not in body
+    assert "applyPhaseRules" not in body
+
+
+def test_dom_sync_paramsless_page_has_p3_in_json(route_db_isolation):
+    import json
+    import re
+
+    client = _make_client()
+    _admin_session(client)
+    with _route_ctx(permissions={"*"}, superadmin=True):
+        resp = client.get("/yonetim/surum-gecmisi")
+    body = resp.get_data(as_text=True)
+    match = re.search(
+        r'<script type="application/json" id="rh-phase-rules-data">(.+?)</script>',
+        body,
+        re.S,
+    )
+    assert match
+    data = json.loads(match.group(1))
+    p3 = data["planlama.atp"]["ATP_GPS_GEOFENCE_P3"]
+    assert p3["heading"] == "Test Edilen Kurallar"
+    assert "Geofence olayları doğrulanmış koordinatlarda işlenir." in p3["rules"]

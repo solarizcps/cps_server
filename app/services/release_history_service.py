@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 try:
     import tomllib
@@ -41,6 +42,15 @@ STATUS_LABELS: dict[str, str] = {
     "KILITLI": "Kilitli",
     "GERI_ALINDI": "Geri Alındı",
 }
+
+UNCOMMITTED_PUSH_LABEL = "Commit bekliyor · Push yapılmadı"
+
+PRODUCTION_STAGED_PREFIXES = (
+    "app/modules/",
+    "app/templates/",
+    "app/static/",
+    "app/migrations/",
+)
 
 PUSH_STATUS_LABELS: dict[str, str] = {
     "WORKING": "Çalışılıyor",
@@ -260,6 +270,66 @@ def _short_sha(value: str) -> str:
     return text[:8] if text else "—"
 
 
+def _is_staged_production_path(path: str) -> bool:
+    normalized = path.strip().replace("\\", "/")
+    if not normalized:
+        return False
+    return any(normalized.startswith(prefix) for prefix in PRODUCTION_STAGED_PREFIXES)
+
+
+def _has_staged_production_files(base: Path | None = None) -> bool:
+    root = base or REPO_ROOT
+    proc = subprocess.run(
+        ["git", "diff", "--cached", "--name-only"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return False
+    return any(_is_staged_production_path(line) for line in proc.stdout.splitlines())
+
+
+def _rules_heading(record: ReleaseRecord | None) -> str:
+    if not record:
+        return "Kilitli kurallar"
+    if record.is_uncommitted or record.status == "TEST":
+        return "Test Edilen Kurallar"
+    if record.status == "KILITLI":
+        return "Kilitli Kurallar"
+    return "Kilitli kurallar"
+
+
+def _format_push_status_label(
+    push_auto: str,
+    *,
+    uncommitted_count: int = 0,
+    production_staged: bool = False,
+) -> str:
+    if uncommitted_count > 0:
+        return UNCOMMITTED_PUSH_LABEL
+    push = (push_auto or "").strip().upper()
+    if push == "COMMIT_PENDING":
+        if production_staged:
+            return PUSH_STATUS_LABELS["COMMIT_PENDING"]
+        return UNCOMMITTED_PUSH_LABEL
+    return PUSH_STATUS_LABELS.get(push, push.replace("_", " "))
+
+
+def _effective_push_status(
+    push_auto: str,
+    *,
+    uncommitted_count: int = 0,
+    production_staged: bool = False,
+) -> str:
+    push = (push_auto or "").strip().upper()
+    if uncommitted_count > 0:
+        return push
+    if push == "COMMIT_PENDING" and not production_staged:
+        return "DEPLOYMENT_UNKNOWN"
+    return push
+
+
 def _deploy_label(
     deployment_status: str,
     push_status: str,
@@ -465,6 +535,7 @@ def _resolve_push_status(
 
 def aggregate_modules(records: list[ReleaseRecord], deploy_state: dict[str, Any] | None = None) -> list[ModuleSummary]:
     deploy_state = deploy_state or {}
+    production_staged = _has_staged_production_files()
     grouped: dict[str, list[ReleaseRecord]] = {}
     for record in records:
         grouped.setdefault(record.module, []).append(record)
@@ -490,6 +561,11 @@ def aggregate_modules(records: list[ReleaseRecord], deploy_state: dict[str, Any]
             current_work = "—"
         next_step = latest.next_steps[0] if latest.next_steps else "—"
         push_auto = _resolve_push_status(module, latest, deploy_state, uncommitted_count=len(uncommitted))
+        push_auto = _effective_push_status(
+            push_auto,
+            uncommitted_count=len(uncommitted),
+            production_staged=production_staged,
+        )
         deploy_source = UNCOMMITTED_SOURCE if uncommitted else latest.source_type
         deploy_status = uncommitted[0].deployment_status if uncommitted else latest.deployment_status
         deploy_status_label = uncommitted[0].status if uncommitted else latest.status
@@ -518,7 +594,11 @@ def aggregate_modules(records: list[ReleaseRecord], deploy_state: dict[str, Any]
                 ),
                 deployment_status=latest.deployment_status or push_auto,
                 push_status_auto=push_auto,
-                push_status_label=PUSH_STATUS_LABELS.get(push_auto, push_auto.replace("_", " ")),
+                push_status_label=_format_push_status_label(
+                    push_auto,
+                    uncommitted_count=len(uncommitted),
+                    production_staged=production_staged,
+                ),
                 current_work=current_work,
                 next_step=next_step,
                 commit_pending_count=len(uncommitted),
@@ -611,6 +691,58 @@ def find_record(records: list[ReleaseRecord], module: str | None, phase_code: st
     return None
 
 
+def _selected_rules_panel(record: ReleaseRecord | None) -> dict[str, Any] | None:
+    if not record:
+        return None
+    return {
+        "phase_code": record.phase_code,
+        "heading": _rules_heading(record),
+        "rules": list(record.locked_rules),
+        "known_issues": list(record.known_issues),
+    }
+
+
+def build_module_selected_rules(
+    records: list[ReleaseRecord],
+    detail_module: str | None,
+    detail_phase: str | None,
+) -> dict[str, dict[str, Any]]:
+    if not detail_module or not detail_phase:
+        return {}
+    selected = find_record(records, detail_module, detail_phase)
+    panel = _selected_rules_panel(selected)
+    if not panel:
+        return {}
+    return {detail_module: panel}
+
+
+def _phase_rules_entry(record: ReleaseRecord) -> dict[str, Any]:
+    return {
+        "heading": _rules_heading(record),
+        "rules": list(record.locked_rules)[:8],
+        "known_issues": list(record.known_issues)[:8],
+        "source_type": record.source_type,
+        "status": record.status,
+    }
+
+
+def build_module_phase_rules_index(
+    records: list[ReleaseRecord],
+    visible_modules: Iterable[str] | None = None,
+) -> dict[str, dict[str, dict[str, Any]]]:
+    allowed = set(visible_modules) if visible_modules is not None else None
+    index: dict[str, dict[str, dict[str, Any]]] = {}
+    for record in records:
+        if allowed is not None and record.module not in allowed:
+            continue
+        if not re.fullmatch(r"[a-z0-9.]+", record.module):
+            continue
+        if not re.fullmatch(r"[A-Z0-9_]+", record.phase_code):
+            continue
+        index.setdefault(record.module, {})[record.phase_code] = _phase_rules_entry(record)
+    return index
+
+
 def module_timeline(records: list[ReleaseRecord], module: str | None) -> list[ReleaseRecord]:
     if not module or not re.fullmatch(r"[a-z0-9.]+", module):
         return []
@@ -645,6 +777,9 @@ def build_page_context(
     detail = find_record(records, detail_module, detail_phase)
     timeline = module_timeline(records, detail_module) if detail_module else []
     module_timelines = {m.module: module_timeline(records, m.module) for m in filtered_modules}
+    module_selected_rules = build_module_selected_rules(records, detail_module, detail_phase)
+    visible_module_ids = [m.module for m in filtered_modules]
+    module_phase_rules = build_module_phase_rules_index(records, visible_module_ids)
 
     return {
         "summary": counts,
@@ -652,8 +787,11 @@ def build_page_context(
         "all_modules": modules,
         "records": records,
         "detail": detail,
+        "detail_phase": detail_phase or "",
         "timeline": timeline,
         "module_timelines": module_timelines,
+        "module_selected_rules": module_selected_rules,
+        "module_phase_rules": module_phase_rules,
         "open_module": detail_module or "",
         "deploy_state": deploy_state,
         "filters": {
