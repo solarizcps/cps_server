@@ -617,6 +617,7 @@ def build_page_context(
 
     detail = find_record(records, detail_module, detail_phase)
     timeline = module_timeline(records, detail_module) if detail_module else []
+    module_timelines = {m.module: module_timeline(records, m.module) for m in filtered_modules}
 
     return {
         "summary": counts,
@@ -625,6 +626,8 @@ def build_page_context(
         "records": records,
         "detail": detail,
         "timeline": timeline,
+        "module_timelines": module_timelines,
+        "open_module": detail_module or "",
         "deploy_state": deploy_state,
         "filters": {
             "module_query": module_query or "",

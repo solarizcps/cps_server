@@ -1,0 +1,39 @@
+schema_version = 1
+module = "cps.release.history"
+version = "v1.3.0"
+phase_code = "CPS_RELEASE_HISTORY_INLINE_DETAIL_UI_V1"
+title = "Geliştirme Geçmişi kompakt tablo ve satır içi detay görünümü"
+status = "KILITLI"
+date = "2026-09-03"
+summary = "Geliştirme Geçmişi kompakt tablo ve satır içi detay görünümü"
+source_type = "commit"
+commit_sha = "adb4c2d3939b268a77a1bfa1cd273a861388a1cc"
+test_result = "87/87 pytest PASS; Adem görsel onayı"
+db_write = false
+server_restart = false
+push_status = "Push yapılmadı"
+deployment_status = "Yerelde hazır; server aktarımı bekliyor"
+approved_by = "Adem"
+evidence_summary = "Adem görsel onayı; 1366/1920 screenshot PASS; URL sync PASS"
+changes = [
+  "7 kolon kompakt tablo ve satır içi accordion detay.",
+  "URL pushState/popstate modül senkronu.",
+  "Kompakt özet şeridi ve tek satır filtre.",
+  "Flex viewport tablo alanı ve sticky kolon başlığı.",
+]
+changed_files = [
+  "app/templates/yonetim/surum_gecmisi.html",
+  "app/services/release_history_service.py",
+  "tests/tools/test_release_history_inline_detail_ui_v1.py",
+  "changes/records/cps.release.history/CPS_RELEASE_HISTORY_INLINE_DETAIL_UI_V1.toml",
+  "changes/fragments/cps.release.history.CPS_RELEASE_HISTORY_INLINE_DETAIL_UI_V1.release",
+]
+locked_rules = [
+]
+tests = [
+  "test_release_history_inline_detail_ui_v1",
+]
+known_issues = [
+]
+next_steps = [
+]
