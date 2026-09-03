@@ -2,24 +2,33 @@ schema_version = 1
 module = "planlama.atp"
 version = "v1.0.2"
 phase_code = "ATP_U0_WHATSAPP_ROUTE_NOTIFY"
-title = "Uygulanan rota WhatsApp bildirimi tamamlandı."
-status = "KILITLI"
+title = "Uygulanan rota WhatsApp bildirimi tamamlandı (commit bekliyor)."
+status = "TEST"
 date = "2026-08-27"
-summary = "Uygulanan rota detayları WhatsApp ile iletilir; legacy fallback kaldırıldı."
-source_type = "commit"
-commit_sha = "80dd27943c4420789f38731805fa67ee7371e999"
-test_result = "Pytest PASS (38 + 16 legacy)"
+summary = "Side branch üzerinde test edildi; ana dalda tam implementasyon commitli değil. Kilitli/canlıda değildir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Pytest PASS 38+16 (side branch)"
 db_write = false
 server_restart = false
-push_status = "DEPLOYMENT_UNKNOWN"
-deployment_status = "DEPLOYMENT_UNKNOWN"
-evidence_summary = "Primary 80dd279 (38 pytest); related e4abd03 legacy fallback kaldırma (16 pytest)."
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "8b561a7ce7c0a500"
+verification_date = "2026-09-03"
+verification_evidence = "Side branch ref 80dd279; whatsapp_message_service ana dalda yok"
+current_work = "WhatsApp rota bildirimi — ana dala commit bekliyor"
+evidence_summary = "Forensic 2026-09-03; branch kanıt ref 80dd279; merge sonrası yeniden değerlendirilecek."
 changes = [
   "WhatsApp rota detay mesajı eklendi.",
   "Legacy fallback kaldırıldı.",
 ]
 changed_files = [
   "app/modules/planlama/arac_takip_routes.py",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = [
+  "Main branch üzerinde tam implementasyon bulunmadığı forensic ile kanıtlandığı için yanlış KİLİTLİ metadata durumu kaldırıldı. Feature veya üretim kuralı değiştirilmedi.",
 ]
 locked_rules = [
   "Legacy fallback kullanılmaz.",
@@ -28,8 +37,10 @@ tests = [
   "WhatsApp payload",
 ]
 known_issues = [
+  "Ana dalda tam implementasyon commitli değil; KILITLI/CANLIDA değildir.",
 ]
 next_steps = [
+  "Ana dala commit ve regresyon sonrası yeniden değerlendir.",
   "Güvenli rota sıralama politikası.",
 ]
 related_commits = [

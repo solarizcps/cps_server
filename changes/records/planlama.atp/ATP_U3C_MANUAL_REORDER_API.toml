@@ -2,18 +2,22 @@ schema_version = 1
 module = "planlama.atp"
 version = "v1.3.1"
 phase_code = "ATP_U3C_MANUAL_REORDER_API"
-title = "Manuel rota sıralama API'si ve atomik uygulama"
-status = "KILITLI"
+title = "Manuel rota sıralama API'si ve atomik uygulama (commit bekliyor)."
+status = "TEST"
 date = "2026-08-31"
-summary = "U3C backend/API katmanı: state token, fail-closed validation, BEGIN IMMEDIATE atomik apply ve snapshot invalidation tek commit içinde U3B ile birlikte geldi."
-source_type = "commit"
-commit_sha = "7244b90e21ade00c4ba641c962825ff948274bcb"
-test_result = "Manual reorder API 68 test PASS; JS parity testleri PASS"
+summary = "Side branch üzerinde test edildi; ana dalda tam implementasyon commitli değil. Kilitli/canlıda değildir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Manual reorder API 68 test PASS (side branch)"
 db_write = false
 server_restart = false
-push_status = "DEPLOYMENT_UNKNOWN"
-deployment_status = "DEPLOYMENT_UNKNOWN"
-evidence_summary = "Commit 7244b90; U3B policy ile aynı SHA — tek commit hem U3B policy hem U3C backend/API/UI wiring taşır."
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "94df876c7c36cbbd"
+verification_date = "2026-09-03"
+verification_evidence = "Side branch ref 7244b90; U3C API/UI ana dalda commitli değil"
+current_work = "Manuel rota sıralama API — ana dala commit bekliyor"
+evidence_summary = "Forensic 2026-09-03; branch kanıt ref 7244b90; merge sonrası yeniden değerlendirilecek."
 changes = [
   "Manuel reorder servisi ve API uçları eklendi.",
   "State token ve atomik apply akışı bağlandı.",
@@ -35,6 +39,11 @@ changed_files = [
   "tests/planlama/test_planlama_arac_takip_manual_reorder_parity.js",
   "tests/planlama/test_planlama_arac_takip_manual_reorder_ui.js",
 ]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = [
+  "Main branch üzerinde tam implementasyon bulunmadığı forensic ile kanıtlandığı için yanlış KİLİTLİ metadata durumu kaldırıldı. Feature veya üretim kuralı değiştirilmedi.",
+]
 locked_rules = [
   "State token kontrolü zorunludur.",
   "Fail-closed validation reddedilir.",
@@ -52,7 +61,9 @@ tests = [
   "Manual reorder UI JS",
 ]
 known_issues = [
+  "Ana dalda tam implementasyon commitli değil; KILITLI/CANLIDA değildir.",
 ]
 next_steps = [
+  "Ana dala commit ve regresyon sonrası yeniden değerlendir.",
   "GPS geçmişi trail fazına geçiş.",
 ]

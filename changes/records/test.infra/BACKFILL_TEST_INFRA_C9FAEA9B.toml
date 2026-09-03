@@ -2,18 +2,22 @@ schema_version = 1
 module = "test.infra"
 version = "v1.2.0"
 phase_code = "BACKFILL_TEST_INFRA_C9FAEA9B"
-title = "Test başlangıcı ve canonical izolasyon sertleştirildi."
-status = "KILITLI"
+title = "Test başlangıcı ve canonical izolasyon sertleştirildi (commit bekliyor)."
+status = "TEST"
 date = "2026-08-27"
-summary = "Temiz startup, canonical izolasyon ve ATP test hijyeni güçlendirildi."
-source_type = "commit"
-commit_sha = "c9faea9b1050a389c2f4c3122fdec674a0e5f39b"
-test_result = "Hijyen paketi PASS"
+summary = "Side branch üzerinde test edildi; ana dalda tam implementasyon commitli değil. Kilitli/canlıda değildir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Hijyen paketi PASS (side branch)"
 db_write = false
 server_restart = false
-push_status = "DEPLOYMENT_UNKNOWN"
-deployment_status = "DEPLOYMENT_UNKNOWN"
-evidence_summary = "Commit c9faea9b."
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "db120dd4f60c4217"
+verification_date = "2026-09-03"
+verification_evidence = "Side branch ref c9faea9b; tests/conftest hijyen paketi ana dalda tam değil"
+current_work = "Test izolasyon sertleştirme — ana dala commit bekliyor"
+evidence_summary = "Forensic 2026-09-03; branch kanıt ref c9faea9; merge sonrası yeniden değerlendirilecek."
 changes = [
   "Canonical izolasyon zorunlu kılındı.",
   "Startup guard eklendi.",
@@ -22,6 +26,11 @@ changes = [
 changed_files = [
   "tests/conftest.py",
   "tests/planlama/atp_test_hygiene.py",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = [
+  "Main branch üzerinde tam implementasyon bulunmadığı forensic ile kanıtlandığı için yanlış KİLİTLİ metadata durumu kaldırıldı. Feature veya üretim kuralı değiştirilmedi.",
 ]
 locked_rules = [
   "Test guard olmadan canonical erişim engellenir.",
@@ -32,7 +41,9 @@ tests = [
   "Hijyen",
 ]
 known_issues = [
+  "Ana dalda tam implementasyon commitli değil; KILITLI/CANLIDA değildir.",
 ]
 next_steps = [
+  "Ana dala commit ve regresyon sonrası yeniden değerlendir.",
   "Legacy izolasyon sürdürülecek.",
 ]

@@ -2,24 +2,33 @@ schema_version = 1
 module = "server"
 version = "v1.1.0"
 phase_code = "BACKFILL_SERVER_B5163074"
-title = "Sunucu Python yürütücüsü host bazlı çözümlendi."
-status = "KILITLI"
+title = "Sunucu Python yürütücüsü host bazlı çözümlendi (commit bekliyor)."
+status = "TEST"
 date = "2026-08-27"
-summary = "Python executable host ortamına göre güvenli çözümlenir."
-source_type = "commit"
-commit_sha = "b5163074c80c08be20f047f50752434995be2042"
-test_result = "Startup guard PASS"
+summary = "Side branch üzerinde test edildi; ana dalda tam implementasyon commitli değil. Kilitli/canlıda değildir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Startup guard PASS (side branch)"
 db_write = false
 server_restart = false
-push_status = "DEPLOYMENT_UNKNOWN"
-deployment_status = "DEPLOYMENT_UNKNOWN"
-evidence_summary = "Commit b5163074."
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "7d6cd901a3ec08af"
+verification_date = "2026-09-03"
+verification_evidence = "Side branch ref b5163074; cps_startup_env ana dalda yok"
+current_work = "Host bazlı Python çözümlemesi — ana dala commit bekliyor"
+evidence_summary = "Forensic 2026-09-03; branch kanıt ref b516307; merge sonrası yeniden değerlendirilecek."
 changes = [
   "Host bazlı Python çözümlemesi eklendi.",
 ]
 changed_files = [
   "app/tools/cps_startup_env.py",
   "tests/tools/test_cps_startup_env_guard_v1.py",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = [
+  "Main branch üzerinde tam implementasyon bulunmadığı forensic ile kanıtlandığı için yanlış KİLİTLİ metadata durumu kaldırıldı. Feature veya üretim kuralı değiştirilmedi.",
 ]
 locked_rules = [
   "Yanlış interpreter ile başlatma engellenir.",
@@ -28,7 +37,9 @@ tests = [
   "Startup env guard",
 ]
 known_issues = [
+  "Ana dalda tam implementasyon commitli değil; KILITLI/CANLIDA değildir.",
 ]
 next_steps = [
+  "Ana dala commit ve regresyon sonrası yeniden değerlendir.",
   "Dağıtım doğrulaması.",
 ]

@@ -2,18 +2,22 @@ schema_version = 1
 module = "planlama.atp"
 version = "v1.0.1"
 phase_code = "ATP_U0_PLAN_OPS_HARDENING"
-title = "Plan operasyonları ve canlı durum sertleştirildi."
-status = "KILITLI"
+title = "Plan operasyonları ve canlı durum sertleştirildi (commit bekliyor)."
+status = "TEST"
 date = "2026-08-27"
-summary = "Planlama rol izinleri, aktif plan canlı durum kapsamı ve planlı iptal kuralları iyileştirildi."
-source_type = "commit"
-commit_sha = "ca4612c058750a6dc7809d7155272efaaa81640c"
-test_result = "Regresyon PASS"
+summary = "Side branch üzerinde test edildi; ana dalda tam implementasyon commitli değil. Kilitli/canlıda değildir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Regresyon PASS (side branch)"
 db_write = false
 server_restart = false
-push_status = "DEPLOYMENT_UNKNOWN"
-deployment_status = "DEPLOYMENT_UNKNOWN"
-evidence_summary = "Primary ca4612c; ilişkili f77c35f, 95afa3a."
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "97ff2abdc96ca524"
+verification_date = "2026-09-03"
+verification_evidence = "Side branch ref ca4612c; scoped ATP izinleri ana dalda commitli değil"
+current_work = "Plan operasyon sertleştirme — ana dala commit bekliyor"
+evidence_summary = "Forensic 2026-09-03; branch kanıt ref ca4612c; merge sonrası yeniden değerlendirilecek."
 changes = [
   "Planlama rol araç izinleri genişletildi.",
   "Canlı durum aktif plan seferleriyle sınırlandı.",
@@ -21,6 +25,11 @@ changes = [
 ]
 changed_files = [
   "app/modules/planlama/arac_takip_routes.py",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = [
+  "Main branch üzerinde tam implementasyon bulunmadığı forensic ile kanıtlandığı için yanlış KİLİTLİ metadata durumu kaldırıldı. Feature veya üretim kuralı değiştirilmedi.",
 ]
 locked_rules = [
   "Canlı durum yalnız aktif plan seferlerini kapsar.",
@@ -30,8 +39,10 @@ tests = [
   "Canlı durum kapsamı",
 ]
 known_issues = [
+  "Ana dalda tam implementasyon commitli değil; KILITLI/CANLIDA değildir.",
 ]
 next_steps = [
+  "Ana dala commit ve regresyon sonrası yeniden değerlendir.",
   "WhatsApp rota bildirimi.",
 ]
 related_commits = [

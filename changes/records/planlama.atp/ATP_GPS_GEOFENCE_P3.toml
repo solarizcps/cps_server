@@ -2,18 +2,22 @@ schema_version = 1
 module = "planlama.atp"
 version = "v1.6.0"
 phase_code = "ATP_GPS_GEOFENCE_P3"
-title = "GPS geofence ziyaret takibi sertleştirildi (P3)."
-status = "KILITLI"
+title = "GPS geofence ziyaret takibi sertleştirildi (P3) (commit bekliyor)."
+status = "TEST"
 date = "2026-09-01"
-summary = "Geofence ziyaret state machine (GPS P3) güvenlik kurallarıyla sertleştirildi; production kod sözleşmesi P3 etiketini kullanır."
-source_type = "commit"
-commit_sha = "8952aaa8d22236f72377e67bb5ab42b058e21449"
-test_result = "Geofence pytest 38 PASS"
+summary = "Side branch üzerinde test edildi; ana dalda tam implementasyon commitli değil. Kilitli/canlıda değildir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Geofence pytest 38 PASS (side branch)"
 db_write = false
 server_restart = false
-push_status = "DEPLOYMENT_UNKNOWN"
-deployment_status = "DEPLOYMENT_UNKNOWN"
-evidence_summary = "Commit 8952aaa; arac_geofence_service/repo GPS P3 sözleşmesi."
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "0d021b39012f3835"
+verification_date = "2026-09-03"
+verification_evidence = "Side branch atp/u3-reconcile ref 8952aaa; ana dalda tam P3 fazı commitli değil"
+current_work = "GPS geofence P3 sertleştirme — ana dala commit bekliyor"
+evidence_summary = "Forensic 2026-09-03; branch kanıt ref 8952aaa; merge sonrası yeniden değerlendirilecek."
 changes = [
   "Geofence ziyaret state machine sertleştirildi.",
   "Geofence A2/A3 regresyon test paketi genişletildi.",
@@ -30,6 +34,11 @@ changed_files = [
   "tests/planlama/test_atp_geofence_a3_integration_v1.py",
   "tests/planlama/test_atp_geofence_a3_out_of_order_v1.py",
 ]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = [
+  "Main branch üzerinde tam implementasyon bulunmadığı forensic ile kanıtlandığı için yanlış KİLİTLİ metadata durumu kaldırıldı. Feature veya üretim kuralı değiştirilmedi.",
+]
 locked_rules = [
   "Geofence olayları doğrulanmış koordinatlarda işlenir.",
   "Ziyaret state machine sırası korunur.",
@@ -40,7 +49,9 @@ tests = [
   "Geofence out-of-order pytest (1)",
 ]
 known_issues = [
+  "Ana dalda tam implementasyon commitli değil; KILITLI/CANLIDA değildir.",
 ]
 next_steps = [
+  "Ana dala commit ve regresyon sonrası yeniden değerlendir.",
   "Sonraki ATP bakım fazları.",
 ]

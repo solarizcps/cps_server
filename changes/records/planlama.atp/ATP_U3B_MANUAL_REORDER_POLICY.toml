@@ -2,18 +2,22 @@ schema_version = 1
 module = "planlama.atp"
 version = "v1.3.0"
 phase_code = "ATP_U3B_MANUAL_REORDER_POLICY"
-title = "Manuel rota sıralama politikası kilitlendi."
-status = "KILITLI"
+title = "Manuel rota sıralama politikası kilitlendi (commit bekliyor)."
+status = "TEST"
 date = "2026-08-31"
-summary = "U3B policy katmanı: arac_route_order_policy.py içinde manuel reorder doğrulama kuralları pytest ile kilitlendi."
-source_type = "commit"
-commit_sha = "7244b90e21ade00c4ba641c962825ff948274bcb"
-test_result = "Manual reorder policy 48 test PASS"
+summary = "Side branch üzerinde test edildi; ana dalda tam implementasyon commitli değil. Kilitli/canlıda değildir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Manual reorder policy 48 test PASS (side branch)"
 db_write = false
 server_restart = false
-push_status = "DEPLOYMENT_UNKNOWN"
-deployment_status = "DEPLOYMENT_UNKNOWN"
-evidence_summary = "Commit 7244b90; U3B policy katmanı. Aynı commit U3C API kaydında da primary SHA olarak kullanılır."
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "cfd64320cb631182"
+verification_date = "2026-09-03"
+verification_evidence = "Side branch ref 7244b90; U3B policy katmanı ana dalda tam commitli değil"
+current_work = "Manuel rota sıralama politikası — ana dala commit bekliyor"
+evidence_summary = "Forensic 2026-09-03; branch kanıt ref 7244b90; merge sonrası yeniden değerlendirilecek."
 changes = [
   "Manuel reorder validation modülü eklendi.",
   "Segment, kilitli görev ve fail-closed durum kuralları tanımlandı.",
@@ -21,6 +25,11 @@ changes = [
 changed_files = [
   "app/modules/planlama/arac_route_order_policy.py",
   "tests/planlama/test_arac_manual_reorder_policy.py",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = [
+  "Main branch üzerinde tam implementasyon bulunmadığı forensic ile kanıtlandığı için yanlış KİLİTLİ metadata durumu kaldırıldı. Feature veya üretim kuralı değiştirilmedi.",
 ]
 locked_rules = [
   "Tamamlanmış/başlamış/varış/ayrılış kilitli görevler taşınamaz.",
@@ -32,7 +41,9 @@ tests = [
   "Manual reorder policy pytest (48)",
 ]
 known_issues = [
+  "Ana dalda tam implementasyon commitli değil; KILITLI/CANLIDA değildir.",
 ]
 next_steps = [
+  "Ana dala commit ve regresyon sonrası yeniden değerlendir.",
   "Manuel rota sıralama API fazına geçiş (U3C).",
 ]

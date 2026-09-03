@@ -142,18 +142,18 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
 
 <div class="rh-summary">
   <div class="rh-summary-primary">
-    <div class="rh-stat"><span class="lbl">Toplam Modül</span><span class="val">{{ summary.total_modules }}</span></div>
-    <div class="rh-stat"><span class="lbl">Toplam Kayıt</span><span class="val">{{ summary.total_records }}</span></div>
-    <div class="rh-stat"><span class="lbl">Devam Eden</span><span class="val">{{ summary.in_progress_modules }}</span></div>
-    <div class="rh-stat"><span class="lbl">Commit Bekleyen</span><span class="val">{{ summary.commit_pending_records }}</span>{% if summary.commit_pending_modules %}<span class="sub">({{ summary.commit_pending_modules }} modül)</span>{% endif %}</div>
-    <div class="rh-stat"><span class="lbl">Push Bekleyen</span><span class="val">{{ summary.push_waiting_modules }}</span></div>
-    <div class="rh-stat"><span class="lbl">Deploy Bekleyen</span><span class="val">{{ summary.deploy_waiting_modules }}</span></div>
-    <div class="rh-stat"><span class="lbl">Açık Sorun</span><span class="val">{{ summary.open_issues }}</span></div>
+    <div class="rh-stat"><span class="lbl">Toplam Modül</span><span class="val">{{ summary.total_modules }} modül</span></div>
+    <div class="rh-stat"><span class="lbl">Toplam Kayıt</span><span class="val">{{ summary.total_records }} kayıt</span></div>
+    <div class="rh-stat"><span class="lbl">Devam Eden</span><span class="val">{{ summary.in_progress_modules }} modül</span></div>
+    <div class="rh-stat"><span class="lbl">Commit Bekleyen</span><span class="val">{{ summary.commit_pending_records }} kayıt · {{ summary.commit_pending_modules }} modül</span></div>
+    <div class="rh-stat"><span class="lbl">Push Bekleyen</span><span class="val">{{ summary.push_waiting_modules }} modül</span></div>
+    <div class="rh-stat"><span class="lbl">Deploy Bekleyen</span><span class="val">{{ summary.deploy_waiting_modules }} modül</span></div>
+    <div class="rh-stat"><span class="lbl">Açık Sorun</span><span class="val">{{ summary.open_issues }} madde</span><span class="sub">(known_issues)</span></div>
   </div>
   <div class="rh-summary-secondary">
-    <span><span class="lbl">Deploy Bilinmiyor:</span> <span class="val">{{ summary.deploy_unknown_modules }}</span></span>
-    <span><span class="lbl">Canlı Güncel:</span> <span class="val">{{ summary.live_current_modules }}</span></span>
-    <span><span class="lbl">Kilitli Modül:</span> <span class="val">{{ summary.locked_modules }}</span></span>
+    <span><span class="lbl">Deploy Bilinmiyor:</span> <span class="val">{{ summary.deploy_unknown_modules }} modül</span></span>
+    <span><span class="lbl">Canlı Güncel:</span> <span class="val">{{ summary.live_current_modules }} modül</span></span>
+    <span><span class="lbl">Kilitli Modül:</span> <span class="val">{{ summary.locked_modules }} modül</span></span>
   </div>
 </div>
 
@@ -211,7 +211,7 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
           <div class="rh-clamp2">{{ item.local_version or item.current_version }}</div>
         </div>
         <div class="rh-cell">
-          <div class="mono rh-clamp2">{{ item.last_completed_phase }}</div>
+          <div class="rh-clamp2">{{ item.last_completed_title if item.last_completed_title != '—' else '—' }}</div>
         </div>
         <div class="rh-cell">
           <div class="rh-clamp2">
@@ -258,10 +258,7 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
         <div class="rh-inline-grid">
           <div class="rh-inline-box">
             <h4>Son tamamlanan</h4>
-            <div class="val rh-clamp2">{{ item.last_completed_phase if item.last_completed_phase != '—' else '—' }}</div>
-            {% if item.latest_title and item.last_completed_phase != '—' %}
-            <div class="sub rh-clamp2" style="margin-top:4px;">{{ item.latest_title }}</div>
-            {% endif %}
+            <div class="val rh-clamp2">{{ item.last_completed_title if item.last_completed_title != '—' else '—' }}</div>
           </div>
           <div class="rh-inline-box">
             <h4>Devam eden</h4>

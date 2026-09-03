@@ -2,18 +2,22 @@ schema_version = 1
 module = "planlama.atp"
 version = "v1.5.0"
 phase_code = "ATP_MAP_LAYER_STABILITY_V1"
-title = "Harita katman yaşam döngüsü stabilize edildi."
-status = "KILITLI"
+title = "Harita katman yaşam döngüsü stabilize edildi (commit bekliyor)."
+status = "TEST"
 date = "2026-09-01"
-summary = "Plan harita katman lifecycle, özdeş overlay gizleme ve viewport restore düzeltmeleri node:test ile doğrulandı."
-source_type = "commit"
-commit_sha = "015aed7f5f9a9a67021a4d87c445d70504f195e1"
-test_result = "node:test 18 primary PASS; 36 cumulative (related commits) PASS"
+summary = "Side branch üzerinde test edildi; ana dalda tam implementasyon commitli değil. Kilitli/canlıda değildir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "node:test 18 primary PASS (side branch)"
 db_write = false
 server_restart = false
-push_status = "DEPLOYMENT_UNKNOWN"
-deployment_status = "DEPLOYMENT_UNKNOWN"
-evidence_summary = "Primary 015aed7f; related 8834836e (overlay hide), 1192a797 (viewport restore) — her üç commit aynı node:test dosyasını genişletir."
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "4bc0e16be72366ae"
+verification_date = "2026-09-03"
+verification_evidence = "Side branch atp/u3-reconcile ref 015aed7; lifecycle testleri ana dalda yok"
+current_work = "Harita katman stabilizasyonu — ana dala commit bekliyor"
+evidence_summary = "Forensic 2026-09-03; branch kanıt ref 015aed7; merge sonrası yeniden değerlendirilecek."
 changes = [
   "Katman lifecycle stabilize edildi.",
   "Özdeş overlay gizlendi.",
@@ -22,6 +26,11 @@ changes = [
 changed_files = [
   "app/static/js/planlama_arac_takip_plan_map.js",
   "tests/planlama/test_planlama_arac_takip_plan_map_route_layers.js",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = [
+  "Main branch üzerinde tam implementasyon bulunmadığı forensic ile kanıtlandığı için yanlış KİLİTLİ metadata durumu kaldırıldı. Feature veya üretim kuralı değiştirilmedi.",
 ]
 locked_rules = [
   "Özdeş overlay gösterilmez.",
@@ -34,8 +43,10 @@ tests = [
   "Cumulative node:test 36",
 ]
 known_issues = [
+  "Ana dalda tam implementasyon commitli değil; KILITLI/CANLIDA değildir.",
 ]
 next_steps = [
+  "Ana dala commit ve regresyon sonrası yeniden değerlendir.",
   "GPS geofence sertleştirme (P3).",
 ]
 related_commits = [

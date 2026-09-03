@@ -127,6 +127,7 @@ class ModuleSummary:
     version_count: int
     latest_phase: str
     last_completed_phase: str
+    last_completed_title: str
     latest_title: str
     status: str
     date: str
@@ -259,9 +260,15 @@ def _short_sha(value: str) -> str:
     return text[:8] if text else "—"
 
 
-def _deploy_label(deployment_status: str, push_status: str, source_type: str = COMMITTED_SOURCE) -> str:
+def _deploy_label(
+    deployment_status: str,
+    push_status: str,
+    source_type: str = COMMITTED_SOURCE,
+    *,
+    status: str = "",
+) -> str:
     if source_type == UNCOMMITTED_SOURCE:
-        return "Commit bekliyor · Doğrulanmış working tree"
+        return "Deploy edilmedi"
     dep = (deployment_status or "").strip().upper()
     push = (push_status or "").strip().upper()
     if dep == "DEPLOYED_VERIFIED":
@@ -274,6 +281,8 @@ def _deploy_label(deployment_status: str, push_status: str, source_type: str = C
         return "Deploy başarısız"
     if dep == "NEEDS_REVIEW":
         return "İnceleme gerekli"
+    if push == "WORKING" or dep == "WORKING":
+        return "Yerelde çalışıyor · Deploy edilmedi"
     if push_status:
         return PUSH_STATUS_LABELS.get(push, push.replace("_", " "))
     return "—"
@@ -336,7 +345,7 @@ def _record_from_toml(data: dict[str, Any], forbidden_tokens: list[str]) -> Rele
         test_result=_sanitize_text(data.get("test_result", ""), forbidden_tokens),
         push_status=push_status,
         deployment_status=deployment_status,
-        deploy_label=_deploy_label(deployment_status, push_status, source_type),
+        deploy_label=_deploy_label(deployment_status, push_status, source_type, status=str(data["status"])),
         live_version=live_version,
         local_version=local_version,
         root_cause=_sanitize_text(data.get("root_cause", ""), forbidden_tokens),
@@ -467,13 +476,23 @@ def aggregate_modules(records: list[ReleaseRecord], deploy_state: dict[str, Any]
         committed = [r for r in items if not r.is_uncommitted]
         uncommitted = [r for r in items if r.is_uncommitted]
         current = max(items, key=lambda item: (_version_key(item.version), item.date, item.phase_code))
-        last_completed = committed[0] if committed else latest
+        if committed:
+            last_completed = committed[0]
+            last_completed_phase = last_completed.phase_code
+            last_completed_title = last_completed.title or last_completed.summary or "—"
+        else:
+            last_completed_phase = "—"
+            last_completed_title = "—"
         current_work_rec = uncommitted[0] if uncommitted else None
-        current_work = current_work_rec.current_work if current_work_rec else "—"
-        if current_work == "—" and latest.status in {"TASLAK", "TEST"}:
-            current_work = latest.title
+        if current_work_rec:
+            current_work = current_work_rec.current_work or current_work_rec.title or "—"
+        else:
+            current_work = "—"
         next_step = latest.next_steps[0] if latest.next_steps else "—"
         push_auto = _resolve_push_status(module, latest, deploy_state, uncommitted_count=len(uncommitted))
+        deploy_source = UNCOMMITTED_SOURCE if uncommitted else latest.source_type
+        deploy_status = uncommitted[0].deployment_status if uncommitted else latest.deployment_status
+        deploy_status_label = uncommitted[0].status if uncommitted else latest.status
         summaries.append(
             ModuleSummary(
                 module=module,
@@ -483,14 +502,20 @@ def aggregate_modules(records: list[ReleaseRecord], deploy_state: dict[str, Any]
                 local_version=latest.local_version or latest.version,
                 version_count=len(items),
                 latest_phase=latest.phase_code,
-                last_completed_phase=last_completed.phase_code if not last_completed.is_uncommitted else (committed[0].phase_code if committed else "—"),
+                last_completed_phase=last_completed_phase,
+                last_completed_title=last_completed_title,
                 latest_title=latest.title,
                 status=latest.status if not uncommitted else uncommitted[0].status,
                 date=latest.date,
                 commit_short=latest.commit_short,
                 test_result=latest.test_result,
                 test_status_label=latest.test_result[:40] + ("…" if len(latest.test_result) > 40 else ""),
-                deploy_label=_deploy_label(latest.deployment_status, push_auto, latest.source_type),
+                deploy_label=_deploy_label(
+                    deploy_status,
+                    push_auto,
+                    deploy_source,
+                    status=deploy_status_label,
+                ),
                 deployment_status=latest.deployment_status or push_auto,
                 push_status_auto=push_auto,
                 push_status_label=PUSH_STATUS_LABELS.get(push_auto, push_auto.replace("_", " ")),
@@ -532,6 +557,8 @@ def build_summary_counts(
         "push_waiting_modules": push_waiting,
         "live_current_modules": live_current,
         "open_issues": open_issues,
+        "open_issues_unit": "madde",
+        "open_issues_semantics": "Tüm kayıtlardaki known_issues maddelerinin toplamı",
         "total_records": len(records),
         "invalid_records": 0,
     }

@@ -209,9 +209,44 @@ def test_t18_regression_ui_v2_subset():
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
-def test_t19_toml_fragments_unchanged():
-    proc = subprocess.run(["git", "diff", "--name-only", "changes/"], cwd=str(ROOT), capture_output=True, text=True)
-    assert proc.stdout.strip() == ""
+_FALSE_LOCK_PHASE_FILES = frozenset({
+    "changes/fragments/planlama.atp.ATP_GPS_GEOFENCE_P3.release",
+    "changes/fragments/planlama.atp.ATP_GPS_HISTORY_TRAIL_V1.release",
+    "changes/fragments/planlama.atp.ATP_MAP_LAYER_STABILITY_V1.release",
+    "changes/fragments/planlama.atp.ATP_U0_PLAN_OPS_HARDENING.release",
+    "changes/fragments/planlama.atp.ATP_U0_WHATSAPP_ROUTE_NOTIFY.release",
+    "changes/fragments/planlama.atp.ATP_U2A_U2B_ACIL_INSERT_LOCK.release",
+    "changes/fragments/planlama.atp.ATP_U3B_MANUAL_REORDER_POLICY.release",
+    "changes/fragments/planlama.atp.ATP_U3C_MANUAL_REORDER_API.release",
+    "changes/fragments/server.BACKFILL_SERVER_B5163074.release",
+    "changes/fragments/test.infra.BACKFILL_TEST_INFRA_C9FAEA9B.release",
+    "changes/records/planlama.atp/ATP_GPS_GEOFENCE_P3.toml",
+    "changes/records/planlama.atp/ATP_GPS_HISTORY_TRAIL_V1.toml",
+    "changes/records/planlama.atp/ATP_MAP_LAYER_STABILITY_V1.toml",
+    "changes/records/planlama.atp/ATP_U0_PLAN_OPS_HARDENING.toml",
+    "changes/records/planlama.atp/ATP_U0_WHATSAPP_ROUTE_NOTIFY.toml",
+    "changes/records/planlama.atp/ATP_U2A_U2B_ACIL_INSERT_LOCK.toml",
+    "changes/records/planlama.atp/ATP_U3B_MANUAL_REORDER_POLICY.toml",
+    "changes/records/planlama.atp/ATP_U3C_MANUAL_REORDER_API.toml",
+    "changes/records/server/BACKFILL_SERVER_B5163074.toml",
+    "changes/records/test.infra/BACKFILL_TEST_INFRA_C9FAEA9B.toml",
+})
+
+
+def test_t19_false_lock_metadata_scope_only():
+    unstaged = subprocess.run(
+        ["git", "diff", "--name-only", "changes/"], cwd=str(ROOT), capture_output=True, text=True
+    )
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "changes/"], cwd=str(ROOT), capture_output=True, text=True
+    )
+    changed = {
+        line.strip().replace("\\", "/")
+        for proc in (unstaged, staged)
+        for line in proc.stdout.splitlines()
+        if line.strip()
+    }
+    assert changed == _FALSE_LOCK_PHASE_FILES, changed - _FALSE_LOCK_PHASE_FILES
 
 
 def test_t20_page_has_timeline_in_inline(route_db_isolation):
