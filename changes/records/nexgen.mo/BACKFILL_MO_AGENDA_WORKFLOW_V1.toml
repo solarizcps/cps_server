@@ -1,0 +1,42 @@
+schema_version = 1
+module = "nexgen.mo"
+version = "v0.5.0"
+phase_code = "BACKFILL_MO_AGENDA_WORKFLOW_V1"
+title = "MO müşteri ajanda iş akışı kilitlendi."
+status = "KILITLI"
+date = "2026-08-14"
+summary = "Müşteri operasyon ajanda UI ve iş akışı pytest ile doğrulandı."
+source_type = "commit"
+commit_sha = "1eae5c1f33741062e913eaab7920f1165d86a28e"
+test_result = "MO ajanda pytest PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Ajanda UI kilidi.",
+  "Müşteri workflow sync.",
+
+]
+changed_files = [
+  "app/templates/nexgen/musteri_pazarlama.html",
+  "tests/nexgen/canonical_db_gate.py",
+  "tests/nexgen/test_ajanda_canonical_sync.py",
+  "tests/nexgen/test_faz6_ajanda_lock.py",
+  "tests/nexgen/test_mo_gorusme_ticari_display_lock.py",
+  "tests/nexgen/test_mo_ui_lock.py",
+
+]
+locked_rules = [
+
+]
+tests = [
+  "MO ajanda pytest",
+
+]
+known_issues = [
+]
+next_steps = [
+
+]

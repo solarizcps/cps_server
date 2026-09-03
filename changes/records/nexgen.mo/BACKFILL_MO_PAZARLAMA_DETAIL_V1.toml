@@ -1,0 +1,40 @@
+schema_version = 1
+module = "nexgen.mo"
+version = "v0.4.0"
+phase_code = "BACKFILL_MO_PAZARLAMA_DETAIL_V1"
+title = "Pazarlama MTT detay UI ve sipariş detay parity kilitlendi."
+status = "ONAYLANDI"
+date = "2026-08-13"
+summary = "MTT detay UI browser navigasyonu ve sipariş detay workflow parity commitlendi."
+source_type = "commit"
+commit_sha = "f5db1959f18c9032b6c70210c2b44a41ebcbbb8a"
+test_result = "Commit doğrulandı; otomatik pytest yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "MTT detay UI.",
+  "Browser navigasyon.",
+  "Sipariş detay parity.",
+
+]
+changed_files = [
+  "app/templates/nexgen/pazarlama_merkezi.html",
+
+]
+locked_rules = [
+
+]
+tests = [
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "8a843f130440edefccaf2e36ca9b9423526ae724",
+]

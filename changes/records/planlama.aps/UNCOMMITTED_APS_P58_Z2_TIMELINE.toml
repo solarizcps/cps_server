@@ -1,0 +1,44 @@
+schema_version = 1
+module = "planlama.aps"
+version = "v1.1.0"
+phase_code = "UNCOMMITTED_APS_P58_Z2_TIMELINE"
+title = "APS P5.8 anchor zoom ve Z2 timeline genişletmesi (commit bekliyor)."
+status = "TEST"
+date = "2026-09-03"
+summary = "Working tree'de APS P5.8 anchor zoom ve Z2G timeline genişletmesi devam ediyor."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Browser harness kısmi"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "f81ad4c83f2b69cd"
+verification_date = "2026-09-03"
+verification_evidence = "27 planlama dosyası dirty; capacity resolver ve dhtmlx contract untracked"
+current_work = "P5.8 anchor zoom + Z2G timeline genişletmesi"
+changes = [
+  "Anchor zoom genişletmesi.",
+  "Z2 timeline contract.",
+  "Capacity resolver taslak.",
+
+]
+changed_files = [
+  "app/modules/planlama/aps_enj_timeline_service.py",
+  "app/modules/planlama/aps_pilot_data_service.py",
+
+]
+locked_rules = [
+]
+tests = [
+
+]
+known_issues = [
+  "Commit bekliyor — canonical geçmişe tamamlanmış olarak eklenmedi",
+
+]
+next_steps = [
+  "Regression tamamla",
+  "Commit + fragment",
+
+]

@@ -1,0 +1,90 @@
+schema_version = 1
+module = "cps.release.history"
+version = "v1.2.0"
+phase_code = "BACKFILL_CPS_RELEASE_HISTORY_9941CDC"
+title = "Release history doğrulanmış backfill commitlendi."
+status = "KILITLI"
+date = "2026-09-02"
+summary = "22 kayıtlı ATP backfill, validator ve test stabilizasyonu commitlendi."
+source_type = "commit"
+commit_sha = "9941cdc08288a04692cf0a36fd31cc719609de90"
+test_result = "Validator 22 kayıt PASS; 33/33 pytest PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Backfill kayıtları.",
+  "Validator.",
+  "Test stabilizasyonu.",
+
+]
+changed_files = [
+  "app/services/release_history_service.py",
+  "app/templates/yonetim/surum_gecmisi.html",
+  "changes/fragments/cps.release.history.BACKFILL_CPS_RELEASE_HISTORY_12903E7.release",
+  "changes/fragments/cps.release.history.BACKFILL_CPS_RELEASE_HISTORY_9A5EA0A.release",
+  "changes/fragments/cps.release.history.BACKFILL_CPS_RELEASE_HISTORY_A0FC538.release",
+  "changes/fragments/nexgen.mo.BACKFILL_NEXGEN_MO_D897546.release",
+  "changes/fragments/planlama.atp.ATP_GPS_GEOFENCE_P3.release",
+  "changes/fragments/planlama.atp.ATP_GPS_HISTORY_TRAIL_V1.release",
+  "changes/fragments/planlama.atp.ATP_MAP_LAYER_STABILITY_V1.release",
+  "changes/fragments/planlama.atp.ATP_U0_MULTI_ADD_CLOSURE.release",
+  "changes/fragments/planlama.atp.ATP_U0_PLAN_OPS_HARDENING.release",
+  "changes/fragments/planlama.atp.ATP_U0_ROUTE_DECISION_MODAL.release",
+  "changes/fragments/planlama.atp.ATP_U0_ROUTE_REALIZATION_ENGINE.release",
+  "changes/fragments/planlama.atp.ATP_U0_WHATSAPP_ROUTE_NOTIFY.release",
+  "changes/fragments/planlama.atp.ATP_U1_ROUTE_ORDER_POLICY.release",
+  "changes/fragments/planlama.atp.ATP_U2A_U2B_ACIL_INSERT_LOCK.release",
+  "changes/fragments/planlama.atp.ATP_U3B_MANUAL_REORDER_POLICY.release",
+  "changes/fragments/planlama.atp.ATP_U3C_MANUAL_REORDER_API.release",
+  "changes/fragments/server.BACKFILL_SERVER_959EBF9.release",
+  "changes/fragments/server.BACKFILL_SERVER_B5163074.release",
+  "changes/fragments/test.infra.BACKFILL_TEST_INFRA_28943F3.release",
+  "changes/fragments/test.infra.BACKFILL_TEST_INFRA_804DA47.release",
+  "changes/fragments/test.infra.BACKFILL_TEST_INFRA_C9FAEA9B.release",
+  "changes/records/cps.release.history/BACKFILL_CPS_RELEASE_HISTORY_12903E7.toml",
+  "changes/records/cps.release.history/BACKFILL_CPS_RELEASE_HISTORY_9A5EA0A.toml",
+  "changes/records/cps.release.history/BACKFILL_CPS_RELEASE_HISTORY_A0FC538.toml",
+  "changes/records/nexgen.mo/BACKFILL_NEXGEN_MO_D897546.toml",
+  "changes/records/nexgen.mo/NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1.toml",
+  "changes/records/planlama.atp/ATP_GPS_GEOFENCE_P3.toml",
+  "changes/records/planlama.atp/ATP_GPS_HISTORY_TRAIL_V1.toml",
+  "changes/records/planlama.atp/ATP_MAP_LAYER_STABILITY_V1.toml",
+  "changes/records/planlama.atp/ATP_U0_MULTI_ADD_CLOSURE.toml",
+  "changes/records/planlama.atp/ATP_U0_PLAN_OPS_HARDENING.toml",
+  "changes/records/planlama.atp/ATP_U0_ROUTE_DECISION_MODAL.toml",
+  "changes/records/planlama.atp/ATP_U0_ROUTE_REALIZATION_ENGINE.toml",
+  "changes/records/planlama.atp/ATP_U0_WHATSAPP_ROUTE_NOTIFY.toml",
+  "changes/records/planlama.atp/ATP_U1_ROUTE_ORDER_POLICY.toml",
+  "changes/records/planlama.atp/ATP_U2A_U2B_ACIL_INSERT_LOCK.toml",
+  "changes/records/planlama.atp/ATP_U3B_MANUAL_REORDER_POLICY.toml",
+  "changes/records/planlama.atp/ATP_U3C_MANUAL_REORDER_API.toml",
+  "changes/records/server/BACKFILL_SERVER_959EBF9.toml",
+  "changes/records/server/BACKFILL_SERVER_B5163074.toml",
+  "changes/records/test.infra/BACKFILL_TEST_INFRA_28943F3.toml",
+  "changes/records/test.infra/BACKFILL_TEST_INFRA_804DA47.toml",
+  "changes/records/test.infra/BACKFILL_TEST_INFRA_C9FAEA9B.toml",
+  "docs/release-history/README.md",
+  "docs/release-history/schema.toml",
+  "tests/tools/conftest.py",
+  "tests/tools/release_history_test_db.py",
+  "tests/tools/test_release_history_ui_v2.py",
+  "tests/tools/test_validate_release_history_v1.py",
+  "tools/validate_release_history.py",
+
+]
+locked_rules = [
+
+]
+tests = [
+  "test_validate_release_history_v1",
+  "test_release_history_ui_v2",
+
+]
+known_issues = [
+]
+next_steps = [
+
+]

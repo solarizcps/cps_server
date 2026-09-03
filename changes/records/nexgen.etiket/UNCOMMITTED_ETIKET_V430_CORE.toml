@@ -1,0 +1,46 @@
+schema_version = 1
+module = "nexgen.etiket"
+version = "v4.3.0"
+phase_code = "UNCOMMITTED_ETIKET_V430_CORE"
+title = "Etiket Basım çekirdek servis ve route (commit bekliyor)."
+status = "TEST"
+date = "2026-09-03"
+summary = "Etiket basım servis, route ve template dosyaları working tree'de doğrulandı; commit bekliyor."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Manuel smoke; otomatik pytest yok"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "10b9d9069a5b2bab"
+verification_date = "2026-09-03"
+verification_evidence = "Untracked etiket_basim routes/service/templates; browser smoke"
+current_work = "Etiket basım çekirdek akış geliştirme"
+changes = [
+  "Etiket basım route eklendi.",
+  "Servis katmanı.",
+  "Print template.",
+
+]
+changed_files = [
+  "app/modules/nexgen/etiket_basim_routes.py",
+  "app/modules/nexgen/etiket_basim_service.py",
+  "app/templates/nexgen/etiket_basim.html",
+  "app/templates/nexgen/etiket_basim_print.html",
+
+]
+locked_rules = [
+]
+tests = [
+
+]
+known_issues = [
+  "QR offline qrcode kütüphanesi eksik — offline mod sınırlı",
+
+]
+next_steps = [
+  "v4.3.1 layout parity",
+  "Commit ve fragment eşleştirme",
+
+]

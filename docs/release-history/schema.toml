@@ -34,6 +34,7 @@ fields = [
 [optional_list_fields]
 fields = [
     "related_commits",
+    "deploy_events",
 ]
 
 [optional_fields]
@@ -46,7 +47,25 @@ fields = [
     "deployment_status",
     "approved_by",
     "breaking_rules",
+    "locked_rules_approval",
+    "worktree_fingerprint",
+    "verification_date",
+    "verification_evidence",
+    "current_work",
 ]
+
+[source_type_enum]
+values = ["commit", "verified_uncommitted"]
+
+[verified_uncommitted_required]
+fields = [
+    "worktree_fingerprint",
+    "verification_date",
+    "verification_evidence",
+]
+
+[verified_uncommitted_status_enum]
+values = ["TEST", "ONAYLANDI"]
 
 [status_enum]
 values = ["TASLAK", "TEST", "ONAYLANDI", "KILITLI", "GERI_ALINDI"]
@@ -58,8 +77,13 @@ modules = [
     "nexgen.etiket",
     "planlama.atp",
     "planlama.aps",
+    "planlama.other",
     "finans",
     "cari360",
+    "ajanda",
+    "yonetim",
+    "uretim.enjeksiyon",
+    "uretim.tablet",
     "server",
     "test.infra",
     "cps.release.history",
@@ -79,4 +103,7 @@ forbidden_path_tokens = [
     "Users\\",
     "/home/",
     "AppData/",
+    "var/release/",
+    "C:/W/",
+    "C:\\W\\",
 ]

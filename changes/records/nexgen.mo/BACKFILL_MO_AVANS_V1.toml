@@ -1,0 +1,44 @@
+schema_version = 1
+module = "nexgen.mo"
+version = "v0.6.0"
+phase_code = "BACKFILL_MO_AVANS_V1"
+title = "Avans tahsilat sevkiyat öncesi akışı kilitlendi."
+status = "KILITLI"
+date = "2026-08-19"
+summary = "Sevkiyat öncesi avans tahsilat akışı pytest ile kilitlendi."
+source_type = "commit"
+commit_sha = "2c57ea7c9c2de383887ddb62cbea322abd64240f"
+test_result = "Avans tahsilat pytest PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Avans tahsilat akışı.",
+  "Sevkiyat öncesi kontrol.",
+
+]
+changed_files = [
+  "app/migrations/164_mo_tahsilat_avans_tipi.py",
+  "app/modules/nexgen/mo_tahsilat_config.py",
+  "app/modules/nexgen/mo_tahsilat_kayit_service.py",
+  "app/modules/nexgen/mo_vade_kontrol_service.py",
+  "app/modules/nexgen/musteri_pazarlama_routes.py",
+  "app/templates/nexgen/musteri_pazarlama.html",
+  "tests/nexgen/test_f5_hydrate_lock.py",
+  "tests/nexgen/test_tahsilat_avans_lock.py",
+
+]
+locked_rules = [
+
+]
+tests = [
+  "Avans tahsilat pytest",
+
+]
+known_issues = [
+]
+next_steps = [
+
+]

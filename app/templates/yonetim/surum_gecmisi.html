@@ -1,235 +1,441 @@
 {% extends "base.html" %}
+
 {% block title %}Geliştirme ve Sürüm Geçmişi — Yönetim{% endblock %}
 
+
+
 {% block head %}
+
 <style>
-.rh-kpi-grid { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:10px; margin-bottom:14px; }
+
+.rh-kpi-grid { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:10px; margin-bottom:14px; }
+
 .rh-kpi { background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:12px 14px; box-shadow:var(--shadow-sm); }
+
 .rh-kpi .lbl { font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1.1px; }
+
 .rh-kpi .val { font-size:22px; font-weight:700; margin-top:4px; color:var(--text1); }
+
 .rh-kpi .sub { font-size:11px; color:var(--text3); margin-top:2px; }
 
+
+
 .rh-filtre { background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:14px; box-shadow:var(--shadow-sm); }
+
 .rh-filtre form { display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; align-items:end; }
+
 .rh-filtre label { display:block; font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1.2px; margin-bottom:3px; }
+
 .rh-filtre input, .rh-filtre select { width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:12px; font-family:var(--sans); }
 
-.rh-tablo { background:#fff; border:0.5px solid var(--border); border-radius:10px; overflow:hidden; box-shadow:var(--shadow-sm); }
-.rh-row { display:grid; grid-template-columns:1.2fr 0.7fr 0.7fr 0.8fr 1.4fr 1.1fr 0.9fr 0.9fr 0.8fr 0.7fr; gap:8px; padding:10px 14px; border-bottom:0.5px solid var(--border); font-size:12px; align-items:center; }
+
+
+.rh-tablo { background:#fff; border:0.5px solid var(--border); border-radius:10px; overflow-x:auto; box-shadow:var(--shadow-sm); }
+
+.rh-row { display:grid; grid-template-columns:1.1fr 0.55fr 0.55fr 0.45fr 0.9fr 0.8fr 0.7fr 0.7fr 0.55fr 0.7fr 0.65fr 0.55fr; gap:6px; padding:10px 12px; border-bottom:0.5px solid var(--border); font-size:11px; align-items:center; min-width:1200px; }
+
 .rh-row:hover { background:var(--bg3); }
-.rh-row.hdr { background:var(--bg4); font-size:10px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1px; }
-.rh-row .mono { font-family:var(--mono); font-size:11px; color:var(--text2); }
-.rh-row .mod { font-weight:600; }
+
+.rh-row.hdr { background:var(--bg4); font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.8px; }
+
+.rh-row .mono { font-family:var(--mono); font-size:10px; color:var(--text2); }
+
+.rh-row .mod { font-weight:600; font-size:12px; }
+
 .rh-row .sub { font-size:10px; color:var(--text3); margin-top:2px; }
 
-.rh-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:0.4px; }
+
+
+.rh-badge { display:inline-block; padding:2px 7px; border-radius:999px; font-size:9px; font-weight:700; letter-spacing:0.3px; white-space:nowrap; }
+
 .rh-badge.kilitli { background:#dcfce7; color:#166534; }
+
 .rh-badge.onaylandi { background:#dbeafe; color:#1d4ed8; }
+
 .rh-badge.test { background:#fef9c3; color:#854d0e; }
+
 .rh-badge.taslak { background:#ffedd5; color:#9a3412; }
+
 .rh-badge.geri { background:#fee2e2; color:#991b1b; }
 
+.rh-badge.commit-bekliyor { background:#f3e8ff; color:#6b21a8; }
+
+
+
 .rh-detail { background:#fff; border:0.5px solid var(--border); border-radius:10px; padding:16px 18px; margin-top:14px; box-shadow:var(--shadow-sm); }
+
 .rh-detail h3 { margin:0 0 8px; font-size:16px; }
+
 .rh-detail .meta { display:flex; flex-wrap:wrap; gap:8px 14px; margin-bottom:12px; font-size:12px; color:var(--text2); }
+
 .rh-detail .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+
 .rh-detail .box { border:0.5px solid var(--border); border-radius:8px; padding:10px 12px; background:var(--bg2); }
+
 .rh-detail .box h4 { margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text3); }
+
 .rh-detail ul { margin:0; padding-left:18px; font-size:12px; line-height:1.45; }
+
 .rh-empty { padding:28px; text-align:center; color:var(--text3); font-size:13px; }
+
 .rh-alert { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:8px; padding:10px 12px; font-size:12px; margin-bottom:12px; }
 
+
+
+.rh-timeline { margin-top:14px; border-top:0.5px solid var(--border); padding-top:12px; }
+
+.rh-timeline-item { display:grid; grid-template-columns:90px 70px 1fr auto; gap:8px; padding:8px 0; border-bottom:0.5px dashed var(--border); font-size:11px; align-items:center; }
+
+.rh-timeline-item:last-child { border-bottom:none; }
+
+
+
 @media (max-width: 1366px) {
+
   .rh-kpi-grid { grid-template-columns:repeat(3, minmax(0, 1fr)); }
-  .rh-row { grid-template-columns:1.2fr 0.8fr 0.8fr 0.9fr 1fr; }
+
   .rh-row .hide-md { display:none; }
+
   .rh-filtre form { grid-template-columns:1fr 1fr; }
+
   .rh-detail .grid2 { grid-template-columns:1fr; }
+
 }
+
 </style>
+
 {% endblock %}
 
+
+
 {% block content %}
+
 <div class="page-header">
+
   <div>
+
     <div class="page-title">Geliştirme ve Sürüm Geçmişi</div>
-    <div class="page-sub">Canonical TOML kayıtları · salt okunur · {{ summary.total_records }} sürüm kaydı</div>
+
+    <div class="page-sub">Canonical TOML kayıtları · otomatik push/deploy durumu · {{ summary.total_records }} kayıt</div>
+
   </div>
+
 </div>
+
+
 
 {% if summary.invalid_records > 0 %}
+
 <div class="rh-alert">Geçersiz {{ summary.invalid_records }} kayıt atlandı. Detay için validator çalıştırın.</div>
+
 {% endif %}
+
+
 
 <div class="rh-kpi-grid">
+
   <div class="rh-kpi"><div class="lbl">Toplam Modül</div><div class="val">{{ summary.total_modules }}</div></div>
-  <div class="rh-kpi"><div class="lbl">Kilitli Modül</div><div class="val">{{ summary.locked_modules }}</div></div>
-  <div class="rh-kpi"><div class="lbl">Devam / Taslak</div><div class="val">{{ summary.in_progress_modules }}</div></div>
-  <div class="rh-kpi"><div class="lbl">Deploy Bekleyen</div><div class="val">{{ summary.deploy_waiting_modules }}</div></div>
-  <div class="rh-kpi"><div class="lbl">Deploy Bilinmiyor</div><div class="val">{{ summary.deploy_unknown_modules }}</div></div>
-  <div class="rh-kpi"><div class="lbl">Açık Sorun</div><div class="val">{{ summary.open_issues }}</div></div>
+
   <div class="rh-kpi"><div class="lbl">Toplam Kayıt</div><div class="val">{{ summary.total_records }}</div></div>
+
+  <div class="rh-kpi"><div class="lbl">Devam Eden</div><div class="val">{{ summary.in_progress_modules }}</div></div>
+
+  <div class="rh-kpi"><div class="lbl">Commit Bekleyen</div><div class="val">{{ summary.commit_pending_records }}</div><div class="sub">{{ summary.commit_pending_modules }} modül</div></div>
+
+  <div class="rh-kpi"><div class="lbl">Push Bekleyen</div><div class="val">{{ summary.push_waiting_modules }}</div></div>
+
+  <div class="rh-kpi"><div class="lbl">Deploy Bekleyen</div><div class="val">{{ summary.deploy_waiting_modules }}</div></div>
+
+  <div class="rh-kpi"><div class="lbl">Deploy Bilinmiyor</div><div class="val">{{ summary.deploy_unknown_modules }}</div></div>
+
+  <div class="rh-kpi"><div class="lbl">Canlı Güncel</div><div class="val">{{ summary.live_current_modules }}</div></div>
+
+  <div class="rh-kpi"><div class="lbl">Açık Sorun</div><div class="val">{{ summary.open_issues }}</div></div>
+
+  <div class="rh-kpi"><div class="lbl">Kilitli Modül</div><div class="val">{{ summary.locked_modules }}</div></div>
+
 </div>
+
+
 
 <div class="rh-filtre">
+
   <form method="get">
+
     {% if detail and detail_allowed %}
+
     <input type="hidden" name="modul" value="{{ detail.module }}">
+
     <input type="hidden" name="faz" value="{{ detail.phase_code }}">
+
     {% endif %}
+
     <div>
+
       <label>Modül Ara</label>
-      <input type="text" name="q" value="{{ filters.module_query }}" placeholder="nexgen.mo, Müşteri Operasyonu...">
+
+      <input type="text" name="q" value="{{ filters.module_query }}" placeholder="nexgen.mo, APS...">
+
     </div>
+
     <div>
+
       <label>Durum</label>
+
       <select name="status">
+
         <option value="">— Tümü —</option>
+
         {% for st in status_options %}
+
         <option value="{{ st }}" {% if filters.status == st %}selected{% endif %}>{{ status_labels.get(st, st) }}</option>
+
         {% endfor %}
+
       </select>
+
     </div>
+
     <div>
+
       <label>Deployment</label>
+
       <select name="deploy">
+
         <option value="">— Tümü —</option>
-        <option value="LOCAL_WAIT" {% if filters.deployment == 'LOCAL_WAIT' %}selected{% endif %}>Yerelde hazır · Server bekliyor</option>
-        <option value="LOCAL_READY_FOR_MONDAY_DEPLOY" {% if filters.deployment == 'LOCAL_READY_FOR_MONDAY_DEPLOY' %}selected{% endif %}>LOCAL_READY_FOR_MONDAY_DEPLOY</option>
+
+        <option value="COMMIT_PENDING" {% if filters.deployment == 'COMMIT_PENDING' %}selected{% endif %}>Commit bekliyor</option>
+
+        <option value="LOCAL_WAIT" {% if filters.deployment == 'LOCAL_WAIT' %}selected{% endif %}>Server aktarımı bekliyor</option>
+
+        <option value="PUSH_WAIT" {% if filters.deployment == 'PUSH_WAIT' %}selected{% endif %}>Push bekliyor</option>
+
+        <option value="DEPLOYMENT_UNKNOWN" {% if filters.deployment == 'DEPLOYMENT_UNKNOWN' %}selected{% endif %}>Deploy bilinmiyor</option>
+
       </select>
+
     </div>
+
     <div style="display:flex; gap:4px;">
+
       <button type="submit" class="btn btn-primary btn-sm">Filtrele</button>
+
       <a href="/yonetim/surum-gecmisi" class="btn btn-outline btn-sm">Temizle</a>
+
     </div>
+
   </form>
+
 </div>
+
+
 
 <div class="rh-tablo">
+
   <div class="rh-row hdr">
+
     <div>Modül</div>
+
     <div>Canlı</div>
+
     <div>Yerel</div>
-    <div>Durum</div>
-    <div>Son Değişiklik</div>
-    <div class="hide-md">Son Faz</div>
-    <div class="hide-md">Test</div>
+
+    <div>Sürüm #</div>
+
+    <div>Son Tamamlanan</div>
+
+    <div>Devam Eden</div>
+
+    <div class="hide-md">Sıradaki</div>
+
+    <div class="hide-md">Commit Bekl.</div>
+
+    <div class="hide-md">Push</div>
+
     <div class="hide-md">Deploy</div>
-    <div class="hide-md">Tarih</div>
-    <div>İşlem</div>
+
+    <div class="hide-md">Test</div>
+
+    <div>Detay</div>
+
   </div>
+
+
 
   {% if modules %}
+
     {% for item in modules %}
+
     <div class="rh-row">
+
       <div>
+
         <div class="mod">{{ item.module_label }}</div>
-        <div class="sub mono">{{ item.module }}</div>
+
+        <div class="sub mono">{{ item.module }} · {{ item.current_version }}</div>
+
       </div>
+
       <div>{{ item.live_version }}</div>
+
       <div>{{ item.local_version or item.current_version }}</div>
+
+      <div>{{ item.version_count }}</div>
+
       <div>
-        {% if item.status == 'KILITLI' %}
-        <span class="rh-badge kilitli">{{ status_labels.get(item.status, item.status) }}</span>
-        {% elif item.status == 'ONAYLANDI' %}
-        <span class="rh-badge onaylandi">{{ status_labels.get(item.status, item.status) }}</span>
-        {% elif item.status == 'TEST' %}
-        <span class="rh-badge test">{{ status_labels.get(item.status, item.status) }}</span>
-        {% elif item.status == 'GERI_ALINDI' %}
-        <span class="rh-badge geri">{{ status_labels.get(item.status, item.status) }}</span>
-        {% else %}
-        <span class="rh-badge taslak">{{ status_labels.get(item.status, item.status) }}</span>
-        {% endif %}
+
+        <div class="mono">{{ item.last_completed_phase }}</div>
+
+        <div class="sub">{{ item.latest_title[:50] }}{% if item.latest_title|length > 50 %}…{% endif %}</div>
+
       </div>
-      <div>
-        <div>{{ item.latest_title }}</div>
-        <div class="sub mono">{{ item.commit_short }}</div>
-      </div>
-      <div class="hide-md mono">{{ item.latest_phase }}</div>
-      <div class="hide-md">{{ item.test_result }}</div>
+
+      <div>{{ item.current_work }}</div>
+
+      <div class="hide-md">{{ item.next_step }}</div>
+
+      <div class="hide-md">{% if item.commit_pending_count > 0 %}<span class="rh-badge commit-bekliyor">{{ item.commit_pending_count }}</span>{% else %}—{% endif %}</div>
+
+      <div class="hide-md">{{ item.push_status_label }}</div>
+
       <div class="hide-md">{{ item.deploy_label }}</div>
-      <div class="hide-md">{{ item.date }}</div>
+
+      <div class="hide-md">{{ item.test_status_label }}</div>
+
       <div>
+
         {% if detail_allowed %}
+
         <a class="btn btn-outline btn-sm" href="/yonetim/surum-gecmisi?modul={{ item.module | urlencode }}&amp;faz={{ item.latest_phase | urlencode }}">Detay</a>
+
         {% else %}
+
         <span class="sub">—</span>
+
         {% endif %}
+
       </div>
+
     </div>
+
     {% endfor %}
+
   {% else %}
-    <div class="rh-empty">Kayıt bulunamadı. Filtreleri temizleyin veya yeni canonical TOML ekleyin.</div>
+
+    <div class="rh-empty">Kayıt bulunamadı.</div>
+
   {% endif %}
+
 </div>
+
+
 
 {% if detail and detail_allowed %}
+
 <div class="rh-detail" id="rh-detail">
+
   <h3>{{ module_labels.get(detail.module, detail.module) }} · {{ detail.version }}</h3>
+
   <div class="meta">
+
     <span><strong>Faz:</strong> {{ detail.phase_code }}</span>
-    <span><strong>Durum:</strong> {{ status_labels.get(detail.status, detail.status) }}</span>
+
+    <span><strong>Durum:</strong>
+
+      {% if detail.is_uncommitted %}<span class="rh-badge commit-bekliyor">Commit bekliyor</span>{% else %}{{ status_labels.get(detail.status, detail.status) }}{% endif %}
+
+    </span>
+
     <span><strong>Tarih:</strong> {{ detail.date }}</span>
-    <span><strong>Commit:</strong> <span class="mono">{{ detail.commit_short }}</span></span>
+
+    {% if detail.commit_short != '—' %}<span><strong>Commit:</strong> <span class="mono">{{ detail.commit_short }}</span></span>{% endif %}
+
     <span><strong>Test:</strong> {{ detail.test_result }}</span>
+
     <span><strong>Deploy:</strong> {{ detail.deploy_label }}</span>
+
   </div>
+
   <p>{{ detail.summary }}</p>
 
+
+
   <div class="grid2">
-    <div class="box">
-      <h4>Kök Neden</h4>
-      <div>{{ detail.root_cause or '—' }}</div>
-    </div>
-    <div class="box">
-      <h4>Migration / DB</h4>
-      <div>{{ detail.migration or 'DB write: kayıtta belirtilmiş · ekranda path gösterilmez' }}</div>
-    </div>
-    <div class="box">
-      <h4>Yapılan Değişiklikler</h4>
-      <ul>
-        {% for line in detail.changes %}<li>{{ line }}</li>{% else %}<li>—</li>{% endfor %}
-      </ul>
-    </div>
-    <div class="box">
-      <h4>Kilitli Kurallar</h4>
-      <ul>
-        {% for line in detail.locked_rules %}<li>{{ line }}</li>{% else %}<li>—</li>{% endfor %}
-      </ul>
-    </div>
-    <div class="box">
-      <h4>Testler</h4>
-      <ul>
-        {% for line in detail.tests %}<li>{{ line }}</li>{% else %}<li>—</li>{% endfor %}
-      </ul>
-    </div>
-    <div class="box">
-      <h4>Değişen Dosyalar</h4>
-      <ul>
-        {% for line in detail.changed_files %}<li class="mono">{{ line }}</li>{% else %}<li>—</li>{% endfor %}
-      </ul>
-    </div>
-    <div class="box">
-      <h4>Bilinen Sorunlar</h4>
-      <ul>
-        {% for line in detail.known_issues %}<li>{{ line }}</li>{% else %}<li>—</li>{% endfor %}
-      </ul>
-    </div>
-    <div class="box">
-      <h4>Sıradaki Adımlar</h4>
-      <ul>
-        {% for line in detail.next_steps %}<li>{{ line }}</li>{% else %}<li>—</li>{% endfor %}
-      </ul>
-    </div>
+
+    <div class="box"><h4>Kök Neden</h4><div>{{ detail.root_cause or '—' }}</div></div>
+
+    <div class="box"><h4>Nerede Kalındı</h4><div>{{ detail.current_work or detail.summary or '—' }}</div></div>
+
+    <div class="box"><h4>Yapılan Değişiklikler</h4><ul>{% for line in detail.changes %}<li>{{ line }}</li>{% else %}<li>—</li>{% endfor %}</ul></div>
+
+    <div class="box"><h4>Kilitli Kurallar</h4><ul>{% for line in detail.locked_rules %}<li>{{ line }}</li>{% else %}<li>—</li>{% endfor %}</ul></div>
+
+    <div class="box"><h4>Testler</h4><ul>{% for line in detail.tests %}<li>{{ line }}</li>{% else %}<li>—</li>{% endfor %}</ul></div>
+
+    <div class="box"><h4>Açık Sorunlar</h4><ul>{% for line in detail.known_issues %}<li>{{ line }}</li>{% else %}<li>—</li>{% endfor %}</ul></div>
+
+    <div class="box"><h4>Sıradaki Adımlar</h4><ul>{% for line in detail.next_steps %}<li>{{ line }}</li>{% else %}<li>—</li>{% endfor %}</ul></div>
+
+    {% if detail.verification_evidence %}
+
+    <div class="box"><h4>Doğrulama Kanıtı</h4><div>{{ detail.verification_evidence }}</div></div>
+
+    {% endif %}
+
   </div>
-  {% if detail.evidence_summary %}
-  <div class="box" style="margin-top:12px;">
-    <h4>Kanıt Özeti</h4>
-    <div>{{ detail.evidence_summary }}</div>
+
+
+
+  {% if timeline %}
+
+  <div class="rh-timeline">
+
+    <h4 style="font-size:11px; text-transform:uppercase; color:var(--text3); margin:0 0 8px;">Sürüm Zaman Çizelgesi ({{ timeline|length }})</h4>
+
+    {% for t in timeline %}
+
+    <div class="rh-timeline-item">
+
+      <div>{{ t.date }}</div>
+
+      <div>{{ t.version }}</div>
+
+      <div>
+
+        <strong>{{ t.phase_code }}</strong> — {{ t.title }}
+
+        {% if t.is_uncommitted %}<span class="rh-badge commit-bekliyor">Commit bekliyor</span>
+
+        {% elif t.status == 'KILITLI' %}<span class="rh-badge kilitli">Kilitli</span>
+
+        {% elif t.status == 'TEST' %}<span class="rh-badge test">Test</span>
+
+        {% elif t.status == 'ONAYLANDI' %}<span class="rh-badge onaylandi">Onaylandı</span>
+
+        {% endif %}
+
+      </div>
+
+      <div>
+
+        <a class="btn btn-outline btn-sm" href="/yonetim/surum-gecmisi?modul={{ t.module | urlencode }}&amp;faz={{ t.phase_code | urlencode }}">Seç</a>
+
+      </div>
+
+    </div>
+
+    {% endfor %}
+
   </div>
+
   {% endif %}
+
 </div>
+
 {% elif not detail_allowed %}
+
 <div class="rh-alert" style="margin-top:14px;">Detay görünümü için Audit Log yetkisi veya superadmin gerekir.</div>
+
 {% endif %}
+
 {% endblock %}

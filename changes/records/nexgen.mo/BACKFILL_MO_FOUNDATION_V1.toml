@@ -1,0 +1,44 @@
+schema_version = 1
+module = "nexgen.mo"
+version = "v0.1.0"
+phase_code = "BACKFILL_MO_FOUNDATION_V1"
+title = "MO müşteri aday ve görüşme çekirdeği eklendi."
+status = "ONAYLANDI"
+date = "2026-08-04"
+summary = "Müşteri aday kaydı, görüşme çekirdeği ve operasyon merkezi UI commitlendi."
+source_type = "commit"
+commit_sha = "05be629e0a40c5a3bcd0cd3b5afb963e873bc8b2"
+test_result = "Commit doğrulandı; otomatik pytest yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Müşteri aday çekirdeği.",
+  "Görüşme modülü.",
+  "Operasyon merkezi UI.",
+
+]
+changed_files = [
+  "app/modules/nexgen/cari360_yetki.py",
+  "app/modules/nexgen/cari_sorumlu_service.py",
+  "app/modules/nexgen/mo_gorusme_config.py",
+  "app/modules/nexgen/mo_gorusme_service.py",
+  "app/modules/nexgen/musteri_aday_service.py",
+
+]
+locked_rules = [
+
+]
+tests = [
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "87bdcb406d9f39b53f01e169696b30c63a2d66a9",
+]

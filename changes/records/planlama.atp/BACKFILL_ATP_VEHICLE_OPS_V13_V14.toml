@@ -1,0 +1,64 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v0.3.0"
+phase_code = "BACKFILL_ATP_VEHICLE_OPS_V13_V14"
+title = "Araç operasyonları v1.3 ve plan harita v1.4a kilitlendi."
+status = "ONAYLANDI"
+date = "2026-08-21"
+summary = "Araç operasyonları faz v1.3 ve plan harita v1.4a commitlendi."
+source_type = "commit"
+commit_sha = "d835866f6816fda862f112545057d441da49e801"
+test_result = "Commit doğrulandı; otomatik pytest yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Araç operasyonları v1.3 eklendi.",
+  "Plan harita v1.4a bağlandı.",
+
+]
+changed_files = [
+  "app/app.py",
+  "app/migrations/176_arac_takip_v13.py",
+  "app/migrations/nexgen_manifest.py",
+  "app/modules/planlama/arac_dashboard_service.py",
+  "app/modules/planlama/arac_lokasyon_service.py",
+  "app/modules/planlama/arac_operasyonu/__init__.py",
+  "app/modules/planlama/arac_operasyonu/services/__init__.py",
+  "app/modules/planlama/arac_operasyonu/services/turkcell_filom_adapter.py",
+  "app/modules/planlama/arac_plan_service.py",
+  "app/modules/planlama/arac_request_user_service.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_map.js",
+  "app/static/js/planlama_arac_takip_pool.js",
+  "app/static/js/planlama_arac_takip_request.js",
+  "app/static/vendor/leaflet/images/layers-2x.png",
+  "app/static/vendor/leaflet/images/layers.png",
+  "app/static/vendor/leaflet/images/marker-icon-2x.png",
+  "app/static/vendor/leaflet/images/marker-icon.png",
+  "app/static/vendor/leaflet/images/marker-shadow.png",
+  "app/static/vendor/leaflet/leaflet.css",
+  "app/static/vendor/leaflet/leaflet.js",
+  "app/templates/base.html",
+  "app/templates/planlama/arac_takip_plan.html",
+
+]
+locked_rules = [
+
+]
+tests = [
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "8ebc1e66fb87d297f2a084531d0d08ad1080e39e",
+]

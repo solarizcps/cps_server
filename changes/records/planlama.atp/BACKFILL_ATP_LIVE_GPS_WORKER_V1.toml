@@ -1,0 +1,62 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v0.5.0"
+phase_code = "BACKFILL_ATP_LIVE_GPS_WORKER_V1"
+title = "Canlı GPS ziyaret ve worker görev sertleştirmesi kilitlendi."
+status = "KILITLI"
+date = "2026-08-24"
+summary = "Canlı GPS ziyaret takibi, Mehmet V2 ops UI ve GPS worker görev yapılandırması commitlendi."
+source_type = "commit"
+commit_sha = "3b55262ab22b1234a3d61bfec10b6f6e49f91508"
+test_result = "Live GPS worker pytest 4 dosya PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Canlı GPS ziyaret takibi.",
+  "GPS worker scheduled task.",
+  "Canonical worker config.",
+
+]
+changed_files = [
+  "Register-Arac-GPS-Worker-Task.ps1",
+  "Start-Arac-GPS-Worker.ps1",
+  "app/migrations/180_arac_plan_ziyaret_durum.py",
+  "app/migrations/nexgen_manifest.py",
+  "app/modules/planlama/arac_add_to_plan_service.py",
+  "app/modules/planlama/arac_dashboard_service.py",
+  "app/modules/planlama/arac_geofence_repo.py",
+  "app/modules/planlama/arac_geofence_service.py",
+  "app/modules/planlama/arac_gps_canonical_guard.py",
+  "app/modules/planlama/arac_gps_poll_service.py",
+  "app/modules/planlama/arac_gps_snapshot_repo.py",
+  "app/modules/planlama/arac_plan_timeline_service.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/modules/planlama/arac_today_operations_service.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "app/tools/arac_gps_poll_once.py",
+  "app/tools/arac_gps_poll_worker.py",
+
+]
+locked_rules = [
+
+]
+tests = [
+  "Live GPS worker pytest",
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "5cb7f4209f742d7acc057cedf12dd0b5cf23a6e9",
+  "63445a837e802082b3821cd4fe0b2738399498d8",
+  "f55af48794570af9dc548d36e1ba69390d60e8e6",
+  "cf6940b49920f92137cdd20a39ebaa35df18c14e",
+]

@@ -1,0 +1,42 @@
+schema_version = 1
+module = "ajanda"
+version = "v0.1.0"
+phase_code = "BACKFILL_AJANDA_MIGRATION151_V1"
+title = "Ajanda migration 151 ve görüşme detay parity kilitlendi."
+status = "ONAYLANDI"
+date = "2026-08-12"
+summary = "Migration 151 güvenli uygulama yolu, admin görünüm parity ve görüşme detay birleştirme commitlendi."
+source_type = "commit"
+commit_sha = "e64f8d5acb99d78183d57d0f249669a08c2415e2"
+test_result = "Commit doğrulandı"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Migration 151.",
+  "Admin görünüm parity.",
+  "Görüşme detay birleştirme.",
+
+]
+changed_files = [
+  "app/tools/apply_migration_151_ajanda.py",
+  "tests/nexgen/test_musteri_operasyon_ajanda_migration_151_lock.py",
+
+]
+locked_rules = [
+
+]
+tests = [
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "ae45fb156c14b9b4e776ead31095c8fc16285ebd",
+  "8ef883d0977461d5ffb915766a6ba0aa7153a0e7",
+]

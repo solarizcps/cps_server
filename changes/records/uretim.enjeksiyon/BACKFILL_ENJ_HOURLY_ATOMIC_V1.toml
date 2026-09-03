@@ -1,0 +1,40 @@
+schema_version = 1
+module = "uretim.enjeksiyon"
+version = "v0.1.0"
+phase_code = "BACKFILL_ENJ_HOURLY_ATOMIC_V1"
+title = "Enjeksiyon saatlik atomik yazım kilidi."
+status = "KILITLI"
+date = "2026-08-04"
+summary = "Saatlik üretim atomik yazım ve Ferhat home contract pytest ile kilitlendi."
+source_type = "commit"
+commit_sha = "dc1762e2b1d9b929a8395bba298256a309a08406"
+test_result = "Enjeksiyon hourly pytest PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Saatlik atomik yazım.",
+  "Ferhat home contract.",
+
+]
+changed_files = [
+  "app/modules/enjeksiyon/routes.py",
+
+]
+locked_rules = [
+
+]
+tests = [
+  "Enjeksiyon hourly pytest",
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "03f30920fcea23e83238061d6e44edfede2c3304",
+]

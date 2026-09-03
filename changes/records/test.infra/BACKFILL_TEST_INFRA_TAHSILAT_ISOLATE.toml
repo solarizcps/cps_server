@@ -1,0 +1,45 @@
+schema_version = 1
+module = "test.infra"
+version = "v1.6.0"
+phase_code = "BACKFILL_TEST_INFRA_TAHSILAT_ISOLATE"
+title = "Tahsilat browser regresyon DB izolasyonu."
+status = "ONAYLANDI"
+date = "2026-08-10"
+summary = "Tahsilat browser regression DB isolate ve duplicate hydrate trigger temizliği."
+source_type = "commit"
+commit_sha = "8a42567a201f218878d5c4585930f465f07bd80f"
+test_result = "Commit doğrulandı; script mevcut"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Tahsilat DB izolasyonu.",
+  "Duplicate hydrate trigger kaldırıldı.",
+
+]
+changed_files = [
+  "app/_browser_faz_tahsilat_sevk_ui_1.py",
+  "app/_browser_faz_tahsilat_tcmb_try_ui_1.py",
+  "app/_browser_tahsilat_regression_runner.py",
+  "app/app.py",
+  "app/config.py",
+  "app/modules/nexgen/routes.py",
+  "app/tools/nexgen_tmp_db.py",
+
+]
+locked_rules = [
+
+]
+tests = [
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "d3ac8c7db58519c0e5146163f1dc11f4e316cf8d",
+]

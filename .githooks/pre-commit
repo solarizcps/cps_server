@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# CPS release history pre-commit guard
+ROOT="$(git rev-parse --show-toplevel)"
+python "$ROOT/tools/check_release_fragment.py" || exit 1
+python "$ROOT/tools/validate_release_history.py" >/dev/null || exit 1
+python "$ROOT/tools/release_state.py" >/dev/null 2>&1 || true
+exit 0

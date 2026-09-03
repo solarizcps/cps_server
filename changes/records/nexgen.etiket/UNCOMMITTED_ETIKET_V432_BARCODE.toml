@@ -1,0 +1,39 @@
+schema_version = 1
+module = "nexgen.etiket"
+version = "v4.3.2"
+phase_code = "UNCOMMITTED_ETIKET_V432_BARCODE"
+title = "Etiket barcode entegrasyonu (commit bekliyor)."
+status = "TEST"
+date = "2026-09-03"
+summary = "Barcode render entegrasyonu geliştirme aşamasında."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Kısmi smoke"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "2a4a09c0eb614fd1"
+verification_date = "2026-09-03"
+verification_evidence = "Barcode demo entegrasyonu incelendi"
+current_work = "Barcode render bağlantısı"
+changes = [
+  "Barcode render hook.",
+
+]
+changed_files = [
+
+]
+locked_rules = [
+]
+tests = [
+
+]
+known_issues = [
+  "QR offline qrcode eksik — qrcode offline modu çalışmıyor",
+
+]
+next_steps = [
+  "v4.3.3 print parity",
+
+]

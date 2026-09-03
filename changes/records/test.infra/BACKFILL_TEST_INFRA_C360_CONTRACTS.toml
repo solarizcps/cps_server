@@ -1,0 +1,42 @@
+schema_version = 1
+module = "test.infra"
+version = "v1.5.0"
+phase_code = "BACKFILL_TEST_INFRA_C360_CONTRACTS"
+title = "C360 üretim bütünlüğü ve konuşma contract testleri kilitlendi."
+status = "KILITLI"
+date = "2026-08-11"
+summary = "C360 production integrity, sevkiyat parity ve konuşma contract testleri commitlendi."
+source_type = "commit"
+commit_sha = "6c6e99fbdeb38fc6652cd921a516586456a360fd"
+test_result = "C360 contract pytest PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Üretim bütünlüğü contract.",
+  "Sevkiyat parity test.",
+  "Konuşma contract.",
+
+]
+changed_files = [
+  "tests/nexgen/test_cari360_uretim_integrity_lock.py",
+
+]
+locked_rules = [
+
+]
+tests = [
+  "C360 contract pytest",
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "aeed41228efcc1a9ebfad011916ccc0eb44a357e",
+  "d278e6e4984ebde8af620156006ecdc0d4904409",
+]

@@ -1,0 +1,49 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v0.7.0"
+phase_code = "BACKFILL_ATP_ROUTE_DECISION_UX_V1"
+title = "Rota karar UX parity ve çoklu iş ekleme kilitlendi."
+status = "ONAYLANDI"
+date = "2026-08-25"
+summary = "Rota karar açıklayıcı, fabrika dönüş bacağı, KPI parity ve multi-add popup commitlendi."
+source_type = "commit"
+commit_sha = "e0f7cb31fcd16ff93318bee50cb3f83a63f4c66d"
+test_result = "Commit doğrulandı; otomatik pytest yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Rota karar açıklayıcı.",
+  "Fabrika dönüş bacağı.",
+  "Header KPI parity.",
+  "Multi-add popup.",
+
+]
+changed_files = [
+  "app/modules/planlama/road_routing/route_planner_service.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_route.js",
+  "app/static/js/planlama_arac_takip_route_explainer.js",
+  "app/templates/planlama/arac_takip_plan.html",
+
+]
+locked_rules = [
+
+]
+tests = [
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "d3627208fc6820176e61daff5ea0de93646b37de",
+  "478d7a57a7a077339b0aab002061af461a4d93af",
+  "75f1e2c1a99bf69e64dd2dba1757f08777d915bf",
+  "45eb22ef6e1a205c16ec84139a856022dcb061d0",
+]

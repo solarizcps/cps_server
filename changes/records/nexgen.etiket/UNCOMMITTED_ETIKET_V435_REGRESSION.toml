@@ -1,0 +1,40 @@
+schema_version = 1
+module = "nexgen.etiket"
+version = "v4.3.5"
+phase_code = "UNCOMMITTED_ETIKET_V435_REGRESSION"
+title = "Etiket regression hazırlığı (commit bekliyor)."
+status = "TEST"
+date = "2026-09-03"
+summary = "Etiket basım regression test paketi hazırlanıyor."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Regression paketi yazılıyor"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "2a4a09c0eb614fd1"
+verification_date = "2026-09-03"
+verification_evidence = "Test planı doğrulandı"
+current_work = "Regression test paketi"
+changes = [
+  "Regression test planı.",
+
+]
+changed_files = [
+
+]
+locked_rules = [
+]
+tests = [
+
+]
+known_issues = [
+  "QR offline/qrcode eksikliği — bilinen açık sorun",
+  "Commit bekliyor",
+
+]
+next_steps = [
+  "Commit sonrası KILITLI aday",
+
+]

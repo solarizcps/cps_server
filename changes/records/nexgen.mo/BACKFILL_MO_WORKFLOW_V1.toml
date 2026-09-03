@@ -1,0 +1,57 @@
+schema_version = 1
+module = "nexgen.mo"
+version = "v0.2.0"
+phase_code = "BACKFILL_MO_WORKFLOW_V1"
+title = "MO müşteri operasyon iş akışı tamamlandı."
+status = "ONAYLANDI"
+date = "2026-08-07"
+summary = "Müşteri operasyon iş akışı boşluk kapatma ve ajanda entegrasyonu commitlendi."
+source_type = "commit"
+commit_sha = "7769ff59b78322df6c2e882e470d3906fcf599e1"
+test_result = "Commit doğrulandı; otomatik pytest yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Operasyon iş akışı tamamlandı.",
+  "Ajanda entegrasyonu.",
+
+]
+changed_files = [
+  "app/app.py",
+  "app/modules/auth.py",
+  "app/modules/nexgen/__init__.py",
+  "app/modules/nexgen/cari360_yetki.py",
+  "app/modules/nexgen/cari_sorumlu_service.py",
+  "app/modules/nexgen/mo_tahsilat_config.py",
+  "app/modules/nexgen/mo_tahsilat_kayit_service.py",
+  "app/modules/nexgen/mo_tahsilat_plan_service.py",
+  "app/modules/nexgen/musteri_pazarlama_routes.py",
+  "app/modules/nexgen/musteri_pazarlama_service.py",
+  "app/modules/nexgen/musteri_temsilcisi_talep_service.py",
+  "app/modules/nexgen/onay_merkezi_routes.py",
+  "app/modules/nexgen/onay_merkezi_service.py",
+  "app/modules/nexgen/onay_service.py",
+  "app/modules/nexgen/onay_tahsilat_adapter.py",
+  "app/templates/base.html",
+  "app/templates/nexgen/musteri_pazarlama.html",
+  "app/templates/nexgen/onay_merkezi.html",
+
+]
+locked_rules = [
+
+]
+tests = [
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "d73513b35f0b6e10407692d2198089f7a324c043",
+  "70bc0d92cc7356ee5b3ba3fe97a1f1c59c352316",
+]

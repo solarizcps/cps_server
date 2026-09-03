@@ -1,59 +1,63 @@
-# AI GELİŞTİRME KURALLARI — Solariz CPS
+# CPS AI Geliştirme Kuralları
 
-Bu kurallar Claude / AI asistan ile yapılan geliştirme sürecinde uygulanır.
+## Amaç
 
-## 1. Önce RECON.
+CPS geliştirme geçmişi canonical, doğrulanabilir ve otomatik push/deploy durumu ile takip edilir.
+AI ajanları manuel hatırlatma gerektirmeden aynı süreci izler.
 
-Herhangi bir kod değişikliğinden önce ilgili dosyalar, DB şeması ve mevcut davranış analiz edilir.
-"Bence şöyle olmalı" yerine "gerçekte nasıl çalışıyor" sorusu sorulur.
+## Kayıt türleri
 
-## 2. Kök sebep bulunmadan kod yok.
+### commit
+- `commit_sha` zorunlu (40 karakter Git SHA)
+- `related_commits` ile destek commitleri gruplanır
+- Test kanıtı yoksa `ONAYLANDI`; pytest kanıtı varsa `KILITLI`
+- Deploy kanıtı yoksa `DEPLOYMENT_UNKNOWN`
 
-Bir bug raporlandığında doğrudan fix yazmak yerine:
-- Hangi endpoint/fonksiyon etkileniyor?
-- DB'de hangi değerler bozuk?
-- Sorun frontend mi backend mi?
+### verified_uncommitted
+- Commit henüz yok; working tree doğrulandı
+- `worktree_fingerprint`, `verification_date`, `verification_evidence` zorunlu
+- Status yalnız `TEST` veya `ONAYLANDI`
+- `KILITLI` ve `CANLIDA` yasak
+- Fingerprint değişince kayıt `NEEDS_REVIEW` olarak işaretlenmeli
 
-sorularına yanıt bulunur. Sonra patch yazılır.
+## Faz adlandırma
 
-## 3. Çalışan CORE değişmez.
+- Gerçek faz kodu varsa onu kullan (ör. `ATP_U3C_MANUAL_REORDER_API`)
+- Yoksa açıklayıcı `BACKFILL_*` veya `UNCOMMITTED_*` kullan
+- Aynı iş kuralını tek belirsiz kayıtta birleştirme
 
-Stabil tag ile işaretlenmiş alan refactor, "iyileştirme" veya yeniden yazım için açılmaz.
-Sadece tespit edilen somut bug için minimum değişiklik yapılır.
+## Commit politikası
 
-## 4. Minimum patch.
+1. Yalnız ilgili TOML, fragment ve gerekli metadata stage et
+2. `_audit_out`, temp DB, screenshot commit etme
+3. Otomatik push/deploy yapma
+4. Canonical DB'ye yazma
 
-Her fix mümkün olan en az sayıda satırı değiştirir.
-Geniş refactor, taşıma veya yeniden yapılandırma ayrı bir onay gerektirir.
+## Test kapısı
 
-## 5. Her değişiklik sonrası endpoint test.
-
+```bash
+python tools/validate_release_history.py
+python -m pytest tests/tools/test_validate_release_history_v1.py tests/tools/test_release_history_ui_v2.py -q
+python tools/release_state.py
 ```
-/enjeksiyon              → 200
-/planlama/operasyon-raporu → 200
-/yonetim/kalip-yonetimi  → 200
-```
 
-Bu üç endpoint her commit öncesi kontrol edilir.
+## Deploy entegrasyonu
 
-## 6. Commit öncesi: git diff kontrol.
+Pazartesi deploy komutu çalıştırıldığında `tools/record_deploy_event.py` (gelecek entegrasyon) şunları yazar:
 
-`git diff --stat` çalıştırılır. Beklenen dosya sayısından fazlası varsa **DUR**.
-Yanlışlıkla staging'e giren dosya commit edilmez.
+- deployment commit SHA
+- tarih/saat
+- hedef server etiketi
+- deploy yapan kullanıcı
+- restart yapıldı mı
+- HTTP smoke sonucu
+- migration sonucu
+- rollback commit (varsa)
 
-## 7. Stable tag sonrası: mimari bozulmaz.
+Manifest: `var/release/deployment_manifest.json` (Git'e alınmaz).
 
-Tag sonrası yapılan değişiklikler:
-- Mevcut snapshot mantığını bozmaz
-- A/B bağımsızlığını bozmaz
-- Geçmiş üretim değerlerini değiştirmez
-- Fire veya operasyon raporu formüllerini sessizce değiştirmez
+`DEPLOYED_VERIFIED` yalnız manifest SHA = server HEAD ve HTTP smoke PASS ise.
 
-## 8. YASAK listesi (her zaman geçerli)
+## Kilitli kural değişikliği
 
-- DB reset / tablo silme
-- Migration olmadan şema değişikliği
-- Yetki sistemini bypass etme (`@login_required`'a düşürme)
-- `git push --force` (main'e)
-- Onaysız büyük refactor
-- "Daha iyi olur" gerekçesiyle çalışan kodu değiştirme
+`locked_rules` alanındaki kurallar Adem'in açık onayı olmadan değiştirilemez.

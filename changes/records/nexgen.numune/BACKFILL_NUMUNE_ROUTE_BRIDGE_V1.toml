@@ -1,0 +1,38 @@
+schema_version = 1
+module = "nexgen.numune"
+version = "v0.4.0"
+phase_code = "BACKFILL_NUMUNE_ROUTE_BRIDGE_V1"
+title = "Numune rota-sipariş köprüsü eklendi."
+status = "KILITLI"
+date = "2026-08-04"
+summary = "Route-to-sample bridge servisi pytest ile doğrulandı."
+source_type = "commit"
+commit_sha = "07d3b16e906ca2afde95fcf43d82e27e8b69378e"
+test_result = "Numune route bridge pytest PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Route-sample bridge.",
+  "Servis bağlantısı.",
+
+]
+changed_files = [
+  "app/modules/nexgen/numune_talep_routes.py",
+  "app/modules/nexgen/routes.py",
+
+]
+locked_rules = [
+
+]
+tests = [
+  "Numune route bridge pytest",
+
+]
+known_issues = [
+]
+next_steps = [
+
+]

@@ -1,0 +1,40 @@
+schema_version = 1
+module = "nexgen.etiket"
+version = "v4.3.3"
+phase_code = "UNCOMMITTED_ETIKET_V433_PRINT"
+title = "Etiket print parity (commit bekliyor)."
+status = "TEST"
+date = "2026-09-03"
+summary = "Print template parity geliştirme aşamasında."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Print preview smoke"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "6d4b1ccf0b43f493"
+verification_date = "2026-09-03"
+verification_evidence = "Print template doğrulandı"
+current_work = "Print CSS parity"
+changes = [
+  "Print template parity.",
+
+]
+changed_files = [
+  "app/templates/nexgen/etiket_basim_print.html",
+
+]
+locked_rules = [
+]
+tests = [
+
+]
+known_issues = [
+  "QR offline qrcode eksikliği",
+
+]
+next_steps = [
+  "v4.3.4 tablet bridge",
+
+]

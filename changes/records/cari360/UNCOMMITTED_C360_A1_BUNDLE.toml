@@ -1,0 +1,44 @@
+schema_version = 1
+module = "cari360"
+version = "v1.1.0"
+phase_code = "UNCOMMITTED_C360_A1_BUNDLE"
+title = "C360-A1 worktree ticari veri bundle (commit bekliyor)."
+status = "ONAYLANDI"
+date = "2026-09-03"
+summary = "WT-C360A1 worktree'de ticari özet, timeline ve data scope değişiklikleri doğrulandı."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "A1/A3 test scriptleri mevcut"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "4207b824331431c9"
+verification_date = "2026-09-03"
+verification_evidence = "WT-C360A1: cari360 servisleri + data_scope + excel import"
+current_work = "C360-A1 canonical veri hizalama"
+changes = [
+  "Ticari özet servisi.",
+  "Timeline servisi.",
+  "Data scope modülü.",
+
+]
+changed_files = [
+  "app/modules/nexgen/cari360_ticari_ozet_service.py",
+  "app/modules/nexgen/cari360_timeline_service.py",
+
+]
+locked_rules = [
+]
+tests = [
+
+]
+known_issues = [
+  "Ana repo temiz; bundle ayrı worktree'de commit bekliyor",
+
+]
+next_steps = [
+  "Worktree commit",
+  "Canonical kayda dönüştürme",
+
+]

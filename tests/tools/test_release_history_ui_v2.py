@@ -230,7 +230,8 @@ def test_t14_template_output_contains_bootstrap_fields(route_db_isolation):
     assert "v1.3.0" in body
     assert "KILITLI" in body or "Kilitli" in body
     assert "ad5fd303" in body
-    assert "T1-T22" in body
+    assert "Commit Bekleyen" in body
+    assert "Sürüm Zaman Çizelgesi" in body or "Toplam Kayıt" in body
     assert "_audit_out" not in body
     assert "C:\\\\Users" not in body
 

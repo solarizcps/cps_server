@@ -1,0 +1,40 @@
+schema_version = 1
+module = "nexgen.etiket"
+version = "v4.3.1"
+phase_code = "UNCOMMITTED_ETIKET_V431_LAYOUT"
+title = "Etiket layout parity (commit bekliyor)."
+status = "TEST"
+date = "2026-09-03"
+summary = "Etiket basım layout düzeni working tree'de; commit bekliyor."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Görsel smoke"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "8599a46f69cfc0f8"
+verification_date = "2026-09-03"
+verification_evidence = "Template layout değişiklikleri doğrulandı"
+current_work = "Layout parity ince ayarı"
+changes = [
+  "Layout parity düzeltmeleri.",
+
+]
+changed_files = [
+  "app/templates/nexgen/etiket_basim.html",
+
+]
+locked_rules = [
+]
+tests = [
+
+]
+known_issues = [
+  "QR offline qrcode eksikliği devam ediyor",
+
+]
+next_steps = [
+  "v4.3.2 barcode entegrasyonu",
+
+]

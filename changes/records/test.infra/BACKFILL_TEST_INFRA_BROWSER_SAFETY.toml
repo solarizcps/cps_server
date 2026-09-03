@@ -1,0 +1,37 @@
+schema_version = 1
+module = "test.infra"
+version = "v1.4.0"
+phase_code = "BACKFILL_TEST_INFRA_BROWSER_SAFETY"
+title = "Browser yazımları canonical DB'den izole edildi."
+status = "KILITLI"
+date = "2026-08-14"
+summary = "Browser test yazımları canonical DB'den izole edildi; pytest PASS."
+source_type = "commit"
+commit_sha = "2c2fc1d06e3b500e766ec4782d04ab4c717ef21f"
+test_result = "Browser safety pytest PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Browser DB izolasyonu.",
+  "Canonical DB koruma.",
+
+]
+changed_files = [
+  "app/tools/browser_test_safety.py",
+
+]
+locked_rules = [
+
+]
+tests = [
+  "Browser safety pytest",
+
+]
+known_issues = [
+]
+next_steps = [
+
+]

@@ -47,3 +47,7 @@ Adem karar →
 Sonnet uygulama
 
 Mimari onay olmadan kod yazılmaz.
+
+## Release History (kısa)
+
+Geliştirme geçmişi: `changes/records/` + `changes/fragments/`. Detay: `AGENTS.md` ve `docs/AI_DEVELOPMENT_RULES.md`. Validator PASS olmadan faz tamamlanmış sayılmaz.
