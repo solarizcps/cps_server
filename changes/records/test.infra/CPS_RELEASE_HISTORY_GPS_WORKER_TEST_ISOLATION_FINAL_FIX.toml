@@ -3,22 +3,20 @@ module = "test.infra"
 version = "v1.7.0"
 phase_code = "CPS_RELEASE_HISTORY_GPS_WORKER_TEST_ISOLATION_FINAL_FIX"
 title = "Release History testlerinde GPS worker ve 8080 izolasyonu"
-status = "TEST"
+status = "KILITLI"
 date = "2026-09-04"
 summary = "GPS poll worker canonical DB yazımı test süresince durdurularak session guard ile byte-for-byte DB koruma kanıtlandı."
-source_type = "verified_uncommitted"
-commit_sha = ""
+source_type = "commit"
+commit_sha = "76d3d2d1662466fd2b18bc032809eba7cb20049a"
 test_result = "90/90 pytest PASS; canonical DB SHA/size/mtime unchanged during test window"
 db_write = false
 server_restart = false
-push_status = "WORKING"
-deployment_status = "WORKING"
-worktree_fingerprint = "453f98ed5c8461fd"
-verification_date = "2026-09-04"
-verification_evidence = "Controlled run: 8080+GPS stopped pre-test; baseline sha256=ac0e8e6618fa2a146126db7af0002b205d9a72f5f7533ff0d91a58a773ab579b unchanged post-test; GPS respawn 70s PASS; Stop-Arac-GPS-Worker.ps1 + release_history_test_guard"
-current_work = "GPS worker test izolasyon altyapısı — commit bekliyor"
+push_status = "Push yapılmadı"
+deployment_status = "Deploy edilmedi"
 evidence_summary = "External writer PID 8864 attribution confirmed; session temp DB + port/GPS preflight guard"
+verification_evidence = "Controlled run: 8080+GPS stopped pre-test; baseline sha256=ac0e8e6618fa2a146126db7af0002b205d9a72f5f7533ff0d91a58a773ab579b unchanged post-test; GPS respawn 70s PASS; Stop-Arac-GPS-Worker.ps1 + release_history_test_guard"
 approved_by = "Adem Terzi"
+locked_rules_approval = true
 changes = [
   "Stop-Arac-GPS-Worker.ps1 companion stop script eklendi.",
   "release_history_test_guard pytest preflight: port 8080 kapalı ve GPS worker yok zorunlu.",
