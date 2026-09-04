@@ -3,22 +3,20 @@ module = "cps.release.history"
 version = "v1.5.0"
 phase_code = "CPS_RELEASE_HISTORY_AUTOMATION_HARDENING_V1"
 title = "Release history post-commit manifest ve SHA ancestry otomasyonu"
-status = "TEST"
+status = "KILITLI"
 date = "2026-09-04"
 summary = "Post-commit deployment_state yenileme, validator NOT_ANCESTOR guard ve temp repo otomasyon testleri."
-source_type = "verified_uncommitted"
-commit_sha = ""
+source_type = "commit"
+commit_sha = "710603f013cbfc53d3764047e8e16c99d0cd295b"
 test_result = "test_release_history_automation_v1.py 13/13 PASS"
 db_write = false
 server_restart = false
-push_status = "WORKING"
-deployment_status = "WORKING"
-worktree_fingerprint = "72717b4a1b2c3d4e"
-verification_date = "2026-09-04"
-verification_evidence = "Temp git repo tests: post-commit local_head sync, NOT_ANCESTOR fail, verified_uncommitted SHA guard, pre-commit fragment guard"
-current_work = "Otomasyon hardening — commit bekliyor"
+push_status = "Push yapılmadı"
+deployment_status = "Deploy edilmedi"
 evidence_summary = "Post-commit hook + validator ancestry + automation test suite"
+verification_evidence = "Temp git repo tests: post-commit local_head sync, NOT_ANCESTOR fail, verified_uncommitted SHA guard, pre-commit fragment guard"
 approved_by = "Adem Terzi"
+locked_rules_approval = true
 changes = [
   ".githooks/post-commit ile deployment_state local_head otomatik yenileme.",
   "validate_release_history.py commit_sha NOT_ANCESTOR guard.",
@@ -41,8 +39,7 @@ tests = [
   "tools/validate_release_history.py",
 ]
 known_issues = [
-  "COMMIT 3 sonrası otomasyon kaydı SHA reconciliation yapılacak.",
 ]
 next_steps = [
-  "Otomasyon kaydı COMMIT 2 SHA ile KILITLI reconciliation.",
+  "Push/deploy manifest senkronu.",
 ]
