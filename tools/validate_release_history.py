@@ -94,11 +94,53 @@ def _is_forbidden_path(value: str, forbidden_tokens: list[str]) -> bool:
 
 
 
-def validate(root: Path | None = None) -> tuple[list[str], list[str]]:
+def _git_run(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _git_commit_exists(sha: str, git_cwd: Path) -> bool:
+    if not sha:
+        return False
+    proc = _git_run(["cat-file", "-t", sha], git_cwd)
+    return proc.returncode == 0 and proc.stdout.strip() == "commit"
+
+
+def _git_head(git_cwd: Path) -> str:
+    proc = _git_run(["rev-parse", "HEAD"], git_cwd)
+    return proc.stdout.strip() if proc.returncode == 0 else ""
+
+
+def _git_is_ancestor(ancestor: str, descendant: str, git_cwd: Path) -> bool | None:
+    if not ancestor or not descendant:
+        return None
+    proc = _git_run(["merge-base", "--is-ancestor", ancestor, descendant], git_cwd)
+    if proc.returncode == 0:
+        return True
+    if proc.returncode == 1:
+        return False
+    return None
+
+
+def validate(root: Path | None = None, *, git_cwd: Path | None = None) -> tuple[list[str], list[str]]:
 
     """Return (errors, info_messages)."""
 
     base = root or ROOT
+
+    git_base = git_cwd or base
+
+    if git_cwd is None and base != ROOT and (base / ".git").is_dir():
+
+        git_base = base
+
+    elif git_cwd is None:
+
+        git_base = ROOT
 
     schema = _load_schema()
 
@@ -160,29 +202,7 @@ def validate(root: Path | None = None) -> tuple[list[str], list[str]]:
 
     seen_module_phase: set[tuple[str, str]] = set()
 
-
-
-    def _git_commit_exists(sha: str) -> bool:
-
-        if base != ROOT:
-
-            return True
-
-        proc = subprocess.run(
-
-            ["git", "cat-file", "-t", sha],
-
-            cwd=ROOT,
-
-            capture_output=True,
-
-            text=True,
-
-        )
-
-        return proc.returncode == 0 and proc.stdout.strip() == "commit"
-
-
+    head_sha = _git_head(git_base) if (git_base / ".git").is_dir() else ""
 
     for record_path in record_paths:
 
@@ -268,13 +288,9 @@ def validate(root: Path | None = None) -> tuple[list[str], list[str]]:
 
                     errors.append(f"{rel}: verified_uncommitted missing '{vu_field}'")
 
-            if commit_sha and not sha_pattern.match(commit_sha):
+            if commit_sha:
 
-                errors.append(f"{rel}: verified_uncommitted commit_sha must be empty or valid SHA")
-
-            if commit_sha and _git_commit_exists(commit_sha):
-
-                errors.append(f"{rel}: verified_uncommitted should not reference existing commit SHA yet")
+                errors.append(f"{rel}: verified_uncommitted commit_sha must be empty")
 
         else:
 
@@ -286,9 +302,29 @@ def validate(root: Path | None = None) -> tuple[list[str], list[str]]:
 
                 errors.append(f"{rel}: invalid commit_sha '{commit_sha}'")
 
-            elif not _git_commit_exists(commit_sha):
+            elif not _git_commit_exists(commit_sha, git_base):
 
                 errors.append(f"{rel}: commit_sha not found in git: {commit_sha}")
+
+            elif head_sha:
+
+                ancestor = _git_is_ancestor(commit_sha, head_sha, git_base)
+
+                if ancestor is False:
+
+                    msg = f"{rel}: commit_sha NOT_ANCESTOR of HEAD ({commit_sha[:12]}.. vs {head_sha[:12]}..)"
+
+                    if status == "KILITLI":
+
+                        errors.append(msg)
+
+                    else:
+
+                        errors.append(msg)
+
+                elif ancestor is None:
+
+                    errors.append(f"{rel}: cannot verify commit_sha ancestry for HEAD")
 
 
 
@@ -326,7 +362,7 @@ def validate(root: Path | None = None) -> tuple[list[str], list[str]]:
 
                         errors.append(f"{rel}: invalid {opt_field} sha '{item}'")
 
-                    elif opt_field == "related_commits" and not _git_commit_exists(item):
+                    elif opt_field == "related_commits" and not _git_commit_exists(item, git_base):
 
                         errors.append(f"{rel}: {opt_field} sha not found in git: {item}")
 
