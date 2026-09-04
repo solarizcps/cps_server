@@ -1,0 +1,51 @@
+schema_version = 1
+module = "test.infra"
+version = "v1.7.0"
+phase_code = "CPS_RELEASE_HISTORY_GPS_WORKER_TEST_ISOLATION_FINAL_FIX"
+title = "Release History testlerinde GPS worker ve 8080 izolasyonu"
+status = "TEST"
+date = "2026-09-04"
+summary = "GPS poll worker canonical DB yazımı test süresince durdurularak session guard ile byte-for-byte DB koruma kanıtlandı."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "90/90 pytest PASS; canonical DB SHA/size/mtime unchanged during test window"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "453f98ed5c8461fd"
+verification_date = "2026-09-04"
+verification_evidence = "Controlled run: 8080+GPS stopped pre-test; baseline sha256=ac0e8e6618fa2a146126db7af0002b205d9a72f5f7533ff0d91a58a773ab579b unchanged post-test; GPS respawn 70s PASS; Stop-Arac-GPS-Worker.ps1 + release_history_test_guard"
+current_work = "GPS worker test izolasyon altyapısı — commit bekliyor"
+evidence_summary = "External writer PID 8864 attribution confirmed; session temp DB + port/GPS preflight guard"
+approved_by = "Adem Terzi"
+changes = [
+  "Stop-Arac-GPS-Worker.ps1 companion stop script eklendi.",
+  "release_history_test_guard pytest preflight: port 8080 kapalı ve GPS worker yok zorunlu.",
+  "Session-level canonical DB guard ve route repeat 5x izolasyon testi.",
+]
+changed_files = [
+  "Stop-Arac-GPS-Worker.ps1",
+  "tests/tools/conftest.py",
+  "tests/tools/release_history_test_db.py",
+  "tests/tools/release_history_test_guard.py",
+  "tests/tools/test_release_history_route_repeat_v1.py",
+  "changes/records/test.infra/CPS_RELEASE_HISTORY_GPS_WORKER_TEST_ISOLATION_FINAL_FIX.toml",
+  "changes/fragments/test.infra.CPS_RELEASE_HISTORY_GPS_WORKER_TEST_ISOLATION_FINAL_FIX.release",
+]
+locked_rules = [
+  "Release History route testleri canonical DB'ye yazamaz.",
+  "Test guard production process öldürmez; aktif 8080 veya GPS worker varsa fail-fast.",
+  "GPS worker test sonrası resmi Start-Arac-GPS-Worker.ps1 ile yeniden başlatılır.",
+]
+tests = [
+  "test_release_history_route_repeat_v1.py (5x)",
+  "release_history_test_guard preflight",
+  "90-test controlled package PASS",
+]
+known_issues = [
+  "GPS worker SYSTEM session 0'da çalışırsa stop script elevation gerektirebilir.",
+]
+next_steps = [
+  "Scheduled task ile GPS worker yaşam döngüsü standardizasyonu.",
+]

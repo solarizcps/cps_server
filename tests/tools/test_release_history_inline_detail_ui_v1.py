@@ -183,9 +183,9 @@ def test_t14_deep_link_module_in_body(route_db_isolation):
     assert "openModule" in body or "openBlock" in body
 
 
-def test_t15_record_count_70(service_mod):
+def test_t15_record_count_73(service_mod):
     records, _ = service_mod.load_release_records(ROOT)
-    assert len(records) == 70
+    assert len(records) == 73
 
 
 def test_t16_module_count_12(service_mod):
@@ -196,7 +196,7 @@ def test_t16_module_count_12(service_mod):
 def test_t17_validator_pass():
     proc = subprocess.run([sys.executable, str(VALIDATOR)], cwd=str(ROOT), capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr
-    assert "records_checked=70" in proc.stdout
+    assert "records_checked=73" in proc.stdout
 
 
 def test_t18_regression_ui_v2_subset():
@@ -383,7 +383,7 @@ def _atp_rules_chunk(body: str) -> str:
     return body.split('id="rh-detail-planlama-atp"')[1].split("rh-history-panel")[0]
 
 
-def _phase_rules_index(service_mod):
+def _phase_rules_index(service_mod, monkeypatch=None):
     records, _ = service_mod.load_release_records(ROOT)
     ctx = service_mod.build_page_context(ROOT)
     return ctx["module_phase_rules"], ctx
@@ -397,6 +397,9 @@ def test_dom_sync_t1_embedded_json_and_apply_js(template_text):
     assert "data-rh-rules-heading" in template_text
     assert "data-rh-rules-list" in template_text
     assert "data-rh-issues-list" in template_text
+    assert "data-rh-push-status" in template_text
+    assert "data-rh-deploy-status" in template_text
+    assert "data-rh-commit-box" in template_text
 
 
 def test_dom_sync_t2_p3_index_has_two_rules(service_mod):
@@ -469,8 +472,8 @@ def test_dom_sync_t9_xss_payload_text_safe(service_mod):
         locked_rules=["<img src=x onerror=alert(1)>"],
         known_issues=["<script>alert(1)</script>"],
     )
-    entry = service_mod._phase_rules_entry(evil)
-    assert entry["rules"][0] == "<img src=x onerror=alert(1)>"
+    panel = service_mod.build_record_phase_panel(evil, {}, service_mod.GitEvidenceCache(ROOT))
+    assert panel["rules"][0] == "<img src=x onerror=alert(1)>"
     js_chunk = TEMPLATE.read_text(encoding="utf-8")
     js_part = js_chunk[js_chunk.index("applyPhaseRules"):]
     assert "innerHTML" not in js_part
@@ -530,3 +533,191 @@ def test_dom_sync_paramsless_page_has_p3_in_json(route_db_isolation):
     p3 = data["planlama.atp"]["ATP_GPS_GEOFENCE_P3"]
     assert p3["heading"] == "Test Edilen Kurallar"
     assert "Geofence olayları doğrulanmış koordinatlarda işlenir." in p3["rules"]
+
+
+def _mock_git_cache(service_mod, *, head: str, origin: str, head_set: set[str], origin_set: set[str]):
+    class _Cache:
+        base = ROOT
+
+        def head(self):
+            return head
+
+        def origin_main(self):
+            return origin
+
+        def resolve_sha(self, value: str):
+            text = (value or "").strip().lower()
+            return text
+
+        def _reachable_commits(self, ref: str):
+            ref = (ref or "").lower()
+            if ref == head:
+                return set(head_set)
+            if ref == origin:
+                return set(origin_set)
+            return set()
+
+        def is_ancestor(self, ancestor: str, descendant: str):
+            anc = self.resolve_sha(ancestor)
+            desc = self.resolve_sha(descendant)
+            reachable = self._reachable_commits(desc)
+            if reachable is None:
+                return None
+            return anc in reachable
+
+    return _Cache()
+
+
+def test_state_t1_stale_manifest_does_not_override(service_mod, monkeypatch):
+    stale = {"local_head": "2b0d77d9d3425592bd399569b8d54dce59fa63eb", "modules": {"cps.release.history": {"push_status": "COMMIT_PENDING"}}}
+    monkeypatch.setattr(service_mod, "_is_deploy_state_stale", lambda _ds, _git: True)
+    monkeypatch.setattr(service_mod, "_has_staged_production_files", lambda _base=None: False)
+    records, _ = service_mod.load_release_records(ROOT)
+    rec = next(r for r in records if r.phase_code == "CPS_RELEASE_HISTORY_ACCORDION_PHASE_DOM_SYNC_FIX")
+    git = _mock_git_cache(
+        service_mod,
+        head="453f98ed5c8461fd8c51bed485e05628bf8b98dd",
+        origin="8952aaa0000000000000000000000000000000000",
+        head_set={"453f98ed5c8461fd8c51bed485e05628bf8b98dd"},
+        origin_set=set(),
+    )
+    lifecycle = service_mod.resolve_record_lifecycle_state(rec, stale, git)
+    assert lifecycle == service_mod.LIFECYCLE_LOCAL_NOT_PUSHED
+
+
+def test_state_t2_t4_cps_selected_phase_labels(service_mod, monkeypatch):
+    monkeypatch.setattr(service_mod, "_has_staged_production_files", lambda _base=None: False)
+    git = _mock_git_cache(
+        service_mod,
+        head="453f98ed5c8461fd8c51bed485e05628bf8b98dd",
+        origin="8952aaa0000000000000000000000000000000000",
+        head_set={"453f98ed5c8461fd8c51bed485e05628bf8b98dd"},
+        origin_set=set(),
+    )
+    monkeypatch.setattr(service_mod, "GitEvidenceCache", lambda base=ROOT: git)
+    ctx = service_mod.build_page_context(
+        ROOT,
+        detail_module="cps.release.history",
+        detail_phase="CPS_RELEASE_HISTORY_ACCORDION_PHASE_DOM_SYNC_FIX",
+    )
+    panel = ctx["module_phase_rules"]["cps.release.history"]["CPS_RELEASE_HISTORY_ACCORDION_PHASE_DOM_SYNC_FIX"]
+    assert panel["lifecycle"] == service_mod.LIFECYCLE_LOCAL_NOT_PUSHED
+    assert panel["push_status_label"] == "Yerelde commitli · Push yapılmadı"
+    assert panel["deploy_status_label"] == "Deploy edilmedi"
+    assert panel["commit_short"] == "453f98ed"
+
+
+def test_state_t5_push_labels_never_contain_deploy_word(service_mod):
+    violations = [label for label in service_mod.PUSH_STATUS_LABELS.values() if "Deploy" in label or "deploy" in label]
+    assert violations == []
+
+
+def test_state_t6_verified_uncommitted_commit_pending(service_mod, monkeypatch):
+    monkeypatch.setattr(service_mod, "_has_staged_production_files", lambda _base=None: False)
+    git = _mock_git_cache(service_mod, head="a", origin="b", head_set={"a"}, origin_set={"b"})
+    monkeypatch.setattr(service_mod, "GitEvidenceCache", lambda base=ROOT: git)
+    ctx = service_mod.build_page_context(ROOT, detail_module="planlama.atp", detail_phase="ATP_GPS_GEOFENCE_P3")
+    panel = ctx["module_phase_rules"]["planlama.atp"]["ATP_GPS_GEOFENCE_P3"]
+    assert panel["push_status_label"] == "Commit bekliyor · Push yapılmadı"
+    assert panel["deploy_status_label"] == "Deploy edilmedi"
+
+
+def test_state_t7_pushed_not_deployed(service_mod):
+    git = _mock_git_cache(
+        service_mod,
+        head="abc1234567890123456789012345678901234567890",
+        origin="abc1234567890123456789012345678901234567890",
+        head_set={"abc1234567890123456789012345678901234567890", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"},
+        origin_set={"abc1234567890123456789012345678901234567890", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"},
+    )
+    records, _ = service_mod.load_release_records(ROOT)
+    rec = next(r for r in records if r.module == "planlama.atp" and r.phase_code == "ATP_U1_ROUTE_ORDER_POLICY")
+    lifecycle = service_mod.resolve_record_lifecycle_state(rec, {}, git)
+    if git.is_ancestor(rec.commit_sha.lower(), git.origin_main()):
+        assert lifecycle == service_mod.LIFECYCLE_PUSHED_NOT_DEPLOYED
+
+
+def test_state_t8_deployed_verified_requires_manifest(service_mod):
+    git = _mock_git_cache(
+        service_mod,
+        head="453f98ed5c8461fd8c51bed485e05628bf8b98dd",
+        origin="8952aaa0000000000000000000000000000000000",
+        head_set={"453f98ed5c8461fd8c51bed485e05628bf8b98dd"},
+        origin_set=set(),
+    )
+    records, _ = service_mod.load_release_records(ROOT)
+    rec = next(r for r in records if r.phase_code == "CPS_RELEASE_HISTORY_ACCORDION_PHASE_DOM_SYNC_FIX")
+    deploy_state = {
+        "manifest_check": {
+            "status": "DEPLOYED_VERIFIED",
+            "sha_resolved": "453f98ed5c8461fd8c51bed485e05628bf8b98dd",
+            "smoke_pass": True,
+        }
+    }
+    lifecycle = service_mod.resolve_record_lifecycle_state(rec, deploy_state, git)
+    assert lifecycle == service_mod.LIFECYCLE_DEPLOYED_VERIFIED
+
+
+def test_state_t9_off_branch_needs_review(service_mod):
+    git = _mock_git_cache(
+        service_mod,
+        head="1111111111111111111111111111111111111111",
+        origin="2222222222222222222222222222222222222222",
+        head_set={"1111111111111111111111111111111111111111"},
+        origin_set={"2222222222222222222222222222222222222222"},
+    )
+    records, _ = service_mod.load_release_records(ROOT)
+    rec = next(r for r in records if r.phase_code == "CPS_RELEASE_HISTORY_ACCORDION_PHASE_DOM_SYNC_FIX")
+    lifecycle = service_mod.resolve_record_lifecycle_state(rec, {}, git)
+    assert lifecycle == service_mod.LIFECYCLE_NEEDS_REVIEW
+
+
+def test_state_t10_inline_selected_phase_dom(route_db_isolation, service_mod, monkeypatch):
+    monkeypatch.setattr(service_mod, "_has_staged_production_files", lambda _base=None: False)
+    git = _mock_git_cache(
+        service_mod,
+        head="453f98ed5c8461fd8c51bed485e05628bf8b98dd",
+        origin="8952aaa0000000000000000000000000000000000",
+        head_set={"453f98ed5c8461fd8c51bed485e05628bf8b98dd"},
+        origin_set=set(),
+    )
+    monkeypatch.setattr(service_mod, "GitEvidenceCache", lambda base=ROOT: git)
+    client = _make_client()
+    _admin_session(client)
+    with _route_ctx(permissions={"*"}, superadmin=True):
+        resp = client.get(
+            "/yonetim/surum-gecmisi?modul=cps.release.history&faz=CPS_RELEASE_HISTORY_ACCORDION_PHASE_DOM_SYNC_FIX"
+        )
+    body = resp.get_data(as_text=True)
+    chunk = body.split('id="rh-detail-cps-release-history"')[1].split("rh-history-panel")[0]
+    assert "453f98ed" in chunk
+    assert "Yerelde commitli · Push yapılmadı" in chunk
+    assert "Deploy edilmedi" in chunk
+    assert "Deploy bilinmiyor" not in chunk
+
+
+def test_state_t11_module_row_aggregate_preserved(service_mod, monkeypatch):
+    monkeypatch.setattr(service_mod, "_has_staged_production_files", lambda _base=None: False)
+    ctx = service_mod.build_page_context(ROOT)
+    cps = next(m for m in ctx["modules"] if m.module == "cps.release.history")
+    assert cps.local_version == "v1.3.1"
+    assert cps.commit_short == "453f98ed"
+
+
+def test_state_t12_p3_rules_dom_sync_preserved(route_db_isolation, service_mod):
+    client = _make_client()
+    _admin_session(client)
+    with _route_ctx(permissions={"*"}, superadmin=True):
+        resp = client.get("/yonetim/surum-gecmisi?modul=planlama.atp&faz=ATP_GPS_GEOFENCE_P3")
+    body = resp.get_data(as_text=True)
+    chunk = _atp_rules_chunk(body)
+    assert "Test Edilen Kurallar" in chunk
+    assert "Geofence olayları doğrulanmış koordinatlarda işlenir." in chunk
+
+
+def test_state_t14_record_module_counts(service_mod):
+    records, skipped = service_mod.load_release_records(ROOT)
+    ctx = service_mod.build_page_context(ROOT)
+    assert len(records) == 73
+    assert skipped == 0
+    assert ctx["summary"]["total_modules"] == 12

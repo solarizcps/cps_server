@@ -1,0 +1,55 @@
+schema_version = 1
+module = "cps.release.history"
+version = "v1.4.0"
+phase_code = "CPS_RELEASE_HISTORY_PUSH_DEPLOY_STATE_ENGINE_FIX_V1"
+title = "Push/deploy durum motoru ve seçili faz meta senkronu sertleştirildi"
+status = "TEST"
+date = "2026-09-04"
+summary = "Git kanıtına dayalı lifecycle state engine; seçili faz commit/push/deploy etiketleri accordion DOM ile senkron."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "90/90 pytest PASS; state engine 13/13; Adem gerçek ekran onayı"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "453f98ed5c8461fd"
+verification_date = "2026-09-04"
+verification_evidence = "Adem ekran onayı: cps.release.history commit=453f98ed Yerelde commitli·Push yapılmadı Deploy edilmedi; planlama.atp P3 Test Edilen Kurallar + 2 geofence kuralı Commit bekliyor·Push yapılmadı Deploy edilmedi"
+current_work = "Push/deploy state engine ve accordion faz meta senkronu — commit bekliyor"
+evidence_summary = "90 test PASS; state_t1–t14 hedefli; ChatGPT ekran incelemesi PASS"
+approved_by = "Adem Terzi"
+changes = [
+  "GitEvidenceCache ile kayıt lifecycle state engine eklendi.",
+  "Push/deploy etiketleri lifecycle tablosundan türetildi; push metninde Deploy kelimesi yok.",
+  "Seçili faz commit/push/deploy meta accordion JS applyPhaseRules ile senkronlandı.",
+  "ACCORDION faz kaydı commit SHA 453f98ed ile KILITLI metadata reconciliation.",
+]
+changed_files = [
+  "app/services/release_history_service.py",
+  "app/templates/yonetim/surum_gecmisi.html",
+  "tests/tools/release_history_test_git.py",
+  "tests/tools/test_release_history_inline_detail_ui_v1.py",
+  "tests/tools/test_release_history_ui_v2.py",
+  "changes/records/cps.release.history/CPS_RELEASE_HISTORY_ACCORDION_PHASE_DOM_SYNC_FIX.toml",
+  "changes/records/cps.release.history/CPS_RELEASE_HISTORY_PUSH_DEPLOY_STATE_ENGINE_FIX_V1.toml",
+  "changes/fragments/cps.release.history.CPS_RELEASE_HISTORY_PUSH_DEPLOY_STATE_ENGINE_FIX_V1.release",
+]
+locked_rules = [
+  "Push durumu etiketlerinde Deploy kelimesi kullanılmaz.",
+  "Seçili faz push/deploy/commit meta module_phase_rules panelinden gelir.",
+  "verified_uncommitted kayıtlar COMMIT_PENDING lifecycle ile gösterilir.",
+]
+tests = [
+  "test_release_history_ui_v2.py",
+  "test_release_history_inline_detail_ui_v1.py (state_t1–t14)",
+  "test_release_history_route_repeat_v1.py",
+  "tools/validate_release_history.py",
+]
+known_issues = [
+  "Bu commit SHA reconciliation sonraki otomasyon fazında yapılacak.",
+]
+next_steps = [
+  "Commit SHA metadata reconciliation.",
+  "Push/deploy manifest senkronu.",
+]

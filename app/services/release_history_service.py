@@ -9,6 +9,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
+LIFECYCLE_COMMIT_PENDING = "COMMIT_PENDING"
+LIFECYCLE_LOCAL_NOT_PUSHED = "LOCAL_COMMITTED_NOT_PUSHED"
+LIFECYCLE_PUSHED_NOT_DEPLOYED = "PUSHED_NOT_DEPLOYED"
+LIFECYCLE_DEPLOYED_VERIFIED = "DEPLOYED_VERIFIED"
+LIFECYCLE_DEPLOY_FAILED = "DEPLOY_FAILED"
+LIFECYCLE_DEPLOYMENT_UNKNOWN = "DEPLOYMENT_UNKNOWN"
+LIFECYCLE_NEEDS_REVIEW = "NEEDS_REVIEW"
+LIFECYCLE_WORKING = "WORKING"
+
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover
@@ -54,14 +63,25 @@ PRODUCTION_STAGED_PREFIXES = (
 
 PUSH_STATUS_LABELS: dict[str, str] = {
     "WORKING": "Çalışılıyor",
-    "COMMIT_PENDING": "Commit bekliyor (staged)",
+    "COMMIT_PENDING": "Commit bekliyor · Push yapılmadı",
     "TESTED": "Test edildi",
-    "LOCAL_COMMITTED_NOT_PUSHED": "Commit bekliyor · Push yapılmadı",
+    "LOCAL_COMMITTED_NOT_PUSHED": "Yerelde commitli · Push yapılmadı",
+    "PUSHED_NOT_DEPLOYED": "Push yapıldı",
+    "DEPLOYED_VERIFIED": "Push yapıldı",
+    "DEPLOY_FAILED": "Push durumu bilinmiyor",
+    "DEPLOYMENT_UNKNOWN": "Push durumu bilinmiyor",
+    "NEEDS_REVIEW": "Push durumu inceleme bekliyor",
+}
+
+DEPLOY_STATUS_LABELS: dict[str, str] = {
+    "WORKING": "Deploy edilmedi",
+    "COMMIT_PENDING": "Deploy edilmedi",
+    "LOCAL_COMMITTED_NOT_PUSHED": "Deploy edilmedi",
     "PUSHED_NOT_DEPLOYED": "Push yapıldı · Deploy bekliyor",
     "DEPLOYED_VERIFIED": "Canlıda doğrulandı",
     "DEPLOY_FAILED": "Deploy başarısız",
-    "DEPLOYMENT_UNKNOWN": "Deploy bilinmiyor",
-    "NEEDS_REVIEW": "İnceleme gerekli",
+    "DEPLOYMENT_UNKNOWN": "Deploy durumu bilinmiyor",
+    "NEEDS_REVIEW": "Deploy durumu inceleme bekliyor",
 }
 
 DEPLOY_WAIT_STATUSES = frozenset({
@@ -300,6 +320,221 @@ def _rules_heading(record: ReleaseRecord | None) -> str:
     return "Kilitli kurallar"
 
 
+def _git_rev_parse(ref: str, base: Path | None = None) -> str:
+    if not ref:
+        return ""
+    proc = subprocess.run(
+        ["git", "rev-parse", ref],
+        cwd=base or REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    return proc.stdout.strip() if proc.returncode == 0 else ""
+
+
+def _git_is_ancestor(ancestor: str, descendant: str, base: Path | None = None) -> bool | None:
+    if not ancestor or not descendant:
+        return None
+    proc = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=base or REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode == 0:
+        return True
+    if proc.returncode == 1:
+        return False
+    return None
+
+
+def _git_head(base: Path | None = None) -> str:
+    return _git_rev_parse("HEAD", base)
+
+
+def _git_origin_main(base: Path | None = None) -> str:
+    root = base or REPO_ROOT
+    for ref in ("origin/main", "refs/remotes/origin/main"):
+        resolved = _git_rev_parse(ref, root)
+        if resolved:
+            return resolved
+    return ""
+
+
+@dataclass
+class GitEvidenceCache:
+    base: Path = REPO_ROOT
+    _head: str | None = field(default=None, init=False, repr=False)
+    _origin_main: str | None = field(default=None, init=False, repr=False)
+    _origin_loaded: bool = field(default=False, init=False, repr=False)
+    _reachable: dict[str, set[str] | None] = field(default_factory=dict, init=False, repr=False)
+    _sha_cache: dict[str, str] = field(default_factory=dict, init=False, repr=False)
+
+    def resolve_sha(self, value: str) -> str:
+        text = (value or "").strip()
+        if not text:
+            return ""
+        if text in self._sha_cache:
+            return self._sha_cache[text]
+        if re.fullmatch(r"[0-9a-fA-F]{40}", text):
+            normalized = text.lower()
+            self._sha_cache[text] = normalized
+            return normalized
+        full = _git_rev_parse(text, self.base) or text
+        self._sha_cache[text] = full
+        return full
+
+    def head(self) -> str:
+        if self._head is None:
+            self._head = _git_head(self.base)
+        return self._head
+
+    def origin_main(self) -> str:
+        if not self._origin_loaded:
+            self._origin_main = _git_origin_main(self.base)
+            self._origin_loaded = True
+        return self._origin_main or ""
+
+    def _reachable_commits(self, ref: str) -> set[str] | None:
+        full = _git_rev_parse(ref, self.base) or ref
+        if full in self._reachable:
+            return self._reachable[full]
+        proc = subprocess.run(
+            ["git", "rev-list", full],
+            cwd=self.base,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if proc.returncode != 0:
+            self._reachable[full] = None
+            return None
+        commits = {line.strip() for line in proc.stdout.splitlines() if line.strip()}
+        commits.add(full)
+        self._reachable[full] = commits
+        return commits
+
+    def is_ancestor(self, ancestor: str, descendant: str) -> bool | None:
+        anc = self.resolve_sha(ancestor)
+        desc = self.resolve_sha(descendant)
+        if not anc or not desc:
+            return None
+        reachable = self._reachable_commits(desc)
+        if reachable is None:
+            return None
+        return anc in reachable
+
+
+def _normalize_sha(value: str, git: GitEvidenceCache) -> str:
+    return git.resolve_sha(value)
+
+
+def _is_deploy_state_stale(deploy_state: dict[str, Any], git: GitEvidenceCache) -> bool:
+    if not deploy_state:
+        return True
+    manifest_head = _normalize_sha(str(deploy_state.get("local_head", "")), git)
+    current_head = git.head()
+    if not current_head:
+        return True
+    if not manifest_head:
+        return True
+    return manifest_head != current_head
+
+
+def _manifest_deploy_verified_for_record(
+    deploy_state: dict[str, Any],
+    record_sha: str,
+    git: GitEvidenceCache,
+) -> bool:
+    if not deploy_state or not record_sha:
+        return False
+    manifest_check = deploy_state.get("manifest_check")
+    if not isinstance(manifest_check, dict):
+        return False
+    if str(manifest_check.get("status", "")).upper() != LIFECYCLE_DEPLOYED_VERIFIED:
+        return False
+    if not manifest_check.get("smoke_pass"):
+        return False
+    manifest_sha = _normalize_sha(str(manifest_check.get("sha_resolved", "")), git)
+    record_full = _normalize_sha(record_sha, git)
+    if not manifest_sha or not record_full:
+        return False
+    covered = git.is_ancestor(record_full, manifest_sha)
+    return covered is True
+
+
+def resolve_record_lifecycle_state(
+    record: ReleaseRecord,
+    deploy_state: dict[str, Any],
+    git: GitEvidenceCache,
+) -> str:
+    if record.is_uncommitted or not (record.commit_sha or "").strip():
+        return LIFECYCLE_COMMIT_PENDING
+
+    record_sha = _normalize_sha(record.commit_sha, git)
+    head = git.head()
+    if not record_sha or not head:
+        return LIFECYCLE_DEPLOYMENT_UNKNOWN
+
+    on_head = git.is_ancestor(record_sha, head)
+    if on_head is False:
+        return LIFECYCLE_NEEDS_REVIEW
+    if on_head is None:
+        return LIFECYCLE_DEPLOYMENT_UNKNOWN
+
+    if _manifest_deploy_verified_for_record(deploy_state, record_sha, git):
+        return LIFECYCLE_DEPLOYED_VERIFIED
+
+    origin_main = git.origin_main()
+    if origin_main:
+        on_origin = git.is_ancestor(record_sha, origin_main)
+        if on_origin is False:
+            return LIFECYCLE_LOCAL_NOT_PUSHED
+        if on_origin is None:
+            return LIFECYCLE_DEPLOYMENT_UNKNOWN
+        if on_origin is True:
+            return LIFECYCLE_PUSHED_NOT_DEPLOYED
+
+    return LIFECYCLE_LOCAL_NOT_PUSHED
+
+
+def _module_lifecycle_state(
+    module: str,
+    latest: ReleaseRecord,
+    deploy_state: dict[str, Any],
+    git: GitEvidenceCache,
+    *,
+    uncommitted_count: int = 0,
+) -> str:
+    if uncommitted_count > 0:
+        return LIFECYCLE_COMMIT_PENDING
+    if not _is_deploy_state_stale(deploy_state, git):
+        modules_state = deploy_state.get("modules", {})
+        if isinstance(modules_state, dict) and module in modules_state:
+            val = str(modules_state[module].get("push_status", "")).strip().upper()
+            if val in {
+                LIFECYCLE_WORKING,
+                LIFECYCLE_COMMIT_PENDING,
+                LIFECYCLE_LOCAL_NOT_PUSHED,
+                LIFECYCLE_PUSHED_NOT_DEPLOYED,
+                LIFECYCLE_DEPLOYED_VERIFIED,
+                LIFECYCLE_DEPLOY_FAILED,
+                LIFECYCLE_NEEDS_REVIEW,
+            }:
+                return val
+    return resolve_record_lifecycle_state(latest, deploy_state, git)
+
+
+def format_push_status_label(lifecycle: str) -> str:
+    key = (lifecycle or "").strip().upper()
+    return PUSH_STATUS_LABELS.get(key, "Push durumu bilinmiyor")
+
+
+def format_deploy_status_label(lifecycle: str) -> str:
+    key = (lifecycle or "").strip().upper()
+    return DEPLOY_STATUS_LABELS.get(key, "Deploy durumu bilinmiyor")
+
+
 def _format_push_status_label(
     push_auto: str,
     *,
@@ -308,54 +543,19 @@ def _format_push_status_label(
 ) -> str:
     if uncommitted_count > 0:
         return UNCOMMITTED_PUSH_LABEL
-    push = (push_auto or "").strip().upper()
-    if push == "COMMIT_PENDING":
-        if production_staged:
-            return PUSH_STATUS_LABELS["COMMIT_PENDING"]
-        return UNCOMMITTED_PUSH_LABEL
-    return PUSH_STATUS_LABELS.get(push, push.replace("_", " "))
-
-
-def _effective_push_status(
-    push_auto: str,
-    *,
-    uncommitted_count: int = 0,
-    production_staged: bool = False,
-) -> str:
-    push = (push_auto or "").strip().upper()
-    if uncommitted_count > 0:
-        return push
-    if push == "COMMIT_PENDING" and not production_staged:
-        return "DEPLOYMENT_UNKNOWN"
-    return push
+    if push_auto == LIFECYCLE_COMMIT_PENDING and production_staged:
+        return PUSH_STATUS_LABELS[LIFECYCLE_COMMIT_PENDING]
+    return format_push_status_label(push_auto)
 
 
 def _deploy_label(
-    deployment_status: str,
-    push_status: str,
-    source_type: str = COMMITTED_SOURCE,
+    lifecycle: str,
     *,
-    status: str = "",
+    source_type: str = COMMITTED_SOURCE,
 ) -> str:
     if source_type == UNCOMMITTED_SOURCE:
-        return "Deploy edilmedi"
-    dep = (deployment_status or "").strip().upper()
-    push = (push_status or "").strip().upper()
-    if dep == "DEPLOYED_VERIFIED":
-        return "Sunucuda doğrulandı"
-    if dep in DEPLOY_WAIT_STATUSES or push in DEPLOY_WAIT_STATUSES:
-        return "Yerelde hazır · Server aktarımı bekliyor"
-    if dep in DEPLOY_UNKNOWN_STATUSES or push in DEPLOY_UNKNOWN_STATUSES:
-        return "Deploy durumu bilinmiyor"
-    if dep == "DEPLOY_FAILED":
-        return "Deploy başarısız"
-    if dep == "NEEDS_REVIEW":
-        return "İnceleme gerekli"
-    if push == "WORKING" or dep == "WORKING":
-        return "Yerelde çalışıyor · Deploy edilmedi"
-    if push_status:
-        return PUSH_STATUS_LABELS.get(push, push.replace("_", " "))
-    return "—"
+        return DEPLOY_STATUS_LABELS[LIFECYCLE_COMMIT_PENDING]
+    return format_deploy_status_label(lifecycle)
 
 
 def _module_deploy_pending(item: ModuleSummary) -> bool:
@@ -415,7 +615,7 @@ def _record_from_toml(data: dict[str, Any], forbidden_tokens: list[str]) -> Rele
         test_result=_sanitize_text(data.get("test_result", ""), forbidden_tokens),
         push_status=push_status,
         deployment_status=deployment_status,
-        deploy_label=_deploy_label(deployment_status, push_status, source_type, status=str(data["status"])),
+        deploy_label=format_deploy_status_label(LIFECYCLE_DEPLOYMENT_UNKNOWN),
         live_version=live_version,
         local_version=local_version,
         root_cause=_sanitize_text(data.get("root_cause", ""), forbidden_tokens),
@@ -508,34 +708,28 @@ def _resolve_push_status(
     module: str,
     record: ReleaseRecord,
     deploy_state: dict[str, Any],
+    git: GitEvidenceCache,
     *,
     uncommitted_count: int = 0,
 ) -> str:
-    modules_state = deploy_state.get("modules", {})
-    if isinstance(modules_state, dict) and module in modules_state:
-        val = str(modules_state[module].get("push_status", "")).strip().upper()
-        if val and val not in {"", "DEPLOYMENT_UNKNOWN"}:
-            return val
-
-    global_state = str(deploy_state.get("global_state", "")).strip().upper()
-    if uncommitted_count > 0 or record.is_uncommitted:
-        if global_state == "COMMIT_PENDING":
-            return "COMMIT_PENDING"
-        return "WORKING"
-    if global_state in {
-        "WORKING", "COMMIT_PENDING", "LOCAL_COMMITTED_NOT_PUSHED",
-        "PUSHED_NOT_DEPLOYED", "DEPLOYED_VERIFIED", "DEPLOY_FAILED", "NEEDS_REVIEW",
-    }:
-        return global_state
-    push = (record.push_status or "").upper()
-    if push and push != "DEPLOYMENT_UNKNOWN":
-        return push
-    return "DEPLOYMENT_UNKNOWN"
+    return _module_lifecycle_state(
+        module,
+        record,
+        deploy_state,
+        git,
+        uncommitted_count=uncommitted_count,
+    )
 
 
-def aggregate_modules(records: list[ReleaseRecord], deploy_state: dict[str, Any] | None = None) -> list[ModuleSummary]:
+def aggregate_modules(
+    records: list[ReleaseRecord],
+    deploy_state: dict[str, Any] | None = None,
+    *,
+    base: Path | None = None,
+) -> list[ModuleSummary]:
     deploy_state = deploy_state or {}
-    production_staged = _has_staged_production_files()
+    git = GitEvidenceCache(base=base or REPO_ROOT)
+    production_staged = _has_staged_production_files(base)
     grouped: dict[str, list[ReleaseRecord]] = {}
     for record in records:
         grouped.setdefault(record.module, []).append(record)
@@ -560,15 +754,14 @@ def aggregate_modules(records: list[ReleaseRecord], deploy_state: dict[str, Any]
         else:
             current_work = "—"
         next_step = latest.next_steps[0] if latest.next_steps else "—"
-        push_auto = _resolve_push_status(module, latest, deploy_state, uncommitted_count=len(uncommitted))
-        push_auto = _effective_push_status(
-            push_auto,
+        lifecycle = _module_lifecycle_state(
+            module,
+            latest,
+            deploy_state,
+            git,
             uncommitted_count=len(uncommitted),
-            production_staged=production_staged,
         )
         deploy_source = UNCOMMITTED_SOURCE if uncommitted else latest.source_type
-        deploy_status = uncommitted[0].deployment_status if uncommitted else latest.deployment_status
-        deploy_status_label = uncommitted[0].status if uncommitted else latest.status
         summaries.append(
             ModuleSummary(
                 module=module,
@@ -586,16 +779,11 @@ def aggregate_modules(records: list[ReleaseRecord], deploy_state: dict[str, Any]
                 commit_short=latest.commit_short,
                 test_result=latest.test_result,
                 test_status_label=latest.test_result[:40] + ("…" if len(latest.test_result) > 40 else ""),
-                deploy_label=_deploy_label(
-                    deploy_status,
-                    push_auto,
-                    deploy_source,
-                    status=deploy_status_label,
-                ),
-                deployment_status=latest.deployment_status or push_auto,
-                push_status_auto=push_auto,
+                deploy_label=_deploy_label(lifecycle, source_type=deploy_source),
+                deployment_status=lifecycle,
+                push_status_auto=lifecycle,
                 push_status_label=_format_push_status_label(
-                    push_auto,
+                    lifecycle,
                     uncommitted_count=len(uncommitted),
                     production_staged=production_staged,
                 ),
@@ -691,47 +879,77 @@ def find_record(records: list[ReleaseRecord], module: str | None, phase_code: st
     return None
 
 
-def _selected_rules_panel(record: ReleaseRecord | None) -> dict[str, Any] | None:
-    if not record:
-        return None
+def build_record_phase_panel(
+    record: ReleaseRecord,
+    deploy_state: dict[str, Any],
+    git: GitEvidenceCache,
+    lifecycle_cache: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    if record.is_uncommitted or not (record.commit_sha or "").strip():
+        lifecycle = LIFECYCLE_COMMIT_PENDING
+    else:
+        sha_key = _normalize_sha(record.commit_sha, git)
+        if lifecycle_cache is not None and sha_key in lifecycle_cache:
+            lifecycle = lifecycle_cache[sha_key]
+        else:
+            lifecycle = resolve_record_lifecycle_state(record, deploy_state, git)
+            if lifecycle_cache is not None and sha_key:
+                lifecycle_cache[sha_key] = lifecycle
     return {
         "phase_code": record.phase_code,
         "heading": _rules_heading(record),
-        "rules": list(record.locked_rules),
-        "known_issues": list(record.known_issues),
+        "rules": list(record.locked_rules)[:8],
+        "known_issues": list(record.known_issues)[:8],
+        "source_type": record.source_type,
+        "status": record.status,
+        "lifecycle": lifecycle,
+        "commit_short": record.commit_short,
+        "commit_pending": record.is_uncommitted,
+        "push_status_label": format_push_status_label(lifecycle),
+        "deploy_status_label": format_deploy_status_label(lifecycle),
     }
+
+
+def _selected_rules_panel(
+    record: ReleaseRecord | None,
+    deploy_state: dict[str, Any] | None = None,
+    git: GitEvidenceCache | None = None,
+    lifecycle_cache: dict[str, str] | None = None,
+) -> dict[str, Any] | None:
+    if not record:
+        return None
+    state = deploy_state or {}
+    cache = git or GitEvidenceCache()
+    return build_record_phase_panel(record, state, cache, lifecycle_cache)
 
 
 def build_module_selected_rules(
     records: list[ReleaseRecord],
     detail_module: str | None,
     detail_phase: str | None,
+    deploy_state: dict[str, Any] | None = None,
+    git: GitEvidenceCache | None = None,
+    lifecycle_cache: dict[str, str] | None = None,
 ) -> dict[str, dict[str, Any]]:
     if not detail_module or not detail_phase:
         return {}
     selected = find_record(records, detail_module, detail_phase)
-    panel = _selected_rules_panel(selected)
+    panel = _selected_rules_panel(selected, deploy_state, git, lifecycle_cache)
     if not panel:
         return {}
     return {detail_module: panel}
 
 
-def _phase_rules_entry(record: ReleaseRecord) -> dict[str, Any]:
-    return {
-        "heading": _rules_heading(record),
-        "rules": list(record.locked_rules)[:8],
-        "known_issues": list(record.known_issues)[:8],
-        "source_type": record.source_type,
-        "status": record.status,
-    }
-
-
 def build_module_phase_rules_index(
     records: list[ReleaseRecord],
-    visible_modules: Iterable[str] | None = None,
+    visible_modules: Iterable[str] | None,
+    deploy_state: dict[str, Any],
+    git: GitEvidenceCache,
+    lifecycle_cache: dict[str, str] | None = None,
 ) -> dict[str, dict[str, dict[str, Any]]]:
     allowed = set(visible_modules) if visible_modules is not None else None
     index: dict[str, dict[str, dict[str, Any]]] = {}
+    cache = lifecycle_cache if lifecycle_cache is not None else {}
     for record in records:
         if allowed is not None and record.module not in allowed:
             continue
@@ -739,7 +957,12 @@ def build_module_phase_rules_index(
             continue
         if not re.fullmatch(r"[A-Z0-9_]+", record.phase_code):
             continue
-        index.setdefault(record.module, {})[record.phase_code] = _phase_rules_entry(record)
+        index.setdefault(record.module, {})[record.phase_code] = build_record_phase_panel(
+            record,
+            deploy_state,
+            git,
+            cache,
+        )
     return index
 
 
@@ -762,10 +985,18 @@ def build_page_context(
 ) -> dict[str, Any]:
     root = base or REPO_ROOT
     deploy_state = load_deployment_state(root)
+    git = GitEvidenceCache(base=root)
+    head_ref = git.head()
+    if head_ref:
+        git._reachable_commits(head_ref)
+    origin_ref = git.origin_main()
+    if origin_ref:
+        git._reachable_commits(origin_ref)
     records, skipped = load_release_records(root)
-    modules = aggregate_modules(records, deploy_state)
+    modules = aggregate_modules(records, deploy_state, base=root)
     counts = build_summary_counts(records, modules, deploy_state)
     counts["invalid_records"] = skipped
+    deploy_state_stale = _is_deploy_state_stale(deploy_state, git)
 
     filtered_modules = filter_modules(
         modules,
@@ -777,9 +1008,23 @@ def build_page_context(
     detail = find_record(records, detail_module, detail_phase)
     timeline = module_timeline(records, detail_module) if detail_module else []
     module_timelines = {m.module: module_timeline(records, m.module) for m in filtered_modules}
-    module_selected_rules = build_module_selected_rules(records, detail_module, detail_phase)
+    lifecycle_cache: dict[str, str] = {}
+    module_selected_rules = build_module_selected_rules(
+        records,
+        detail_module,
+        detail_phase,
+        deploy_state,
+        git,
+        lifecycle_cache,
+    )
     visible_module_ids = [m.module for m in filtered_modules]
-    module_phase_rules = build_module_phase_rules_index(records, visible_module_ids)
+    module_phase_rules = build_module_phase_rules_index(
+        records,
+        visible_module_ids,
+        deploy_state,
+        git,
+        lifecycle_cache,
+    )
 
     return {
         "summary": counts,
@@ -794,6 +1039,7 @@ def build_page_context(
         "module_phase_rules": module_phase_rules,
         "open_module": detail_module or "",
         "deploy_state": deploy_state,
+        "deploy_state_stale": deploy_state_stale,
         "filters": {
             "module_query": module_query or "",
             "status": status or "",

@@ -16,6 +16,15 @@ from unittest.mock import patch
 
 import pytest
 
+from release_history_test_git import (
+    MOCK_HEAD,
+    MOCK_ORIGIN,
+    NEXGEN_RECORD_SHA,
+    PUSHED_RECORD_SHA,
+    UNKNOWN_RECORD_SHA,
+    mock_git_cache,
+)
+
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "app"
 VALIDATOR = ROOT / "tools" / "validate_release_history.py"
@@ -65,11 +74,23 @@ def test_t2_module_aggregation_pass(fixture_root, service_mod):
     assert ctx["modules"][0].current_version == "v1.3.0"
 
 
-def test_t3_current_local_deployment_fields_pass(fixture_root, service_mod):
+def test_t3_current_local_deployment_fields_pass(fixture_root, service_mod, monkeypatch):
+    git = mock_git_cache(
+        base=fixture_root,
+        head=MOCK_HEAD,
+        origin=MOCK_ORIGIN,
+        head_set={NEXGEN_RECORD_SHA},
+        origin_set=set(),
+    )
+    monkeypatch.setattr(service_mod, "GitEvidenceCache", lambda base=None: git)
+    monkeypatch.setattr(service_mod, "_has_staged_production_files", lambda _base=None: False)
     ctx = service_mod.build_page_context(fixture_root)
     item = ctx["modules"][0]
     assert item.local_version == "v1.3.0"
-    assert "Server aktarımı" in item.deploy_label
+    assert item.push_status_auto == "LOCAL_COMMITTED_NOT_PUSHED"
+    assert item.push_status_label == "Yerelde commitli · Push yapılmadı"
+    assert item.deployment_status == "LOCAL_COMMITTED_NOT_PUSHED"
+    assert item.deploy_label == "Deploy edilmedi"
 
 
 def test_t4_invalid_toml_safe_skip_pass(fixture_root, service_mod):
@@ -198,7 +219,12 @@ def test_t11_unauthorized_route_403(route_db_isolation):
     assert resp.status_code == 403
 
 
-def test_t12_unauthenticated_redirect():
+def test_t12_unauthenticated_redirect(route_db_isolation):
+    import config
+    from tools.atp_test_db_guard import is_canonical_path
+
+    assert route_db_isolation.get("active") is True
+    assert not is_canonical_path(config.Config.MOCK_DB_PATH)
     client = _make_client()
     resp = client.get("/yonetim/surum-gecmisi")
     assert resp.status_code in (302, 303)
@@ -395,12 +421,14 @@ def _write_deploy_kpi_record(
     version: str,
     push_status: str,
     deployment_status: str,
+    commit_sha: str = NEXGEN_RECORD_SHA,
 ) -> None:
     text = _canonical_toml_text()
     text = (
         text.replace("nexgen.mo", module)
         .replace("NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1", phase_code)
         .replace("v1.3.0", version)
+        .replace(NEXGEN_RECORD_SHA, commit_sha)
         .replace('push_status = "LOCAL_COMMITTED_NOT_PUSHED"', f'push_status = "{push_status}"')
         .replace(
             'deployment_status = "LOCAL_COMMITTED_NOT_PUSHED"',
@@ -432,6 +460,7 @@ def _copy_deploy_kpi_fixture(tmp: Path) -> None:
         version="v1.0.0",
         push_status="PUSHED_NOT_DEPLOYED",
         deployment_status="PUSHED_NOT_DEPLOYED",
+        commit_sha=PUSHED_RECORD_SHA,
     )
     for idx, module in enumerate(("planlama.atp", "server", "test.infra"), start=1):
         _write_deploy_kpi_record(
@@ -441,12 +470,24 @@ def _copy_deploy_kpi_fixture(tmp: Path) -> None:
             version="v1.0.0",
             push_status="DEPLOYMENT_UNKNOWN",
             deployment_status="DEPLOYMENT_UNKNOWN",
+            commit_sha=UNKNOWN_RECORD_SHA,
         )
 
 
-def test_t25_deploy_kpi_counts_local_vs_unknown(service_mod, tmp_path):
+def test_t25_deploy_kpi_counts_local_vs_unknown(service_mod, tmp_path, monkeypatch):
     fixture_root = tmp_path / "deploy_kpi_fixture"
     _copy_deploy_kpi_fixture(fixture_root)
+
+    git = mock_git_cache(
+        base=fixture_root,
+        head=MOCK_HEAD,
+        origin=MOCK_ORIGIN,
+        head_set={NEXGEN_RECORD_SHA, PUSHED_RECORD_SHA},
+        origin_set={PUSHED_RECORD_SHA},
+        unknown_refs={UNKNOWN_RECORD_SHA},
+    )
+    monkeypatch.setattr(service_mod, "GitEvidenceCache", lambda base=None: git)
+    monkeypatch.setattr(service_mod, "_has_staged_production_files", lambda _base=None: False)
 
     records, skipped = service_mod.load_release_records(fixture_root)
     ctx = service_mod.build_page_context(fixture_root)

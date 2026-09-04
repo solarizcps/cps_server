@@ -276,9 +276,11 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
         </div>
 
         <div class="rh-inline-meta">
-          <div class="box"><div class="lbl">Commit durumu</div>{% if item.commit_pending_count > 0 %}<span class="rh-badge commit-bekliyor">{{ item.commit_pending_count }} bekliyor</span>{% elif item.commit_short != '—' %}<span class="mono">{{ item.commit_short }}</span>{% else %}—{% endif %}</div>
-          <div class="box"><div class="lbl">Push durumu</div>{{ item.push_status_label }}</div>
-          <div class="box"><div class="lbl">Deploy durumu</div>{{ item.deploy_label }}</div>
+          {% set phase_open = detail_module == item.module and detail_phase %}
+          {% set phase_panel = module_phase_rules.get(item.module, {}).get(detail_phase) if phase_open else none %}
+          <div class="box"><div class="lbl">Commit durumu</div><div data-rh-commit-box>{% if phase_panel %}{% if phase_panel.commit_pending %}<span class="rh-badge commit-bekliyor">Commit bekliyor</span>{% elif phase_panel.commit_short != '—' %}<span class="mono" data-rh-commit-status>{{ phase_panel.commit_short }}</span>{% else %}—{% endif %}{% elif item.commit_pending_count > 0 %}<span class="rh-badge commit-bekliyor">{{ item.commit_pending_count }} bekliyor</span>{% elif item.commit_short != '—' %}<span class="mono" data-rh-commit-status>{{ item.commit_short }}</span>{% else %}—{% endif %}</div></div>
+          <div class="box"><div class="lbl">Push durumu</div><span data-rh-push-status>{% if phase_panel %}{{ phase_panel.push_status_label }}{% else %}{{ item.push_status_label }}{% endif %}</span></div>
+          <div class="box"><div class="lbl">Deploy durumu</div><span data-rh-deploy-status>{% if phase_panel %}{{ phase_panel.deploy_status_label }}{% else %}{{ item.deploy_label }}{% endif %}</span></div>
         </div>
 
         <div class="rh-inline-lists">
@@ -365,11 +367,41 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
     }
   }
 
+  function setCommitBox(box, panel) {
+    if (!box) return;
+    while (box.firstChild) {
+      box.removeChild(box.firstChild);
+    }
+    if (!panel) {
+      box.textContent = '—';
+      return;
+    }
+    if (panel.commit_pending) {
+      var badge = document.createElement('span');
+      badge.className = 'rh-badge commit-bekliyor';
+      badge.textContent = 'Commit bekliyor';
+      box.appendChild(badge);
+      return;
+    }
+    if (panel.commit_short && panel.commit_short !== '—') {
+      var mono = document.createElement('span');
+      mono.className = 'mono';
+      mono.setAttribute('data-rh-commit-status', '');
+      mono.textContent = panel.commit_short;
+      box.appendChild(mono);
+      return;
+    }
+    box.textContent = '—';
+  }
+
   function applyPhaseRules(block, moduleId, phaseCode) {
     if (!block || !moduleId || !phaseCode) return;
     var headingEl = block.querySelector('[data-rh-rules-heading]');
     var rulesUl = block.querySelector('[data-rh-rules-list]');
     var issuesUl = block.querySelector('[data-rh-issues-list]');
+    var pushEl = block.querySelector('[data-rh-push-status]');
+    var deployEl = block.querySelector('[data-rh-deploy-status]');
+    var commitBox = block.querySelector('[data-rh-commit-box]');
     if (!headingEl || !rulesUl || !issuesUl) return;
     var modData = phaseRulesData[moduleId];
     var panel = modData && modData[phaseCode];
@@ -377,10 +409,16 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
       headingEl.textContent = panel.heading || 'Kilitli kurallar';
       fillList(rulesUl, panel.rules || []);
       fillList(issuesUl, panel.known_issues || []);
+      setCommitBox(commitBox, panel);
+      if (pushEl) pushEl.textContent = panel.push_status_label || 'Push durumu bilinmiyor';
+      if (deployEl) deployEl.textContent = panel.deploy_status_label || 'Deploy durumu bilinmiyor';
     } else {
       headingEl.textContent = 'Kilitli kurallar';
       fillList(rulesUl, []);
       fillList(issuesUl, []);
+      setCommitBox(commitBox, null);
+      if (pushEl) pushEl.textContent = 'Push durumu bilinmiyor';
+      if (deployEl) deployEl.textContent = 'Deploy durumu bilinmiyor';
     }
   }
 
@@ -389,10 +427,16 @@ main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; paddi
     var headingEl = block.querySelector('[data-rh-rules-heading]');
     var rulesUl = block.querySelector('[data-rh-rules-list]');
     var issuesUl = block.querySelector('[data-rh-issues-list]');
+    var pushEl = block.querySelector('[data-rh-push-status]');
+    var deployEl = block.querySelector('[data-rh-deploy-status]');
+    var commitBox = block.querySelector('[data-rh-commit-box]');
     if (!headingEl || !rulesUl || !issuesUl) return;
     headingEl.textContent = 'Kilitli kurallar';
     fillList(rulesUl, []);
     fillList(issuesUl, []);
+    if (commitBox) commitBox.textContent = '—';
+    if (pushEl) pushEl.textContent = 'Push durumu bilinmiyor';
+    if (deployEl) deployEl.textContent = 'Deploy durumu bilinmiyor';
   }
 
   function scrollTop() {

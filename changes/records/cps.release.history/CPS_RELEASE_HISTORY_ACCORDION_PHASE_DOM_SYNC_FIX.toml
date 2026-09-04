@@ -3,22 +3,18 @@ module = "cps.release.history"
 version = "v1.3.1"
 phase_code = "CPS_RELEASE_HISTORY_ACCORDION_PHASE_DOM_SYNC_FIX"
 title = "Seçili faz kuralları accordion detayına reload olmadan senkronlandı"
-status = "TEST"
+status = "KILITLI"
 date = "2026-09-03"
 summary = "Seçili faz kuralları sayfa yenilenmeden accordion detayına senkronlandı."
-source_type = "verified_uncommitted"
-commit_sha = ""
+source_type = "commit"
+commit_sha = "453f98ed5c8461fd8c51bed485e05628bf8b98dd"
 test_result = "49/49 PASS; Adem gerçek ekran onayı"
 db_write = false
 server_restart = false
 push_status = "Push yapılmadı"
 deployment_status = "Deploy edilmedi"
-worktree_fingerprint = "87878312fee00ede"
-verification_date = "2026-09-03"
-verification_evidence = "Adem gerçek ekran onayı; P3 Test Edilen Kurallar + 2 madde; U1 Kilitli Kurallar; popstate/stale DOM/XSS doğrulandı"
 approved_by = "Adem Terzi"
-evidence_summary = "Adem gerçek ekran onayı; accordion Detay tıklaması reload olmadan doğru faz kuralları"
-current_work = "Commit bekliyor; metadata reconciliation ile SHA bağlanacak"
+evidence_summary = "Adem gerçek ekran onayı; P3 Test Edilen Kurallar + 2 madde; U1 Kilitli Kurallar; popstate/stale DOM/XSS doğrulandı"
 changes = [
   "module_phase_rules JSON index build_module_phase_rules_index ile üretildi.",
   "Accordion JS applyPhaseRules ile heading/rules/known_issues textContent güncellenir.",
@@ -40,5 +36,4 @@ tests = [
 known_issues = [
 ]
 next_steps = [
-  "Feature commit SHA metadata reconciliation.",
 ]
