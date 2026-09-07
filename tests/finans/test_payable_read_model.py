@@ -743,6 +743,209 @@ class TestDryRun:
             assert active_id is None  # Publish edilmedi
 
 
+# ─── 9. Gerçek Flask route — HTTP 500 regression ─────────────────────────────
+
+def _route_app_root() -> Path:
+    return Path(__file__).parent.parent.parent / "app"
+
+
+def _prepare_temp_mock_db(tmp_path: Path) -> Path:
+    """Canonical DB kopyası veya skip — canonical'a yazılmaz."""
+    canonical = _route_app_root() / "mock_data.db"
+    main_canonical = Path(r"C:\Solariz_CPS_SERVER\app\mock_data.db")
+    src = canonical if canonical.is_file() else main_canonical
+    if not src.is_file():
+        pytest.skip("Route test için mock_data.db bulunamadı")
+    dest = tmp_path / "mock_data_route.db"
+    import shutil
+    shutil.copy2(src, dest)
+    return dest
+
+
+def _finans_superadmin_session(client):
+    with client.session_transaction() as sess:
+        sess["kullanici"] = {
+            "Id": 1,
+            "KullaniciAdi": "admin",
+            "AdSoyad": "Admin",
+            "Tip": "sistem",
+            "RolId": 1,
+            "RolAd": "Admin",
+            "AuthVersion": 1,
+        }
+
+
+@pytest.fixture
+def flask_route_client(tmp_path, monkeypatch):
+    """Flask test client — temp mock DB + temp read-model, Korgün yok."""
+    import sys
+    import importlib
+    app_root = _route_app_root()
+    mock_copy = _prepare_temp_mock_db(tmp_path)
+    rm_path = str(tmp_path / "route_rm.sqlite")
+
+    monkeypatch.setenv("CPS_MOCK_DB_PATH", str(mock_copy))
+    monkeypatch.setenv("ODEME_PLANI_RM_PATH", rm_path)
+    if str(app_root) not in sys.path:
+        sys.path.insert(0, str(app_root))
+
+    import config
+    import db
+    importlib.reload(config)
+    importlib.reload(db)
+    import app as flask_app
+    importlib.reload(flask_app)
+
+    assert str(mock_copy) == config.Config.MOCK_DB_PATH
+    assert mock_copy.is_file()
+
+    flask_app.app.config["TESTING"] = True
+    flask_app.app.config["PROPAGATE_EXCEPTIONS"] = True
+    return flask_app.app.test_client(), rm_path
+
+
+def _route_patches():
+    """before_request oturum_kontrol + finans yetki bypass."""
+    from contextlib import contextmanager
+    from unittest.mock import patch
+
+    @contextmanager
+    def _ctx():
+        patches = [
+            patch("app.sistem_session_gecerli_mi", return_value=True),
+            patch("app.kullanici_yetkileri", return_value={"*"}),
+            patch("modules.auth.is_superadmin", return_value=True),
+            patch("modules.auth.yetki_var", return_value=True),
+            patch("modules.finans.services.odeme_plani_yetki.is_superadmin", return_value=True),
+        ]
+        for p in patches:
+            p.start()
+        try:
+            yield
+        finally:
+            for p in patches:
+                p.stop()
+    return _ctx()
+
+
+class TestRealRouteCariler:
+    """GET /finans/odeme-plani?sekme=cariler — gerçek route render."""
+
+    @patch("modules.finans.services.korgun_finance_adapter.KorgunFinanceAdapter.fetch_supplier_balances_bundle")
+    def test_route_http_200_with_snapshot(self, mock_fetch, flask_route_client):
+        client, rm_path = flask_route_client
+        mock_fetch.side_effect = AssertionError("inline Korgün çağrılmamalı")
+
+        from modules.finans.read_model.rm_refresh import run_refresh
+
+        balances = _make_balances(12)
+        with patch("modules.finans.read_model.rm_refresh._import_adapter") as mock_adapter:
+            class _A:
+                def fetch_supplier_balances_bundle(self, **kw):
+                    return balances, [b for b in balances if b.bakiye < 0]
+            mock_adapter.return_value = _A
+            assert run_refresh(db_path=rm_path)["ok"] is True
+
+        _finans_superadmin_session(client)
+        import time
+        t0 = time.perf_counter()
+        with _route_patches():
+            resp = client.get("/finans/odeme-plani?sekme=cariler")
+        ms = int((time.perf_counter() - t0) * 1000)
+
+        assert resp.status_code == 200, resp.data[:500]
+        html = resp.get_data(as_text=True)
+        assert "Son güncelleme" in html or "op-rm-banner" in html
+        assert "op-kpi" in html
+        assert "data-cari-kod=" in html
+        assert "500" not in html[:200]
+        assert ms < 1000
+        mock_fetch.assert_not_called()
+
+    def test_route_no_snapshot_http_200(self, flask_route_client):
+        client, rm_path = flask_route_client
+        # rm_path yok veya boş — bootstrap yok
+        import os
+        if os.path.exists(rm_path):
+            os.unlink(rm_path)
+
+        _finans_superadmin_session(client)
+        with _route_patches():
+            resp = client.get("/finans/odeme-plani?sekme=cariler")
+
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert "henüz hazırlanmadı" in html.lower() or "no_snapshot" in html or "op-rm-banner" in html
+
+    @patch("modules.finans.read_model.rm_refresh._import_adapter")
+    def test_route_stale_snapshot_http_200(self, mock_adapter, flask_route_client):
+        client, rm_path = flask_route_client
+        balances = _make_balances(5)
+
+        class _A:
+            def fetch_supplier_balances_bundle(self, **kw):
+                return balances, []
+        mock_adapter.return_value = _A
+
+        from modules.finans.read_model.rm_refresh import run_refresh
+        from modules.finans.read_model.rm_db import open_readwrite
+
+        run_refresh(db_path=rm_path)
+        stale_pub = (datetime.now(timezone.utc) - timedelta(minutes=20)).isoformat()
+        with open_readwrite(rm_path) as conn:
+            conn.execute(
+                "UPDATE rm_snapshot SET published_at=? WHERE status='ACTIVE'",
+                (stale_pub,),
+            )
+            conn.commit()
+
+        _finans_superadmin_session(client)
+        with _route_patches():
+            resp = client.get("/finans/odeme-plani?sekme=cariler")
+
+        assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert "Veri eski" in html or "data-cari-kod=" in html
+
+    @patch("modules.finans.read_model.rm_refresh.run_parity_gate")
+    @patch("modules.finans.read_model.rm_refresh._import_adapter")
+    def test_route_failed_refresh_keeps_last_success(
+        self, mock_adapter, mock_parity, flask_route_client,
+    ):
+        from modules.finans.read_model.rm_parity import ParityResult
+        from modules.finans.read_model.rm_refresh import run_refresh
+        from modules.finans.read_model.rm_reader import read_payable_snapshot
+
+        client, rm_path = flask_route_client
+        balances = _make_balances(4)
+
+        class _A:
+            def fetch_supplier_balances_bundle(self, **kw):
+                return balances, []
+        mock_adapter.return_value = _A
+
+        first = run_refresh(db_path=rm_path)
+        first_id = first["snapshot_id"]
+
+        mock_parity.return_value = ParityResult(
+            passed=False, checks=[], failure_reasons=["forced"],
+        )
+        try:
+            run_refresh(db_path=rm_path)
+        except Exception:
+            pass
+
+        snap = read_payable_snapshot(db_path=rm_path)
+        assert snap.get("snapshot_id") == first_id
+
+        _finans_superadmin_session(client)
+        with _route_patches():
+            resp = client.get("/finans/odeme-plani?sekme=cariler")
+
+        assert resp.status_code == 200
+        assert b"data-cari-kod=" in resp.data
+
+
 # ─── Test çalıştırma ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

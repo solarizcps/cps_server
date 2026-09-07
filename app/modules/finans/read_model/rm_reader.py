@@ -219,6 +219,39 @@ def read_payable_snapshot(
         }
 
 
+def _as_float(v: Any) -> float:
+    """SQLite Decimal string → float (Jinja '{:,.2f}'.format uyumu)."""
+    if v is None or v == "":
+        return 0.0
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return float(str(v).strip().replace(",", ""))
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _minimal_ui_row_fields(durum: Optional[str], durum_class: str) -> Dict[str, Any]:
+    """Template'in zorunlu gördüğü minimal satır alanları (Layer2/Korgün yok)."""
+    label = (durum or "").strip()
+    low = label.lower()
+    if "borç" in low or "borc" in low:
+        karar_badge, karar_aksiyon = "Açık Borç", "Ödeme planla"
+    elif "alacak" in low:
+        karar_badge, karar_aksiyon = "Alacaklıyız", "—"
+    else:
+        karar_badge, karar_aksiyon = "Bakiye Yok", "—"
+    return {
+        "aktif_takip": False,
+        "karar_badge": karar_badge,
+        "karar_class": durum_class,
+        "karar_aksiyon": karar_aksiyon,
+        "soz_has_active": False,
+        "soz_is_overdue": False,
+        "vade_has_term": False,
+    }
+
+
 def _load_cari_rows(conn: sqlite3.Connection, snapshot_id: str) -> List[Dict[str, Any]]:
     """Snapshot'tan tüm cari satırlarını yükler."""
     rows = conn.execute(
@@ -233,9 +266,13 @@ def _load_cari_rows(conn: sqlite3.Connection, snapshot_id: str) -> List[Dict[str
 
     result = []
     for r in rows:
+        durum = r[9]
+        durum_class = _durum_class(durum)
+        net_f = _as_float(r[7])
+        disp_f = _as_float(r[10])
         result.append({
             "location": r[0],
-            "location_label": r[1],
+            "location_label": r[1] or r[0],
             "cari_kod": r[2],
             "cari_adi": r[3],
             "para_birimi": r[4],
@@ -243,13 +280,14 @@ def _load_cari_rows(conn: sqlite3.Connection, snapshot_id: str) -> List[Dict[str
             "alacak": r[6],
             "net": r[7],
             "canonical_key": r[8],
-            "bakiye_durumu": r[9],
-            "display_bakiye": r[10],
+            "bakiye_durumu": durum,
+            "display_bakiye": disp_f,
             # Mevcut UI'ın beklediği alanlar
-            "acik_bakiye": r[7],      # net
-            "kritik": r[9],
-            "kritik_class": _durum_class(r[9]),
-            "bakiye_durum_class": _durum_class(r[9]),
+            "acik_bakiye": net_f,
+            "kritik": durum,
+            "kritik_class": durum_class,
+            "bakiye_durum_class": durum_class,
+            **_minimal_ui_row_fields(durum, durum_class),
         })
     return result
 
