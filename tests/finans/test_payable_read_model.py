@@ -875,7 +875,14 @@ class TestRealRouteCariler:
 
         assert resp.status_code == 200
         html = resp.get_data(as_text=True)
-        assert "henüz hazırlanmadı" in html.lower() or "no_snapshot" in html or "op-rm-banner" in html
+        # CH UI: no_snapshot durumu op-ch-status-info veya op-ch-status içinde gösterilir
+        assert (
+            "henüz hazırlanmadı" in html.lower()
+            or "veri hazırlanıyor" in html.lower()
+            or "no_snapshot" in html
+            or "op-rm-banner" in html
+            or "op-ch-status" in html
+        )
 
     @patch("modules.finans.read_model.rm_refresh._import_adapter")
     def test_route_stale_snapshot_http_200(self, mock_adapter, flask_route_client):
@@ -906,6 +913,53 @@ class TestRealRouteCariler:
         assert resp.status_code == 200
         html = resp.get_data(as_text=True)
         assert "Veri eski" in html or "data-cari-kod=" in html
+
+    @patch("modules.finans.services.korgun_finance_adapter.KorgunFinanceAdapter.fetch_supplier_balances_bundle")
+    def test_route_bare_odeme_plani_defaults_cariler(self, mock_fetch, flask_route_client):
+        """Parametresiz /finans/odeme-plani → cariler snapshot (PAYABLE_RM_V1 default)."""
+        client, rm_path = flask_route_client
+        mock_fetch.side_effect = AssertionError("inline Korgün çağrılmamalı")
+
+        from modules.finans.read_model.rm_refresh import run_refresh
+
+        balances = _make_balances(8)
+        with patch("modules.finans.read_model.rm_refresh._import_adapter") as mock_adapter:
+            class _A:
+                def fetch_supplier_balances_bundle(self, **kw):
+                    return balances, [b for b in balances if b.bakiye < 0]
+            mock_adapter.return_value = _A
+            assert run_refresh(db_path=rm_path)["ok"] is True
+
+        _finans_superadmin_session(client)
+        import time
+        t0 = time.perf_counter()
+        with _route_patches():
+            resp = client.get("/finans/odeme-plani")
+        ms = int((time.perf_counter() - t0) * 1000)
+
+        assert resp.status_code == 200, resp.data[:500]
+        html = resp.get_data(as_text=True)
+        assert "op-rm-banner" in html or "Son güncelleme" in html
+        assert "data-cari-kod=" in html
+        assert ms < 1000
+        mock_fetch.assert_not_called()
+
+
+class TestOdemePlaniErrorClassification:
+    def test_sqlite_error_classified_local(self):
+        import sqlite3
+        from unittest.mock import patch
+        from modules.finans.services import odeme_plani_service as svc
+
+        with patch.object(
+            svc,
+            "odeme_plani_sayfa_verisi",
+            side_effect=sqlite3.OperationalError("no such table: finans_odeme_tedarikci_takip"),
+        ):
+            data = svc.odeme_plani_sayfa_verisi_safe(active_tab="yukumlulukler")
+        assert data["hata_kind"] == "local"
+        assert "no such table" in data["hata"]
+        assert data["kpi_filtered"] == {"active": False}
 
     @patch("modules.finans.read_model.rm_refresh.run_parity_gate")
     @patch("modules.finans.read_model.rm_refresh._import_adapter")
@@ -944,6 +998,295 @@ class TestRealRouteCariler:
 
         assert resp.status_code == 200
         assert b"data-cari-kod=" in resp.data
+
+
+# ─── V2 Row Contract Testleri ────────────────────────────────────────────────
+
+@dataclass
+class MockPayDTO:
+    tarih: Optional[str]
+    tutar: float
+    pb: str
+    kaynak: str = "EFT"
+
+@dataclass
+class MockCekDTO:
+    verilis: Optional[str]
+    vade: Optional[str]
+    tutar: float
+    pb: str
+    cek_no: str = "C001"
+
+@dataclass
+class MockPurDTO:
+    tarih: Optional[str]
+    tutar: float
+    pb: str
+    belge: str = "FAT001"
+    tip: str = "FATURA"
+
+
+class TestRowContractV2:
+    """V2 snapshot row contract — enrichment alanları snapshot'ta doğru."""
+
+    @staticmethod
+    def _run_refresh_with_layer2(db_path: str, balances, layer2=None, takip_map=None):
+        """Adapter mock ve layer2 ile refresh çalıştır."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+        from modules.finans.read_model.rm_refresh import run_refresh, _write_snapshot_rows
+        from modules.finans.read_model.rm_db import open_readwrite
+
+        class _MockAdapter:
+            def fetch_supplier_balances_bundle(self, **kw):
+                return balances, [b for b in balances if b.bakiye < 0]
+
+        with patch("modules.finans.read_model.rm_refresh._import_adapter") as mock_adp:
+            mock_adp.return_value = _MockAdapter
+            # layer2 enjekte et — fetch_layer2_maps'i patch'le
+            layer2_val = layer2 or {}
+            takip_val = takip_map or {}
+
+            def _fake_layer2(locations=None, force_refresh=True):
+                return layer2_val
+
+            def _fake_takip(locations=None):
+                return takip_val
+
+            def _fake_enrichment(locs, ckods):
+                return {}, {}, {}
+
+            with patch("modules.finans.read_model.rm_refresh._fetch_layer2",
+                       side_effect=_fake_layer2):
+                with patch("modules.finans.read_model.rm_refresh._fetch_takip",
+                           side_effect=_fake_takip):
+                    with patch("modules.finans.read_model.rm_refresh._fetch_enrichment",
+                               side_effect=_fake_enrichment):
+                        return run_refresh(db_path=db_path)
+
+    def test_debt_row_has_nonzero_bakiye(self, bootstrapped_db):
+        """Açık borç satırında display_bakiye > 0."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+        from modules.finans.read_model.rm_reader import read_payable_snapshot
+
+        balances = [MockDTO("SA001", "SA001", "320.01.001", "BORC_CARI", "TRY", -5000.0)]
+        result = self._run_refresh_with_layer2(bootstrapped_db, balances)
+        assert result["ok"] is True, result
+
+        snap = read_payable_snapshot(db_path=bootstrapped_db)
+        rows = snap["cari_rows"]
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["bakiye_durumu"] == "Açık Borç"
+        assert row["display_bakiye"] == 5000.0
+        assert row["karar_badge"] == "Açık Borç"
+        assert row["karar_class"] == "op-st-open"
+        assert row["karar_aksiyon"] == "Ödeme planla"
+
+    def test_credit_row_correct_direction(self, bootstrapped_db):
+        """Alacaklı satır yönü doğru."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+        from modules.finans.read_model.rm_reader import read_payable_snapshot
+
+        balances = [MockDTO("SA001", "SA001", "320.01.002", "ALACAK_CARI", "TRY", 3500.0)]
+        result = self._run_refresh_with_layer2(bootstrapped_db, balances)
+        assert result["ok"] is True
+
+        snap = read_payable_snapshot(db_path=bootstrapped_db)
+        rows = snap["cari_rows"]
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["bakiye_durumu"] == "Alacaklıyız"
+        assert row["karar_badge"] == "Alacaklıyız"
+        assert row["karar_class"] == "op-st-credit"
+
+    def test_fa_tarih_stored_from_layer2(self, bootstrapped_db):
+        """Layer2 son ödeme → fa_tarih snapshot'ta doğru."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+        from modules.finans.read_model.rm_reader import read_payable_snapshot
+
+        pay = MockPayDTO(tarih="2026-08-15", tutar=10000.0, pb="TRY")
+        layer2 = {
+            "last_payment_map": {"320.01.003": pay},
+            "last_cek_map": {},
+            "last_purchase_map": {},
+            "elapsed_ms": 1,
+        }
+        balances = [MockDTO("SA001", "SA001", "320.01.003", "ODEME_CARI", "TRY", -8000.0)]
+        result = self._run_refresh_with_layer2(bootstrapped_db, balances, layer2=layer2)
+        assert result["ok"] is True
+
+        snap = read_payable_snapshot(db_path=bootstrapped_db)
+        rows = snap["cari_rows"]
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["fa_tarih"] == "2026-08-15"
+        assert row["fa_turu"] == "EFT"
+        assert row["fa_is_cek"] is False
+        assert row["son_odeme_tarih"] == "2026-08-15"
+
+    def test_fa_cek_takes_priority_when_newer(self, bootstrapped_db):
+        """Çek tarihi daha yeni olunca FA = çek."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+        from modules.finans.read_model.rm_reader import read_payable_snapshot
+
+        pay = MockPayDTO(tarih="2026-07-01", tutar=5000.0, pb="TRY")
+        cek = MockCekDTO(verilis="2026-08-20", vade="2026-10-20", tutar=12000.0, pb="TRY")
+        layer2 = {
+            "last_payment_map": {"320.01.004": pay},
+            "last_cek_map": {"320.01.004": cek},
+            "last_purchase_map": {},
+            "elapsed_ms": 1,
+        }
+        balances = [MockDTO("SA001", "SA001", "320.01.004", "CEK_CARI", "TRY", -12000.0)]
+        result = self._run_refresh_with_layer2(bootstrapped_db, balances, layer2=layer2)
+        assert result["ok"] is True
+
+        snap = read_payable_snapshot(db_path=bootstrapped_db)
+        rows = snap["cari_rows"]
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["fa_is_cek"] is True
+        assert row["fa_tarih"] == "2026-08-20"
+        assert row["fa_turu"] == "Çek"
+        assert row["fa_vade"] == "2026-10-20"
+
+    def test_son_alim_stored_from_layer2(self, bootstrapped_db):
+        """Son alış → snapshot'ta doğru."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+        from modules.finans.read_model.rm_reader import read_payable_snapshot
+
+        pur = MockPurDTO(tarih="2026-09-01", tutar=25000.0, pb="TRY")
+        layer2 = {
+            "last_payment_map": {},
+            "last_cek_map": {},
+            "last_purchase_map": {"320.01.005": pur},
+            "elapsed_ms": 1,
+        }
+        balances = [MockDTO("SA001", "SA001", "320.01.005", "ALIM_CARI", "TRY", -25000.0)]
+        result = self._run_refresh_with_layer2(bootstrapped_db, balances, layer2=layer2)
+        assert result["ok"] is True
+
+        snap = read_payable_snapshot(db_path=bootstrapped_db)
+        row = snap["cari_rows"][0]
+        assert row["son_alim_tarih"] == "2026-09-01"
+        assert row["son_alim_tip"] == "FATURA"
+
+    def test_aktif_takip_stored(self, bootstrapped_db):
+        """Aktif takip map → snapshot row'da doğru."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+        from modules.finans.read_model.rm_reader import read_payable_snapshot
+
+        takip = {"SA001|320.01.006": True}
+        balances = [MockDTO("SA001", "SA001", "320.01.006", "TAKIP_CARI", "TRY", -3000.0)]
+        result = self._run_refresh_with_layer2(bootstrapped_db, balances, takip_map=takip)
+        assert result["ok"] is True
+
+        snap = read_payable_snapshot(db_path=bootstrapped_db)
+        row = snap["cari_rows"][0]
+        assert row["aktif_takip"] is True
+
+    def test_usd_and_eur_rows_stored(self, bootstrapped_db):
+        """USD ve EUR satırları doğru para birimi ile saklanır."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+        from modules.finans.read_model.rm_reader import read_payable_snapshot
+
+        balances = [
+            MockDTO("SA001", "SA001", "320.01.010", "USD_CARI", "USD", -1500.0),
+            MockDTO("SA001", "SA001", "320.01.011", "EUR_CARI", "EUR", -2000.0),
+        ]
+        result = self._run_refresh_with_layer2(bootstrapped_db, balances)
+        assert result["ok"] is True
+
+        snap = read_payable_snapshot(db_path=bootstrapped_db)
+        rows_by_pb = {r["para_birimi"]: r for r in snap["cari_rows"]}
+        assert "USD" in rows_by_pb
+        assert "EUR" in rows_by_pb
+        assert rows_by_pb["USD"]["bakiye_durumu"] == "Açık Borç"
+        assert rows_by_pb["USD"]["display_bakiye"] == 1500.0
+        assert rows_by_pb["EUR"]["display_bakiye"] == 2000.0
+
+    def test_no_wrong_zero_balance_in_snapshot(self, bootstrapped_db):
+        """Borç satırları 0,00 olarak dönmemeli."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+        from modules.finans.read_model.rm_reader import read_payable_snapshot
+
+        balances = [
+            MockDTO("SA001", "SA001", f"320.01.{100+i:03d}", f"CARI_{i}", "TRY", -(i+1)*1000.0)
+            for i in range(10)
+        ]
+        result = self._run_refresh_with_layer2(bootstrapped_db, balances)
+        assert result["ok"] is True
+
+        snap = read_payable_snapshot(db_path=bootstrapped_db)
+        wrong_zero = [r for r in snap["cari_rows"]
+                      if r["bakiye_durumu"] == "Açık Borç" and r["display_bakiye"] == 0.0]
+        assert len(wrong_zero) == 0, f"Yanlış sıfır bakiye: {wrong_zero}"
+
+    def test_missing_layer2_does_not_crash(self, bootstrapped_db):
+        """Layer2 eksik olduğunda reader sessizce çalışır (fail-closed değil, ama crash yok)."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+        from modules.finans.read_model.rm_reader import read_payable_snapshot
+
+        balances = [MockDTO("SA001", "SA001", "320.01.020", "NO_LAYER2_CARI", "TRY", -9000.0)]
+        # layer2 boş — crash beklemiyoruz
+        result = self._run_refresh_with_layer2(bootstrapped_db, balances, layer2={})
+        assert result["ok"] is True
+
+        snap = read_payable_snapshot(db_path=bootstrapped_db)
+        row = snap["cari_rows"][0]
+        # fa_tarih None olabilir — ama crash yok ve bakiye doğru
+        assert row["display_bakiye"] == 9000.0
+        assert row["fa_tarih"] is None
+
+    def test_schema_v1_db_rejected(self, tmp_rm_db):
+        """Eski V1 schema DB, bootstrap sırasında RuntimeError fırlatmalı."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+
+        # Manuel olarak V1 schema oluştur
+        conn = sqlite3.connect(tmp_rm_db)
+        conn.execute("""CREATE TABLE rm_schema_meta (key TEXT PRIMARY KEY, value TEXT)""")
+        conn.execute("INSERT INTO rm_schema_meta VALUES ('schema_version', '1')")
+        conn.commit()
+        conn.close()
+
+        from modules.finans.read_model.rm_db import open_readwrite
+        from modules.finans.read_model.rm_config import SCHEMA_VERSION
+
+        if SCHEMA_VERSION != 1:
+            with pytest.raises(RuntimeError, match="schema version uyumsuz|Read-model schema version"):
+                with open_readwrite(tmp_rm_db) as _:
+                    pass
+
+    def test_cross_company_cari_has_correct_location(self, bootstrapped_db):
+        """Çapraz şirkette cari location doğru eşleşmeli."""
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent / "app"))
+        from modules.finans.read_model.rm_reader import read_payable_snapshot
+
+        balances = [
+            MockDTO("SA001", "SA001", "320.01.050", "SAPKA_CARI", "TRY", -4000.0),
+            MockDTO("YN001", "YN001", "320.01.050", "SAPKA_CARI", "TRY", -6000.0),
+        ]
+        result = self._run_refresh_with_layer2(bootstrapped_db, balances)
+        assert result["ok"] is True
+
+        snap = read_payable_snapshot(db_path=bootstrapped_db)
+        rows = snap["cari_rows"]
+        sa_row = next(r for r in rows if r["location"] == "SA001")
+        yn_row = next(r for r in rows if r["location"] == "YN001")
+        assert sa_row["display_bakiye"] == 4000.0
+        assert yn_row["display_bakiye"] == 6000.0
 
 
 # ─── Test çalıştırma ─────────────────────────────────────────────────────────

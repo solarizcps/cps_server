@@ -16,7 +16,7 @@ from pathlib import Path
 
 # ─── Sabitler ────────────────────────────────────────────────────────────────
 
-SCHEMA_VERSION: int = 1
+SCHEMA_VERSION: int = 2  # V2: row enrichment alanları (fa_*, son_*, aktif_takip, karar, vade)
 DIRECTION_PAYABLE: str = "PAYABLE"
 
 # Production default path — repo dışı, git-ignored, yeniden üretilebilir.

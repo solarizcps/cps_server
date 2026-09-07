@@ -44,6 +44,36 @@ from .rm_schema import bootstrap_schema
 
 logger = logging.getLogger("cps.finans.rm_refresh")
 
+
+# ─── Enrichment facade'ları (test'te patch edilebilir) ───────────────────────
+
+def _fetch_layer2(locations=None, force_refresh: bool = True) -> Dict[str, Any]:
+    """Layer2 enrichment: son ödeme/çek/alış — Korgün batch (3 sorgu)."""
+    try:
+        from modules.finans.services.odeme_karar_read_service import fetch_layer2_maps
+    except ImportError:
+        from app.modules.finans.services.odeme_karar_read_service import fetch_layer2_maps
+    return fetch_layer2_maps(locations=locations, force_refresh=force_refresh)
+
+
+def _fetch_takip(locations=None) -> Dict[str, bool]:
+    """CPS local: aktif takip map."""
+    try:
+        from modules.finans.services.odeme_takip_service import fetch_aktif_takip_map
+    except ImportError:
+        from app.modules.finans.services.odeme_takip_service import fetch_aktif_takip_map
+    return fetch_aktif_takip_map(locations=locations)
+
+
+def _fetch_enrichment(locations, cari_kods) -> tuple:
+    """CPS local: contact/promise/term maps."""
+    try:
+        from modules.finans.services.odeme_plani_enrichment_service import fetch_enrichment_maps
+    except ImportError:
+        from app.modules.finans.services.odeme_plani_enrichment_service import fetch_enrichment_maps
+    return fetch_enrichment_maps(locations, cari_kods)
+
+
 # ─── Windows Named Mutex ──────────────────────────────────────────────────────
 
 _MUTEX_NAME = "Global\\CPS_OdemePlaniPayableRefresh"
@@ -190,31 +220,44 @@ class _DecimalEncoder(json.JSONEncoder):
 
 # ─── Snapshot yazma ───────────────────────────────────────────────────────────
 
+def _ds(v) -> str:
+    """Decimal/float/int/str → güvenli Decimal string (float yasak)."""
+    from decimal import Decimal as D
+    if v is None or v == "" or v == "None":
+        return "0"
+    if isinstance(v, D):
+        return str(v)
+    if isinstance(v, float):
+        return str(D(str(v)))
+    if isinstance(v, (int, str)):
+        try:
+            return str(D(str(v)))
+        except Exception:
+            return "0"
+    return "0"
+
+
 def _write_snapshot_rows(
     conn,
     snapshot_id: str,
     balances: List[Any],
+    layer2: Optional[Dict[str, Any]] = None,
+    takip_map: Optional[Dict[str, bool]] = None,
+    enrichment_maps: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
-    Cari satırlarını rm_snapshot_row'a yazar.
-    BATCH insert — N+1 yok.
-    Tutar değerleri Decimal string olarak saklanır.
+    Cari satırlarını rm_snapshot_row'a yazar — V2 tam UI contract.
+    BATCH insert, N+1 yok.
+    Layer2 (son ödeme/çek/alış) ve CPS-local enrichment (soz/temas/takip/vade)
+    refresh sırasında snapshot'a gömülür; web request Korgün çağırmaz.
     """
     from decimal import Decimal as D
+    from datetime import date as _date
 
-    def _d(v) -> str:
-        if isinstance(v, D):
-            return str(v)
-        if isinstance(v, float):
-            return str(D(str(v)))
-        if isinstance(v, (int, str)):
-            return str(D(str(v) if isinstance(v, str) else v))
-        return "0"
+    def _net_is_zero(net_d: D) -> bool:
+        return net_d == D("0")
 
-    def _net_is_zero(net_d) -> bool:
-        return D(str(net_d)) == D("0")
-
-    def _bakiye_durumu(net_d) -> str:
+    def _bakiye_durumu(net_d: D) -> str:
         from .rm_config import DEBT_NET_TOLERANCE_STR
         tol = D(DEBT_NET_TOLERANCE_STR)
         if net_d > tol:
@@ -223,21 +266,137 @@ def _write_snapshot_rows(
             return "Açık Borç"
         return "Bakiye Yok"
 
+    def _karar(net_d: D) -> tuple:
+        """(badge, class, aksiyon)"""
+        from .rm_config import DEBT_NET_TOLERANCE_STR
+        tol = D(DEBT_NET_TOLERANCE_STR)
+        if net_d < -tol:
+            return "Açık Borç", "op-st-open", "Ödeme planla"
+        if net_d > tol:
+            return "Alacaklıyız", "op-st-credit", "—"
+        return "Bakiye Yok", "op-st-neutral", "—"
+
+    def _fmt_money(v, pb: str) -> str:
+        if v is None:
+            return ""
+        sym = {"TRY": "₺", "USD": "$", "EUR": "€"}.get(str(pb), str(pb) + " ")
+        try:
+            return f"{sym}{float(v):,.0f}".replace(",", ".")
+        except (TypeError, ValueError):
+            return ""
+
+    # Layer2 maps
+    pay_map = (layer2 or {}).get("last_payment_map", {})
+    cek_map = (layer2 or {}).get("last_cek_map", {})
+    pur_map = (layer2 or {}).get("last_purchase_map", {})
+
+    # CPS local maps (contact, promise, term)
+    contact_map = (enrichment_maps or {}).get("contact_map", {})
+    promise_map = (enrichment_maps or {}).get("promise_map", {})
+    term_map = (enrichment_maps or {}).get("term_map", {})
+    takip_map = takip_map or {}
+
+    today = _date.today()
+
     rows = []
     for b in balances:
         net_d = D(str(b.bakiye)) if not isinstance(b.bakiye, D) else b.bakiye
         # borc / alacak ayrımı
         if net_d >= D("0"):
             borc_str = "0"
-            alacak_str = _d(net_d)
+            alacak_str = _ds(net_d)
         else:
-            borc_str = _d(abs(net_d))
+            borc_str = _ds(abs(net_d))
             alacak_str = "0"
 
-        net_str = _d(net_d)
-        disp = _d(abs(net_d)) if not _net_is_zero(net_d) else "0"
+        net_str = _ds(net_d)
+        disp = _ds(abs(net_d)) if not _net_is_zero(net_d) else "0"
         durum = _bakiye_durumu(net_d)
+        karar_badge, karar_class, karar_aksiyon = _karar(net_d)
         canonical_key = f"{b.location}:{b.cari_kod}:{b.para_birimi}"
+        canonical_key_pipe = f"{b.location}|{b.cari_kod}"
+
+        # Layer2: son ödeme/çek/alış
+        pay = pay_map.get(b.cari_kod)
+        cek = cek_map.get(b.cari_kod)
+        pur = pur_map.get(b.cari_kod)
+
+        # Son Finansal Aksiyon (FA = max(nakit, çek tarihi))
+        cash_date = getattr(pay, "tarih", None)
+        cek_date = getattr(cek, "verilis", None)
+        if cash_date and cek_date:
+            fa_is_cek = cek_date >= cash_date
+        elif cek_date:
+            fa_is_cek = True
+        else:
+            fa_is_cek = False
+
+        if fa_is_cek and cek:
+            fa_tarih = getattr(cek, "verilis", None)
+            fa_turu = "Çek"
+            fa_tutar = _ds(getattr(cek, "tutar", None))
+            fa_pb = getattr(cek, "pb", None) or b.para_birimi
+            fa_vade = getattr(cek, "vade", None)
+            fa_cek_no = getattr(cek, "cek_no", None)
+            # Vade süresi kısası — çek veriliş → vade gün farkı
+            try:
+                from datetime import datetime as _dt
+                _v = _dt.strptime(str(fa_vade)[:10], "%Y-%m-%d").date() if fa_vade else None
+                _s = _dt.strptime(str(fa_tarih)[:10], "%Y-%m-%d").date() if fa_tarih else None
+                fa_vade_short = f"{(_v - _s).days}g" if (_v and _s) else ""
+            except Exception:
+                fa_vade_short = ""
+        elif pay:
+            fa_tarih = getattr(pay, "tarih", None)
+            fa_turu = str(getattr(pay, "kaynak", "") or "")
+            fa_tutar = _ds(getattr(pay, "tutar", None))
+            fa_pb = getattr(pay, "pb", None) or b.para_birimi
+            fa_vade = None
+            fa_cek_no = None
+            fa_vade_short = ""
+        else:
+            fa_tarih = fa_turu = fa_vade = fa_cek_no = fa_vade_short = None
+            fa_tutar = "0"
+            fa_pb = b.para_birimi
+            fa_is_cek = False
+
+        # CPS local: aktif takip
+        aktif_takip = 1 if takip_map.get(canonical_key_pipe, False) else 0
+
+        # CPS local: enrichment (soz/temas/vade)
+        soz_has_active = 0
+        soz_is_overdue = 0
+        temas_tarih_iso = None
+        anlasma_durumu = None
+        vade_has_term = 0
+        vade_gun = None
+
+        if contact_map or promise_map or term_map:
+            _bre = None
+            try:
+                from modules.finans.services.odeme_plani_enrichment_service import build_row_enrichment as _bre
+            except ImportError:
+                try:
+                    from app.modules.finans.services.odeme_plani_enrichment_service import build_row_enrichment as _bre
+                except ImportError:
+                    _bre = None
+            if _bre is not None:
+                try:
+                    enrich = _bre(
+                        b.location, b.cari_kod,
+                        contact_map=contact_map,
+                        promise_map=promise_map,
+                        term_map=term_map,
+                        today=today,
+                    )
+                    soz_has_active = 1 if enrich.get("soz_has_active") else 0
+                    soz_is_overdue = 1 if enrich.get("soz_is_overdue") else 0
+                    temas_tarih_iso = enrich.get("temas_tarih_iso")
+                    anlasma_durumu = enrich.get("anlasma_durumu")
+                    vade_has_term = 1 if enrich.get("vade_has_term") else 0
+                    vade_gun = enrich.get("vade_gun")
+                except Exception:
+                    pass
 
         rows.append((
             snapshot_id,
@@ -252,13 +411,50 @@ def _write_snapshot_rows(
             canonical_key,
             durum,
             disp,
+            # V2 enrichment
+            fa_tarih,
+            fa_turu,
+            fa_tutar,
+            fa_pb,
+            fa_vade,
+            1 if fa_is_cek else 0,
+            fa_vade_short,
+            fa_cek_no,
+            str(getattr(pay, "tarih", None) or "") or None,
+            _ds(getattr(pay, "tutar", None)),
+            getattr(pay, "pb", None) or b.para_birimi,
+            str(getattr(pur, "tarih", None) or "") or None,
+            _ds(getattr(pur, "tutar", None)),
+            getattr(pur, "pb", None) or b.para_birimi,
+            str(getattr(pur, "tip", None) or "") or None,
+            str(getattr(cek, "vade", None) or "") or None,
+            _ds(getattr(cek, "tutar", None)),
+            getattr(cek, "pb", None) or b.para_birimi,
+            str(getattr(cek, "cek_no", None) or "") or None,
+            aktif_takip,
+            karar_badge,
+            karar_class,
+            karar_aksiyon,
+            anlasma_durumu,
+            vade_has_term,
+            vade_gun,
+            soz_has_active,
+            soz_is_overdue,
+            temas_tarih_iso,
         ))
 
     conn.executemany(
         """INSERT INTO rm_snapshot_row
            (snapshot_id, location, location_label, cari_kod, cari_adi, para_birimi,
-            borc, alacak, net, canonical_key, bakiye_durumu, display_bakiye)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            borc, alacak, net, canonical_key, bakiye_durumu, display_bakiye,
+            fa_tarih, fa_turu, fa_tutar, fa_pb, fa_vade, fa_is_cek, fa_vade_short, fa_cek_no,
+            son_odeme_tarih, son_odeme_tutar, son_odeme_pb,
+            son_alim_tarih, son_alim_tutar, son_alim_pb, son_alim_tip,
+            son_cek_vade, son_cek_tutar, son_cek_pb, son_cek_no,
+            aktif_takip, karar_badge, karar_class, karar_aksiyon,
+            anlasma_durumu, vade_has_term, vade_gun,
+            soz_has_active, soz_is_overdue, temas_tarih_iso)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         rows,
     )
 
@@ -517,9 +713,39 @@ def _do_refresh(
         "currencies": sorted(source_summary.currencies),
     }
 
-    # Satırları STAGING snapshot'a yaz
+    # Layer2 enrichment — son ödeme/çek/alış (Korgün batch, 3 sorgu)
+    layer2: Dict[str, Any] = {}
+    try:
+        layer2 = _fetch_layer2(locations=locations)
+        logger.info("Layer2 fetch tamamlandı: elapsed=%dms", layer2.get("elapsed_ms", 0))
+    except Exception as _l2_exc:
+        logger.warning("Layer2 fetch başarısız (enrichment boş olacak): %s", sanitize_error(_l2_exc))
+
+    # CPS-local enrichment — soz/temas/vade/takip (SQLite, Korgün yok)
+    takip_map: Dict[str, bool] = {}
+    enrichment_maps: Dict[str, Any] = {}
+    try:
+        takip_map = _fetch_takip(locations=locations)
+        _enrich_ckods = [b.cari_kod for b in supplier_master]
+        contact_map, promise_map, term_map = _fetch_enrichment(locations, _enrich_ckods)
+        enrichment_maps = {
+            "contact_map": contact_map,
+            "promise_map": promise_map,
+            "term_map": term_map,
+        }
+        logger.info("CPS local enrichment tamamlandı: takip=%d contact=%d promise=%d term=%d",
+                    len(takip_map), len(contact_map), len(promise_map), len(term_map))
+    except Exception as _enr_exc:
+        logger.warning("CPS enrichment fetch başarısız (default olacak): %s", sanitize_error(_enr_exc))
+
+    # Heartbeat
+    _heartbeat(conn, lock_owner)
+
+    # Satırları STAGING snapshot'a yaz (V2 tam UI contract)
     conn.execute("BEGIN IMMEDIATE")
-    _write_snapshot_rows(conn, snapshot_id, supplier_master)
+    _write_snapshot_rows(conn, snapshot_id, supplier_master,
+                         layer2=layer2, takip_map=takip_map,
+                         enrichment_maps=enrichment_maps)
     conn.execute("COMMIT")
 
     fetch_completed = _now_iso()

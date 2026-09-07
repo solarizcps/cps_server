@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Ödeme Planı - Finans{% endblock %}
+{% block title %}Cari Hareketler - Finans{% endblock %}
 
 {% set active = 'finans' %}
 
@@ -11,19 +11,40 @@
 {% block content %}
 <div class="op-wrap">
 
-  <nav class="op-breadcrumb">Finans &gt; Ödeme Planı</nav>
-
-  <div class="page-header op-header">
-    <div class="page-header-baslik">
-      <h1 class="page-title op-title">
-        <span class="op-title-icon" aria-hidden="true">📋</span>
-        Ödeme Planı
-      </h1>
-      <div class="page-subtitle op-subtitle">
-        Açık yükümlülüklerinizi, vade tarihlerini ve ödeme planınızı tek ekranda yönetin.
+  {# [CH_HEADER_V1] Kompakt tek satır başlık #}
+  <div class="op-ch-header">
+    <div class="op-ch-header-left">
+      <nav class="op-ch-breadcrumb">Finans &gt; Cari Hareketler</nav>
+      <div class="op-ch-title-row">
+        <h1 class="op-ch-title">Cari Hareketler</h1>
+        {# Durum göstergesi — tüm sekmeler için #}
+        {% if payable_rm_v1 %}
+          {% set _sl = rm_status_label %}
+          {% if _sl == 'fresh' %}
+          <span class="op-ch-status op-ch-status-fresh" id="op-rm-status">
+            ● Son güncelleme: <strong>{{ rm_published_at[:16] | replace('T',' ') if rm_published_at }}</strong>
+          </span>
+          {% elif _sl == 'refreshing' %}
+          <span class="op-ch-status op-ch-status-refreshing" id="op-rm-status">
+            🔄 Yenileniyor…{% if rm_published_at %} · Son: {{ rm_published_at[:16] | replace('T',' ') }}{% endif %}
+          </span>
+          {% elif _sl == 'stale' %}
+          <span class="op-ch-status op-ch-status-stale" id="op-rm-status">
+            ⏰ Eski veri ({{ ((rm_snapshot_age_seconds or 0) // 60) }} dk önce){% if rm_published_at %} · {{ rm_published_at[:16] | replace('T',' ') }}{% endif %}
+          </span>
+          {% elif _sl == 'failed_last_ok' %}
+          <span class="op-ch-status op-ch-status-warn" id="op-rm-status">
+            ⚠️ Yenileme başarısız · Son: {{ rm_published_at[:16] | replace('T',' ') if rm_published_at }}
+          </span>
+          {% elif _sl == 'no_snapshot' %}
+          <span class="op-ch-status op-ch-status-info" id="op-rm-status">
+            ⏳ Veri hazırlanıyor…
+          </span>
+          {% endif %}
+        {% endif %}
       </div>
     </div>
-    <div class="op-header-actions">
+    <div class="op-ch-header-actions">
       <a href="/finans/tedarikci-ayarlari?sirket={{ location_filter or 'SA001' }}" class="op-btn-secondary">Tedarikçi Ayarları</a>
       {% if can_write %}
       <button type="button" class="op-btn-primary" id="opBtnYeniSoz">+ Yeni Ödeme Sözü</button>
@@ -32,55 +53,17 @@
       {% endif %}
     </div>
   </div>
+  {# [/CH_HEADER_V1] #}
 
   {% if hata %}
   <div class="op-alert op-alert-error">
+    {% if hata_kind == 'local' %}
+    Yerel veri veya konfigürasyon hatası: {{ hata }}
+    {% else %}
     Korgün bağlantı hatası: {{ hata }}
+    {% endif %}
   </div>
   {% endif %}
-
-  {# [PAYABLE_RM_V1] Snapshot durum banner'ları — cariler sekmesinde gösterilir #}
-  {% if payable_rm_v1 and active_tab == 'cariler' %}
-    {% set _sl = rm_status_label %}
-    {% if _sl == 'no_snapshot' %}
-    <div class="op-alert op-alert-info" id="op-rm-banner" data-state="no_snapshot">
-      <span style="margin-right:6px">⏳</span>
-      <strong>Finans verisi henüz hazırlanmadı.</strong>
-      İlk yenileme tamamlandığında veri görünecek. Sayfa beklemeden açıldı.
-    </div>
-    {% elif _sl == 'refreshing' %}
-    <div class="op-alert op-alert-info" id="op-rm-banner" data-state="refreshing">
-      <span style="margin-right:6px">🔄</span>
-      Veriler yenileniyor…
-      {% if rm_published_at %}
-      &nbsp;·&nbsp;Son güncelleme: <strong>{{ rm_published_at[:16] | replace('T',' ') }}</strong>
-      {% endif %}
-    </div>
-    {% elif _sl == 'failed_last_ok' %}
-    <div class="op-alert op-alert-warning" id="op-rm-banner" data-state="failed_last_ok">
-      <span style="margin-right:6px">⚠️</span>
-      <strong>Yenileme başarısız</strong> — son başarılı veri gösteriliyor.
-      {% if rm_published_at %}
-      Son güncelleme: <strong>{{ rm_published_at[:16] | replace('T',' ') }}</strong>
-      {% endif %}
-    </div>
-    {% elif _sl == 'stale' %}
-    <div class="op-alert op-alert-warning" id="op-rm-banner" data-state="stale">
-      <span style="margin-right:6px">⏰</span>
-      Veri eski ({{ ((rm_snapshot_age_seconds or 0) // 60) }} dakika önce).
-      {% if rm_published_at %}
-      Son güncelleme: <strong>{{ rm_published_at[:16] | replace('T',' ') }}</strong>
-      {% endif %}
-    </div>
-    {% elif _sl == 'fresh' %}
-    <div class="op-alert op-alert-success op-rm-banner-fresh" id="op-rm-banner" data-state="fresh"
-         style="padding:4px 12px;font-size:0.82rem;color:#374151;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;margin-bottom:8px;">
-      <span style="margin-right:4px;color:#16a34a">●</span>
-      Son güncelleme: <strong>{{ rm_published_at[:16] | replace('T',' ') if rm_published_at }}</strong>
-    </div>
-    {% endif %}
-  {% endif %}
-  {# [/PAYABLE_RM_V1] #}
 
   <!-- KPI KARTLARI -->
   <div class="op-kpi-grid">
@@ -184,154 +167,145 @@
     </div>
   </div>
 
-  <!-- FİLTRE + SEKMELER -->
-  <div class="op-toolbar">
+  <!-- FİLTRE + SEKMELER [CH_V1] -->
+  <div class="op-toolbar op-ch-toolbar">
+    {# Sekme satırı #}
     <div class="op-tabs">
       {% for t in tabs %}
       <a href="/finans/odeme-plani?sekme={{ t.id }}{% if location_filter %}&amp;sirket={{ location_filter }}{% endif %}"
          class="op-tab {% if active_tab == t.id %}op-tab-active{% endif %}">{{ t.label }}</a>
       {% endfor %}
     </div>
-    <div class="op-toolbar-right">
-      <form method="get" action="/finans/odeme-plani" class="op-filter-form">
-        <input type="hidden" name="sekme" value="{{ active_tab }}">
-        {% if active_tab == 'cariler' %}
-          {% if cari_view == 'zero' %}
-        <input type="hidden" name="zero" value="1">
-          {% elif cari_view == 'active' %}
-        <input type="hidden" name="aktif" value="1">
-          {% else %}
-        <input type="hidden" name="aktif" value="0">
+
+    {# Kontrol satırı: arama geniş + şirket + filtrele + view butonları #}
+    {% if active_tab == 'cariler' %}
+    {% set cari_base = '/finans/odeme-plani?sekme=cariler' ~ ('&sirket=' ~ location_filter if location_filter else '') %}
+    <div class="op-ch-controls">
+      {# Geniş arama alanı #}
+      <form method="get" action="/finans/odeme-plani" class="op-ch-search-form" id="opSearchForm">
+        <input type="hidden" name="sekme" value="cariler">
+        {% if location_filter %}<input type="hidden" name="sirket" value="{{ location_filter }}">{% endif %}
+        {% if cari_filters.qf and cari_filters.qf != 'tumu' %}<input type="hidden" name="qf" value="{{ cari_filters.qf }}">{% endif %}
+        <div class="op-ch-search-wrap">
+          <svg class="op-ch-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" name="fh_tedarikci" class="op-ch-search-input" placeholder="Cari ara (ad / kod / şirket)…"
+                 value="{{ cari_filters.tedarikci or '' }}" autocomplete="off" id="opSearchInput">
+          {% if cari_filters.tedarikci %}
+          <a href="{{ cari_base }}{% if cari_filters.qf and cari_filters.qf != 'tumu' %}&amp;qf={{ cari_filters.qf }}{% endif %}" class="op-ch-search-clear" title="Aramayı temizle">×</a>
           {% endif %}
+        </div>
+      </form>
+
+      {# Şirket seçimi #}
+      <form method="get" action="/finans/odeme-plani" class="op-ch-sirket-form">
+        <input type="hidden" name="sekme" value="cariler">
+        {% if cari_filters.qf and cari_filters.qf != 'tumu' %}<input type="hidden" name="qf" value="{{ cari_filters.qf }}">{% endif %}
+        <select name="sirket" class="op-select op-ch-sirket-sel" onchange="this.form.submit()">
+          {% for c in companies %}
+          <option value="{{ c.code }}" {% if location_filter == c.code %}selected{% endif %}>{{ c.label }}</option>
+          {% endfor %}
+        </select>
+      </form>
+
+      {# Filtrele butonu #}
+      <button type="button" class="op-btn-secondary op-ch-filter-btn" id="opBtnFiltrele">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+        Filtrele
+      </button>
+
+      {# View butonları — referans tasarım #}
+      <div class="op-view-toggle op-ch-view-toggle">
+        <a href="{{ cari_base }}&amp;qf=hareketli{% if cari_filters.tedarikci %}&amp;fh_tedarikci={{ cari_filters.tedarikci|urlencode }}{% endif %}"
+           class="op-view-btn {% if cari_filters.qf == 'hareketli' or (not cari_filters.qf or cari_filters.qf == 'tumu') %}op-view-btn-active{% endif %}">Hareketli</a>
+        <a href="{{ cari_base }}&amp;qf=aktif_takip{% if cari_filters.tedarikci %}&amp;fh_tedarikci={{ cari_filters.tedarikci|urlencode }}{% endif %}"
+           class="op-view-btn {% if cari_filters.qf == 'aktif_takip' %}op-view-btn-active{% endif %}">Aktif Takip</a>
+        <a href="{{ cari_base }}&amp;qf=hareketsiz{% if cari_filters.tedarikci %}&amp;fh_tedarikci={{ cari_filters.tedarikci|urlencode }}{% endif %}"
+           class="op-view-btn {% if cari_filters.qf == 'hareketsiz' %}op-view-btn-active{% endif %}">Hareketsiz</a>
+        <a href="{{ cari_base }}{% if cari_filters.tedarikci %}&amp;fh_tedarikci={{ cari_filters.tedarikci|urlencode }}{% endif %}"
+           class="op-view-btn {% if not cari_filters.qf or cari_filters.qf == 'tumu' %}{% else %}{% if cari_filters.qf not in ('hareketli','aktif_takip','hareketsiz') %}op-view-btn-active{% endif %}{% endif %}">Tüm Cariler</a>
+      </div>
+
+      {# Excel #}
+      <button type="button" class="op-btn-secondary" disabled title="Excel">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Excel
+      </button>
+    </div>
+
+    {# Aktif filtreler satırı #}
+    {% set _filters_active = (cari_filters.qf and cari_filters.qf not in ('tumu','hareketli')) or cari_filters.tedarikci or cari_filters.bakiye or cari_filters.karar or cari_filters.vade %}
+    <div class="op-ch-active-filters" id="opActiveFilters"{% if not _filters_active %} style="display:none"{% endif %}>
+      <span class="op-af-label">Aktif filtreler:</span>
+      <span class="op-af-chips" id="opAfChips">
+        {% if cari_filters.qf and cari_filters.qf not in ('tumu','hareketli') %}
+        <span class="op-af-chip" data-af-key="qf">
+          {% if cari_filters.qf == 'mudahale' %}Müdahale Gereken
+          {% elif cari_filters.qf == 'acik_borc' %}Açık Borç
+          {% elif cari_filters.qf == 'alacakli' %}Alacaklıyız
+          {% elif cari_filters.qf == 'aktif_takip' %}Aktif Takip
+          {% elif cari_filters.qf == 'sifir_bakiye' %}0 Bakiye
+          {% elif cari_filters.qf == 'hareketsiz' %}Hareketsiz
+          {% else %}{{ cari_filters.qf }}{% endif %}
+          <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
+        </span>
         {% endif %}
-        <select name="sirket" class="op-select" onchange="this.form.submit()">
+        {% if cari_filters.tedarikci %}
+        <span class="op-af-chip" data-af-key="tedarikci">
+          Arama: {{ cari_filters.tedarikci }}
+          <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
+        </span>
+        {% endif %}
+        {% if cari_filters.bakiye %}
+        <span class="op-af-chip" data-af-key="bakiye">
+          {% if cari_filters.bakiye == 'acik_borc' %}Açık Borç{% elif cari_filters.bakiye == 'alacakli' %}Alacaklıyız{% elif cari_filters.bakiye == 'sifir' %}0 Bakiye{% else %}{{ cari_filters.bakiye }}{% endif %}
+          <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
+        </span>
+        {% endif %}
+        {% if cari_filters.karar %}
+        <span class="op-af-chip" data-af-key="karar">
+          {% if cari_filters.karar == 'acik_borc' %}Karar: Açık Borç{% elif cari_filters.karar == 'odeme_yapma' %}Ödeme Yapma / Alacaklıyız{% elif cari_filters.karar == 'mudahale' %}Karar: Müdahale{% else %}{{ cari_filters.karar }}{% endif %}
+          <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
+        </span>
+        {% endif %}
+      </span>
+      <button type="button" class="op-af-clear-all" id="opAfClearAll">Tümünü Temizle</button>
+    </div>
+
+    {# Hareketli/toplam bilgi satırı #}
+    {% set _pg = pagination or {} %}
+    {% set _active_cnt = _pg.active_count|default(0) %}
+    {% set _loc_total = _pg.loc_total|default(_pg.unfiltered_count|default(0)) %}
+    <div class="op-ch-count-row" id="opCountRow">
+      {% if cari_filters.qf == 'hareketli' or (not cari_filters.qf or cari_filters.qf == 'tumu') %}
+        {% if _active_cnt and _loc_total %}
+          <span>{{ _active_cnt }} hareketli gösteriliyor &nbsp;·&nbsp; {{ _loc_total }} toplam cari</span>
+        {% elif _loc_total %}
+          <span>{{ _loc_total }} toplam cari</span>
+        {% endif %}
+      {% else %}
+        <span>{{ _pg.total_count|default(0) }} kayıt gösteriliyor &nbsp;·&nbsp; {{ _loc_total }} toplam cari</span>
+      {% endif %}
+    </div>
+
+    {% else %}
+    {# Diğer sekmeler için basit şirket filtresi #}
+    <div class="op-ch-controls">
+      <form method="get" action="/finans/odeme-plani" class="op-ch-sirket-form">
+        <input type="hidden" name="sekme" value="{{ active_tab }}">
+        <select name="sirket" class="op-select op-ch-sirket-sel" onchange="this.form.submit()">
           {% for c in companies %}
           <option value="{{ c.code }}" {% if location_filter == c.code %}selected{% endif %}>{{ c.label }}</option>
           {% endfor %}
         </select>
         <button type="submit" class="op-btn-secondary">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
           Filtrele
         </button>
       </form>
-      {% if active_tab == 'cariler' %}
-      {% set cari_base = '/finans/odeme-plani?sekme=cariler' ~ ('&sirket=' ~ location_filter if location_filter else '') %}
-      <div class="op-view-toggle">
-        <a href="{{ cari_base }}&amp;aktif=0"
-           class="op-view-btn {% if cari_view == 'daily' %}op-view-btn-active{% endif %}">Tümü</a>
-        <a href="{{ cari_base }}&amp;aktif=1"
-           class="op-view-btn {% if cari_view == 'active' %}op-view-btn-active{% endif %}">Aktif Takip</a>
-        <a href="{{ cari_base }}&amp;zero=1"
-           class="op-view-btn {% if cari_view == 'zero' %}op-view-btn-active{% endif %}">0 Bakiye</a>
-      </div>
-      {% endif %}
-      <button type="button" class="op-btn-secondary" disabled>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        Excel
-      </button>
     </div>
+    {% endif %}
   </div>
-
-  {% if active_tab == 'cariler' %}
-  <!-- HIZLI FİLTRE CHİPLERİ + KOLON FİLTRELERİ -->
-  <div class="op-quick-filters" id="opQuickFilters">
-    <button type="button" class="op-chip op-chip-active" data-qf="tumu">Tümü</button>
-    <button type="button" class="op-chip" data-qf="mudahale">Müdahale Gereken</button>
-    <button type="button" class="op-chip" data-qf="acik_borc">Açık Borç</button>
-    <button type="button" class="op-chip" data-qf="alacakli">Alacaklıyız</button>
-    <button type="button" class="op-chip" data-qf="aktif_takip">Aktif Takip</button>
-    <button type="button" class="op-chip" data-qf="sifir_bakiye">0 Bakiye</button>
-    <span class="op-chip-sep"></span>
-    <button type="button" class="op-chip op-chip-clear" id="opClearAllFilters" style="display:none">✕ Tüm Filtreleri Temizle</button>
-  </div>
-  {% set _filters_active = (cari_filters.qf and cari_filters.qf != 'tumu') or cari_filters.tedarikci or cari_filters.bakiye or cari_filters.karar or cari_filters.vade or cari_filters.odeme or cari_filters.alim or cari_filters.temas or cari_filters.soz or cari_filters.takip %}
-  <div class="op-active-filters" id="opActiveFilters"{% if not _filters_active %} style="display:none"{% endif %}>
-    <span class="op-af-label">Aktif filtreler:</span>
-    <span class="op-af-chips" id="opAfChips">
-      {% if cari_filters.qf and cari_filters.qf != 'tumu' %}
-      <span class="op-af-chip" data-af-key="qf">
-        {% if cari_filters.qf == 'mudahale' %}Müdahale Gereken{% elif cari_filters.qf == 'acik_borc' %}Açık Borç{% elif cari_filters.qf == 'alacakli' %}Alacaklıyız{% elif cari_filters.qf == 'aktif_takip' %}Aktif Takip{% elif cari_filters.qf == 'sifir_bakiye' %}0 Bakiye{% else %}{{ cari_filters.qf }}{% endif %}
-        <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
-      </span>
-      {% endif %}
-      {% if cari_filters.tedarikci %}
-      <span class="op-af-chip" data-af-key="tedarikci">
-        Tedarikçi: {{ cari_filters.tedarikci }}
-        <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
-      </span>
-      {% endif %}
-      {% if cari_filters.bakiye %}
-      <span class="op-af-chip" data-af-key="bakiye">
-        {% if cari_filters.bakiye == 'acik_borc' %}Açık Borç{% elif cari_filters.bakiye == 'alacakli' %}Alacaklıyız{% elif cari_filters.bakiye == 'sifir' %}0 Bakiye{% else %}{{ cari_filters.bakiye }}{% endif %}
-        <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
-      </span>
-      {% endif %}
-      {% if cari_filters.karar %}
-      <span class="op-af-chip" data-af-key="karar">
-        {% if cari_filters.karar == 'acik_borc' %}Karar: Açık Borç{% elif cari_filters.karar == 'odeme_yapma' %}Ödeme Yapma / Alacaklıyız{% elif cari_filters.karar == 'mudahale' %}Karar: Müdahale Gereken{% else %}{{ cari_filters.karar }}{% endif %}
-        <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
-      </span>
-      {% endif %}
-      {% if cari_filters.vade %}
-      <span class="op-af-chip" data-af-key="vade">
-        {% if cari_filters.vade == 'vade_var' %}Vade Var{% elif cari_filters.vade == 'vade_yok' %}Vade Tanımlı Değil{% else %}{{ cari_filters.vade }}{% endif %}
-        <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
-      </span>
-      {% endif %}
-      {% if cari_filters.odeme %}
-      <span class="op-af-chip" data-af-key="odeme">
-        {% if cari_filters.odeme == 'bu_ay' %}Son Ödeme: Bu Ay{% elif cari_filters.odeme == 'son_30' %}Son Ödeme: Son 30 Gün{% elif cari_filters.odeme == 'son_90' %}Son Ödeme: Son 90 Gün{% elif cari_filters.odeme == 'yok' %}Son Ödeme: Yok{% else %}{{ cari_filters.odeme }}{% endif %}
-        <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
-      </span>
-      {% endif %}
-      {% if cari_filters.alim %}
-      <span class="op-af-chip" data-af-key="alim">
-        {% if cari_filters.alim == 'bu_ay' %}Son Alım: Bu Ay{% elif cari_filters.alim == 'son_30' %}Son Alım: Son 30 Gün{% elif cari_filters.alim == 'yok' %}Son Alım: Yok{% else %}{{ cari_filters.alim }}{% endif %}
-        <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
-      </span>
-      {% endif %}
-      {% if cari_filters.temas %}
-      <span class="op-af-chip" data-af-key="temas">
-        {% if cari_filters.temas == 'bu_ay' %}Son Temas: Bu Ay{% elif cari_filters.temas == 'son_30' %}Son Temas: Son 30 Gün{% elif cari_filters.temas == 'yok' %}Son Temas: Yok{% else %}{{ cari_filters.temas }}{% endif %}
-        <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
-      </span>
-      {% endif %}
-      {% if cari_filters.soz %}
-      <span class="op-af-chip" data-af-key="soz">
-        {% if cari_filters.soz == 'var' %}Ödeme Sözü: Var{% elif cari_filters.soz == 'yok' %}Ödeme Sözü: Yok{% elif cari_filters.soz == 'bu_hafta' %}Ödeme Sözü: Bu Hafta{% elif cari_filters.soz == 'gecikmis' %}Ödeme Sözü: Gecikmiş{% else %}{{ cari_filters.soz }}{% endif %}
-        <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
-      </span>
-      {% endif %}
-      {% if cari_filters.takip %}
-      <span class="op-af-chip" data-af-key="takip">
-        {% if cari_filters.takip == 'aktif' %}Aktif Takip{% elif cari_filters.takip == 'pasif' %}Pasif Takip{% else %}{{ cari_filters.takip }}{% endif %}
-        <button type="button" class="op-af-chip-x" aria-label="Kaldır">×</button>
-      </span>
-      {% endif %}
-    </span>
-    <button type="button" class="op-af-clear-all" id="opAfClearAll">Tümünü Temizle</button>
-  </div>
-  {% if cari_filters.vade == 'vade_var' and vade_term_universe_count|default(0) == 0 %}
-  <div class="op-vade-info" id="opVadeInfo">
-    Bu şirkette Korgün'de vadesi tanımlı tedarikçi bulunmuyor.
-  </div>
-  {% endif %}
-  {% endif %}
-
-  {% if active_tab == 'yukumlulukler' %}
-  <!-- ALT SEKME FİLTRELERİ (P2: yalnız Yükümlülükler sekmesinde, pasif) -->
-  <div class="op-subtabs">
-    <span class="op-subtab op-subtab-active">Tümü</span>
-    <span class="op-subtab op-subtab-disabled">Vadesi Geçmiş</span>
-    <span class="op-subtab op-subtab-disabled">Bugün</span>
-    <span class="op-subtab op-subtab-disabled">7 Gün</span>
-    <span class="op-subtab op-subtab-disabled">30 Gün</span>
-    <span class="op-subtab op-subtab-disabled">31–60 Gün</span>
-    <span class="op-subtab op-subtab-disabled">61–90 Gün</span>
-    <span class="op-subtab op-subtab-disabled">Ödendi</span>
-    <span class="op-subtab op-subtab-disabled">Planlanan</span>
-  </div>
-  {% endif %}
+  {# eski quick-filter chip satırı kaldırıldı — yeni op-view-toggle yeterli #}
 
   <!-- TABLO / İÇERİK -->
   <div class="op-table-wrap">
@@ -388,7 +362,7 @@
         <tr class="op-thead-main">
           {# 1 TEDARİKÇİ #}
           <th class="op-th-tedarikci">
-            <span class="op-th-label">TEDARİKÇİ</span>
+            <span class="op-th-label">TEDARİKÇİ CARİ ↕</span>
             <button type="button" class="op-fh-btn" data-fh-col="tedarikci" title="Filtrele"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 2.5h8M2.5 5h5M4 7.5h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
             <div class="op-fh-pop" data-fh-pop="tedarikci">
               <input class="op-fh-input" type="text" placeholder="Ara…" data-cf-col="0" autocomplete="off">
@@ -508,7 +482,7 @@
                   <button type="button" class="op-link-btn op-btn-har"
                           data-location="{{ row.location }}"
                           data-cari-kod="{{ row.cari_kod }}"
-                          data-cari-adi="{{ row.cari_adi }}">{{ row.cari_adi }}</button>
+                          data-cari-adi="{{ row.cari_adi }}">{{ row.cari_adi | cari_adi_display }}</button>
                 </div>
                 <div class="op-cari-kod">{{ row.cari_kod }} · {{ row.location_label }}</div>
               </div>
@@ -721,22 +695,35 @@
     {% endif %}
   </div>
 
-  <div class="op-footer">
-    <div class="op-footer-left">Toplam <strong>{{ total_kayit }}</strong> kayıt</div>
+  <div class="op-footer op-ch-footer">
     {% if active_tab == 'cariler' %}
     {% set pg = pagination or {} %}
     {% set pg_page = pg.page|default(1) %}
     {% set pg_size = pg.page_size|default(50) %}
     {% set pg_total_pages = pg.total_pages|default(1) %}
+    {% set pg_total_count = pg.total_count|default(0) %}
+    {% set pg_start = (pg_page - 1) * pg_size + 1 %}
+    {% set pg_end = [pg_page * pg_size, pg_total_count]|min %}
     {% macro op_pg_url(p) -%}
-    /finans/odeme-plani?sekme=cariler{% if location_filter %}&amp;sirket={{ location_filter }}{% endif %}{% if cari_view == 'zero' %}&amp;zero=1{% elif cari_view == 'active' %}&amp;aktif=1{% endif %}{% if cari_filters.qf and cari_filters.qf != 'tumu' %}&amp;qf={{ cari_filters.qf }}{% endif %}{% if cari_filters.tedarikci %}&amp;fh_tedarikci={{ cari_filters.tedarikci|urlencode }}{% endif %}{% if cari_filters.bakiye %}&amp;fh_bakiye={{ cari_filters.bakiye }}{% endif %}{% if cari_filters.karar %}&amp;fh_karar={{ cari_filters.karar }}{% endif %}{% if cari_filters.vade %}&amp;fh_vade={{ cari_filters.vade }}{% endif %}{% if cari_filters.odeme %}&amp;fh_odeme={{ cari_filters.odeme }}{% endif %}{% if cari_filters.alim %}&amp;fh_alim={{ cari_filters.alim }}{% endif %}{% if cari_filters.temas %}&amp;fh_temas={{ cari_filters.temas }}{% endif %}{% if cari_filters.soz %}&amp;fh_soz={{ cari_filters.soz }}{% endif %}{% if cari_filters.takip %}&amp;fh_takip={{ cari_filters.takip }}{% endif %}&amp;page={{ p }}&amp;sayfa_boyutu={{ pg_size }}
+    /finans/odeme-plani?sekme=cariler{% if location_filter %}&amp;sirket={{ location_filter }}{% endif %}{% if cari_filters.qf and cari_filters.qf != 'tumu' %}&amp;qf={{ cari_filters.qf }}{% endif %}{% if cari_filters.tedarikci %}&amp;fh_tedarikci={{ cari_filters.tedarikci|urlencode }}{% endif %}{% if cari_filters.bakiye %}&amp;fh_bakiye={{ cari_filters.bakiye }}{% endif %}{% if cari_filters.karar %}&amp;fh_karar={{ cari_filters.karar }}{% endif %}{% if cari_filters.vade %}&amp;fh_vade={{ cari_filters.vade }}{% endif %}&amp;page={{ p }}&amp;sayfa_boyutu={{ pg_size }}
     {%- endmacro %}
-    <div class="op-pagination op-pagination-server" id="opPagination" data-op-pg-server="1">
-      <a class="op-pg-btn{% if pg_page <= 1 %} op-pg-disabled{% endif %}" href="{{ op_pg_url(pg_page - 1 if pg_page > 1 else 1) }}" aria-label="Önceki">‹</a>
+
+    {# Sol: N–M / K cari #}
+    <div class="op-footer-left">
+      {{ pg_start }}–{{ pg_end }} / <strong>{{ pg_total_count }}</strong> cari
+    </div>
+
+    {# Orta: tam sayfalama #}
+    <div class="op-ch-pagination" id="opPagination" data-op-pg-server="1">
+      <a class="op-pg-btn{% if pg_page <= 1 %} op-pg-disabled{% endif %}"
+         href="{{ op_pg_url(1) }}" title="İlk sayfa" aria-label="İlk">«</a>
+      <a class="op-pg-btn{% if pg_page <= 1 %} op-pg-disabled{% endif %}"
+         href="{{ op_pg_url(pg_page - 1 if pg_page > 1 else 1) }}" aria-label="Önceki">‹</a>
       <div class="op-pg-pages" id="opPgPages">
         {% for p in range(1, pg_total_pages + 1) %}
-          {% if pg_total_pages <= 7 or p == 1 or p == pg_total_pages or (p >= pg_page - 1 and p <= pg_page + 1) %}
-        <a class="op-pg-btn op-pg-num{% if p == pg_page %} op-pg-active{% endif %}" href="{{ op_pg_url(p) }}">{{ p }}</a>
+          {% if pg_total_pages <= 7 or p == 1 or p == pg_total_pages or (p >= pg_page - 2 and p <= pg_page + 2) %}
+        <a class="op-pg-btn op-pg-num{% if p == pg_page %} op-pg-active{% endif %}"
+           href="{{ op_pg_url(p) }}">{{ p }}</a>
           {% elif p == 2 and pg_page > 4 %}
         <span class="op-pg-ellipsis">…</span>
           {% elif p == pg_total_pages - 1 and pg_page < pg_total_pages - 3 %}
@@ -744,17 +731,30 @@
           {% endif %}
         {% endfor %}
       </div>
-      <a class="op-pg-btn{% if pg_page >= pg_total_pages %} op-pg-disabled{% endif %}" href="{{ op_pg_url(pg_page + 1 if pg_page < pg_total_pages else pg_total_pages) }}" aria-label="Sonraki">›</a>
+      <a class="op-pg-btn{% if pg_page >= pg_total_pages %} op-pg-disabled{% endif %}"
+         href="{{ op_pg_url(pg_page + 1 if pg_page < pg_total_pages else pg_total_pages) }}" aria-label="Sonraki">›</a>
+      <a class="op-pg-btn{% if pg_page >= pg_total_pages %} op-pg-disabled{% endif %}"
+         href="{{ op_pg_url(pg_total_pages) }}" title="Son sayfa" aria-label="Son">»</a>
     </div>
+
+    {# Sağ: sayfaya git + sayfa boyutu #}
     <div class="op-footer-right">
-      Sayfa başına:
+      <span class="op-pg-goto-label">Sayfaya git</span>
+      <input type="number" id="opPgGotoInput" class="op-pg-goto-input" min="1" max="{{ pg_total_pages }}"
+             value="{{ pg_page }}" placeholder="{{ pg_page }}">
+      <button type="button" class="op-btn-secondary op-pg-goto-btn" id="opPgGotoBtn"
+              data-base-url="{{ op_pg_url(1)|replace('&amp;page=1', '') }}">Git</button>
+      <span style="margin: 0 4px; color:#d1d5db">|</span>
+      <span class="op-pg-size-label">Sayfa başına</span>
       <select class="op-pg-size" id="opPgSize" data-base-url="{{ op_pg_url(1)|replace('&amp;page=1', '') }}">
         <option value="10" {% if pg_size == 10 %}selected{% endif %}>10</option>
         <option value="20" {% if pg_size == 20 %}selected{% endif %}>20</option>
         <option value="50" {% if pg_size == 50 %}selected{% endif %}>50</option>
       </select>
     </div>
+
     {% else %}
+    <div class="op-footer-left">Toplam <strong>{{ total_kayit }}</strong> kayıt</div>
     <div class="op-footer-right">
       {% if total_kalan_by_pb %}
       {% for pb, info in total_kalan_by_pb.items() %}
@@ -1648,6 +1648,23 @@ function cpsParaFmt(val, pb) {
   if (pgSizeEl) {
     pgSizeEl.addEventListener('change', function() {
       navigateWithFilters(1, parseInt(pgSizeEl.value, 10) || 50);
+    });
+  }
+
+  // ---- Sayfaya git ----
+  var pgGotoBtn = document.getElementById('opPgGotoBtn');
+  var pgGotoInput = document.getElementById('opPgGotoInput');
+  if (pgGotoBtn && pgGotoInput) {
+    function gotoPage() {
+      var p = parseInt(pgGotoInput.value, 10);
+      var max = parseInt(pgGotoInput.max, 10) || 1;
+      if (isNaN(p) || p < 1) p = 1;
+      if (p > max) p = max;
+      navigateWithFilters(p);
+    }
+    pgGotoBtn.addEventListener('click', gotoPage);
+    pgGotoInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); gotoPage(); }
     });
   }
 

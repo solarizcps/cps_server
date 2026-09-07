@@ -77,6 +77,28 @@ def _snapshot_status_label(
 
 # ─── Filtre ve pagination (mevcut odeme_plani_service davranışı korunur) ────
 
+def _is_hareketli(r: Dict[str, Any]) -> bool:
+    """
+    Hareketli cari: bakiye≠0 VEYA aktif_takip VEYA son ödeme/alım/temas/söz var.
+    Bakiye sıfır, takip yok, hareketsiz → False.
+    """
+    if abs(float(r.get("display_bakiye") or 0)) > 0.009:
+        return True
+    if r.get("aktif_takip"):
+        return True
+    if r.get("son_odeme_tarihi"):
+        return True
+    if r.get("son_cek_vade"):
+        return True
+    if r.get("son_alim_tarihi"):
+        return True
+    if r.get("son_temas_tarihi"):
+        return True
+    if r.get("son_soz_tarihi"):
+        return True
+    return False
+
+
 def _apply_filters(
     rows: List[Dict[str, Any]],
     location: Optional[str],
@@ -96,10 +118,42 @@ def _apply_filters(
             result = [r for r in result if "Alacaklı" in (r.get("bakiye_durumu") or "")]
         elif bf == "sifir":
             result = [r for r in result if "Yok" in (r.get("bakiye_durumu") or "")]
+        elif bf == "mudahale":
+            # Legacy semantik: mudahale = açık borçlu cariler (bakiye_durumu contains "Borç")
+            result = [r for r in result if "Açık Borç" in (r.get("bakiye_durumu") or "")]
+        elif bf == "aktif_takip":
+            # Aktif Takip: aktif_takip=True olan satırlar
+            result = [r for r in result if r.get("aktif_takip") is True]
+        elif bf == "hareketli":
+            # Hareketli: bakiye≠0 VEYA aktif_takip VEYA son_odeme/son_alim/son_temas var
+            result = [r for r in result if _is_hareketli(r)]
+        elif bf == "hareketsiz":
+            # Hareketsiz: bakiye sıfır VE aktif takip yok VE hareket yok
+            result = [r for r in result if not _is_hareketli(r)]
     if tedarikci_q:
         q = tedarikci_q.strip().lower()
         if q:
-            result = [r for r in result if q in (r.get("cari_adi") or "").lower()]
+            # Türkçe büyük harf duyarsız karşılaştırma
+            # İ → i, I → ı (Python .lower() İ'yi 2 karakter yapabiliyor)
+            _TR_LOWER_MAP = str.maketrans('İIĞÜŞÖÇ', 'iiğüşöç')
+
+            def _tr_lower(s: str) -> str:
+                return s.translate(_TR_LOWER_MAP).lower()
+
+            q_norm = _tr_lower(q)
+
+            # Arama kapsamı: cari_adi + cari_kod + şirket/lokasyon kodu ve adı
+            def _matches(r: Dict[str, Any]) -> bool:
+                if q_norm in _tr_lower(r.get("cari_adi") or ""):
+                    return True
+                if q_norm in _tr_lower(r.get("cari_kod") or ""):
+                    return True
+                if q_norm in _tr_lower(r.get("location") or ""):
+                    return True
+                if q_norm in _tr_lower(r.get("location_label") or ""):
+                    return True
+                return False
+            result = [r for r in result if _matches(r)]
     return result
 
 
@@ -182,7 +236,15 @@ def read_payable_snapshot(
 
         # Cari satırları — snapshot'tan oku, filtrele, paginate et
         all_rows = _load_cari_rows(conn, snapshot_id)
-        filtered_rows = _apply_filters(all_rows, location, bakiye_f, tedarikci_q)
+        # location filtresi sonrası toplam (şirket filtreli evren)
+        loc_rows = _apply_filters(all_rows, location, None, None)
+        active_count = sum(1 for r in loc_rows if _is_hareketli(r))
+        # Arama varsa hareketli/hareketsiz filtresini devre dışı bırak
+        # → hareketsiz cariler de aramada bulunabilir
+        effective_bakiye_f = bakiye_f
+        if tedarikci_q and tedarikci_q.strip() and bakiye_f in ('hareketli', 'hareketsiz'):
+            effective_bakiye_f = None
+        filtered_rows = _apply_filters(all_rows, location, effective_bakiye_f, tedarikci_q)
         page_rows, total, page_out, total_pages = _paginate(filtered_rows, page, page_size)
 
         # Durum mesajı
@@ -207,6 +269,8 @@ def read_payable_snapshot(
                 "total_count": total,
                 "filtered_count": len(filtered_rows),
                 "unfiltered_count": len(all_rows),
+                "active_count": active_count,
+                "loc_total": len(loc_rows),
             },
             "inline_korgun_calls": 0,   # Kanıt
             "snapshot_meta": {
@@ -231,38 +295,37 @@ def _as_float(v: Any) -> float:
         return 0.0
 
 
-def _minimal_ui_row_fields(durum: Optional[str], durum_class: str) -> Dict[str, Any]:
-    """Template'in zorunlu gördüğü minimal satır alanları (Layer2/Korgün yok)."""
-    label = (durum or "").strip()
-    low = label.lower()
-    if "borç" in low or "borc" in low:
-        karar_badge, karar_aksiyon = "Açık Borç", "Ödeme planla"
-    elif "alacak" in low:
-        karar_badge, karar_aksiyon = "Alacaklıyız", "—"
-    else:
-        karar_badge, karar_aksiyon = "Bakiye Yok", "—"
-    return {
-        "aktif_takip": False,
-        "karar_badge": karar_badge,
-        "karar_class": durum_class,
-        "karar_aksiyon": karar_aksiyon,
-        "soz_has_active": False,
-        "soz_is_overdue": False,
-        "vade_has_term": False,
-    }
-
-
 def _load_cari_rows(conn: sqlite3.Connection, snapshot_id: str) -> List[Dict[str, Any]]:
-    """Snapshot'tan tüm cari satırlarını yükler."""
+    """Snapshot'tan tüm cari satırlarını yükler — V2 tam UI contract."""
     rows = conn.execute(
         """SELECT location, location_label, cari_kod, cari_adi,
                   para_birimi, borc, alacak, net, canonical_key,
-                  bakiye_durumu, display_bakiye
+                  bakiye_durumu, display_bakiye,
+                  fa_tarih, fa_turu, fa_tutar, fa_pb, fa_vade, fa_is_cek, fa_vade_short, fa_cek_no,
+                  son_odeme_tarih, son_odeme_tutar, son_odeme_pb,
+                  son_alim_tarih, son_alim_tutar, son_alim_pb, son_alim_tip,
+                  son_cek_vade, son_cek_tutar, son_cek_pb, son_cek_no,
+                  aktif_takip, karar_badge, karar_class, karar_aksiyon,
+                  anlasma_durumu, vade_has_term, vade_gun,
+                  soz_has_active, soz_is_overdue, temas_tarih_iso
            FROM rm_snapshot_row
            WHERE snapshot_id = ?
-           ORDER BY location, cari_adi, para_birimi""",
+           ORDER BY
+             CASE bakiye_durumu
+               WHEN 'Açık Borç'   THEN 1
+               WHEN 'Alacaklıyız' THEN 2
+               ELSE                    3
+             END,
+             CAST(display_bakiye AS REAL) DESC,
+             location, cari_adi, para_birimi""",
         (snapshot_id,),
     ).fetchall()
+
+    def _str(v: Any) -> Optional[str]:
+        return str(v) if v not in (None, "", "None") else None
+
+    def _bool_col(v: Any) -> bool:
+        return bool(v) if v is not None else False
 
     result = []
     for r in rows:
@@ -270,6 +333,56 @@ def _load_cari_rows(conn: sqlite3.Connection, snapshot_id: str) -> List[Dict[str
         durum_class = _durum_class(durum)
         net_f = _as_float(r[7])
         disp_f = _as_float(r[10])
+
+        # karar alanları: snapshot'ta varsa kullan; yoksa durum'dan fallback
+        karar_badge = r[31] or (durum or "Bakiye Yok")
+        karar_class = r[32] or durum_class
+        karar_aksiyon = r[33] or "—"
+        anlasma_durumu = _str(r[34])
+        vade_has_term = _bool_col(r[35])
+        vade_gun = r[36]
+        aktif_takip = _bool_col(r[30])
+        soz_has_active = _bool_col(r[37])
+        soz_is_overdue = _bool_col(r[38])
+        temas_tarih_iso = _str(r[39])
+
+        # fa (Son Finansal Aksiyon)
+        fa_tarih = _str(r[11])
+        fa_turu = _str(r[12]) or ""
+        fa_tutar_f = _as_float(r[13])
+        fa_pb = _str(r[14]) or r[4]
+        fa_vade = _str(r[15])
+        fa_is_cek = _bool_col(r[16])
+        fa_vade_short = _str(r[17]) or ""
+        fa_cek_no = _str(r[18])
+
+        def _fmt(v_str: Any, pb: str) -> str:
+            f = _as_float(v_str)
+            if f == 0.0:
+                return ""
+            sym = {"TRY": "₺", "USD": "$", "EUR": "€"}.get(str(pb), str(pb) + " ")
+            try:
+                return f"{sym}{f:,.0f}".replace(",", ".")
+            except Exception:
+                return ""
+
+        fa_pb_str = fa_pb or r[4]
+        fa_label = _fmt(r[13], fa_pb_str)
+
+        son_odeme_tarih = _str(r[19])
+        son_odeme_pb = _str(r[21]) or r[4]
+        son_odeme_label = _fmt(r[20], son_odeme_pb)
+
+        son_alim_tarih = _str(r[22])
+        son_alim_pb = _str(r[24]) or r[4]
+        son_alim_label = _fmt(r[23], son_alim_pb)
+        son_alim_tip = _str(r[25]) or ""
+
+        son_cek_vade = _str(r[26])
+        son_cek_pb = _str(r[28]) or r[4]
+        son_cek_label = _fmt(r[27], son_cek_pb)
+        son_cek_no = _str(r[29])
+
         result.append({
             "location": r[0],
             "location_label": r[1] or r[0],
@@ -282,12 +395,51 @@ def _load_cari_rows(conn: sqlite3.Connection, snapshot_id: str) -> List[Dict[str
             "canonical_key": r[8],
             "bakiye_durumu": durum,
             "display_bakiye": disp_f,
-            # Mevcut UI'ın beklediği alanlar
             "acik_bakiye": net_f,
             "kritik": durum,
             "kritik_class": durum_class,
             "bakiye_durum_class": durum_class,
-            **_minimal_ui_row_fields(durum, durum_class),
+            # Karar
+            "karar_badge": karar_badge,
+            "karar_class": karar_class,
+            "karar_aksiyon": karar_aksiyon,
+            "anlasma_durumu": anlasma_durumu or "Vade tanımlı değil",
+            "vade_has_term": vade_has_term,
+            "vade_gun": vade_gun,
+            # Takip / soz / temas
+            "aktif_takip": aktif_takip,
+            "soz_has_active": soz_has_active,
+            "soz_is_overdue": soz_is_overdue,
+            "temas_tarih_iso": temas_tarih_iso,
+            # Placeholder rich fields (template'de yalnız has_active ile dallanıyor)
+            "son_odeme_sozu": "—",
+            "son_odeme_sozu_rich": "",
+            "son_gorusme": "—",
+            "son_gorusme_rich": "",
+            # Son Finansal Aksiyon
+            "fa_tarih": fa_tarih,
+            "fa_turu": fa_turu,
+            "fa_tutar": fa_tutar_f,
+            "fa_pb": fa_pb_str,
+            "fa_vade": fa_vade,
+            "fa_is_cek": fa_is_cek,
+            "fa_vade_short": fa_vade_short,
+            "fa_cek_no": fa_cek_no,
+            "fa_label": fa_label,
+            # Son ödeme
+            "son_odeme_tarih": son_odeme_tarih,
+            "son_odeme_label": son_odeme_label,
+            "son_odeme_pb": son_odeme_pb,
+            # Son alış
+            "son_alim_tarih": son_alim_tarih,
+            "son_alim_label": son_alim_label,
+            "son_alim_tip": son_alim_tip,
+            "son_alim_pb": son_alim_pb,
+            # Son çek
+            "son_cek_vade": son_cek_vade,
+            "son_cek_label": son_cek_label,
+            "son_cek_no": son_cek_no,
+            "son_cek_pb": son_cek_pb,
         })
     return result
 
@@ -351,6 +503,77 @@ def _build_kpi_from_snapshot(
 
     try_debt = debt_by_pb.get("TRY", {"kalem": 0, "tutar": 0.0})
 
+    # Vadeli çek KPI'ları — son_cek_vade + son_cek_tutar sütunlarından snapshot row bazlı hesap
+    # NOT: Bu cari başına son çek özeti; tüm açık çeklerin tam kümesi değil (yaklaşık)
+    today_str = datetime.now(timezone.utc).date().isoformat()  # "YYYY-MM-DD"
+    cutoff_7 = (datetime.now(timezone.utc).date() + timedelta(days=7)).isoformat()
+    cutoff_30 = (datetime.now(timezone.utc).date() + timedelta(days=30)).isoformat()
+
+    cek_rows = conn.execute(
+        """SELECT son_cek_vade, son_cek_tutar, son_cek_pb
+           FROM rm_snapshot_row
+           WHERE snapshot_id = ?
+             AND son_cek_vade IS NOT NULL AND son_cek_vade != ''
+             AND son_cek_tutar IS NOT NULL AND son_cek_tutar != ''""",
+        (snapshot_id,),
+    ).fetchall()
+
+    vadesi_gecmis = {"tutar": 0.0, "kalem": 0}
+    gun_7 = {"tutar": 0.0, "kalem": 0}
+    gun_30 = {"tutar": 0.0, "kalem": 0}
+    for cr in cek_rows:
+        vade = (cr[0] or "")[:10]
+        tutar = 0.0
+        try:
+            tutar = float(str(cr[1]).replace(",", "") or 0)
+        except (ValueError, TypeError):
+            pass
+        if not vade or tutar == 0.0:
+            continue
+        if vade < today_str:
+            vadesi_gecmis["tutar"] += tutar
+            vadesi_gecmis["kalem"] += 1
+        elif vade <= cutoff_7:
+            gun_7["tutar"] += tutar
+            gun_7["kalem"] += 1
+        elif vade <= cutoff_30:
+            gun_30["tutar"] += tutar
+            gun_30["kalem"] += 1
+
+    # Bu hafta ödeme sözü — local CPS DB'den (finans_odeme_plani_sozu)
+    bu_hafta_soz = {"tutar": 0.0, "cari": 0, "has_data": False}
+    try:
+        from .rm_config import get_rm_path as _get_rm_path
+        import os as _os
+        _mock_db = _os.environ.get("CPS_MOCK_DB_PATH", "")
+        if _mock_db and _os.path.exists(_mock_db):
+            _soz_conn = sqlite3.connect(_mock_db, timeout=5)
+            _soz_conn.row_factory = sqlite3.Row
+            try:
+                from datetime import timedelta as _td
+                _today = datetime.now(timezone.utc).date()
+                _week_end = (_today + _td(days=7)).isoformat()
+                _today_str = _today.isoformat()
+                _soz_rows = _soz_conn.execute(
+                    """SELECT COUNT(DISTINCT cari_kod) as cnt, COALESCE(SUM(tutar),0) as toplam
+                       FROM finans_odeme_plani_sozu
+                       WHERE durum='BEKLIYOR'
+                         AND soz_tarihi >= ? AND soz_tarihi <= ?""",
+                    (_today_str, _week_end),
+                ).fetchone()
+                if _soz_rows and (_soz_rows[0] or 0) > 0:
+                    bu_hafta_soz = {
+                        "tutar": float(_soz_rows[1] or 0),
+                        "cari": int(_soz_rows[0] or 0),
+                        "has_data": True,
+                    }
+            except Exception:
+                pass
+            finally:
+                _soz_conn.close()
+    except Exception:
+        pass
+
     kpi = {
         "toplam_acik_borc": {
             "tutar": try_debt.get("tutar", 0.0),
@@ -362,6 +585,25 @@ def _build_kpi_from_snapshot(
             "source": "rm_snapshot",
             "semantic": "Read-model snapshot açık borç (net<0)",
         },
+        "vadesi_gecmis": {
+            "tutar": vadesi_gecmis["tutar"],
+            "kalem": vadesi_gecmis["kalem"],
+            "has_data": vadesi_gecmis["kalem"] > 0,
+            "source": "rm_snapshot_row.son_cek_vade",
+        },
+        "7_gun": {
+            "tutar": gun_7["tutar"],
+            "kalem": gun_7["kalem"],
+            "has_data": gun_7["kalem"] > 0,
+            "source": "rm_snapshot_row.son_cek_vade",
+        },
+        "30_gun": {
+            "tutar": gun_30["tutar"],
+            "kalem": gun_30["kalem"],
+            "has_data": gun_30["kalem"] > 0,
+            "source": "rm_snapshot_row.son_cek_vade",
+        },
+        "bu_hafta_odeme_sozu": bu_hafta_soz,
         "snapshot_id": snapshot_id,
         "row_count": hdr["row_count"],
         "unique_cari_count": hdr["unique_cari_count"],

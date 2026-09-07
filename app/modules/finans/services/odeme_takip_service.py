@@ -21,10 +21,10 @@ from typing import Any, Dict, List, Optional
 try:
     from db import get_db_path
 except ImportError:
+    from config import Config
+
     def get_db_path() -> str:
-        return os.path.normpath(
-            os.path.join(os.path.dirname(__file__), '..', '..', '..', 'mock_data.db')
-        )
+        return Config.MOCK_DB_PATH
 
 
 class TakipError(Exception):

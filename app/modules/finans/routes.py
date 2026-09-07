@@ -1607,7 +1607,8 @@ def finans_odeme_plani():
 
     # [PAYABLE_RM_V1 BAS] ─────────────────────────────────────────────────────
     # cariler sekmesi → read-model snapshot okuma (inline Korgün YOK)
-    _active_sekme = (sekme or 'yukumlulukler').strip().lower()
+    # Varsayılan giriş: cariler (snapshot); yukumlulukler yalnız ?sekme=yukumlulukler ile
+    _active_sekme = (sekme or 'cariler').strip().lower()
     if _active_sekme == 'cariler':
         try:
             try:
@@ -1617,9 +1618,24 @@ def finans_odeme_plani():
 
             _page = int(page_raw) if page_raw.isdigit() else 1
             _page_size = int(page_size_raw) if page_size_raw and page_size_raw.isdigit() else 50
+            # qf chip → bakiye_f sunucu filtresi dönüşümü
+            # Template'de hızlı filtreler ?qf=acik_borc|alacakli|sifir_bakiye gönderir;
+            # fh_bakiye kolon filtresiyle birleşince fh_bakiye öncelik alır.
+            _qf = (cari_filters.get('qf') or 'tumu').strip()
+            _fh_bakiye = (cari_filters.get('fh_bakiye') or '').strip()
+            _QF_TO_BAKIYE = {
+                'acik_borc': 'acik_borc',
+                'alacakli': 'alacakli',
+                'sifir_bakiye': 'sifir',
+                'mudahale': 'mudahale',
+                'aktif_takip': 'aktif_takip',
+                'hareketli': 'hareketli',
+                'hareketsiz': 'hareketsiz',
+            }
+            _bakiye_f = _fh_bakiye or _QF_TO_BAKIYE.get(_qf) or None
             _rm_data = read_payable_snapshot(
                 location=sirket or None,
-                bakiye_f=cari_filters.get('fh_bakiye') or None,
+                bakiye_f=_bakiye_f,
                 tedarikci_q=cari_filters.get('fh_tedarikci') or None,
                 page=_page,
                 page_size=_page_size,
@@ -1652,15 +1668,15 @@ def finans_odeme_plani():
             'p3a_phase': True,
             'payable_rm_v1': True,           # PAYABLE_RM_V1 aktif bayrağı
             'active_tab': 'cariler',
-            'tabs': [
-                {'id': 'yukumlulukler', 'label': 'Yükümlülükler'},
-                {'id': 'cariler', 'label': 'Cariler / Tedarikçiler'},
-                {'id': 'anlasmalar', 'label': 'Anlaşmalar'},
-                {'id': 'odeme_sozleri', 'label': 'Ödeme Sözleri'},
-                {'id': 'arama', 'label': 'Aradı / Ödeme Sordu'},
-                {'id': 'odendi', 'label': 'Ödendi'},
-            ],
-            'location_filter': sirket or '',
+                'tabs': [
+                    {'id': 'yukumlulukler', 'label': 'Müşteri Carileri'},
+                    {'id': 'cariler', 'label': 'Tedarikçi Carileri'},
+                    {'id': 'anlasmalar', 'label': 'Anlaşmalar'},
+                    {'id': 'odeme_sozleri', 'label': 'Ödeme Sözleri'},
+                    {'id': 'arama', 'label': 'Aradı / Ödeme Sordu'},
+                    {'id': 'odendi', 'label': 'Ödendi'},
+                ],
+                'location_filter': sirket or '',
             'cari_view': cari_view,
             'aktif_takip_filter': aktif_filter,
             'cari_filters': cari_filters,
@@ -1684,7 +1700,7 @@ def finans_odeme_plani():
             'arama_rows': [],
             'tab_empty': None,
             'total_kayit': (_rm_data.get('pagination') or {}).get('total_count', 0),
-            'pagination': _rm_data.get('pagination', {'page': 1, 'page_size': 50, 'total_pages': 1, 'total_count': 0}),
+            'pagination': _rm_data.get('pagination', {'page': 1, 'page_size': 50, 'total_pages': 1, 'total_count': 0, 'active_count': 0, 'loc_total': 0}),
             # KPI — snapshot'tan gelir; Korgün vadeli çek KPI'ları legacy olarak korunur
             'kpi': _rm_data.get('kpi') or {},
             'kpi_filtered': {'active': False},
@@ -1707,6 +1723,130 @@ def finans_odeme_plani():
         }
         return render_template('finans/odeme_plani.html', **_rm_template_data)
     # [PAYABLE_RM_V1 SON] ────────────────────────────────────────────────────
+
+    # [RM_BYPASS_TABS BAS] ───────────────────────────────────────────────────
+    # anlasmalar, odeme_sozleri, arama, odendi, yukumlulukler sekmeleri için
+    # fetch_supplier_balances_bundle (Korgün ~15s) çağrılmaz.
+    # KPI snapshot'tan, sekme verisi local DB'den / snapshot'tan gelir.
+    _BYPASS_TABS = ('anlasmalar', 'odeme_sozleri', 'arama', 'odendi', 'yukumlulukler')
+    if _active_sekme in _BYPASS_TABS:
+        try:
+            try:
+                from modules.finans.services.odeme_plani_ops_service import (
+                    build_soz_list_rows, build_iletisim_list_rows,
+                )
+                from modules.finans.read_model.rm_reader import read_payable_snapshot
+                from modules.finans.services.odeme_plani_yetki import can_odeme_plani_write
+                from modules.finans.services.korgun_finance_adapter import COMPANY_LOCATIONS, CANONICAL_LOCATION_CODES
+            except ImportError:
+                from app.modules.finans.services.odeme_plani_ops_service import (
+                    build_soz_list_rows, build_iletisim_list_rows,
+                )
+                from app.modules.finans.read_model.rm_reader import read_payable_snapshot
+                from app.modules.finans.services.odeme_plani_yetki import can_odeme_plani_write
+                from app.modules.finans.services.korgun_finance_adapter import COMPANY_LOCATIONS, CANONICAL_LOCATION_CODES
+
+            # Snapshot'tan KPI (0 Korgün çağrısı)
+            _rm_kpi_data = read_payable_snapshot(location=sirket or None, page=1, page_size=1)
+            _snap_kpi = _rm_kpi_data.get('kpi') or {}
+
+            # Sekme verisi
+            _locs = [sirket] if sirket else list(CANONICAL_LOCATION_CODES)
+            _soz_rows, _arama_rows, _table_rows = [], [], []
+            _tab_empty = None
+
+            if _active_sekme == 'odeme_sozleri':
+                _soz_rows = build_soz_list_rows(_locs)
+                if not _soz_rows:
+                    _tab_empty = {'tab': 'odeme_sozleri', 'mesaj': 'Henüz ödeme sözü kaydı yok.'}
+            elif _active_sekme == 'arama':
+                _arama_rows = build_iletisim_list_rows(_locs)
+                if not _arama_rows:
+                    _tab_empty = {'tab': 'arama', 'mesaj': 'Henüz iletişim kaydı yok.'}
+            elif _active_sekme == 'yukumlulukler':
+                # [CUSTOMER_SCOPE_NOT_IMPLEMENTED]
+                # Müşteri Carileri (satış/tahsilat) veri modeli henüz uygulanmadı.
+                # Tedarikçi snapshot verisi müşteri gibi gösterilmez.
+                _tab_empty = {
+                    'tab': 'yukumlulukler',
+                    'mesaj': 'Müşteri Carileri (tahsilat modülü) yakında aktif olacak.',
+                    'customer_scope': False,
+                }
+            else:
+                # anlasmalar, odendi — şimdilik boş (veri CPS local DB'ye taşınmamış)
+                _tab_empty = {
+                    'tab': _active_sekme,
+                    'mesaj': 'Anlaşmalar ve Ödendi sekmeleri yakında aktif olacak.',
+                }
+
+            _bypass_data = {
+                'ok': True,
+                'p2_phase': True,
+                'p3a_phase': True,
+                'payable_rm_v1': True,
+                'active_tab': _active_sekme,
+                'tabs': [
+                    {'id': 'yukumlulukler', 'label': 'Müşteri Carileri'},
+                    {'id': 'cariler', 'label': 'Tedarikçi Carileri'},
+                    {'id': 'anlasmalar', 'label': 'Anlaşmalar'},
+                    {'id': 'odeme_sozleri', 'label': 'Ödeme Sözleri'},
+                    {'id': 'arama', 'label': 'Aradı / Ödeme Sordu'},
+                    {'id': 'odendi', 'label': 'Ödendi'},
+                ],
+                'location_filter': sirket or '',
+                'cari_view': cari_view,
+                'aktif_takip_filter': aktif_filter,
+                'cari_filters': cari_filters,
+                'can_write': can_odeme_plani_write(session.get('kullanici')),
+                'cache_refreshed': False,
+                'aktif_filter_active': (cari_view == 'active'),
+                'zero_filter_active': (cari_view == 'zero'),
+                'companies': [
+                    {'code': '', 'label': 'Tüm Şirketler'},
+                    {'code': 'SA001', 'label': 'Şahin Taban'},
+                    {'code': 'YN001', 'label': 'NexGen'},
+                    {'code': 'YP001', 'label': 'Pera AŞ'},
+                ],
+                'kpi': _snap_kpi,
+                'kpi_filtered': {'active': False},
+                'table_rows': _table_rows,
+                'cari_rows': [],
+                'cari_rows_full': [],
+                'soz_rows': _soz_rows,
+                'arama_rows': _arama_rows,
+                'tab_empty': _tab_empty,
+                'total_kayit': len(_table_rows) or len(_soz_rows) or len(_arama_rows),
+                'total_kalan_by_pb': {},
+                'pagination': {
+                    'page': 1, 'page_size': 50, 'total_pages': 1,
+                    'total_count': len(_table_rows) or len(_soz_rows) or len(_arama_rows),
+                    'cari_unfiltered_total': 0,
+                },
+                'vade_term_universe_count': 0,
+                'korgun_readonly': True,
+                'hata': None,
+                'supplier_counts': {},
+                'supplier_counts_total': 0,
+                'verification': {},
+                'perf': {'kg_fn_scan_count': 0, 'layer2_locations': [], 'html_row_count': 0},
+                'karar_layer2_ms': None,
+                'karar_query_count': 0,
+                'rm_snapshot_id': _rm_kpi_data.get('snapshot_id'),
+                'rm_published_at': _rm_kpi_data.get('published_at'),
+                'rm_snapshot_age_seconds': _rm_kpi_data.get('snapshot_age_seconds'),
+                'rm_status_label': _rm_kpi_data.get('status_label', 'ok'),
+                'rm_status_message': _rm_kpi_data.get('status_message', ''),
+                'rm_refreshing': False,
+                'rm_inline_korgun_calls': 0,
+            }
+            return render_template('finans/odeme_plani.html', **_bypass_data)
+        except Exception as _bypass_exc:
+            import logging as _log
+            _log.getLogger('cps.finans.routes').error(
+                'Bypass tab hatası (%s): %s', _active_sekme, _bypass_exc
+            )
+            # Fallback: eski ağır path (timeout olabilir ama en azından veri gelir)
+    # [RM_BYPASS_TABS SON] ───────────────────────────────────────────────────
 
     if do_refresh:
         # Sadece ilgili location scope'u invalidate et

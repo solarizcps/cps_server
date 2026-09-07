@@ -20,10 +20,9 @@ KATEGORI_SET = ("kredi", "kart", "cari", "cek", "maas", "vergi",
 
 
 def _db_path():
-    """Service dosyasi 3 dirname yukari = app/ klasoru, sonra mock_data.db"""
-    here = os.path.dirname(os.path.abspath(__file__))
-    # services -> finans -> modules -> app
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "mock_data.db")
+    """Effective app DB — tek resolver (db.get_db_path)."""
+    from db import get_db_path
+    return get_db_path()
 
 
 def _conn(db_path=None):

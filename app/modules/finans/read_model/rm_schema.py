@@ -56,7 +56,39 @@ CREATE TABLE IF NOT EXISTS rm_snapshot_row (
     net             TEXT NOT NULL DEFAULT '0',     -- net = alacak - borc (KorgunFinanceAdapter semantiği)
     canonical_key   TEXT,                          -- location:cari_kod:para_birimi
     bakiye_durumu   TEXT,                          -- Açık Borç | Alacaklıyız | Bakiye Yok
-    display_bakiye  TEXT                           -- abs(net) Decimal string
+    display_bakiye  TEXT,                          -- abs(net) Decimal string
+    -- V2: Layer2 enrichment (refresh sırasında yazılır; web request Korgün çağırmaz)
+    fa_tarih        TEXT,   -- Son Finansal Aksiyon tarihi (ISO)
+    fa_turu         TEXT,   -- Çek | Banka | Havale ...
+    fa_tutar        TEXT,   -- Decimal string
+    fa_pb           TEXT,
+    fa_vade         TEXT,   -- ISO, yalnız çek
+    fa_is_cek       INTEGER DEFAULT 0,
+    fa_vade_short   TEXT,
+    fa_cek_no       TEXT,
+    son_odeme_tarih TEXT,
+    son_odeme_tutar TEXT,
+    son_odeme_pb    TEXT,
+    son_alim_tarih  TEXT,
+    son_alim_tutar  TEXT,
+    son_alim_pb     TEXT,
+    son_alim_tip    TEXT,
+    son_cek_vade    TEXT,
+    son_cek_tutar   TEXT,
+    son_cek_pb      TEXT,
+    son_cek_no      TEXT,
+    aktif_takip     INTEGER DEFAULT 0,
+    karar_badge     TEXT,
+    karar_class     TEXT,
+    karar_aksiyon   TEXT,
+    anlasma_durumu  TEXT,
+    vade_has_term   INTEGER DEFAULT 0,
+    vade_gun        INTEGER,
+    soz_has_active  INTEGER DEFAULT 0,
+    soz_is_overdue  INTEGER DEFAULT 0,
+    temas_tarih_iso TEXT,
+    -- CPS enrichment overlay (reader'da local DB'den yazılır — V2 plan için yer tutucu)
+    enrichment_json TEXT
 )
 """
 

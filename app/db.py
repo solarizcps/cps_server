@@ -31,6 +31,15 @@ def _reject_canonical_rw_in_test_mode() -> None:
         )
 
 
+def get_db_path() -> str:
+    """Tek dogrulanmis effective app DB yolu.
+
+    Modul disi helper'lar repo-relative path uretmemelidir; worktree'de
+    canonical DB'den sapar.
+    """
+    return Config.MOCK_DB_PATH
+
+
 def _sqlite_conn():
     _reject_canonical_rw_in_test_mode()
     conn = sqlite3.connect(Config.MOCK_DB_PATH, timeout=15)

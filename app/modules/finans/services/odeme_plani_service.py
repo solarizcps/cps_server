@@ -14,7 +14,8 @@ from collections import defaultdict
 from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
+import sqlite3
 
 try:
     from modules.finans.services.odeme_plani_ops_service import (
@@ -871,6 +872,19 @@ def odeme_plani_sayfa_verisi(
     }
 
 
+def _classify_page_error(exc: Exception) -> Tuple[str, str]:
+    """SQLite/schema/config → local; gerçek Korgün/network → korgun."""
+    msg = str(exc).strip()
+    low = msg.lower()
+    if isinstance(exc, sqlite3.Error):
+        return 'local', msg
+    if 'no such table' in low or 'no such column' in low:
+        return 'local', msg
+    if 'mock_db_path' in low or 'cps_mock_db_path' in low:
+        return 'local', msg
+    return 'korgun', msg
+
+
 def odeme_plani_sayfa_verisi_safe(
     location_filter: Optional[str] = None,
     active_tab: Optional[str] = None,
@@ -895,6 +909,7 @@ def odeme_plani_sayfa_verisi_safe(
         )
     except Exception as exc:
         tab = _parse_tab(active_tab)
+        hata_kind, hata_msg = _classify_page_error(exc)
         return {
             'ok': False,
             'p2_phase': True,
@@ -914,6 +929,7 @@ def odeme_plani_sayfa_verisi_safe(
             'supplier_counts': {c: 0 for c in CANONICAL_LOCATION_CODES},
             'supplier_counts_total': 0,
             'kpi': {},
+            'kpi_filtered': {'active': False},
             'table_rows': [],
             'cari_rows': [],
             'soz_rows': [],
@@ -923,7 +939,8 @@ def odeme_plani_sayfa_verisi_safe(
             'total_kayit': 0,
             'total_kalan_by_pb': {},
             'korgun_readonly': True,
-            'hata': str(exc),
+            'hata_kind': hata_kind,
+            'hata': hata_msg,
             'pagination': {'page': 1, 'page_size': 10, 'total_pages': 1, 'total_count': 0, 'cari_unfiltered_total': 0},
             'cari_filters': _parse_cari_filters(None),
             'perf': {'kg_fn_scan_count': 0, 'layer2_locations': [], 'html_row_count': 0},
