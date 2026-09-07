@@ -1,0 +1,106 @@
+schema_version = 1
+module = "finans"
+version = "PAYABLE_READ_MODEL_V1"
+phase_code = "PAYABLE_READ_MODEL_V1"
+title = "Ödeme Planı PAYABLE Read-Model V1 — Candidate"
+status = "TEST"
+date = "2026-09-07"
+summary = """
+Cariler sekmesi soğuk açılışı 18.3s → inline Korgün YOKTUR.
+Ayrı izole SQLite read-model (ProgramData/Solariz/runtime/finans).
+Refresh CLI Windows Scheduled Task ile her 5 dakikada çalışır.
+Parity gate: satır/cari/sirket/PB/hash kontrolü; tek kuruş fark → reject.
+Snapshot yoksa hızlı hazır değil durumu.
+Last successful snapshot refresh fail'de korunur.
+Canonical production DB'ye tablo veya veri eklenmedi.
+"""
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "candidate/finans-odeme-plani-payable-read-model-v1"
+verification_date = "2026-09-07"
+verification_evidence = "pytest 31 pass 1 skip 0 fail — temp SQLite, no canonical DB"
+
+changes = [
+    "app/modules/finans/read_model/__init__.py — yeni paket",
+    "app/modules/finans/read_model/rm_config.py — path validation, canonical DB rejection",
+    "app/modules/finans/read_model/rm_schema.py — idempotent DDL",
+    "app/modules/finans/read_model/rm_db.py — read-only/read-write bağlantı",
+    "app/modules/finans/read_model/rm_parity.py — muhasebe parity gate",
+    "app/modules/finans/read_model/rm_refresh.py — lease lock, staging→flip",
+    "app/modules/finans/read_model/rm_cli.py — Scheduled Task CLI entrypoint",
+    "app/modules/finans/read_model/rm_reader.py — snapshot okuma + pagination",
+    "app/modules/finans/routes.py — cariler sekmesi snapshot yoluna alındı",
+    "app/templates/finans/odeme_plani.html — snapshot durum banner'ları",
+]
+
+changed_files = [
+    "app/modules/finans/read_model/__init__.py",
+    "app/modules/finans/read_model/rm_cli.py",
+    "app/modules/finans/read_model/rm_config.py",
+    "app/modules/finans/read_model/rm_db.py",
+    "app/modules/finans/read_model/rm_parity.py",
+    "app/modules/finans/read_model/rm_reader.py",
+    "app/modules/finans/read_model/rm_refresh.py",
+    "app/modules/finans/read_model/rm_schema.py",
+    "app/modules/finans/routes.py",
+    "app/templates/finans/odeme_plani.html",
+    "tests/finans/test_payable_read_model.py",
+]
+
+locked_rules = []
+
+tests = [
+    "TestSchemaBootstrap::test_bootstrap_idempotent PASS",
+    "TestSchemaBootstrap::test_refresh_control_seeded PASS",
+    "TestSchemaBootstrap::test_pointer_seeded PASS",
+    "TestCanonicalDBPathRejection::test_mock_data_db_rejected PASS",
+    "TestCanonicalDBPathRejection::test_mock_data_db_windows_path_rejected PASS",
+    "TestCanonicalDBPathRejection::test_mock_data_variant_rejected PASS",
+    "TestCanonicalDBPathRejection::test_temp_path_accepted PASS",
+    "TestCanonicalDBPathRejection::test_assert_test_path_rejects_production PASS",
+    "TestParityGate::test_parity_pass_matching_data PASS",
+    "TestParityGate::test_parity_fail_row_count_diff PASS",
+    "TestParityGate::test_parity_fail_hash_mismatch PASS",
+    "TestParityGate::test_parity_fail_company_set_diff PASS",
+    "TestParityGate::test_parity_fixture_muhasebe PASS",
+    "TestRefreshProcess::test_first_successful_refresh PASS",
+    "TestRefreshProcess::test_second_refresh_rotates_generation PASS",
+    "TestRefreshProcess::test_third_refresh_retention PASS",
+    "TestRefreshProcess::test_refresh_exception_keeps_active PASS",
+    "TestRefreshProcess::test_parity_failure_rejects_publish PASS",
+    "TestConcurrentRefreshLock::test_lease_busy_returns_lease_busy PASS",
+    "TestConcurrentRefreshLock::test_stale_lease_recovered PASS",
+    "TestWebReadOnly::test_snapshot_read_no_korgun PASS",
+    "TestWebReadOnly::test_no_snapshot_response PASS",
+    "TestWebReadOnly::test_no_snapshot_db_file_missing PASS",
+    "TestWebReadOnly::test_fresh_snapshot_read PASS",
+    "TestWebReadOnly::test_snapshot_read_under_800ms PASS",
+    "TestWebReadOnly::test_stale_snapshot_shows_data PASS",
+    "TestWebReadOnly::test_failed_refresh_shows_last_success PASS",
+    "TestWebReadOnly::test_pagination PASS",
+    "TestWebReadOnly::test_location_filter PASS",
+    "TestWebReadOnly::test_same_snapshot_id_in_response PASS",
+    "TestCanonicalDBIntegrity::test_canonical_db_sha_unchanged SKIP (canonical_db worktree'de yok)",
+    "TestDryRun::test_dry_run_parity_passes_no_publish PASS",
+]
+
+known_issues = [
+    "Manuel refresh düğmesi V1'de yoktur — Scheduled Task yönetir",
+    "Cari detay drill-down (popup) hâlâ Korgün'e lazy bağlanır (bu V1'de kasıtlı)",
+    "Vadeli çek KPI'ları (cek_Kart) cariler sekmesinde snapshot'ta değil — V2 kapsamı",
+    "Windows Scheduled Task bu fazda KAYITLI DEĞİLDİR — deploy adımı 6'da yapılacak",
+]
+
+next_steps = [
+    "Adem onayı",
+    "Worktree merge ve production deploy sırası",
+    "Windows Scheduled Task kaydı (deploy adım 6)",
+    "Canlı parity kabul: snapshot KPI = canlı Korgün KPI",
+    "Müşteri/tahsilat (RECEIVABLE) faz — ayrı release",
+    "Sibel dar görüntüleme rolü — ayrı release",
+]
+
+test_result = "31 PASS 1 SKIP 0 FAIL"
+db_write = false
+server_restart = false
+push_status = "not_pushed"

@@ -39,6 +39,49 @@
   </div>
   {% endif %}
 
+  {# [PAYABLE_RM_V1] Snapshot durum banner'ları — cariler sekmesinde gösterilir #}
+  {% if payable_rm_v1 and active_tab == 'cariler' %}
+    {% set _sl = rm_status_label %}
+    {% if _sl == 'no_snapshot' %}
+    <div class="op-alert op-alert-info" id="op-rm-banner" data-state="no_snapshot">
+      <span style="margin-right:6px">⏳</span>
+      <strong>Finans verisi henüz hazırlanmadı.</strong>
+      İlk yenileme tamamlandığında veri görünecek. Sayfa beklemeden açıldı.
+    </div>
+    {% elif _sl == 'refreshing' %}
+    <div class="op-alert op-alert-info" id="op-rm-banner" data-state="refreshing">
+      <span style="margin-right:6px">🔄</span>
+      Veriler yenileniyor…
+      {% if rm_published_at %}
+      &nbsp;·&nbsp;Son güncelleme: <strong>{{ rm_published_at[:16] | replace('T',' ') }}</strong>
+      {% endif %}
+    </div>
+    {% elif _sl == 'failed_last_ok' %}
+    <div class="op-alert op-alert-warning" id="op-rm-banner" data-state="failed_last_ok">
+      <span style="margin-right:6px">⚠️</span>
+      <strong>Yenileme başarısız</strong> — son başarılı veri gösteriliyor.
+      {% if rm_published_at %}
+      Son güncelleme: <strong>{{ rm_published_at[:16] | replace('T',' ') }}</strong>
+      {% endif %}
+    </div>
+    {% elif _sl == 'stale' %}
+    <div class="op-alert op-alert-warning" id="op-rm-banner" data-state="stale">
+      <span style="margin-right:6px">⏰</span>
+      Veri eski ({{ ((rm_snapshot_age_seconds or 0) // 60) }} dakika önce).
+      {% if rm_published_at %}
+      Son güncelleme: <strong>{{ rm_published_at[:16] | replace('T',' ') }}</strong>
+      {% endif %}
+    </div>
+    {% elif _sl == 'fresh' %}
+    <div class="op-alert op-alert-success op-rm-banner-fresh" id="op-rm-banner" data-state="fresh"
+         style="padding:4px 12px;font-size:0.82rem;color:#374151;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;margin-bottom:8px;">
+      <span style="margin-right:4px;color:#16a34a">●</span>
+      Son güncelleme: <strong>{{ rm_published_at[:16] | replace('T',' ') if rm_published_at }}</strong>
+    </div>
+    {% endif %}
+  {% endif %}
+  {# [/PAYABLE_RM_V1] #}
+
   <!-- KPI KARTLARI -->
   <div class="op-kpi-grid">
     {# KPI-1: Toplam Açık Borç — kg_fn_CariHesToplam net < 0 #}

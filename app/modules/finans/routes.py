@@ -1534,13 +1534,23 @@ def api_kredi_taksit(anlasma_id):
 
 
 # [ODEME_PLANI_P1 BAS] Ödeme Planı — Korgün READ-ONLY P1
+# [PAYABLE_RM_V1] cariler sekmesi → read-model snapshot okuma (inline Korgün BLOCK)
 @finans_bp.route('/odeme-plani')
 def finans_odeme_plani():
     """
-    Ödeme Planı ana sayfası — P3A.3.
+    Ödeme Planı ana sayfası — P3A.3 + PAYABLE_RM_V1.
+
     Yetki: finans.odeme_plani.write:can_view (canonical, P1.1).
-    Veri: KorgunFinanceAdapter → kg_fn CROSS APPLY (READ-ONLY, 45s TTL cache).
-    ?refresh=1 ile cache invalidate ve Korgün yeniden okunur.
+
+    PAYABLE_RM_V1 değişikliği:
+      - 'cariler' sekmesi: read-model snapshot'tan okur (inline Korgün YOKTUR).
+      - Diğer sekmeler: mevcut davranış korunur (Korgün servisleri çağrılır).
+      - Snapshot yoksa: hızlı "henüz hazır değil" durumu döner, 18 sn bekleme olmaz.
+      - Snapshot eskiyse: veriyi göster + yaş uyarısı.
+      - Refresh başarısızsa: son başarılı gösterilmeye devam eder.
+
+    NOT: ?refresh=1 artık yalnız cariler dışı sekmeler için cache invalidate eder.
+    Manuel refresh V1'de yoktur (Scheduled Task yönetir).
     """
     from flask import render_template, request, abort
 
@@ -1594,6 +1604,109 @@ def finans_odeme_plani():
     else:
         cari_view = 'daily'
         aktif_filter = None
+
+    # [PAYABLE_RM_V1 BAS] ─────────────────────────────────────────────────────
+    # cariler sekmesi → read-model snapshot okuma (inline Korgün YOK)
+    _active_sekme = (sekme or 'yukumlulukler').strip().lower()
+    if _active_sekme == 'cariler':
+        try:
+            try:
+                from modules.finans.read_model.rm_reader import read_payable_snapshot
+            except ImportError:
+                from app.modules.finans.read_model.rm_reader import read_payable_snapshot
+
+            _page = int(page_raw) if page_raw.isdigit() else 1
+            _page_size = int(page_size_raw) if page_size_raw and page_size_raw.isdigit() else 50
+            _rm_data = read_payable_snapshot(
+                location=sirket or None,
+                bakiye_f=cari_filters.get('fh_bakiye') or None,
+                tedarikci_q=cari_filters.get('fh_tedarikci') or None,
+                page=_page,
+                page_size=_page_size,
+            )
+        except Exception as _rm_exc:
+            import logging as _log
+            _log.getLogger('cps.finans.routes').error(
+                'Read-model okuma hatası (cariler): %s', type(_rm_exc).__name__
+            )
+            _rm_data = {
+                'ok': False,
+                'snapshot_state': 'no_snapshot',
+                'status_label': 'no_snapshot',
+                'status_message': 'Finans verisi geçici olarak erişilemiyor.',
+                'cari_rows': [],
+                'kpi': None,
+                'pagination': {'page': 1, 'page_size': 50, 'total_pages': 1, 'total_count': 0},
+                'inline_korgun_calls': 0,
+            }
+
+        try:
+            from modules.finans.services.odeme_plani_yetki import can_odeme_plani_write
+        except ImportError:
+            from app.modules.finans.services.odeme_plani_yetki import can_odeme_plani_write
+
+        # Mevcut template değişkenlerini koruyarak RM verisini ekle
+        _rm_template_data = {
+            'ok': _rm_data.get('ok', True),
+            'p2_phase': True,
+            'p3a_phase': True,
+            'payable_rm_v1': True,           # PAYABLE_RM_V1 aktif bayrağı
+            'active_tab': 'cariler',
+            'tabs': [
+                {'id': 'yukumlulukler', 'label': 'Yükümlülükler'},
+                {'id': 'cariler', 'label': 'Cariler / Tedarikçiler'},
+                {'id': 'anlasmalar', 'label': 'Anlaşmalar'},
+                {'id': 'odeme_sozleri', 'label': 'Ödeme Sözleri'},
+                {'id': 'arama', 'label': 'Aradı / Ödeme Sordu'},
+                {'id': 'odendi', 'label': 'Ödendi'},
+            ],
+            'location_filter': sirket or '',
+            'cari_view': cari_view,
+            'aktif_takip_filter': aktif_filter,
+            'cari_filters': cari_filters,
+            'can_write': can_odeme_plani_write(session.get('kullanici')),
+            'cache_refreshed': False,
+            'aktif_filter_active': (cari_view == 'active'),
+            'zero_filter_active': (cari_view == 'zero'),
+            # Read-model verileri
+            'rm_snapshot_id': _rm_data.get('snapshot_id'),
+            'rm_published_at': _rm_data.get('published_at'),
+            'rm_snapshot_age_seconds': _rm_data.get('snapshot_age_seconds'),
+            'rm_status_label': _rm_data.get('status_label', 'no_snapshot'),
+            'rm_status_message': _rm_data.get('status_message', ''),
+            'rm_refreshing': _rm_data.get('refreshing', False),
+            'rm_inline_korgun_calls': _rm_data.get('inline_korgun_calls', 0),
+            # Cari satırları ve pagination
+            'cari_rows': _rm_data.get('cari_rows', []),
+            'cari_rows_full': _rm_data.get('cari_rows', []),
+            'table_rows': [],
+            'soz_rows': [],
+            'arama_rows': [],
+            'tab_empty': None,
+            'total_kayit': (_rm_data.get('pagination') or {}).get('total_count', 0),
+            'pagination': _rm_data.get('pagination', {'page': 1, 'page_size': 50, 'total_pages': 1, 'total_count': 0}),
+            # KPI — snapshot'tan gelir; Korgün vadeli çek KPI'ları legacy olarak korunur
+            'kpi': _rm_data.get('kpi') or {},
+            'kpi_filtered': {'active': False},
+            'vade_term_universe_count': 0,
+            'total_kalan_by_pb': {},
+            'korgun_readonly': True,
+            'hata': None,
+            'supplier_counts': {},
+            'supplier_counts_total': 0,
+            'verification': {},
+            'companies': [
+                {'code': '', 'label': 'Tüm Şirketler'},
+                {'code': 'SA001', 'label': 'Şahin Taban'},
+                {'code': 'YN001', 'label': 'NexGen'},
+                {'code': 'YP001', 'label': 'Pera AŞ'},
+            ],
+            'perf': {'kg_fn_scan_count': 0, 'layer2_locations': [], 'html_row_count': len(_rm_data.get('cari_rows', []))},
+            'karar_layer2_ms': None,
+            'karar_query_count': 0,
+        }
+        return render_template('finans/odeme_plani.html', **_rm_template_data)
+    # [PAYABLE_RM_V1 SON] ────────────────────────────────────────────────────
 
     if do_refresh:
         # Sadece ilgili location scope'u invalidate et
