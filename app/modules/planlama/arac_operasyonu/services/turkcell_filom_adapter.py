@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -61,13 +62,71 @@ class FilomApiError(Exception):
         self.category = category
 
 
+def _normalize_filom_base_url(raw: str) -> str:
+    """
+    Canonical Filom service root — matches .env.example / web live path.
+
+    DPAPI worker secrets may store http:// or accidental /register suffix;
+    both can trigger redirect loops on POST /register (TooManyRedirects).
+    """
+    base = (raw or '').strip().rstrip('/')
+    if not base:
+        return base
+    low = base.lower()
+    for suffix in ('/register', '/mobiles'):
+        if low.endswith(suffix):
+            base = base[: -len(suffix)].rstrip('/')
+            low = base.lower()
+    if low.startswith('http://'):
+        base = 'https://' + base[7:]
+    return base
+
+
 def _cfg() -> Tuple[str, str, str]:
-    base = (os.environ.get('TURKCELL_FILOM_BASE_URL') or '').rstrip('/')
+    base = _normalize_filom_base_url(os.environ.get('TURKCELL_FILOM_BASE_URL') or '')
     user = os.environ.get('TURKCELL_FILOM_USERNAME') or ''
     pwd = os.environ.get('TURKCELL_FILOM_PASSWORD') or ''
     if not base or not user or not pwd:
         raise FilomApiError('Filom credential yapılandırması eksik', category='config')
     return base, user, pwd
+
+
+def _same_filom_host(url_a: str, url_b: str) -> bool:
+    return urlparse(url_a).netloc.lower() == urlparse(url_b).netloc.lower()
+
+
+def _post_register(url: str, user: str, pwd: str) -> requests.Response:
+    """
+    Register without redirect chains — one same-host Location follow only.
+    Credentials are never sent to a different host.
+    """
+    headers = {'username': user, 'password': pwd}
+    timeout = (_CONNECT_TIMEOUT, _READ_TIMEOUT)
+    r = requests.post(
+        url,
+        params={'language': 'tr'},
+        headers=headers,
+        timeout=timeout,
+        allow_redirects=False,
+    )
+    if r.status_code not in (301, 302, 303, 307, 308):
+        return r
+    location = (r.headers.get('Location') or '').strip()
+    if not location:
+        return r
+    next_url = urljoin(url, location)
+    if not _same_filom_host(url, next_url):
+        raise FilomApiError(
+            'Filom register cross-host redirect reddedildi',
+            category='network',
+        )
+    return requests.post(
+        next_url,
+        params={'language': 'tr'},
+        headers=headers,
+        timeout=timeout,
+        allow_redirects=False,
+    )
 
 
 def _log_call(endpoint: str, status: int, elapsed_ms: int, extra: str = '') -> None:
@@ -83,12 +142,7 @@ def authenticate(force: bool = False) -> str:
     url = f'{base}/register'
     t0 = time.perf_counter()
     try:
-        r = requests.post(
-            url,
-            params={'language': 'tr'},
-            headers={'username': user, 'password': pwd},
-            timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
-        )
+        r = _post_register(url, user, pwd)
     except requests.Timeout as e:
         raise FilomApiError('Filom register timeout', category='timeout') from e
     except requests.RequestException as e:

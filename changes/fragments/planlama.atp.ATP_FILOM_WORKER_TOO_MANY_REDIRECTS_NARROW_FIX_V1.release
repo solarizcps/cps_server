@@ -1,0 +1,1 @@
+Filom GPS worker register TooManyRedirects dar fix: base URL normalize, redirect-safe POST /register, regression test.
