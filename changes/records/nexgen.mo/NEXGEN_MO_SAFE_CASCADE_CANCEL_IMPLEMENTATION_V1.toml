@@ -1,0 +1,78 @@
+schema_version = 1
+module = "nexgen.mo"
+version = "v1.4.0"
+phase_code = "NEXGEN_MO_SAFE_CASCADE_CANCEL_IMPLEMENTATION_V1"
+title = "Üretim başlamamış PZM siparişi için cascade iptal akışı"
+status = "ONAYLANDI"
+date = "2026-09-07"
+summary = "Üretime gönderilmiş ancak üretimi başlamamış PZM siparişleri MTT→PZM→Plan→Batch→Parça→RF→Rezerv zincirinde tek transaction ile IPTAL edilir; UI Siparişi İptal Et akışı sağlar."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "release/nexgen-mo-safe-cancel-v1@8147840"
+verification_date = "2026-09-07"
+verification_evidence = "app/test_nexgen_siparis_uretim_cascade_iptal_v1.py T1-T24 temp DB; canonical SHA unchanged."
+test_result = "T1-T24 ALL PASS (25 assertions); visual gate pending"
+db_write = false
+server_restart = false
+push_status = "NOT_PUSHED"
+deployment_status = "NOT_DEPLOYED"
+evidence_summary = "Cascade cancel service + route + PZM UI; fail-closed guards; idempotent; no physical delete."
+
+changes = [
+    "New POST /nexgen/api/pazarlama/siparis/{id}/uretim-iptal canonical cascade cancel endpoint.",
+    "pzm_uretim_iptal_service.siparis_uretim_zinciri_iptal transaction with guard checks.",
+    "PZM detail UI: Siparişi İptal Et modal; Taslağı Sil renamed; Kalıcı Sil hidden for URETIMDE.",
+    "Regression suite test_nexgen_siparis_uretim_cascade_iptal_v1.py T1-T24.",
+]
+
+changed_files = [
+    "app/modules/nexgen/pzm_uretim_iptal_service.py",
+    "app/modules/nexgen/routes.py",
+    "app/templates/nexgen/pazarlama_merkezi.html",
+    "app/test_nexgen_siparis_uretim_cascade_iptal_v1.py",
+]
+
+locked_rules = [
+    "Üretim başlamış sipariş cascade iptal ile kapatılamaz.",
+    "Partial update yasak; guard fail 409 rollback.",
+    "Fiziksel silme bu akışta kullanılmaz.",
+    "donusturulen_siparis_id tarihsel referans olarak korunur.",
+    "Mevcut Bitir/Beklet ve _pzm_siparis_tamamlandi_sync davranışı değişmez.",
+]
+
+tests = [
+    "T1 full chain IPTAL",
+    "T2 MTT IPTAL donusturulen_siparis_id preserved",
+    "T3 PZM IPTAL",
+    "T4 Plan IPTAL",
+    "T5 Batch IPTAL",
+    "T6 42 parca IPTAL",
+    "T7 RF IPTAL",
+    "T8 rezerv IPTAL",
+    "T9 row counts unchanged",
+    "T10 idempotent",
+    "T11 DEVAM parca 409",
+    "T12 BITTI parca 409",
+    "T13 uretilen_kg>0 409",
+    "T14 baslama_zamani 409",
+    "T15 stok hareket 409",
+    "T16 wrong siparis_no 400",
+    "T17 empty reason 400",
+    "T18 unauthorized 403",
+    "T19 rollback",
+    "T20 tablet list removed",
+    "T21 MTT history IPTAL",
+    "T22 regression popup+erhan",
+    "T23 canonical SHA",
+    "T24 etiket/ATP scope 0",
+]
+
+known_issues = [
+    "Visual gate pending Adem approval 1920/1366 test server.",
+]
+
+next_steps = [
+    "Adem UI visual gate on temp DB test server.",
+    "Commit/push release/nexgen-mo-safe-cancel-v1 after approval.",
+    "Production RDP apply for MTT-2026-0015 test chain closure.",
+]

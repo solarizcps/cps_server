@@ -20087,6 +20087,77 @@ def api_pazarlama_talep_iptal(talep_id):
         con.close()
 
 
+@nexgen_bp.route('/api/pazarlama/siparis/<int:siparis_id>/uretim-iptal-durum', methods=['GET'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_pazarlama_siparis_uretim_iptal_durum(siparis_id):
+    """Üretim başlamamış PZM siparişi cascade iptal uygunluğu (salt okunur)."""
+    from modules.nexgen.pzm_uretim_iptal_service import (
+        SiparisUretimIptalError,
+        degerlendir_siparis_uretim_iptal,
+    )
+
+    con = _db()
+    try:
+        sonuc = degerlendir_siparis_uretim_iptal(con, siparis_id)
+        ozet = sonuc.pop('ozet', None)
+        if ozet:
+            sonuc['uretim_basladi'] = not sonuc.get('iptal_edilebilir') and not sonuc.get('already_cancelled')
+            if sonuc.get('kismi_iptal'):
+                sonuc['uretim_basladi'] = True
+        if sonuc.get('kismi_iptal'):
+            return jsonify({'ok': False, **sonuc}), 409
+        return jsonify({'ok': True, **sonuc})
+    except SiparisUretimIptalError as e:
+        body = {'ok': False, 'hata': e.mesaj, 'kod': e.kod, 'nedenler': e.nedenler}
+        if e.audit:
+            body['audit'] = e.audit
+        return jsonify(body), e.http_status
+    finally:
+        con.close()
+
+
+@nexgen_bp.route('/api/pazarlama/siparis/<int:siparis_id>/uretim-iptal', methods=['POST'])
+@yetki_gerekli('nexgen.plan.manage', 'can_manage')
+def api_pazarlama_siparis_uretim_iptal(siparis_id):
+    """Üretim başlamamış PZM sipariş zincirini tek transaction ile IPTAL yapar."""
+    from modules.nexgen.pzm_uretim_iptal_service import (
+        SiparisUretimIptalError,
+        siparis_uretim_zinciri_iptal,
+    )
+
+    data = request.get_json(silent=True) or {}
+    siparis_no = (data.get('siparis_no') or '').strip()
+    iptal_nedeni = (data.get('iptal_nedeni') or '').strip()
+    client_submit_id = (data.get('client_submit_id') or '').strip() or None
+
+    if not iptal_nedeni:
+        return jsonify({'ok': False, 'hata': 'İptal nedeni zorunludur.', 'kod': 'NEDEN_ZORUNLU'}), 400
+    if not siparis_no:
+        return jsonify({'ok': False, 'hata': 'Sipariş numarası zorunludur.', 'kod': 'SIPARIS_NO_ZORUNLU'}), 400
+
+    con = _db()
+    try:
+        sonuc = siparis_uretim_zinciri_iptal(
+            con,
+            siparis_id,
+            siparis_no=siparis_no,
+            iptal_nedeni=iptal_nedeni,
+            kullanici_id=_kullanici_id(),
+            client_submit_id=client_submit_id,
+        )
+        return jsonify(sonuc)
+    except SiparisUretimIptalError as e:
+        body = {'ok': False, 'hata': e.mesaj, 'kod': e.kod, 'nedenler': e.nedenler}
+        if e.audit:
+            body['audit'] = e.audit
+        return jsonify(body), e.http_status
+    except Exception as e:
+        con.rollback()
+        return jsonify({'ok': False, 'hata': str(e)}), 500
+    finally:
+        con.close()
+
+
 # FAZ-1B: durum allowlist YOK — yalnız ticari/sonuç ilişkileri engeller
 _PZM_SILINEMEZ_SONUC_DURUMLAR = frozenset({
     'BITTI', 'SEVK_EDILDI', 'TAMAMLANDI',
