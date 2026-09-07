@@ -1,0 +1,62 @@
+schema_version = 1
+module = "nexgen.mo"
+version = "v1.3.0"
+phase_code = "NEXGEN_DIRECT_SIPARIS_END_TO_END_REGRESSION_LOCK_V1"
+title = "Doğrudan Sipariş Talebi onay ve planlama akışı kilitlendi."
+status = "KILITLI"
+date = "2026-09-02"
+summary = "Müşteri Operasyonu doğrudan Sipariş Talebi akışı yönetim onayı ve planlama kuyruğu ile uçtan uca doğrulandı; T1–T22 regresyon testleriyle kilitlendi."
+source_type = "commit"
+commit_sha = "0bb714bf0071fd47a39d740f9d78ec3127a705b5"
+test_result = "T1-T22 ALL PASS"
+db_write = false
+server_restart = false
+push_status = "RELEASE_BRANCH_PENDING"
+deployment_status = "RELEASE_BRANCH_PENDING"
+evidence_summary = "Cherry-pick on origin/main@8952aaa into release/nexgen-mo-mehmet-v1; temp DB regression verified before push."
+
+changes = [
+    "Dedicated Sipariş Talebi MTT submit endpoint added for popup workflow.",
+    "Service orchestrator creates nexgen_onay and MTT with ONAY_BEKLIYOR initial state.",
+    "Popup UI wired to canonical approval endpoint with idempotency guard.",
+    "T1–T22 regression suite locks self-approval, queue, conversion, and legacy 410 guards.",
+]
+
+changed_files = [
+    "app/modules/nexgen/musteri_pazarlama_routes.py",
+    "app/modules/nexgen/musteri_temsilcisi_talep_service.py",
+    "app/templates/nexgen/musteri_pazarlama.html",
+    "app/test_nexgen_siparis_popup_canonical_guard_v1.py",
+]
+
+locked_rules = [
+    "Erhan doğrudan Sipariş Talebi MTT ve nexgen_onay oluşturur.",
+    "İlk durum ONAY_BEKLIYOR olur.",
+    "Talep kendi kendine onaylanamaz.",
+    "Yönetim onayı sonrası MTT YENI olur.",
+    "Planlama kuyruğunda görünür ve ISLEME_ALINDI olabilir.",
+    "Görüşme Kaydı akışı değişmez.",
+    "Numune popup akışı değişmez.",
+    "Legacy sipariş endpoint'leri 410 kalır.",
+    "Teknik formül, teknik renk ve gerçek termin eksikken sipariş kaydedilemez.",
+    "Duplicate gönderim engellenir.",
+]
+
+tests = [
+    "T1 self-approval guard",
+    "T2 header visibility",
+    "T3 management API visibility",
+    "T4 reject flow",
+    "T5 Mehmet YENI queue",
+    "T6 conversion prefill",
+    "T7 technical guard blocks save",
+    "T8 Erhan notification",
+    "T9 legacy 410 endpoints",
+    "T10 Erhan header 403",
+    "T11-T22 extended end-to-end regression lock",
+]
+
+known_issues = []
+next_steps = [
+    "Production deploy via RDP on release/nexgen-mo-mehmet-v1 branch.",
+]
