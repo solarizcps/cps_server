@@ -1,0 +1,61 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.7.0"
+phase_code = "ATP_FILOM_WORKER_TOO_MANY_REDIRECTS_NARROW_FIX_V1"
+title = "Filom worker register TooManyRedirects dar fix"
+status = "ONAYLANDI"
+date = "2026-09-07"
+summary = "GPS worker SYSTEM DPAPI base URL http/suffix misconfig nedeniyle POST /register redirect loop aliyordu; shared turkcell_filom_adapter normalize + fail-closed register ile web ile hizalandi."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "release/atp-filom-worker-redirect-v1@c2e41cf"
+verification_date = "2026-09-07"
+verification_evidence = "test_filom_register_redirect_v1.py 10/10 PASS; test_atp_multi_add_identity_coordinate_dropdown_v1.py 25/25 PASS; temp DB insert+dedup; canonical SHA unchanged."
+test_result = "redirect 10/10; ATP regression 25/25; temp DB insert+dedup PASS; cross-host fail-closed PASS"
+db_write = false
+server_restart = false
+push_status = "NOT_PUSHED"
+deployment_status = "NOT_DEPLOYED"
+root_cause = "Worker DPAPI TURKCELL_FILOM_BASE_URL http:// or /register suffix; requests POST allow_redirects=True redirect loop; web .env had canonical https base."
+evidence_summary = "Shared adapter only; no second login path; credentials not logged; TLS verify unchanged."
+
+changes = [
+  "Normalize Filom base URL (http to https, strip /register|/mobiles suffix).",
+  "_post_register allow_redirects=False with single same-host retry.",
+  "Cross-host redirect fail-closed; no credential forward.",
+  "Regression test_filom_register_redirect_v1.py.",
+]
+
+changed_files = [
+  "app/modules/planlama/arac_operasyonu/services/turkcell_filom_adapter.py",
+  "tests/planlama/test_filom_register_redirect_v1.py",
+]
+
+locked_rules = [
+  "Filom response sozlesmesi degismez.",
+  "TLS dogrulama kapatilmaz.",
+  "Kimlik bilgileri loglanmaz.",
+  "GPS/geofence/rota is kurallari bu fazda degismez.",
+]
+
+tests = [
+  "test_filom_register_redirect_v1 normalize http/https",
+  "test_filom_register_redirect_v1 register no redirect chain",
+  "test_filom_register_redirect_v1 redirect repro mock",
+  "test_filom_register_redirect_v1 same-host single follow",
+  "test_filom_register_redirect_v1 cross-host blocked",
+  "test_filom_register_redirect_v1 poll_once insert dedup temp DB",
+  "test_filom_register_redirect_v1 credential not in logs",
+  "test_atp_multi_add_identity_coordinate_dropdown_v1 regression 25",
+]
+
+known_issues = [
+]
+
+next_steps = [
+  "Production RDP deploy adapter only; restart GPS SYSTEM task after deploy.",
+  "Verify worker poll inserted>0 in arac_gps_worker.out.log.",
+]
+
+related_commits = [
+]
