@@ -1,0 +1,66 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.0.0"
+phase_code = "ATP_PRODUCTION_STABILIZATION_LOCK_V1"
+title = "Production ATP stabilization lock — SHA256 manifest + fail-closed validator"
+status = "ONAYLANDI"
+date = "2026-09-07"
+summary = "Locks ATP module at production baseline 21b8a21 with forensic inventory, touchpoints, and fail-closed validator gates."
+source_type = "verified_uncommitted"
+commit_sha = "21b8a2100ba34db92172f300f246c2a67b319e94"
+test_result = "tests/tools/test_atp_stabilization_lock_v1.py PASS; ATP regression subset PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+worktree_fingerprint = "release-atp-filom-worker-redirect-v1@21b8a21"
+verification_date = "2026-09-07"
+verification_evidence = "ATP_STABILIZATION_LOCK=PASS ATP_FILES_CHECKED=132; CPS_PRE_RELEASE_GATES=PASS"
+evidence_summary = "Production SOLARIZDB stable: GPS worker, Filom poll, Plan 9 route snapshot and ON_ROUTE state verified before lock."
+root_cause = "Prior Filom worker failure caused by DPAPI password mismatch vs web .env; corrected operationally without recording secret material."
+changes = [
+  "Forensic ATP dependency inventory (132 files + 4 touchpoints).",
+  "Immutable SHA256 manifest at docs/atp-lock/.",
+  "Fail-closed validator tools/validate_atp_stabilization_lock.py.",
+  "Pre-release gate orchestrator tools/validate_cps_pre_release_gates.py.",
+  "Lock policy and enforcement documentation.",
+]
+changed_files = [
+  "docs/atp-lock/ATP_STABILIZATION_LOCK_POLICY.md",
+  "docs/atp-lock/ENFORCEMENT.md",
+  "docs/atp-lock/atp_stabilization_manifest.sha256",
+  "docs/atp-lock/atp_touchpoints.sha256",
+  "docs/atp-lock/atp_inventory.json",
+  "tools/build_atp_lock_manifest.py",
+  "tools/validate_atp_stabilization_lock.py",
+  "tools/validate_cps_pre_release_gates.py",
+  "tests/tools/test_atp_stabilization_lock_v1.py",
+  "changes/records/planlama.atp/ATP_PRODUCTION_STABILIZATION_LOCK_V1.toml",
+  "changes/fragments/planlama.atp.ATP_PRODUCTION_STABILIZATION_LOCK_V1.release",
+]
+locked_rules = [
+  "Adem explicit approval required before any ATP code/UI/worker/adapter change.",
+  "Non-ATP releases require ATP_DIFF=0 against manifest baseline 21b8a21.",
+  "Manifest hash mismatch or missing ATP file → fail-closed.",
+  "Secret values/hashes never stored in manifest or release records.",
+  "V2 unresolved-3xx hardening excluded until explicit unlock phase.",
+  "Past-departure ORS UX gap accepted; no fix without unlock.",
+]
+tests = [
+  "tests/tools/test_atp_stabilization_lock_v1.py",
+  "tests/planlama/test_filom_register_redirect_v1.py subset",
+  "tests/planlama/test_atp_db_guard_v1.py",
+]
+known_issues = [
+  "Production geofence OUTSIDE→INSIDE→COMPLETED not yet observed end-to-end.",
+  "Past-departure ORS snapshot button missing in UI (known UX gap).",
+  "validate_release_history.py absent at baseline; ATP gate via validate_cps_pre_release_gates.py.",
+]
+next_steps = [
+  "Adem review lock artefacts in worktree; commit when approved.",
+  "Wire validate_cps_pre_release_gates into CI/pre-deploy checklist.",
+  "Optional: append ATP gate to validate_release_history when merged to main.",
+]
+related_commits = [
+  "21b8a2100ba34db92172f300f246c2a67b319e94",
+]

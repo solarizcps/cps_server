@@ -15,7 +15,20 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 APP = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'app')
-CANONICAL_DB = os.path.join(APP, 'mock_data.db')
+
+
+def _resolve_canonical_db() -> str | None:
+    """Read-only canonical path — env first, then repo app/mock_data.db; never copy."""
+    env_path = os.environ.get('CPS_CANONICAL_DB_SOURCE', '').strip()
+    if env_path and os.path.isfile(env_path):
+        return os.path.abspath(env_path)
+    repo_path = os.path.join(APP, 'mock_data.db')
+    if os.path.isfile(repo_path):
+        return os.path.abspath(repo_path)
+    return None
+
+
+CANONICAL_DB = _resolve_canonical_db()
 sys.path.insert(0, APP)
 os.chdir(APP)
 
@@ -137,7 +150,14 @@ class TestRegisterRedirectBehavior(unittest.TestCase):
 class TestPollOnceWithMockFilom(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.canonical_sha = hashlib.sha256(open(CANONICAL_DB, 'rb').read()).hexdigest()
+        cls.canonical_db = CANONICAL_DB
+        if not cls.canonical_db:
+            raise RuntimeError(
+                'Canonical DB not found for read-only fixture check. '
+                'Set CPS_CANONICAL_DB_SOURCE to a readable mock_data.db path, '
+                f'or place mock_data.db at {os.path.join(APP, "mock_data.db")}.',
+            )
+        cls.canonical_sha = hashlib.sha256(open(cls.canonical_db, 'rb').read()).hexdigest()
 
     def _run_migration(self, db_path: str, filename: str) -> None:
         spec = importlib.util.spec_from_file_location(
@@ -193,7 +213,7 @@ class TestPollOnceWithMockFilom(unittest.TestCase):
             self.assertEqual(r2['inserted'], 0)
 
     def test_canonical_db_unchanged(self):
-        after = hashlib.sha256(open(CANONICAL_DB, 'rb').read()).hexdigest()
+        after = hashlib.sha256(open(self.canonical_db, 'rb').read()).hexdigest()
         self.assertEqual(after, self.canonical_sha)
 
 

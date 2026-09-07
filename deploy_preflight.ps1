@@ -7,6 +7,7 @@
 $ErrorActionPreference = "Stop"
 
 $root    = "C:\Solariz_CPS_SERVER"
+$repoRoot = $PSScriptRoot
 $appDir  = "$root\app"
 $dbPath  = "$appDir\mock_data.db"
 $logDir  = "$root\logs"
@@ -35,6 +36,25 @@ Log "======================================================"
 Log "DEPLOY PREFLIGHT BASLADI"
 Log "Hedef DB : $dbPath"
 Log "======================================================"
+
+# ------------------------------------------------------------------
+# 0. ATP production stabilization lock (fail-closed when manifest present)
+# ------------------------------------------------------------------
+$atpManifest = "$repoRoot\docs\atp-lock\atp_stabilization_manifest.sha256"
+$atpValidator = "$repoRoot\tools\validate_atp_stabilization_lock.py"
+if (Test-Path -LiteralPath $atpManifest) {
+    if (-not (Test-Path -LiteralPath $atpValidator)) {
+        Fail "ATP lock manifest mevcut fakat validator eksik: $atpValidator"
+    } else {
+        Log "ATP stabilization lock gate"
+        & python $atpValidator
+        if ($LASTEXITCODE -ne 0) {
+            Fail "ATP stabilization lock FAIL (exit=$LASTEXITCODE)"
+        } else {
+            PassOK "ATP_STABILIZATION_LOCK=PASS"
+        }
+    }
+}
 
 # ------------------------------------------------------------------
 # 1. DB fiziksel varlik

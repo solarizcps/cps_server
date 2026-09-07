@@ -1,0 +1,64 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.1.0"
+phase_code = "ATP_PRODUCTION_STABILIZATION_LOCK_V1_1_AUDIT_FIX"
+title = "ATP lock audit fix — enforcement wiring, inventory reconcile, regression ERROR=0"
+status = "ONAYLANDI"
+date = "2026-09-07"
+summary = "Audit fixes for ATP stabilization lock: deploy_preflight enforcement, disjoint inventory (134 files), deterministic builder, canonical DB test fixture, removed orphan gates script."
+source_type = "verified_uncommitted"
+commit_sha = "21b8a2100ba34db92172f300f246c2a67b319e94"
+test_result = "tests/tools/test_atp_stabilization_lock_v1.py 13/13 PASS; filom canonical ERROR=0"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+worktree_fingerprint = "release-atp-filom-worker-redirect-v1@21b8a21"
+verification_date = "2026-09-07"
+verification_evidence = "ATP_STABILIZATION_LOCK=PASS ATP_FILES_CHECKED=134; deploy_preflight tamper exit!=0"
+evidence_summary = "Lock infra only; ATP app/UI/worker behavior unchanged at baseline 21b8a21."
+root_cause = "Phase V1 audit blockers: orphan validate_cps_pre_release_gates.py, inventory double-count, manifest non-determinism, filom tests missing canonical DB path in worktree."
+changes = [
+  "Wire ATP lock into deploy_preflight.ps1 step 0 ($repoRoot manifest/validator).",
+  "Remove unused validate_cps_pre_release_gates.py.",
+  "Disjoint category inventory builder; 134 unique files.",
+  "Deterministic manifest header timestamp.",
+  "Filom poll tests: CPS_CANONICAL_DB_SOURCE read-only resolution (no copy).",
+  "Lock unit tests: deploy_preflight invoke + tamper non-zero exit.",
+]
+changed_files = [
+  "deploy_preflight.ps1",
+  "docs/atp-lock/ATP_STABILIZATION_LOCK_POLICY.md",
+  "docs/atp-lock/ENFORCEMENT.md",
+  "docs/atp-lock/atp_stabilization_manifest.sha256",
+  "docs/atp-lock/atp_touchpoints.sha256",
+  "docs/atp-lock/atp_inventory.json",
+  "tools/build_atp_lock_manifest.py",
+  "tools/validate_atp_stabilization_lock.py",
+  "tests/tools/test_atp_stabilization_lock_v1.py",
+  "tests/planlama/test_filom_register_redirect_v1.py",
+  "changes/records/planlama.atp/ATP_PRODUCTION_STABILIZATION_LOCK_V1_1_AUDIT_FIX.toml",
+  "changes/fragments/planlama.atp.ATP_PRODUCTION_STABILIZATION_LOCK_V1_1_AUDIT_FIX.release",
+]
+locked_rules = [
+  "Adem explicit approval required before any ATP code/UI/worker/adapter change.",
+  "Non-ATP releases require ATP_DIFF=0 against manifest baseline 21b8a21.",
+  "deploy_preflight.ps1 is the in-tree deploy gate; _start_8080 must not block startup.",
+  "No future validate_release_history.py patch in allowlist until file exists on branch.",
+]
+tests = [
+  "tests/tools/test_atp_stabilization_lock_v1.py",
+  "tests/planlama/test_filom_register_redirect_v1.py::TestPollOnceWithMockFilom",
+]
+known_issues = [
+  "Baseline 21b8a21 has no deploy_cps_with_release_state.ps1; wrapper on main chains preflight on -Execute.",
+  "Commit/restart without deploy_preflight bypasses lock until hooks/CI added.",
+  "Full tests/planlama/ directory run hits pytest 3.14 capture bug in some shells; per-file runs PASS.",
+]
+next_steps = [
+  "Adem review; commit when approved.",
+  "Merge deploy_preflight change to main with lock artefacts.",
+]
+related_commits = [
+  "21b8a2100ba34db92172f300f246c2a67b319e94",
+]
