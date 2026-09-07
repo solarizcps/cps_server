@@ -1,20 +1,25 @@
 ## finans.PAYABLE_READ_MODEL_V1 — 2026-09-07
 
-**Ödeme Planı PAYABLE Read-Model V1 (Candidate)**
+**Ödeme Planı PAYABLE Read-Model V1 (Release branch)**
 
-Cariler sekmesi soğuk açılışı 18.3 saniyeden <800ms'ye indirgendi.
+Cariler sekmesi soğuk açılışı 18.3 saniyeden snapshot okumaya indirgendi.
 Korgün `fetch_supplier_balances_bundle()` web request yolundan çıkarıldı.
 
 ### Yapılan değişiklikler
 - `app/modules/finans/read_model/` yeni paket (8 modül)
 - `routes.py`: cariler sekmesi → snapshot okuma (inline Korgün=0)
 - `odeme_plani.html`: snapshot durum banner'ları (5 durum)
+- `rm_reader.py` (21f1814): display_bakiye float DTO — HTTP 500 düzeltmesi
+- `TestRealRouteCariler`: gerçek Flask route HTTP 200 regression
+
+### Commits
+- `b32652b` — read-model v1 candidate
+- `21f1814` — UI DTO uyumluluk düzeltmesi
 
 ### Güvenlik
-- Canonical `app/mock_data.db`: DOKUNULMADI
-- Production runtime DB: OLUŞTURULMADI (deploy adımı)
-- Scheduled Task: KAYITLI DEĞİL (deploy adımı 6)
-- Main branch: DOKUNULMADI (worktree candidate)
+- Canonical production DB: DOKUNULMADI
+- Production runtime DB: OLUŞTURULMADI
+- Scheduled Task: KAYITLI DEĞİL
 
 ### Test
-31 PASS · 1 SKIP · 0 FAIL — tüm temp SQLite, canonical DB dokunulmadı
+36 PASS · 0 FAIL — temp SQLite + Flask route HTTP 200, Korgün call count=0
