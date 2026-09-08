@@ -1,0 +1,169 @@
+# Yönetim / Onay — schema contract
+# Metadata only. No DB data.
+
+module = "yonetim_onay"
+pilot_baseline = "cb593bd6794544a45bb7e8c42ef70c49ff6a041c"
+
+owner_files = [
+    "app/modules/yonetim/",
+]
+
+critical_routes = [
+    "/yonetim",
+    "/yonetim/onay",
+    "/yonetim/onay/<int:talep_id>",
+]
+
+read_tables = [
+    "onay_talep",
+    "onay_talep_adim",
+    "onay_adapter_log",
+    "kullanici",
+    "rol",
+    "permission_matrix",
+]
+write_tables = [
+    "onay_talep",
+    "onay_talep_adim",
+    "onay_adapter_log",
+]
+
+# Onay migration'ları için canonical applied listesinde açık etiket yok.
+# Tahmin yapılmıyor.
+required_migrations = []
+registry_required   = []
+
+[[tables]]
+name = "onay_talep"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "talep_kod"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "talep_tipi"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "kaynak_modul"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "kaynak_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "durum"
+type = "TEXT"
+not_null = true
+default = "'BEKLIYOR'"
+
+[[tables.columns]]
+name = "idempotency_key"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "aktif"
+type = "INTEGER"
+not_null = true
+default = "1"
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = true
+
+[[tables.indexes]]
+name = "idx_onay_talep_durum"
+table = "onay_talep"
+columns = ["durum"]
+
+[[tables.indexes]]
+name = "idx_onay_talep_aktif_kaynak"
+table = "onay_talep"
+columns = ["aktif", "kaynak_id"]
+
+[[tables]]
+name = "onay_talep_adim"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "talep_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "sira"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "adim_tipi"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "kademe"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "durum"
+type = "TEXT"
+not_null = true
+default = "'BEKLIYOR'"
+
+[[tables.indexes]]
+name = "idx_onay_adim_talep"
+table = "onay_talep_adim"
+columns = ["talep_id"]
+
+[[tables]]
+name = "onay_adapter_log"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "talep_id"
+type = "INTEGER"
+not_null = false
+
+[[tables.columns]]
+name = "adapter_kodu"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "islem"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "sonuc"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = true

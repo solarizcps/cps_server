@@ -1,0 +1,168 @@
+# Finans / Ödeme Planı — schema contract
+# Metadata only. No DB data.
+# DEPLOY_BLOCKER: kpi_filtered view / finans sorgusunun beklenen yapısı
+# mevcut DB şemasına göre doğrulanamamıştır.
+# Bu blocker giderilmeden bu modül için deploy önerilmez.
+
+module = "finans_odeme_plani"
+pilot_baseline = "cb593bd6794544a45bb7e8c42ef70c49ff6a041c"
+
+known_blockers = [
+    "kpi_filtered view may not exist or may have changed — verify before deploy",
+]
+
+owner_files = [
+    "app/modules/finans/odeme_plani_routes.py",
+]
+
+critical_routes = [
+    "/finans/odeme-plani",
+    "/finans/odeme-plani/liste",
+]
+
+read_tables = [
+    "Cari_Kart",
+    "Cari_Har",
+    "Banka_Kart",
+    "Kasa_Kart",
+    "Cek_Senet",
+]
+write_tables = [
+    "Cari_Har",
+]
+
+# Mevcut canonical DB'deki applied migration'lar arasında
+# finans-specific migration numarası tespit edilemedi.
+# Çakışan migration numaraları (50, 100) nedeniyle otomatik atama yapılmıyor.
+required_migrations = []
+registry_required   = []
+
+[[tables]]
+name = "Cari_Kart"
+
+[[tables.columns]]
+name = "CKod"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "CName"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "CTip"
+type = "INTEGER"
+not_null = false
+default = "1"
+
+[[tables.columns]]
+name = "VergiNo"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "Bakiye"
+type = "REAL"
+not_null = false
+default = "0"
+
+[[tables.columns]]
+name = "Aktif"
+type = "INTEGER"
+not_null = false
+default = "1"
+
+[[tables]]
+name = "Cari_Har"
+
+[[tables.columns]]
+name = "Id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "CKod"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "Tarih"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "Borc"
+type = "REAL"
+not_null = false
+default = "0"
+
+[[tables.columns]]
+name = "Alacak"
+type = "REAL"
+not_null = false
+default = "0"
+
+[[tables.indexes]]
+name = "idx_ch_ckod"
+table = "Cari_Har"
+columns = ["CKod"]
+
+[[tables.indexes]]
+name = "idx_ch_tarih"
+table = "Cari_Har"
+columns = ["Tarih"]
+
+[[tables]]
+name = "Banka_Kart"
+
+[[tables.columns]]
+name = "Id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "BankaAd"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "Doviz"
+type = "TEXT"
+not_null = false
+default = "'TL'"
+
+[[tables]]
+name = "Kasa_Kart"
+
+[[tables.columns]]
+name = "Id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "KasaAd"
+type = "TEXT"
+not_null = false
+
+[[tables]]
+name = "Cek_Senet"
+
+[[tables.columns]]
+name = "Id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "CKod"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "VadeTarih"
+type = "TEXT"
+not_null = false

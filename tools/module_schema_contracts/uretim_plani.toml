@@ -1,0 +1,188 @@
+# Üretim Planı — FAZ 0.4 modül sözleşmesi
+# FAZ 0.2 planlama.toml'a dokunmaz; yeni modül adı ile oluşturuldu.
+# Metadata only. No DB data.
+
+module = "uretim_plani"
+pilot_baseline = "cb593bd6794544a45bb7e8c42ef70c49ff6a041c"
+
+owner_files = [
+    "app/modules/planlama/uretim_plan_routes.py",
+]
+
+critical_routes = [
+    "/planlama/uretim-plani",
+    "/planlama/uretim-plani/<int:plan_id>",
+]
+
+read_tables = [
+    "uretim_model_plan",
+    "uretim_model_plan_emir",
+    "uretim_model_plan_enj_istasyon",
+    "uretim_plan_process",
+    "enj_istasyon_durumu",
+]
+write_tables = [
+    "uretim_model_plan",
+    "uretim_model_plan_emir",
+    "uretim_model_plan_enj_istasyon",
+    "uretim_plan_process",
+]
+
+required_migrations = ["158", "162", "163", "188"]
+registry_required   = ["158", "162", "163", "188"]
+
+[[tables]]
+name = "uretim_model_plan"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "sip_no"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "mamul_skod"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "plan_donemi"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "oncelik"
+type = "INTEGER"
+not_null = true
+default = "3"
+
+[[tables.columns]]
+name = "aktif"
+type = "INTEGER"
+not_null = true
+default = "1"
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = true
+
+[[tables.indexes]]
+name = "idx_ump_donem"
+table = "uretim_model_plan"
+columns = ["plan_donemi"]
+
+[[tables.indexes]]
+name = "idx_ump_tarih"
+table = "uretim_model_plan"
+columns = ["plan_baslangic"]
+
+[[tables.indexes]]
+name = "idx_ump_canonical_aktif"
+table = "uretim_model_plan"
+columns = ["aktif"]
+
+[[tables]]
+name = "uretim_model_plan_emir"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "plan_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "emir_no"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "emir_tipi"
+type = "TEXT"
+not_null = true
+default = "'M'"
+
+[[tables.columns]]
+name = "miktar"
+type = "REAL"
+not_null = true
+
+[[tables.indexes]]
+name = "uq_umpe_plan_emir"
+table = "uretim_model_plan_emir"
+columns = ["plan_id", "emir_no"]
+unique = true
+
+[[tables]]
+name = "uretim_model_plan_enj_istasyon"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "plan_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "enj_makine_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "enj_slot"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "istasyon_no"
+type = "INTEGER"
+not_null = true
+
+[[tables]]
+name = "uretim_plan_process"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "plan_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "sequence_no"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "proses_kod"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "scheduling_status"
+type = "TEXT"
+not_null = true
+default = "'UNSCHEDULED'"
+
+[[tables.indexes]]
+name = "idx_upproc_plan"
+table = "uretim_plan_process"
+columns = ["plan_id"]

@@ -1,0 +1,163 @@
+# NexGen — schema contract
+# Metadata only. No DB data.
+
+module = "nexgen"
+pilot_baseline = "cb593bd6794544a45bb7e8c42ef70c49ff6a041c"
+
+owner_files = [
+    "app/modules/nexgen/",
+]
+
+critical_routes = [
+    "/nexgen",
+    "/nexgen/siparis",
+    "/nexgen/siparis/<int:siparis_id>",
+]
+
+read_tables = [
+    "nexgen_planlama_siparis",
+    "nexgen_planlama_siparis_kalem",
+    "nexgen_onay",
+    "nexgen_cari",
+    "nexgen_stok_kart",
+]
+write_tables = [
+    "nexgen_planlama_siparis",
+    "nexgen_planlama_siparis_kalem",
+    "nexgen_onay",
+]
+
+# Nexgen migration'ları arasında canonical DB'de çakışmalı/atlanmış numaralar var.
+# Güvenli tespit edilenler listelendi; tahmin edilmedi.
+required_migrations = []
+registry_required   = []
+
+[[tables]]
+name = "nexgen_planlama_siparis"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "siparis_no"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "durum"
+type = "TEXT"
+not_null = true
+default = "'TALEP'"
+
+[[tables.columns]]
+name = "olusturma_tarihi"
+type = "TEXT"
+not_null = false
+
+[[tables.indexes]]
+name = "idx_nps_siparis_no"
+table = "nexgen_planlama_siparis"
+columns = ["siparis_no"]
+
+[[tables.indexes]]
+name = "idx_nps_cari"
+table = "nexgen_planlama_siparis"
+columns = ["cari_id"]
+
+[[tables]]
+name = "nexgen_planlama_siparis_kalem"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "planlama_siparis_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "sira_no"
+type = "INTEGER"
+not_null = true
+default = "1"
+
+[[tables]]
+name = "nexgen_onay"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "onay_no"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "kaynak_turu"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "kaynak_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "durum"
+type = "TEXT"
+not_null = true
+default = "'ONAY_BEKLIYOR'"
+
+[[tables.columns]]
+name = "idempotency_key"
+type = "TEXT"
+not_null = true
+
+[[tables.indexes]]
+name = "idx_nonay_durum"
+table = "nexgen_onay"
+columns = ["durum"]
+
+[[tables.indexes]]
+name = "idx_nonay_kaynak"
+table = "nexgen_onay"
+columns = ["kaynak_id"]
+
+[[tables]]
+name = "nexgen_cari"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "aktif"
+type = "INTEGER"
+not_null = false
+default = "1"
+
+[[tables]]
+name = "nexgen_stok_kart"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "aktif"
+type = "INTEGER"
+not_null = false
+default = "1"
