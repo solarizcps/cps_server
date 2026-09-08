@@ -15,7 +15,7 @@ import pytest
 
 WT = Path(__file__).resolve().parents[2]
 CONTRACT = str(WT / 'tools' / 'module_schema_contracts' / 'planlama.toml')
-COMMIT = 'ebb04ca8765fa2a2370bafff4b7056ec401866de'
+COMMIT = 'aac27ed8e7407cd16199749b0f3696a635b66467'
 CANONICAL = Path(os.environ.get(
     'CPS_CANONICAL_DB_SOURCE',
     r'C:\Solariz_CPS_SERVER\app\mock_data.db',
