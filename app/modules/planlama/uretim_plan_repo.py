@@ -249,6 +249,33 @@ def _sync_enj_istasyonlar(con, plan_id, makine_id, slot, istasyonlar) -> None:
     )
 
 
+ENJ_PAYLOAD_ANAHTARLARI = frozenset(ENJ_ALANLARI) | {
+    'enj_istasyonlar', 'enj_kalip_adedi', 'has_enjeksiyon',
+}
+
+
+def _enj_payload_dokunuldu(payload: dict) -> bool:
+    """Payload enjeksiyon rezervasyon alanlarına dokunuyor mu."""
+    return any(k in payload for k in ENJ_PAYLOAD_ANAHTARLARI)
+
+
+def _enj_update_payload(payload: dict, mevcut: dict) -> dict:
+    """Güncelleme doğrulaması için payload'ı mevcut kayıtla tamamla.
+
+    Kısmi güncellemede payload'da olmayan enjeksiyon alanları mevcut kayıttan
+    gelir; böylece doğrulama eksik veriyle yanlış tetiklenmez.
+    """
+    birlesik = dict(mevcut)
+    birlesik.update(payload)
+    if 'has_enjeksiyon' not in payload:
+        birlesik['has_enjeksiyon'] = bool(
+            birlesik.get('enj_makine_id') or birlesik.get('enj_plan_baslangic')
+        )
+    if 'enj_istasyonlar' not in payload:
+        birlesik['enj_istasyonlar'] = _payload_istasyonlar(birlesik)
+    return birlesik
+
+
 def _plan_istasyonlar(con, plan_id, enj_istasyon_no) -> list[int]:
     """Planın istasyonlarını child tablodan, yoksa legacy kolondan oku."""
     if _istasyon_tablosu_var(con):
@@ -340,13 +367,17 @@ def _enj_vals(payload: dict) -> dict:
     return out
 
 
-def _validate_enj_istasyon_availability(con, payload: dict) -> None:
+def _validate_enj_istasyon_availability(con, payload: dict,
+                                        haric_plan_id: int | None = None) -> None:
     """Kayıt öncesinde seçili enjeksiyon istasyonlarını ayrı ayrı doğrula.
 
     Kontroller:
     1. Seçili istasyon sayısı == kalıp adedi
     2. Her istasyon numarası makinenin istasyon_sayisi sınırında
     3. Seçili tarih aralığında her istasyon için çakışma yok
+
+    haric_plan_id verilirse o plan çakışma taramasından çıkarılır; güncelleme
+    yolunda plan kendi rezervasyonuyla çakışmış gibi görünmez.
     """
     from modules.planlama.enj_kapasite_motor import _check_conflicts, _parse_dt
 
@@ -389,7 +420,10 @@ def _validate_enj_istasyon_availability(con, payload: dict) -> None:
     except (ValueError, TypeError):
         return  # tarih parse hatası zaten başka kontrol yakalar
 
-    conflicts = _check_conflicts(con, makine_id, slot, ist_list, bas_dt, bit_dt)
+    conflicts = _check_conflicts(
+        con, makine_id, slot, ist_list, bas_dt, bit_dt,
+        haric_plan_id=haric_plan_id,
+    )
     if conflicts:
         cnames = ', '.join(
             f"İST{c.get('enj_istasyon_no','?')} (Plan #{c.get('id','?')})"
@@ -457,6 +491,9 @@ def plan_ekle(payload: dict, user_id: int) -> dict:
         )
         con.commit()
         return plan_get(cur.lastrowid)
+    except Exception:
+        con.rollback()
+        raise
     finally:
         con.close()
 
@@ -480,33 +517,58 @@ def plan_guncelle(plan_id: int, payload: dict, user_id: int) -> dict:
         if dup:
             raise ValueError('Bu model+renk bu plan döneminde zaten planlı')
 
-        istasyonlar = _payload_istasyonlar(payload)
-        enj = _enj_vals(payload)
-        enj_set = ', '.join(f'{k}=?' for k in enj)
+        birlesik = _enj_update_payload(payload, mevcut)
+        # Genel plan başlangıcı genel bir alan; enjeksiyon alanlarına
+        # dokunulmasa da enjeksiyon bitişinin önüne çekilemez.
+        _validate_general_after_enj(birlesik)
 
-        con.execute(f"""
-            UPDATE uretim_model_plan SET
-                plan_donemi=?, plan_baslangic=?, plan_bitis=?,
-                oncelik=?, plan_gerekce=?, plan_notu=?,
-                {enj_set},
-                updated_at=datetime('now','localtime'), updated_by=?
-             WHERE id=?
-        """, (
+        enj = None
+        istasyonlar = None
+        if _enj_payload_dokunuldu(payload):
+            # plan_ekle ile aynı iş kuralları
+            _validate_enj_required(birlesik)
+            if birlesik.get('has_enjeksiyon'):
+                _validate_enj_istasyon_availability(
+                    con, birlesik, haric_plan_id=int(plan_id)
+                )
+            istasyonlar = _payload_istasyonlar(birlesik)
+            enj = _enj_vals(birlesik)
+
+        set_parcalari = [
+            'plan_donemi=?', 'plan_baslangic=?', 'plan_bitis=?',
+            'oncelik=?', 'plan_gerekce=?', 'plan_notu=?',
+        ]
+        args = [
             donem,
             payload.get('plan_baslangic', mevcut.get('plan_baslangic')),
             payload.get('plan_bitis', mevcut.get('plan_bitis')),
             int(payload.get('oncelik', mevcut.get('oncelik') or 3)),
             payload.get('plan_gerekce', mevcut.get('plan_gerekce')),
             payload.get('plan_notu', mevcut.get('plan_notu')),
-            *enj.values(),
-            int(user_id), int(plan_id),
-        ))
-        _sync_enj_istasyonlar(
-            con, plan_id, enj.get('enj_makine_id'),
-            enj.get('enj_slot'), istasyonlar,
-        )
+        ]
+        if enj is not None:
+            # Enjeksiyona dokunulmadıysa kolonlar UPDATE'e hiç girmez;
+            # aksi halde mevcut rezervasyon NULL'a düşerdi.
+            set_parcalari += [f'{k}=?' for k in enj]
+            args += list(enj.values())
+
+        con.execute(f"""
+            UPDATE uretim_model_plan SET
+                {', '.join(set_parcalari)},
+                updated_at=datetime('now','localtime'), updated_by=?
+             WHERE id=?
+        """, (*args, int(user_id), int(plan_id)))
+
+        if enj is not None:
+            _sync_enj_istasyonlar(
+                con, plan_id, enj.get('enj_makine_id'),
+                enj.get('enj_slot'), istasyonlar,
+            )
         con.commit()
         return plan_get(plan_id)
+    except Exception:
+        con.rollback()
+        raise
     finally:
         con.close()
 
