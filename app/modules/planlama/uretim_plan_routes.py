@@ -651,7 +651,7 @@ def api_enj_son_hafta_hiz():
     Değer hesap motoru girdisi değildir; planlamacı için görsel referanstır.
     """
     days = request.args.get('days', default=7, type=int)
-    days = max(1, min(days, 30))
+    days = max(1, min(days, 90))
     # gunduz: 10h canonical, gece: 14h canonical (enj_kapasite_read_service ile uyumlu)
     CANON_SAAT = {'gunduz': 10, 'gece': 14}
     # En az 1 aktif saat olan vardiyalar dahil edilir (gürültü filtresi)
