@@ -153,7 +153,62 @@ ENJ_ALANLARI = (
     'enj_gunluk_tur_plan', 'enj_gunluk_kapasite',
     'enj_plan_baslangic', 'enj_plan_bitis',
     'enj_tahmini_gun', 'enj_planlanacak_cift',
+    'enj_calisma_modu', 'enj_hafta_sonu_calisma', 'enj_hafta_sonu_vardiya',
+    'enj_kapasite_snapshot',
 )
+
+
+def _validate_enj_required(payload: dict) -> None:
+    """has_enjeksiyon=True ürünlerde enjeksiyon rezervasyon alanlarının zorunlu kontrolü.
+
+    Sadece payload'da 'has_enjeksiyon' anahtarı açıkça True ise devreye girer.
+    Yoksa (False veya eksik) geçer — enjeksiyonsuz ürünler serbest.
+    """
+    if not payload.get('has_enjeksiyon'):
+        return
+    required_enj = {
+        'enj_makine_id': 'Enjeksiyon makine seçimi',
+        'enj_slot': 'Enjeksiyon taraf (A/B)',
+        'enj_kalip_id': 'Enjeksiyon kalıp',
+        'enj_plan_baslangic': 'Enjeksiyon başlangıç tarihi',
+        'enj_plan_bitis': 'Enjeksiyon bitiş tarihi',
+    }
+    missing = [lbl for k, lbl in required_enj.items() if not payload.get(k)]
+    if missing:
+        raise ValueError('Enjeksiyonlu plan için eksik: ' + ', '.join(missing))
+
+    # Enjeksiyon başlangıç < bitiş
+    bas = payload.get('enj_plan_baslangic') or ''
+    bit = payload.get('enj_plan_bitis') or ''
+    if bas and bit and str(bas) >= str(bit):
+        raise ValueError('Enjeksiyon bitiş tarihi, başlangıçtan sonra olmalı')
+
+    # Kalıp adedi kadar istasyonun tarih aralığında uygun olduğunu doğrula
+    # enj_istasyonlar: frontend'den gelen list; enj_istasyon_no: kaydedilen string
+    enj_ist_raw = payload.get('enj_istasyonlar') or []
+    if isinstance(enj_ist_raw, str):
+        enj_ist_raw = [x.strip() for x in enj_ist_raw.split(',') if x.strip()]
+    enj_ist_list = [int(x) for x in enj_ist_raw if x is not None and str(x).strip().isdigit()]
+    kalip_adedi = int(payload.get('enj_kalip_adedi') or payload.get('enj_aktif_goz') or 0)
+    # kalip_adedi 0 ise kontrol atlama (eski kayıtlar için geriye dönük uyumluluk)
+    if kalip_adedi > 0 and len(enj_ist_list) < kalip_adedi:
+        raise ValueError(
+            f'Seçilen istasyon sayısı ({len(enj_ist_list)}) kalıp adedinden ({kalip_adedi}) az. '
+            'Lütfen tüm istasyonların planlama döneminde uygun olduğunu doğrulayın.'
+        )
+
+def _validate_general_after_enj(payload: dict) -> None:
+    """Genel plan başlangıcı enjeksiyon bitişinden önce olamaz."""
+    enj_bit = payload.get('enj_plan_bitis') or ''
+    plan_bas = payload.get('plan_baslangic') or ''
+    if not enj_bit or not plan_bas:
+        return
+    # Karşılaştırma: ISO tarih/datetime string — ilk 10 karakter yeterli
+    if str(plan_bas)[:10] < str(enj_bit)[:10]:
+        raise ValueError(
+            'Genel plan başlangıcı, enjeksiyon tamamlanmadan önce olamaz. '
+            f'Enjeksiyon bitiş: {str(enj_bit)[:16]}, Plan başlangıç: {str(plan_bas)[:10]}'
+        )
 
 
 def _enj_vals(payload: dict) -> dict:
@@ -182,6 +237,70 @@ def _enj_vals(payload: dict) -> dict:
     return out
 
 
+def _validate_enj_istasyon_availability(con, payload: dict) -> None:
+    """Kayıt öncesinde seçili enjeksiyon istasyonlarını ayrı ayrı doğrula.
+
+    Kontroller:
+    1. Seçili istasyon sayısı == kalıp adedi
+    2. Her istasyon numarası makinenin istasyon_sayisi sınırında
+    3. Seçili tarih aralığında her istasyon için çakışma yok
+    """
+    from modules.planlama.enj_kapasite_motor import _check_conflicts, _parse_dt
+
+    makine_id  = int(payload.get('enj_makine_id') or 0)
+    slot       = (payload.get('enj_slot') or '').upper()
+    bas_str    = payload.get('enj_plan_baslangic') or ''
+    bit_str    = payload.get('enj_plan_bitis')    or ''
+    if not makine_id or not slot or not bas_str or not bit_str:
+        return  # zorunlu alan kontrolü zaten _validate_enj_required'de
+
+    enj_ist_raw = payload.get('enj_istasyonlar') or []
+    if isinstance(enj_ist_raw, str):
+        enj_ist_raw = [x.strip() for x in enj_ist_raw.split(',') if x.strip()]
+    ist_list = [int(x) for x in enj_ist_raw if x is not None and str(x).strip().isdigit()]
+    kalip_adedi = int(payload.get('enj_kalip_adedi') or 0)
+
+    # 1. Sayı kontrolü
+    if kalip_adedi > 0 and len(ist_list) != kalip_adedi:
+        raise ValueError(
+            f'Seçili istasyon sayısı ({len(ist_list)}) kalıp adediyle ({kalip_adedi}) uyuşmuyor. '
+            'İST listesi ve kalıp adedi eşit olmalı.'
+        )
+    if not ist_list:
+        return
+
+    # 2. Makine istasyon_sayisi sınır kontrolü
+    mk_row = con.execute(
+        'SELECT istasyon_sayisi FROM enj_makine WHERE id=? AND aktif=1', (makine_id,)
+    ).fetchone()
+    if not mk_row:
+        raise ValueError(f'Makine id={makine_id} bulunamadı veya pasif.')
+    ist_max = int(mk_row['istasyon_sayisi'])
+    gecersiz = [i for i in ist_list if i < 1 or i > ist_max]
+    if gecersiz:
+        raise ValueError(
+            f'İstasyon no {gecersiz} makine kapasitesi dışında (1–{ist_max}).'
+        )
+
+    # 3. Tarih aralığında çakışma kontrolü
+    try:
+        bas_dt = _parse_dt(bas_str)
+        bit_dt = _parse_dt(bit_str)
+    except (ValueError, TypeError):
+        return  # tarih parse hatası zaten başka kontrol yakalar
+
+    conflicts = _check_conflicts(con, makine_id, slot, ist_list, bas_dt, bit_dt)
+    if conflicts:
+        cnames = ', '.join(
+            f"İST{c.get('enj_istasyon_no','?')} (Plan #{c.get('id','?')})"
+            for c in conflicts[:3]
+        )
+        raise ValueError(
+            f'Seçilen tarih aralığında çakışma tespit edildi: {cnames}. '
+            'Lütfen uygun bir başlangıç tarihi seçin.'
+        )
+
+
 def plan_ekle(payload: dict, user_id: int) -> dict:
     con = get_conn()
     try:
@@ -196,6 +315,23 @@ def plan_ekle(payload: dict, user_id: int) -> dict:
         )).fetchone()
         if dup:
             raise ValueError('Bu model+renk bu plan döneminde zaten planlı')
+
+        # ENJ validation: enjeksiyonlu üründe rezervasyon alanları zorunlu
+        _validate_enj_required(payload)
+        # Genel plan başlangıcı enjeksiyon bitişinden önce olamaz
+        _validate_general_after_enj(payload)
+
+        # Enjeksiyonlu plan: seçili istasyonların gerçek çakışma ve varlık kontrolü
+        if payload.get('has_enjeksiyon'):
+            _validate_enj_istasyon_availability(con, payload)
+
+        # enj_istasyonlar array'ini enj_istasyon_no string'ine dönüştür
+        # _load_raw_plans legacy sorgusu enj_istasyon_no IS NOT NULL bekler
+        if payload.get('has_enjeksiyon') and not payload.get('enj_istasyon_no'):
+            ist_list = payload.get('enj_istasyonlar') or []
+            if ist_list:
+                payload = dict(payload)  # mutable kopya
+                payload['enj_istasyon_no'] = ','.join(str(i) for i in ist_list)
 
         enj = _enj_vals(payload)
         enj_cols = ', '.join(enj.keys())
