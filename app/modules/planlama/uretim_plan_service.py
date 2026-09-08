@@ -805,6 +805,16 @@ def siparis_model_satirlari(con, sip_no, include_lots=False):
                 'sresim': satir['sresim'],
                 'm_emir_sayisi': satir['m_emir_sayisi'],
                 'y_emir_sayisi': satir['y_emir_sayisi'],
+                'asorti': satir.get('asorti'),
+                'musteri': sip_meta.get('musteri'),
+                'proses_kodlari': [
+                    str(p.get('proses_kod', '')).strip()
+                    for p in (satir.get('prosesler') or [])
+                ],
+                'has_enjeksiyon': any(
+                    str(p.get('proses_kod', '')).strip() == '26'
+                    for p in (satir.get('prosesler') or [])
+                ),
             })
 
     cur.close()
@@ -906,6 +916,106 @@ def _m_lotlar_detay(m_emirs, y_by_m, em2em_rows, emir_meta, con_by_emir, wait_by
             'prosesler': lot_prosesler,
             'y_emir_sayisi': len(ys),
         })
+    return out
+
+
+def m_emir_ui_status(korgun_durum: str, aktif_planda: bool) -> str:
+    """C3B.3 — UI durum mapping (precedence kilidi).
+
+    Korgun BİTTİ → BİTTİ
+    Korgun DEVAM → ÜRETİMDE
+    Korgun BAŞLANMADI + aktif CPS plan → PLANLANDI
+    Korgun BAŞLANMADI + plan yok → PLANLANMADI
+    """
+    kd = (korgun_durum or 'BAŞLANMADI').upper()
+    if kd == 'BİTTİ':
+        return 'BİTTİ'
+    if kd == 'DEVAM':
+        return 'ÜRETİMDE'
+    if aktif_planda:
+        return 'PLANLANDI'
+    return 'PLANLANMADI'
+
+
+def m_emir_selectable(ui_status: str) -> bool:
+    return (ui_status or '').upper() == 'PLANLANMADI'
+
+
+def m_emirler_onizleme(con, sip_no, sip_harinx, mamul_skod, rkod,
+                       aktif_bagli: dict | None = None):
+    """Step1 M emir listesi — Korgun miktar/durum + CPS plan bağlantısı."""
+    aktif_bagli = aktif_bagli or {}
+    row = model_satir_by_canonical(
+        con, sip_no, sip_harinx, mamul_skod, rkod, include_lots=True,
+    )
+    if not row:
+        return []
+    m_lotlar = row.get('m_lotlar') or []
+    emir_nos = [int(m['emir_no']) for m in m_lotlar]
+    biten_map: dict[int, int] = {}
+    if emir_nos:
+        cur = con.cursor()
+        _, con_by_emir, _ = _load_emir_hareket(cur, emir_nos)
+        for en in emir_nos:
+            biten_map[en] = sum(
+                int(r.get('biten') or 0) for r in con_by_emir.get(en, [])
+            )
+    out = []
+    for m in m_lotlar:
+        en = int(m['emir_no'])
+        miktar = int(m.get('miktar') or 0)
+        uretilen = int(biten_map.get(en, 0))
+        kalan = max(0, miktar - uretilen)
+        korgun = m.get('durum') or 'BAŞLANMADI'
+        ui = m_emir_ui_status(korgun, en in aktif_bagli)
+        out.append({
+            'emir_no': en,
+            'emir_tipi': 'M',
+            'miktar': miktar,
+            'uretilen': uretilen,
+            'kalan': kalan,
+            'korgun_durum': korgun,
+            'durum': ui,
+            'selectable': m_emir_selectable(ui),
+            'y_emir_sayisi': int(m.get('y_emir_sayisi') or 0),
+            'plan_id': aktif_bagli.get(en),
+        })
+    return out
+
+
+def resolve_selected_m_emirler(con, sip_no, sip_harinx, mamul_skod, rkod,
+                               selected: list) -> list[dict]:
+    """Authoritative ownership + miktar — payload'a güvenilmez."""
+    row = model_satir_by_canonical(
+        con, sip_no, sip_harinx, mamul_skod, rkod, include_lots=True,
+    )
+    if not row:
+        raise ValueError('Sipariş kalemi Korgun\'da bulunamadı')
+    allowed: dict[int, dict] = {}
+    for m in row.get('m_lotlar') or []:
+        en = int(m['emir_no'])
+        allowed[en] = {
+            'emir_no': en,
+            'emir_tipi': 'M',
+            'miktar': float(m.get('miktar') or 0),
+        }
+    if not selected:
+        raise ValueError('En az bir M emir seçin')
+    seen = set()
+    out = []
+    for raw in selected:
+        try:
+            en = int(raw)
+        except (TypeError, ValueError):
+            raise ValueError(f'Geçersiz emir no: {raw!r}')
+        if en in seen:
+            continue
+        seen.add(en)
+        if en not in allowed:
+            raise ValueError(f'Emir {en} bu sipariş kalemine ait değil')
+        out.append(dict(allowed[en]))
+    if not out:
+        raise ValueError('En az bir M emir seçin')
     return out
 
 

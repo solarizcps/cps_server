@@ -1,0 +1,58 @@
+schema_version = 1
+module = "planlama.other"
+version = "v1.0.0"
+phase_code = "URETIM_PLANI_PILOT_DEPLOY_V1"
+title = "Üretim Planı + Enjeksiyon pilot deploy kilitlendi."
+status = "ONAYLANDI"
+date = "2026-09-08"
+summary = "Üretim Planı ve Enjeksiyon planlama geliştirmeleri pilot olarak deploy edildi. Shift seçimi, makine/istasyon seçimi, ilk uygun tarih, çakışma kontrolü, plan payload ve rezervasyon alanları tamamlandı."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "cps_fix_uretim_plan_start_date_v1"
+verification_date = "2026-09-08"
+verification_evidence = "19/19 birim testi PASS. HTTP 200 uretim-plan ve finans/odeme-plani. 6 plan dosyası staged."
+test_result = "19 PASS / 0 FAIL — _test_uretim_plan_enj_v1.py"
+db_write = false
+server_restart = true
+push_status = "PUSHED"
+deployment_status = "DEPLOYED"
+evidence_summary = "19/19 birim testi geçti. HTTP 200 uretim-plan, finans/odeme-plani. Test suite: _test_uretim_plan_enj_v1.py"
+changes = [
+  "Shift seçimi (Gündüz, Gece, Gündüz+Gece) tamamlandı.",
+  "Makine ve A/B taraf seçimi tamamlandı.",
+  "Gerçek istasyon seçimi ve doluluk kontrolü eklendi.",
+  "PLANLI/DOLU istasyon seçim engeli eklendi.",
+  "Kalıp adedi = seçili istasyon sayısı doğrulaması eklendi.",
+  "İlk uygun tarih hesaplama (ilk-uygun API) tamamlandı.",
+  "Manuel/tarihsel hız referansı davranışı eklendi.",
+  "Enjeksiyon hesaplama ve plan payload tamamlandı.",
+  "Çakışma kontrolü (cakisma-kontrol API) eklendi.",
+  "has_enjeksiyon ve proses_kodlari alanları eklendi.",
+  "m_emir_ui_status ve m_emirler_onizleme fonksiyonları eklendi.",
+]
+changed_files = [
+  "app/modules/planlama/uretim_plan_repo.py",
+  "app/modules/planlama/uretim_plan_routes.py",
+  "app/modules/planlama/uretim_plan_service.py",
+  "app/static/css/uretim_plan.css",
+  "app/static/js/uretim_plan.js",
+  "app/templates/planlama/uretim_plan.html",
+]
+locked_rules = [
+  "Finans dosyaları bu commit kapsamı dışındadır.",
+  "Pilot tamamlanana kadar Üretim Planı dosyalarında yeni geliştirme yapılmaz.",
+  "canonical DB içeriği değiştirilmedi.",
+]
+tests = [
+  "T1 Üretim Planı HTTP 200",
+  "T3 Makine listesi HTTP 200 count=4",
+  "T5 Enjeksiyon kapasite HTTP 200",
+  "T7 HTTP 500=0",
+  "19/19 birim testi geçti",
+]
+known_issues = [
+  "Korgun bağlantısı gerektiren API'ler (siparis-onizle, slot-durum) test ortamında mock edilmedi.",
+]
+next_steps = [
+  "Alpay ve Mehmet pilot kullanım notları ayrı fazda ele alınacak.",
+]

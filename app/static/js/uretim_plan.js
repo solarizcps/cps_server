@@ -44,6 +44,12 @@
             manualRefGece: null,
             autoRefGunduz: null,
             autoRefGece: null,
+            // Ref kaynak takibi: 'HISTORICAL_CONFIRMED' | 'MANUAL' | null
+            refSourceGunduz: null,
+            refSourceGece: null,
+            // Onaylı referans değerleri (kullanıcı "Kullan" butonuna bastıktan sonra)
+            refConfirmedGunduz: false,
+            refConfirmedGece: false,
             planOzetMap: {},
             istasyonPlanDurum: {},
             reservation: null,
@@ -631,8 +637,20 @@
 
     function showCreateForm(o) {
         if (!o) return;
-        state.requiresEnj = !!o.has_enjeksiyon;
+        // has_enjeksiyon guard: alan hiç gelmemişse sessiz false kabul etme
+        if (!Object.prototype.hasOwnProperty.call(o, 'has_enjeksiyon')) {
+            showError('Ürünün proses bilgisi alınamadı. Lütfen tekrar getir.');
+            return;
+        }
+        state.requiresEnj = o.has_enjeksiyon === true;
         state.createStep = 1;
+        // Modal yeniden açıldığında step3 form alanlarını temizle (stale tarih engeli)
+        if ($('upFormBas')) $('upFormBas').value = '';
+        if ($('upFormBit')) $('upFormBit').value = '';
+        if ($('upFormNot')) $('upFormNot').value = '';
+        state.step3.basMode = null;
+        state.step3.saveBlocked = false;
+        state.step3.bitisUyari = null;
         wizardShowStep(1);
         if ($('upStep1Readonly')) {
             $('upStep1Readonly').style.display = 'block';
@@ -681,6 +699,52 @@
         return String(v).replace('T', ' ').slice(0, 10);
     }
 
+    // ---- Dönem → [başlangıç, bitiş] hesabı (Python donem_aralik'ın JS karşılığı) ----
+    function donemAralikJs(donem) {
+        // Türkiye yerel tarihini ISO string olarak döner (UTC kayma yok)
+        var now = new Date();
+        var todayIso = now.getFullYear() + '-' +
+            String(now.getMonth() + 1).padStart(2, '0') + '-' +
+            String(now.getDate()).padStart(2, '0');
+        function addDays(iso, n) {
+            var p = iso.split('-');
+            var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+            d.setDate(d.getDate() + n);
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+        function weekStart(iso) {
+            var p = iso.split('-');
+            var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+            var dow = d.getDay(); // 0=Sun,1=Mon
+            var diff = (dow === 0) ? -6 : 1 - dow; // Pazartesi başlangıç
+            d.setDate(d.getDate() + diff);
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+        if (donem === 'bu_hafta') {
+            var ws = weekStart(todayIso);
+            return { bas: ws, bit: addDays(ws, 6) };
+        }
+        if (donem === 'gelecek_hafta') {
+            var ws2 = weekStart(todayIso);
+            var nw = addDays(ws2, 7);
+            return { bas: nw, bit: addDays(nw, 6) };
+        }
+        if (donem === 'bu_ay') {
+            var p2 = todayIso.split('-');
+            var yr = parseInt(p2[0], 10), mo = parseInt(p2[1], 10);
+            var ayBas = yr + '-' + String(mo).padStart(2, '0') + '-01';
+            var nextMo = mo === 12 ? new Date(yr + 1, 0, 1) : new Date(yr, mo, 1);
+            nextMo.setDate(nextMo.getDate() - 1);
+            var ayBit = nextMo.getFullYear() + '-' + String(nextMo.getMonth() + 1).padStart(2, '0') + '-' + String(nextMo.getDate()).padStart(2, '0');
+            return { bas: ayBas, bit: ayBit };
+        }
+        if (donem === '3_ay') {
+            return { bas: todayIso, bit: addDays(todayIso, 92) };
+        }
+        // 'gecmis' veya bilinmeyen
+        return { bas: todayIso, bit: todayIso };
+    }
+
     function initStep3() {
         enjRenderStep3Reservation();
 
@@ -698,6 +762,21 @@
         }
 
         state.step3.basMode = null;
+
+        // Enjeksiyon yoksa donem_aralik'tan üretilen tarihleri kullan
+        if (!enjBas && !afterEnj) {
+            var donem = ($('upFormDonem') && $('upFormDonem').value) || 'bu_hafta';
+            var aralik = donemAralikJs(donem);
+            // upFormBit'i dönem bitiş tarihiyle doldur
+            if ($('upFormBit') && !$('upFormBit').value) {
+                $('upFormBit').value = aralik.bit;
+            }
+            // Başlangıç seçeneğini dönem başı olarak sun
+            var fakeSecenekler = [{ tarih: aralik.bas, dolu: false, oneri_donem: donem }];
+            renderStep3BasSecenekleri(fakeSecenekler, aralik.bas, null);
+            return;
+        }
+
         fetchStep3OnCheck([enjBas, afterEnj].filter(Boolean), function (secenekler) {
             renderStep3BasSecenekleri(secenekler, enjBas, afterEnj);
         });
@@ -709,7 +788,7 @@
         state.step3.secenekler = secenekler;
         el.innerHTML = '';
         var opts = [
-            { mode: 'enj_bas', key: enjBas, label: 'Enjeksiyon başlangıç günü' },
+            { mode: 'enj_bas', key: enjBas, label: enjBas ? 'Enjeksiyon başlangıç günü' : 'Dönem başlangıcı' },
             { mode: 'after_enj', key: afterEnj, label: 'Enjeksiyon tamamlandıktan sonraki uygun gün' },
         ];
         var firstSelectable = null;
@@ -839,28 +918,187 @@
     }
 
     function enjUpdateManualRefVisibility() {
-        // B2 SADELESTİRME: OTOMATİK kaldırıldı, MANUAL her zaman görünür
         var cm = state.enj.calismaModu || 'GUNDUZ_GECE';
-        var wrap = $('upEnjManualRefWrap');
         var gW = $('upEnjManualGunduzWrap');
         var eW = $('upEnjManualGeceWrap');
+        var wrap = $('upEnjManualRefWrap');
         if (wrap) wrap.style.display = '';
+        // Vardiya saatlerini bant olarak göster
+        var bantEl = $('upEnjVardiyaSaatBant');
+        if (bantEl) {
+            var bant = [];
+            if (cm !== 'GECE')   bant.push('<span class="up-enj-vd-pill up-vd-gunduz">Gündüz</span> 07:00–17:00 <span style="color:#94a3b8">· 10 saat/vardiya</span>');
+            if (cm !== 'GUNDUZ') bant.push('<span class="up-enj-vd-pill up-vd-gece">Gece</span> 17:00–07:00 <span style="color:#94a3b8">· 14 saat/vardiya</span>');
+            bantEl.innerHTML = bant.join('<span style="color:#cbd5e1;margin:0 4px">|</span>');
+        }
+        // Doluluk bandı makine modunu güncelle
+        var dolEl = $('upEnjDolulukBant');
+        var dolMode = $('upEnjDolulukModeLabel');
+        if (dolEl && dolMode) {
+            dolMode.textContent = enjCalismaLabel(cm);
+            dolEl.style.display = state.enj.gridData && state.enj.gridData.length ? '' : 'none';
+        }
         if (gW) gW.style.display = cm !== 'GECE' ? '' : 'none';
         if (eW) eW.style.display = cm !== 'GUNDUZ' ? '' : 'none';
+        // Auto-ref hint ve autofill güncelle
+        enjUpdateAutoRefHints();
     }
 
     function enjSyncReferenceModeFromDom() {
-        // B2 SADELESTİRME: radio kaldırıldı, daima MANUAL
-        state.enj.referenceMode = 'MANUAL';
+        // referenceMode: kullanıcı "Kullan" butonuna basıp onaylayana kadar MANUAL.
+        // refConfirmedGunduz / refConfirmedGece onay durumunu takip eder.
         state.enj.manualRefGunduz = $('upEnjManualGunduz') && $('upEnjManualGunduz').value
             ? parseFloat($('upEnjManualGunduz').value) : null;
         state.enj.manualRefGece = $('upEnjManualGece') && $('upEnjManualGece').value
             ? parseFloat($('upEnjManualGece').value) : null;
-        enjUpdateManualRefVisibility();
+        // Kullanıcı manuel değiştirirse kaynak MANUAL olur
+        // (kaynak, "Kullan" click handler'ında HISTORICAL_CONFIRMED olarak set edilir)
+        state.enj.referenceMode = 'MANUAL';
     }
 
     function enjUpdateLowConfHint(d) {
-        // B2 SADELESTİRME: OTOMATİK kaldırıldı, hint artık kullanılmıyor
+        // HESAPLA sonrasında auto_gunduz_reference / auto_gece_reference'ı state'e al
+        // ve hint panelini güncelle. AUTO moda geçme — kullanıcı onayı gerekiyor.
+        if (d && (d.auto_gunduz_reference || d.auto_gece_reference)) {
+            // Zaten yüklenmiş autoRef'i override etme; sadece boşsa güncelle
+            if (!state.enj.autoRefGunduz || !state.enj.autoRefGunduz.reference_value) {
+                state.enj.autoRefGunduz = d.auto_gunduz_reference || d.gunduz_reference || {};
+            }
+            if (!state.enj.autoRefGece || !state.enj.autoRefGece.reference_value) {
+                state.enj.autoRefGece = d.auto_gece_reference || d.gece_reference || {};
+            }
+        }
+        enjUpdateAutoRefHints();
+    }
+
+    function enjRefConfidenceLabel(conf) {
+        return { YUKSEK: 'Yüksek güven', ORTA: 'Orta güven', DUSUK: 'Düşük güven', YETERSIZ: 'Yetersiz veri' }[conf] || conf;
+    }
+
+    function enjUpdateAutoRefHints() {
+        // Her aktif vardiya için geçmiş veri durumunu göster.
+        // YETERSIZ confidence'ta da değer + örnek bilgisi gösterilir.
+        // Otomatik doldurma YOK — kullanıcı "Kullan" / "Manuel doğrulayarak kullan" butonuna basmalı.
+        var cm = state.enj.calismaModu || 'GUNDUZ_GECE';
+        var autoG = state.enj.autoRefGunduz || {};
+        var autoE = state.enj.autoRefGece || {};
+        var mkod = state.enj.makineKod;
+        var DAYS_LABEL = 'son ' + (state.enj._sonHaftaDays || 7) + ' gün';
+
+        // ── Gündüz ──────────────────────────────────────────────────────
+        var hintGEl = $('upEnjAutoRefGunduzHint');
+        var fillGEl = $('upEnjAutoFillGunduz');
+        if (hintGEl && cm !== 'GECE') {
+            var gHasData = autoG.reference_value > 0 && (autoG.sample_count || 0) > 0;
+            if (gHasData) {
+                var confG    = enjRefConfidenceLabel(autoG.confidence);
+                var sampleG  = autoG.sample_count || 0;
+                var medG     = Math.round(autoG.reference_value);
+                var minG     = autoG.min != null ? Math.round(autoG.min) : null;
+                var maxG     = autoG.max != null ? Math.round(autoG.max) : null;
+                var rangeG   = (minG != null && maxG != null) ? ' · aralık ' + minG + '–' + maxG : '';
+                hintGEl.innerHTML = '<strong>' + medG + ' tur/vd</strong> — ' + confG +
+                    ' · ' + sampleG + ' örnek (' + DAYS_LABEL + ')' + rangeG;
+                hintGEl.className = 'up-enj-ref-hint ' + (autoG.confidence === 'YUKSEK' ? 'ok' : 'warn');
+                hintGEl.style.display = '';
+                if (fillGEl) {
+                    // YETERSIZ: uyarılı buton; diğerleri: normal buton
+                    fillGEl.style.display = '';
+                    if (autoG.confidence === 'YETERSIZ' || sampleG < 3) {
+                        fillGEl.textContent = 'Manuel doğrulayarak kullan';
+                        fillGEl.dataset.confirm = '1';
+                    } else {
+                        fillGEl.textContent = 'Kullan';
+                        fillGEl.dataset.confirm = '0';
+                    }
+                }
+            } else {
+                // Geçmiş veri yok — manuel değer girilmiş mi kontrol et
+                var manG = state.enj.manualRefGunduz;
+                var manGValid = manG && isFinite(manG) && manG > 0;
+                if (manGValid) {
+                    hintGEl.textContent = 'Manuel hız kullanılacak: ' + Math.round(manG) + ' tur/vardiya';
+                    hintGEl.className = 'up-enj-ref-hint warn';
+                } else {
+                    var msgG = mkod
+                        ? ('Gündüz vardiyası için geçmiş hız verisi yok. Manuel giriş gerekli.')
+                        : 'Makine seçilmedi';
+                    hintGEl.textContent = msgG;
+                    hintGEl.className = 'up-enj-ref-hint err';
+                }
+                hintGEl.style.display = '';
+                if (fillGEl) fillGEl.style.display = 'none';
+            }
+        } else if (hintGEl) {
+            hintGEl.style.display = 'none';
+            if (fillGEl) fillGEl.style.display = 'none';
+        }
+
+        // ── Gece ────────────────────────────────────────────────────────
+        var hintEEl = $('upEnjAutoRefGeceHint');
+        var fillEEl = $('upEnjAutoFillGece');
+        if (hintEEl && cm !== 'GUNDUZ') {
+            var eHasData = autoE.reference_value > 0 && (autoE.sample_count || 0) > 0;
+            if (eHasData) {
+                var confE    = enjRefConfidenceLabel(autoE.confidence);
+                var sampleE  = autoE.sample_count || 0;
+                var medE     = Math.round(autoE.reference_value);
+                var minE     = autoE.min != null ? Math.round(autoE.min) : null;
+                var maxE     = autoE.max != null ? Math.round(autoE.max) : null;
+                var rangeE   = (minE != null && maxE != null) ? ' · aralık ' + minE + '–' + maxE : '';
+                hintEEl.innerHTML = '<strong>' + medE + ' tur/vd</strong> — ' + confE +
+                    ' · ' + sampleE + ' örnek (' + DAYS_LABEL + ')' + rangeE;
+                hintEEl.className = 'up-enj-ref-hint ' + (autoE.confidence === 'YUKSEK' ? 'ok' : 'warn');
+                hintEEl.style.display = '';
+                if (fillEEl) {
+                    fillEEl.style.display = '';
+                    if (autoE.confidence === 'YETERSIZ' || sampleE < 3) {
+                        fillEEl.textContent = 'Manuel doğrulayarak kullan';
+                        fillEEl.dataset.confirm = '1';
+                    } else {
+                        fillEEl.textContent = 'Kullan';
+                        fillEEl.dataset.confirm = '0';
+                    }
+                }
+            } else {
+                // Geçmiş veri yok — manuel değer girilmiş mi kontrol et
+                var manE = state.enj.manualRefGece;
+                var manEValid = manE && isFinite(manE) && manE > 0;
+                if (manEValid) {
+                    hintEEl.textContent = 'Manuel hız kullanılacak: ' + Math.round(manE) + ' tur/vardiya';
+                    hintEEl.className = 'up-enj-ref-hint warn';
+                } else {
+                    hintEEl.textContent = 'Gece vardiyası için geçmiş hız verisi yok. Manuel giriş gerekli.';
+                    hintEEl.className = 'up-enj-ref-hint err';
+                }
+                hintEEl.style.display = '';
+                if (fillEEl) fillEEl.style.display = 'none';
+            }
+        } else if (hintEEl) {
+            hintEEl.style.display = 'none';
+            if (fillEEl) fillEEl.style.display = 'none';
+        }
+
+        // ── Kaynak durum bandı ───────────────────────────────────────────
+        var srcEl = $('upEnjRefKaynakDurum');
+        if (srcEl) {
+            var cm2 = state.enj.calismaModu || 'GUNDUZ_GECE';
+            var needG2 = cm2 !== 'GECE';
+            var needE2 = cm2 !== 'GUNDUZ';
+            var gConf = needG2 ? (state.enj.refConfirmedGunduz ? '✓ Gündüz onaylı' : null) : null;
+            var eConf = needE2 ? (state.enj.refConfirmedGece   ? '✓ Gece onaylı'   : null) : null;
+            var parts = [];
+            if (gConf) parts.push(gConf);
+            if (eConf) parts.push(eConf);
+            if (parts.length) {
+                srcEl.className = 'up-enj-ref-kaynak-durum auto';
+                srcEl.textContent = parts.join(' · ');
+            } else {
+                srcEl.className = 'up-enj-ref-kaynak-durum manual';
+                srcEl.textContent = '⚠ Hız referansı doğrulanmadı — "Kullan" veya manuel giriş';
+            }
+            srcEl.style.display = '';
+        }
     }
 
     function wizardUpdateNav() {
@@ -915,9 +1153,19 @@
         if ($('upEnjIstasyonUyari')) { $('upEnjIstasyonUyari').style.display = 'none'; $('upEnjIstasyonUyari').textContent = ''; }
         if ($('upEnjCakismaUyari')) $('upEnjCakismaUyari').style.display = 'none';
         if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
-        if ($('upEnjManualGunduz')) $('upEnjManualGunduz').value = '';
+        var _ew = $('upEnjBasEarlyWarn');
+        if (_ew) _ew.style.display = 'none';
         if ($('upEnjManualGece')) $('upEnjManualGece').value = '';
-        // B2 SADELESTİRME: radio kaldırıldı, MANUAL sabit
+        // Reset auto-ref state
+        state.enj.autoRefGunduz     = {};
+        state.enj.autoRefGece       = {};
+        state.enj.refSourceGunduz   = null;
+        state.enj.refSourceGece     = null;
+        state.enj.refConfirmedGunduz = false;
+        state.enj.refConfirmedGece   = false;
+        // Hint ve disabled sebep temizle
+        if ($('upEnjHesapBtnHint')) $('upEnjHesapBtnHint').style.display = 'none';
+        if ($('upEnjRefKaynakDurum')) $('upEnjRefKaynakDurum').style.display = 'none';
         enjUpdateManualRefVisibility();
         enjUpdateGozField();
     }
@@ -1018,11 +1266,15 @@
         var e = state.enj;
         var mr = d || e.motorResult || {};
         var istStr = e.istasyonlar.map(function (x) { return 'İST' + x; }).join('–');
-        // B PHASE CLEANUP: daima MANUEL mod
+        // B PHASE CLEANUP: daima MANUEL mod, kaynak takibi ile
         var refLbl = '—';
         var rv = mr.manual_reference_gunduz || e.manualRefGunduz;
         if (e.calismaModu === 'GECE') rv = mr.manual_reference_gece || e.manualRefGece;
-        refLbl = rv != null ? ('MANUEL ' + Math.round(rv) + ' tur/vardiya') : 'MANUEL';
+        var srcG = e.refSourceGunduz || 'MANUAL';
+        var srcE = e.refSourceGece   || 'MANUAL';
+        var activeSrc = (e.calismaModu === 'GECE') ? srcE : srcG;
+        var modeLbl = (activeSrc === 'HISTORICAL_CONFIRMED') ? 'GEÇMİŞ(onaylı)' : 'MANUEL';
+        refLbl = rv != null ? (modeLbl + ' ' + Math.round(rv) + ' tur/vardiya') : modeLbl;
         e.reservation = {
             makineKod: e.makineKod,
             slot: e.slot,
@@ -1228,6 +1480,36 @@
             e.kalipBasiCift = $('upEnjKalipManuelKbc')
                 ? parseFloat($('upEnjKalipManuelKbc').value) || null : null;
             e.kalipId = null;
+        } else {
+            // Liste modunda DOM'dan kalipId ve kalipBasiCift senkronize et
+            // (programmatic select change event'i listener'ı tetiklemeyebilir)
+            var kalipSel = $('upEnjKalip');
+            if (kalipSel && kalipSel.value) {
+                var selOpt = kalipSel.options[kalipSel.selectedIndex];
+                var domKalipId = parseInt(kalipSel.value, 10) || null;
+                if (domKalipId) {
+                    e.kalipId = domKalipId;
+                    // Her zaman DOM'dan kalipBasiCift oku (change event garantisi yok)
+                    if (selOpt && selOpt.dataset && selOpt.dataset.kbc) {
+                        var kbc = parseFloat(selOpt.dataset.kbc);
+                        if (kbc > 0) e.kalipBasiCift = kbc;
+                    }
+                }
+            }
+        }
+        // İstasyon grid'inden checked istasyonları state ile senkronize et
+        var istGrid = $('upEnjIstasyonGrid');
+        if (istGrid) {
+            var cbs = istGrid.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)');
+            if (cbs.length > 0) {
+                var domIstasyonlar = [];
+                cbs.forEach(function (cb) {
+                    var n = parseInt(cb.value, 10);
+                    if (n > 0) domIstasyonlar.push(n);
+                });
+                // DOM'da seçim varsa state'i override et
+                e.istasyonlar = domIstasyonlar;
+            }
         }
     }
 
@@ -1255,6 +1537,26 @@
             e.planCift > 0 && e.baslangic && e.kalipBasiCift > 0 && e.gozPerKalip > 0 && refOk);
     }
 
+    function enjHesaplaDisabledNeden() {
+        var e = state.enj;
+        var reasons = [];
+        if (!e.makineId) reasons.push('Makine seçilmedi');
+        if (!e.slot)     reasons.push('A/B tarafı seçilmedi');
+        if (!(e.istasyonlar.length > 0)) reasons.push('İstasyon seçilmedi');
+        if (e.kalipAdedi !== e.istasyonlar.length) reasons.push('Kalıp adedi (' + (e.kalipAdedi||0) + ') ≠ seçili istasyon (' + e.istasyonlar.length + ')');
+        if (!enjKalipSecili())   reasons.push('Kalıp seçilmedi');
+        if (!(e.planCift > 0))   reasons.push('Planlanacak çift girilmedi');
+        if (!e.baslangic)        reasons.push('Başlangıç tarihi girilmedi');
+        if (!(e.kalipBasiCift > 0)) reasons.push('Kalıp başı çift sıfır/boş');
+        if (e.referenceMode === 'MANUAL') {
+            if (e.calismaModu !== 'GECE' && !((e.manualRefGunduz || 0) > 0))
+                reasons.push('Gündüz tur/vardiya değeri girilmedi');
+            if (e.calismaModu !== 'GUNDUZ' && !((e.manualRefGece || 0) > 0))
+                reasons.push('Gece tur/vardiya değeri girilmedi');
+        }
+        return reasons;
+    }
+
     function enjUpdateHesapBtn() {
         enjSyncInputsFromDom();
         enjSyncReferenceModeFromDom();
@@ -1268,7 +1570,19 @@
                 uyEl.style.display = 'none';
             }
         }
-        if ($('upEnjHesapBtn')) $('upEnjHesapBtn').disabled = !enjCanHesapla();
+        var canCalc = enjCanHesapla();
+        if ($('upEnjHesapBtn')) $('upEnjHesapBtn').disabled = !canCalc;
+        // Disabled sebebini göster
+        var hintEl = $('upEnjHesapBtnHint');
+        if (hintEl) {
+            if (!canCalc) {
+                var reasons = enjHesaplaDisabledNeden();
+                hintEl.textContent = reasons.length ? 'Hesapla için eksik: ' + reasons.join(' · ') : '';
+                hintEl.style.display = reasons.length ? '' : 'none';
+            } else {
+                hintEl.style.display = 'none';
+            }
+        }
     }
 
     function enjHesaplaMotor() {
@@ -1346,7 +1660,7 @@
               e.autoRefGece = (d.auto_gece_reference || d.gece_reference || {});
               enjFreezeReservation(d);
               enjRenderHesapOzet(d);
-              enjUpdateLowConfHint(d);
+              enjUpdateLowConfHint(d);  // auto-ref güncelle + sync
               wizardUpdateNav();
           })
           .catch(function (err) {
@@ -1377,7 +1691,9 @@
             sumTur += tur;
             sumCift += Number(row.cift) || 0;
             var dp = (row.tarih || '').split('-');
-            var lbl = dp.length === 3 ? dp[2] + '.' + dp[1] + ' ' + (row.vardiya || '') : (row.vardiya || '');
+            var vardiyaLbl = row.vardiya || '';
+            var saatBilgisi = vardiyaLbl === 'gunduz' ? ' (07:00–17:00)' : vardiyaLbl === 'gece' ? ' (17:00–07:00)' : '';
+            var lbl = dp.length === 3 ? dp[2] + '.' + dp[1] + ' ' + vardiyaLbl + saatBilgisi : (vardiyaLbl + saatBilgisi);
             return '<div class="up-enj-vardiya-satir"><span>' + esc(lbl) + '</span><span>' +
                 Math.round(tur) + ' tur · ' + fmtN(row.cift) + ' çift</span></div>';
         }).join('');
@@ -1431,7 +1747,6 @@
         if ($('upEnjOzetCalisma')) $('upEnjOzetCalisma').textContent = enjCalismaLabel(e.calismaModu);
         if ($('upEnjOzetBas')) $('upEnjOzetBas').textContent = enjFmtDtApi(e.baslangic);
         if ($('upEnjBitis')) $('upEnjBitis').textContent = enjFmtDtApi(d.tahmini_bitis);
-        // B PHASE CLEANUP: OTOMATİK referans alanları kaldırıldı — yalnız MANUEL mod
         if ($('upEnjOzetRefMode')) {
             $('upEnjOzetRefMode').textContent = 'MANUEL';
         }
@@ -1446,7 +1761,17 @@
             $('upEnjOzetManuelE').textContent = (d.manual_reference_gece || e.manualRefGece || '—') + ' tur/vardiya';
         }
         if ($('upEnjOzetRefKaynak')) {
-            $('upEnjOzetRefKaynak').textContent = 'Manuel operasyon tahmini';
+            var kaynak = state.enj.referenceMode === 'AUTO'
+                ? ('Geçmiş üretim — ' + enjRefConfidenceLabel((d.gunduz_reference || {}).confidence || 'YETERSIZ'))
+                : 'Manuel operasyon tahmini';
+            $('upEnjOzetRefKaynak').textContent = kaynak;
+        }
+        // Güven gösterimi
+        var guvenEl = $('upEnjOzetGuven');
+        var guvenWrap = $('upEnjOzetGuvenWrap');
+        if (guvenEl && guvenWrap && d.overall_confidence) {
+            guvenEl.textContent = enjRefConfidenceLabel(d.overall_confidence);
+            guvenWrap.style.display = '';
         }
         if ($('upEnjOzetHs')) {
             $('upEnjOzetHs').textContent = e.haftaSonu === 'EVET'
@@ -1462,6 +1787,12 @@
         if (e.baslangicManuel || !e.makineId) return;
         var iu = e.ilkUygunMap[e.makineId];
         if (!iu || !iu.ilk_uygun) return;
+        // Stale map guard: ilkUygun fetch edildiği slotla seçili slot aynı olmalı
+        if (iu._fetched_slot && iu._fetched_slot !== e.slot) {
+            if ($('upEnjBas')) $('upEnjBas').value = '';
+            if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
+            return;
+        }
         e.baslangicOneri = iu.ilk_uygun;
         e.baslangic = iu.ilk_uygun;
         if ($('upEnjBas')) {
@@ -1473,12 +1804,28 @@
                 return (x.makine_id || x.id) === state.enj.makineId;
             });
             if (m) enjRenderIstasyonGrid(m);
+            enjUpdateHesapBtn();  // Tarih set olduktan sonra HESAPLA durumunu güncelle
         });
     }
 
     function enjFetchIlkUygun() {
         var e = state.enj;
-        if (!e.slot || !e.istasyonlar.length) return;
+        if (!e.slot || !e.makineId) return;
+        // Gerçek seçili istasyonları kullan (checkbox).
+        // Sayı kalıp adedine eşit değilse yeterli uygun istasyon yoktur;
+        // ilk uygun tarih hesaplanamaz → input ve ÖNERİLEN gizli kalır.
+        var kalipAdedi = parseInt($('upEnjKalipAdedi') && $('upEnjKalipAdedi').value, 10) || 0;
+        var seciliIst  = e.istasyonlar.slice();
+        // Stale öneriyi her durumda gizle
+        if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
+        if ($('upEnjBas') && !e.baslangicManuel) $('upEnjBas').value = '';
+        e.ilkUygunMap = {};
+        if (kalipAdedi < 1 || seciliIst.length === 0) return;
+        if (seciliIst.length < kalipAdedi) {
+            // Yeterli istasyon yok — tarih hesaplanamaz
+            enjUpdateHesapBtn();
+            return;
+        }
         var ids = (e.gridData || []).map(function (m) { return m.makine_id || m.id; }).filter(Boolean);
         if (!ids.length) return;
         fetch('/planlama/uretim-plan/api/enj/ilk-uygun', {
@@ -1489,7 +1836,7 @@
                 makine_ids: ids,
                 selected_makine_id: e.makineId,
                 slot: e.slot,
-                istasyonlar: e.istasyonlar.slice(),
+                istasyonlar: seciliIst,
                 calisma_modu: e.calismaModu,
                 hafta_sonu_calisma: e.haftaSonu,
                 hafta_sonu_vardiya: e.hsVardiya,
@@ -1499,6 +1846,8 @@
               if (!d.ok) return;
               e.ilkUygunMap = {};
               (d.makineler || []).forEach(function (m) {
+                  m._fetched_slot     = e.slot;
+                  m._fetched_ist      = seciliIst.slice();
                   e.ilkUygunMap[m.makine_id] = m;
               });
               enjRenderMakineCards(e.gridData || []);
@@ -1539,6 +1888,9 @@
                 state.enj.slot = null;
                 state.enj.baslangicManuel = false;
                 state.enj.baslangic = null;
+                state.enj.baslangicOneri = null;
+                // Makine değişince stale ilkUygunMap temizle
+                state.enj.ilkUygunMap = {};
                 state.enj.istasyonPlanDurum = {};
                 if ($('upEnjBas')) $('upEnjBas').value = '';
                 if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
@@ -1549,10 +1901,12 @@
                 if ($('upEnjSlotB')) $('upEnjSlotB').classList.remove('selected');
                 if ($('upEnjKalip')) $('upEnjKalip').disabled = false;
                 enjUpdateHesapBtn();
-                // B2: SON 1 HAFTA kutusunda seçili makineyi vurgula
+                // B2: SON 1 HAFTA kutusunda seçili makineyi vurgula + autoRef yükle
                 if (state.enj._sonHaftaVeri) {
                     enjSonHaftaHizRender(state.enj._sonHaftaVeri, kod);
+                    enjLoadAutoRefFromSonHafta(kod, e.slot);
                 }
+                enjUpdateAutoRefHints();
             });
             el.appendChild(card);
         });
@@ -1601,7 +1955,7 @@
                 (disabled ? ' disabled' : '') +
                 (state.enj.istasyonlar.indexOf(i) >= 0 ? ' checked' : '') + '> İST' + i +
                 '<small class="' + (durum === 'PLANLI' ? 'planli' : durum === 'DOLU' ? 'dolu' : '') + '">' +
-                durum + (detail ? '<br>' + esc(detail) : '') + '</small>';
+                (durum === 'KAPALI' ? 'BOŞ' : durum) + (detail ? '<br>' + esc(detail) : '') + '</small>';
             if (!disabled) {
                 lbl.querySelector('input').addEventListener('change', function (ev) {
                     var n = parseInt(ev.target.value, 10);
@@ -1631,6 +1985,11 @@
         state.enj.slot = slot;
         state.enj.istasyonlar = [];
         state.enj.baslangicManuel = false;
+        state.enj.baslangic = null;
+        state.enj.baslangicOneri = null;
+        // Slot değişince stale ilkUygunMap temizle — yeni slot için yeniden hesaplanacak
+        state.enj.ilkUygunMap = {};
+        state.enj.istasyonPlanDurum = {};
         if ($('upEnjBas')) $('upEnjBas').value = '';
         if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
         enjHesapGizle();
@@ -1645,6 +2004,10 @@
         enjFetchIstasyonPlanDurum(function () {
             if (m) enjRenderIstasyonGrid(m);
         });
+        // Slot değişince autoRef yeniden yükle (A/B farklı hız olabilir)
+        if (state.enj.makineKod && state.enj._sonHaftaVeri) {
+            enjLoadAutoRefFromSonHafta(state.enj.makineKod, slot);
+        }
         enjUpdateHesapBtn();
     }
 
@@ -1661,6 +2024,49 @@
     }
 
     // ─── SON 1 HAFTA MAKİNE VERİSİ — görsel referans kutusu ─────────────────
+    function enjLoadAutoRefFromSonHafta(mkod, slot) {
+        // Son hafta verisi varsa ilgili makine/slot için autoRef state'i doldur.
+        // NOT: Otomatik input doldurma YOKTUR. Kullanıcı "Kullan" butonuna basmalı.
+        var veri = state.enj._sonHaftaVeri;
+        if (!veri || !mkod) return;
+        var mkVeri = veri[mkod];
+        if (!mkVeri) return;
+        var slotKey = (slot || state.enj.slot || 'A').toUpperCase();
+        var gData = ((mkVeri.gunduz || {})[slotKey]) || {};
+        var eData = ((mkVeri.gece   || {})[slotKey]) || {};
+        // autoRefGunduz — min/max/avg da sakla
+        if (!gData.calismadi && gData.median != null) {
+            state.enj.autoRefGunduz = {
+                reference_value: gData.median,
+                confidence: gData.sample >= 6 ? 'YUKSEK' : gData.sample >= 3 ? 'ORTA' : 'DUSUK',
+                sample_count: gData.sample || 0,
+                min: gData.min,
+                max: gData.max,
+                avg: gData.avg,
+                reference_type: 'SonHaftaHiz',
+            };
+        } else {
+            state.enj.autoRefGunduz = { reference_value: 0, confidence: 'YETERSIZ', sample_count: 0 };
+        }
+        // autoRefGece
+        if (!eData.calismadi && eData.median != null) {
+            state.enj.autoRefGece = {
+                reference_value: eData.median,
+                confidence: eData.sample >= 6 ? 'YUKSEK' : eData.sample >= 3 ? 'ORTA' : 'DUSUK',
+                sample_count: eData.sample || 0,
+                min: eData.min,
+                max: eData.max,
+                avg: eData.avg,
+                reference_type: 'SonHaftaHiz',
+            };
+        } else {
+            state.enj.autoRefGece = { reference_value: 0, confidence: 'YETERSIZ', sample_count: 0 };
+        }
+        // Otomatik doldurma YAPILMAZ — kullanıcı onayı zorunlu
+        enjUpdateAutoRefHints();
+        enjUpdateHesapBtn();
+    }
+
     function enjSonHaftaHizRender(veri, secilenMakine) {
         var kutu = $('upEnjSonHaftaHiz');
         var icerik = $('upEnjSonHaftaIcerik');
@@ -1710,26 +2116,59 @@
     }
 
     function enjYukleSonHaftaHiz(secilenMakine) {
+        // Kademeli referans aralığı: 7 → 30 → 90 gün
+        // Bir makine/slot için herhangi bir veri varsa o adımda dur.
         var kutu = $('upEnjSonHaftaHiz');
         var icerik = $('upEnjSonHaftaIcerik');
         if (!kutu || !icerik) return;
         kutu.style.display = '';
         icerik.innerHTML = '<span class="up-enj-son-hafta-yukleniyor">Yükleniyor…</span>';
-        fetch('/planlama/uretim-plan/api/enj/son-hafta-hiz?days=7', { credentials: 'include' })
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (d.ok && d.makineler) {
-                    state.enj._sonHaftaVeri = d.makineler;
-                    enjSonHaftaHizRender(d.makineler, secilenMakine);
-                } else {
+
+        function _hasAnyData(makineler) {
+            for (var k in makineler) {
+                var mk = makineler[k];
+                for (var vd in mk) {
+                    for (var s in mk[vd]) {
+                        if (mk[vd][s] && !mk[vd][s].calismadi) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function _fetch(days, remaining) {
+            fetch('/planlama/uretim-plan/api/enj/son-hafta-hiz?days=' + days, { credentials: 'include' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.ok && d.makineler) {
+                        if (_hasAnyData(d.makineler) || remaining.length === 0) {
+                            // Veri bulundu veya son deneme
+                            state.enj._sonHaftaVeri = d.makineler;
+                            state.enj._sonHaftaDays = days;
+                            // Başlık güncelle
+                            if ($('upEnjSonHaftaAralik')) $('upEnjSonHaftaAralik').textContent = 'son ' + days + ' gün';
+                            enjSonHaftaHizRender(d.makineler, secilenMakine);
+                            if (state.enj.makineKod) {
+                                enjLoadAutoRefFromSonHafta(state.enj.makineKod, state.enj.slot);
+                            }
+                        } else {
+                            // Veri yok, bir üst aralığı dene
+                            _fetch(remaining[0], remaining.slice(1));
+                        }
+                    } else {
+                        state.enj._sonHaftaVeri = null;
+                        state.enj._sonHaftaDays = days;
+                        icerik.innerHTML = '<span class="up-shh-yok">Veri alınamadı</span>';
+                        enjUpdateAutoRefHints();
+                    }
+                })
+                .catch(function () {
                     state.enj._sonHaftaVeri = null;
                     icerik.innerHTML = '<span class="up-shh-yok">Veri alınamadı</span>';
-                }
-            })
-            .catch(function () {
-                state.enj._sonHaftaVeri = null;
-                icerik.innerHTML = '<span class="up-shh-yok">Veri alınamadı</span>';
-            });
+                });
+        }
+
+        _fetch(7, [30, 90]);
     }
 
     function enjBuildKalipSelect() {
@@ -1782,6 +2221,26 @@
                         if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
                         enjSyncInputsFromDom();
                         enjHesapGizle();
+                        // Erken tarih kontrolü: girilen tarih ilk uygun tarihten erken olamaz
+                        var iu = state.enj.ilkUygunMap[state.enj.makineId];
+                        if (iu && iu.ilk_uygun && $('upEnjBas').value) {
+                            var girildi = $('upEnjBas').value.replace('T', ' ');
+                            var ilkStr = iu.ilk_uygun.substring(0, 16).replace('T', ' ');
+                            if (girildi < ilkStr) {
+                                var uyariEl = $('upEnjBasEarlyWarn');
+                                if (!uyariEl) {
+                                    uyariEl = document.createElement('div');
+                                    uyariEl.id = 'upEnjBasEarlyWarn';
+                                    uyariEl.className = 'up-enj-warn-msg';
+                                    $('upEnjBas').parentNode.appendChild(uyariEl);
+                                }
+                                uyariEl.textContent = '⚠ Seçilen tarih, ' + iu.ilk_uygun_gosterim + ' ilk uygun tarihinden erken. Çakışma olabilir.';
+                                uyariEl.style.display = '';
+                            } else {
+                                var w = $('upEnjBasEarlyWarn');
+                                if (w) w.style.display = 'none';
+                            }
+                        }
                         enjFetchIstasyonPlanDurum(function () {
                             var m = (state.enj.gridData || []).find(function (x) {
                                 return (x.makine_id || x.id) === state.enj.makineId;
@@ -1790,10 +2249,39 @@
                         });
                     } else if (id === 'upEnjKalipAdedi' || id === 'upEnjCalismaModu') {
                         state.enj.baslangicManuel = false;
-                        if (id === 'upEnjCalismaModu') enjUpdateManualRefVisibility();
+                        if (id === 'upEnjCalismaModu') {
+                            // Mod değişiminde: stale değerleri ve eski hesabı temizle
+                            state.enj.autoRefGunduz      = {};
+                            state.enj.autoRefGece        = {};
+                            state.enj.refSourceGunduz    = null;
+                            state.enj.refSourceGece      = null;
+                            state.enj.refConfirmedGunduz = false;
+                            state.enj.refConfirmedGece   = false;
+                            // Stale öneri tarihini de temizle
+                            state.enj.ilkUygunMap    = {};
+                            state.enj.baslangic      = null;
+                            state.enj.baslangicOneri = null;
+                            if ($('upEnjBas')) $('upEnjBas').value = '';
+                            if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
+                            if ($('upEnjManualGunduz')) $('upEnjManualGunduz').value = '';
+                            if ($('upEnjManualGece'))   $('upEnjManualGece').value   = '';
+                            state.enj.manualRefGunduz = null;
+                            state.enj.manualRefGece   = null;
+                            enjUpdateManualRefVisibility();
+                            // Seçili makine için yeni modda autoRef yükle
+                            if (state.enj.makineKod && state.enj._sonHaftaVeri) {
+                                enjLoadAutoRefFromSonHafta(state.enj.makineKod, state.enj.slot);
+                            }
+                        }
                         enjFetchIlkUygun();
                         enjYuklePlanOzet(function () {
                             enjRenderMakineCards(state.enj.gridData || []);
+                            // Doluluk bandı modunu güncelle
+                            var dolMode = $('upEnjDolulukModeLabel');
+                            var dolEl   = $('upEnjDolulukBant');
+                            var cm = state.enj.calismaModu || 'GUNDUZ_GECE';
+                            if (dolMode) dolMode.textContent = enjCalismaLabel(cm);
+                            if (dolEl && state.enj.gridData && state.enj.gridData.length) dolEl.style.display = '';
                         });
                         if (id === 'upEnjKalipAdedi') enjUpdateToplamGozHint();
                     } else if (id === 'upEnjGozPerKalip') {
@@ -1845,12 +2333,79 @@
         ['upEnjManualGunduz', 'upEnjManualGece'].forEach(function (id) {
             if ($(id)) {
                 $(id).addEventListener('input', function () {
+                    // Kullanıcı değeri değiştirirse kaynak MANUAL olur
+                    if (id === 'upEnjManualGunduz') {
+                        state.enj.refSourceGunduz    = 'MANUAL';
+                        state.enj.refConfirmedGunduz = false;
+                    } else {
+                        state.enj.refSourceGece    = 'MANUAL';
+                        state.enj.refConfirmedGece = false;
+                    }
                     enjSyncReferenceModeFromDom();
                     enjHesapGizle();
                     enjUpdateHesapBtn();
+                    enjUpdateAutoRefHints();
                 });
             }
         });
+        // Auto-fill butonları — kullanıcı onayı + kaynak takibi
+        if ($('upEnjAutoFillGunduz')) {
+            $('upEnjAutoFillGunduz').addEventListener('click', function () {
+                var autoG = state.enj.autoRefGunduz || {};
+                if (!autoG.reference_value) return;
+                var val = Math.round(autoG.reference_value);
+                var needConfirm = this.dataset.confirm === '1';
+                var proceed = true;
+                if (needConfirm) {
+                    var confLabel = enjRefConfidenceLabel(autoG.confidence);
+                    proceed = window.confirm(
+                        'Gündüz verisi güven seviyesi: ' + confLabel +
+                        ' (' + (autoG.sample_count || 0) + ' örnek).\n\n' +
+                        'Bu referans değerini (' + val + ' tur/vardiya) gündüz alanına aktarmak istiyor musunuz?\n\n' +
+                        'Değeri üretime özgün verilerle doğrulamanız önerilir.'
+                    );
+                }
+                if (proceed) {
+                    var inp = $('upEnjManualGunduz');
+                    if (inp) {
+                        inp.value = val;
+                        inp.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    // Kaynak takibi
+                    state.enj.refSourceGunduz    = 'HISTORICAL_CONFIRMED';
+                    state.enj.refConfirmedGunduz = true;
+                    enjUpdateAutoRefHints();
+                }
+            });
+        }
+        if ($('upEnjAutoFillGece')) {
+            $('upEnjAutoFillGece').addEventListener('click', function () {
+                var autoE = state.enj.autoRefGece || {};
+                if (!autoE.reference_value) return;
+                var val = Math.round(autoE.reference_value);
+                var needConfirm = this.dataset.confirm === '1';
+                var proceed = true;
+                if (needConfirm) {
+                    var confLabelE = enjRefConfidenceLabel(autoE.confidence);
+                    proceed = window.confirm(
+                        'Gece verisi güven seviyesi: ' + confLabelE +
+                        ' (' + (autoE.sample_count || 0) + ' örnek).\n\n' +
+                        'Bu referans değerini (' + val + ' tur/vardiya) gece alanına aktarmak istiyor musunuz?\n\n' +
+                        'Değeri üretime özgün verilerle doğrulamanız önerilir.'
+                    );
+                }
+                if (proceed) {
+                    var inpE = $('upEnjManualGece');
+                    if (inpE) {
+                        inpE.value = val;
+                        inpE.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    state.enj.refSourceGece    = 'HISTORICAL_CONFIRMED';
+                    state.enj.refConfirmedGece = true;
+                    enjUpdateAutoRefHints();
+                }
+            });
+        }
         if ($('upEnjConflictApply')) $('upEnjConflictApply').addEventListener('click', enjApplyConflictIlkUygun);
         if ($('upEnjConflictCalendar')) $('upEnjConflictCalendar').addEventListener('click', enjOpenConflictCalendar);
         if ($('upEnjConflictKapat')) $('upEnjConflictKapat').addEventListener('click', enjHideConflictModal);
@@ -1912,6 +2467,7 @@
                 oncelik: parseInt($('upFormOncelik').value, 10),
                 plan_gerekce: $('upFormGerekce').value || null,
                 plan_notu: $('upFormNot').value || null,
+                has_enjeksiyon: state.requiresEnj === true,
             };
             if (state.requiresEnj && enj.hesapOk && rez) {
                 payload.enj_makine_id = enj.makineId;
@@ -1920,6 +2476,7 @@
                 payload.enj_kalip_id = enj.kalipMode === 'liste' ? enj.kalipId : null;
                 payload.enj_kalip_kod = rez.kalipKod;
                 payload.enj_aktif_goz = (rez.kalipAdedi || 0) * (rez.gozPerKalip || 1);
+                payload.enj_kalip_adedi = rez.kalipAdedi || 0;
                 payload.enj_goz_per_kalip = rez.gozPerKalip;
                 payload.enj_kalip_basi_cift = rez.kalipBasiCift;
                 payload.enj_tur_cift = mr.tur_basi_cift || enj.turCift;
@@ -1950,9 +2507,17 @@
                     calendar_breakdown: mr.vardiya_breakdown || [],
                     kalip_kod: rez.kalipKod,
                     manuel_kalip: enj.kalipMode === 'manuel',
-                    reference_mode: 'MANUAL',
-                    manual_reference_gunduz: enj.manualRefGunduz,
-                    manual_reference_gece: enj.manualRefGece,
+                    reference_mode: enj.referenceMode || 'MANUAL',
+                    manual_reference_gunduz: enj.referenceMode === 'MANUAL' ? enj.manualRefGunduz : null,
+                    manual_reference_gece: enj.referenceMode === 'MANUAL' ? enj.manualRefGece : null,
+                    auto_ref_gunduz: enj.autoRefGunduz || null,
+                    auto_ref_gece: enj.autoRefGece || null,
+                    // Audit: kaynak ve onay durumu
+                    ref_source_gunduz: enj.refSourceGunduz || 'MANUAL',
+                    ref_source_gece:   enj.refSourceGece   || 'MANUAL',
+                    ref_confirmed_gunduz: !!enj.refConfirmedGunduz,
+                    ref_confirmed_gece:   !!enj.refConfirmedGece,
+                    ref_audit_ts: new Date().toISOString(),
                 });
             }
             fetch('/planlama/uretim-plan/api/plan', {
@@ -2245,7 +2810,19 @@
         });
         if ($('upFormDonem')) $('upFormDonem').addEventListener('change', function () {
             clearPlanErrors();
+            var donem = $('upFormDonem').value;
             var bas = $('upFormBas') && $('upFormBas').value;
+            // Dönem değişince bitiş tarihini yeniden hesapla (enjeksiyon yoksa)
+            var rez = state.enj.reservation || {};
+            var hasEnj = !!(rez.baslangic || state.enj.baslangic);
+            if (!hasEnj) {
+                var aralik = donemAralikJs(donem);
+                if ($('upFormBit')) $('upFormBit').value = aralik.bit;
+                // Başlangıç seçeneğini de güncelle
+                var fakeSecenekler = [{ tarih: aralik.bas, dolu: false, oneri_donem: donem }];
+                renderStep3BasSecenekleri(fakeSecenekler, aralik.bas, null);
+                return;
+            }
             if (bas) {
                 fetchStep3OnCheck([bas], function (secs) {
                     var s0 = secs[0] || {};

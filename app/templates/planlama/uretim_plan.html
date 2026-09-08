@@ -126,6 +126,11 @@
       <div id="upStep2" class="up-wizard-panel" style="display:none;">
         <div class="up-enj-bolum">
           <div id="upEnjUyari" class="up-enj-uyari" style="display:none;"></div>
+          <!-- MAKİNE DOLULUK FILTRE BANDI -->
+          <div class="up-enj-doluluk-bant" id="upEnjDolulukBant" style="display:none;">
+            <span class="up-enj-doluluk-baslik">MAKİNE DURUMU</span>
+            <span class="up-enj-doluluk-mode" id="upEnjDolulukModeLabel"></span>
+          </div>
           <div class="up-enj-makine-cards" id="upEnjMakineCards"></div>
           <div class="up-enj-slot-row">
             <span class="up-enj-slot-label">Taraf</span>
@@ -190,23 +195,47 @@
             </label>
           </div>
           <div class="up-enj-ref-mode">
-            <div class="up-enj-ref-mode-baslik">PLAN HIZI (Manuel)</div>
+            <div class="up-enj-ref-mode-baslik">PLAN HIZI</div>
+            <!-- Vardiya saatleri bilgi bandı -->
+            <div id="upEnjVardiyaSaatBant" class="up-enj-vardiya-saat-bant"></div>
+            <!-- Referans kaynak durumu -->
+            <div id="upEnjRefKaynakDurum" class="up-enj-ref-kaynak-durum" style="display:none;"></div>
             <div id="upEnjManualRefWrap" class="up-enj-manual-ref">
-              <label id="upEnjManualGunduzWrap">Tahmini Gündüz Tur / Vardiya
-                <input type="number" id="upEnjManualGunduz" min="1" step="1" placeholder="ör. 60">
-              </label>
-              <label id="upEnjManualGeceWrap">Tahmini Gece Tur / Vardiya
-                <input type="number" id="upEnjManualGece" min="1" step="1" placeholder="ör. 55">
-              </label>
+              <div id="upEnjManualGunduzWrap" class="up-enj-manual-row">
+                <label for="upEnjManualGunduz" class="up-enj-manual-label">
+                  <span class="up-enj-vd-pill up-vd-gunduz">Gündüz</span>
+                  <span class="up-enj-vd-saat">07:00–17:00 · 10h</span>
+                  Tur / Vardiya
+                </label>
+                <div class="up-enj-ref-input-row">
+                  <input type="number" id="upEnjManualGunduz" min="1" step="1" placeholder="ör. 60">
+                  <button type="button" class="up-enj-autofill-btn" id="upEnjAutoFillGunduz" style="display:none;" title="Geçmiş veriyi gündüz alanına aktar">Kullan</button>
+                </div>
+                <div id="upEnjAutoRefGunduzHint" class="up-enj-ref-hint" style="display:none;"></div>
+              </div>
+              <div id="upEnjManualGeceWrap" class="up-enj-manual-row">
+                <label for="upEnjManualGece" class="up-enj-manual-label">
+                  <span class="up-enj-vd-pill up-vd-gece">Gece</span>
+                  <span class="up-enj-vd-saat">17:00–07:00 · 14h</span>
+                  Tur / Vardiya
+                </label>
+                <div class="up-enj-ref-input-row">
+                  <input type="number" id="upEnjManualGece" min="1" step="1" placeholder="ör. 55">
+                  <button type="button" class="up-enj-autofill-btn" id="upEnjAutoFillGece" style="display:none;" title="Geçmiş veriyi gece alanına aktar">Kullan</button>
+                </div>
+                <div id="upEnjAutoRefGeceHint" class="up-enj-ref-hint" style="display:none;"></div>
+              </div>
             </div>
-            <!-- SON 1 HAFTA MAKİNE VERİSİ — hesap input değil, görsel referans -->
+            <!-- SON X GÜN MAKİNE VERİSİ — hesap input değil, görsel referans -->
             <div id="upEnjSonHaftaHiz" class="up-enj-son-hafta" style="display:none;">
-              <div class="up-enj-son-hafta-baslik">SON 1 HAFTA MAKİNE VERİSİ</div>
+              <div class="up-enj-son-hafta-baslik">MAKİNE HIZ GEÇMİŞİ — <span id="upEnjSonHaftaAralik">son 7 gün</span></div>
               <div id="upEnjSonHaftaIcerik" class="up-enj-son-hafta-icerik">
                 <span class="up-enj-son-hafta-yukleniyor">Yükleniyor…</span>
               </div>
             </div>
           </div>
+          <!-- HESAPLA disabled sebebi -->
+          <div id="upEnjHesapBtnHint" class="up-enj-hesap-hint" style="display:none;"></div>
           <button type="button" class="up-btn up-btn-accent" id="upEnjHesapBtn" disabled>ENJEKSİYON HESAPLA</button>
           <div id="upEnjHesapOzet" class="up-enj-hesap-ozet" style="display:none;">
             <div class="up-enj-hesap-satir"><span>Makine / Taraf</span><strong id="upEnjOzetMakine">—</strong></div>
@@ -228,6 +257,7 @@
             <div class="up-enj-hesap-satir" id="upEnjOzetManuelGWrap" style="display:none;"><span>Plan Hızı Gündüz</span><strong id="upEnjOzetManuelG">—</strong></div>
             <div class="up-enj-hesap-satir" id="upEnjOzetManuelGWrap2" style="display:none;"><span>Plan Hızı Gece</span><strong id="upEnjOzetManuelE">—</strong></div>
             <div class="up-enj-hesap-satir"><span>Plan Hızı Kaynağı</span><strong id="upEnjOzetRefKaynak">—</strong></div>
+            <div class="up-enj-hesap-satir" id="upEnjOzetGuvenWrap" style="display:none;"><span>Referans Güveni</span><strong id="upEnjOzetGuven">—</strong></div>
             <div class="up-enj-hesap-satir"><span>Hafta sonu</span><strong id="upEnjOzetHs">—</strong></div>
             <div id="upEnjVardiyaBreakdown" class="up-enj-vardiya-wrap" style="display:none;">
               <div class="up-enj-vardiya-baslik">Vardiya Planı</div>
@@ -367,5 +397,5 @@
   window.UP_CAN_EDIT = {{ 'true' if can_edit else 'false' }};
   window.UP_GEREKCE = {{ gerekce_secenekleri | tojson }};
 </script>
-<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=18"></script>
+<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=31"></script>
 {% endblock %}
