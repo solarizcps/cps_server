@@ -17,7 +17,11 @@ import pytest
 
 WT = Path(__file__).resolve().parents[2]
 CONTRACT = str(WT / 'tools' / 'module_schema_contracts' / 'planlama.toml')
-COMMIT = 'aac27ed8e7407cd16199749b0f3696a635b66467'
+# Always read the actual git HEAD of this worktree — stays valid after any commit
+COMMIT = subprocess.run(
+    ['git', 'rev-parse', 'HEAD'], cwd=str(WT),
+    capture_output=True, text=True, check=True,
+).stdout.strip()
 CANONICAL = Path(os.environ.get(
     'CPS_CANONICAL_DB_SOURCE',
     r'C:\Solariz_CPS_SERVER\app\mock_data.db',

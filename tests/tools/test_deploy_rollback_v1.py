@@ -8,6 +8,7 @@ import os
 import platform
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -16,7 +17,10 @@ from unittest import mock
 import pytest
 
 WT = Path(__file__).resolve().parents[2]
-COMMIT = 'aac27ed8e7407cd16199749b0f3696a635b66467'
+COMMIT = subprocess.run(
+    ['git', 'rev-parse', 'HEAD'], cwd=str(WT),
+    capture_output=True, text=True, check=True,
+).stdout.strip()
 CANONICAL = Path(os.environ.get('CPS_CANONICAL_DB_SOURCE',
                                 r'C:\Solariz_CPS_SERVER\app\mock_data.db'))
 CONTRACT = str(WT / 'tools' / 'module_schema_contracts' / 'planlama.toml')
