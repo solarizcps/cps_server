@@ -204,6 +204,9 @@ class TestDeployProcessIntegration:
             ), mock.patch(
                 'tools.deploy_and_rollback.check_parity',
                 return_value={'PARITY_RESULT': 'PASS'},
+            ), mock.patch(
+                'tools.deploy_preflight._process_info',
+                return_value={'pid': '6820', 'name': 'python.exe', 'cmd': 'python app.py'},
             ):
                 run_deploy(
                     manifest_path=mp, repo=str(WT), db=db,
@@ -277,15 +280,10 @@ class TestDeployProcessIntegration:
         from tools.deploy_and_rollback import run_deploy
         from tools.release_manifest import save_manifest
 
-        td, db = _make_temp_db()
+        td, db = _make_temp_db(apply_190=False)
         mp = str(tmp_path / 'manifest.json')
         save_manifest(_good_manifest(), Path(mp))
-        reset_called: list[str] = []
         restore_called: list[tuple[str, str]] = []
-
-        def _reset(repo, commit):
-            reset_called.append(commit)
-            return True
 
         def _restore(backup, target):
             restore_called.append((backup, target))
@@ -301,9 +299,7 @@ class TestDeployProcessIntegration:
             ), mock.patch(
                 'tools.deploy_and_rollback.check_parity',
                 return_value={'PARITY_RESULT': 'PASS'},
-            ), mock.patch.object(dar, 'git_reset_hard', side_effect=_reset), mock.patch.object(
-                dar, 'restore_db', side_effect=_restore,
-            ):
+            ), mock.patch.object(dar, 'restore_db', side_effect=_restore):
                 r = run_deploy(
                     manifest_path=mp, repo=str(WT), db=db,
                     target_commit=COMMIT, execute=True,
@@ -317,7 +313,7 @@ class TestDeployProcessIntegration:
                 )
             assert r.get('ROLLBACK_APPLIED') == 'YES'
             assert restore_called
-            assert reset_called
+            assert r['HEALTH_AFTER'] == 'FAIL'
         finally:
             import shutil
             shutil.rmtree(td)
