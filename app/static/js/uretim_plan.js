@@ -992,67 +992,58 @@
         var rez = state.enj.reservation || {};
         var enjBas = dateOnlyFromApi(rez.baslangic || state.enj.baslangic);
         var enjBit = dateOnlyFromApi(rez.bitis || (state.enj.motorResult && state.enj.motorResult.tahmini_bitis));
-        var afterEnj = enjBit;
-        if (enjBas && enjBit) {
-            var dp = enjBit.split('-');
-            var d = new Date(parseInt(dp[0], 10), parseInt(dp[1], 10) - 1, parseInt(dp[2], 10));
-            d.setDate(d.getDate() + 1);
-            afterEnj = d.getFullYear() + '-' +
-                String(d.getMonth() + 1).padStart(2, '0') + '-' +
-                String(d.getDate()).padStart(2, '0');
-        }
 
         state.step3.basMode = null;
         state.step3.manuelDegisti = false;
+        // Bitiş için güvenilir üretim süresi kaynağı yok; alan manuel kalır.
+        state.step3.onerilenBit = null;
 
         // Enjeksiyon yoksa donem_aralik'tan üretilen tarihleri kullan
-        if (!enjBas && !afterEnj) {
+        if (!enjBas && !enjBit) {
             var donem = ($('upFormDonem') && $('upFormDonem').value) || 'bu_hafta';
             var aralik = donemAralikJs(donem);
             if ($('upFormBit') && !$('upFormBit').value) {
                 $('upFormBit').value = aralik.bit;
+                $('upFormBit').min = aralik.bas;
             }
-            state.step3.onerilenBit = aralik.bit;
-            step3ShowBitOneri(aralik.bit);
+            step3ShowBitHint(aralik.bas);
             var fakeSecenekler = [{ tarih: aralik.bas, dolu: false, oneri_donem: donem }];
-            renderStep3BasSecenekleri(fakeSecenekler, aralik.bas, null);
+            renderStep3BasSecenekleri(fakeSecenekler, aralik.bas);
             step3FetchOncekiPlanlar(aralik.bas, aralik.bit);
             return;
         }
 
-        // Bitiş önerisi: enjeksiyon bitişi
+        // Başlangıç önerisi: enjeksiyon bitiş tarihi (backend kuralıyla uyumlu: >=)
+        // Bitiş: güvenilir kaynak yok; alan min=enjBit ile manuel kalır
         if (enjBit) {
-            state.step3.onerilenBit = enjBit;
-            step3ShowBitOneri(enjBit);
-            if ($('upFormBit') && !$('upFormBit').value) {
-                $('upFormBit').value = enjBit;
+            if ($('upFormBit')) {
+                $('upFormBit').min = enjBit;
+                // Daha önce doldurulmuşsa ve min'den küçükse temizle
+                if ($('upFormBit').value && $('upFormBit').value < enjBit) {
+                    $('upFormBit').value = '';
+                }
             }
+            step3ShowBitHint(enjBit);
         }
 
         // Öneri kuralını göster
-        if (afterEnj) {
-            step3RenderOneriKural('Güvenli başlangıç: enjeksiyon tamamlandıktan sonraki gün (' + fmtDateTr(afterEnj) + ')');
-        } else if (enjBas) {
-            step3RenderOneriKural('Başlangıç: enjeksiyon başlangıç günü (' + fmtDateTr(enjBas) + ')');
-        }
+        step3RenderOneriKural('Başlangıç en erken enjeksiyon bitiş tarihi: ' + fmtDateTr(enjBit));
 
-        fetchStep3OnCheck([enjBas, afterEnj].filter(Boolean), function (secenekler) {
-            renderStep3BasSecenekleri(secenekler, enjBas, afterEnj);
-            // afterEnj seçildiyse önceki plan kontrolü yap
-            var tarihBas = afterEnj || enjBas;
-            var tarihBit = $('upFormBit') ? $('upFormBit').value : enjBit;
-            step3FetchOncekiPlanlar(tarihBas, tarihBit);
+        fetchStep3OnCheck([enjBit].filter(Boolean), function (secenekler) {
+            renderStep3BasSecenekleri(secenekler, enjBit);
+            var tarihBit = $('upFormBit') ? $('upFormBit').value : '';
+            step3FetchOncekiPlanlar(enjBit, tarihBit);
         });
     }
 
-    function renderStep3BasSecenekleri(secenekler, enjBas, afterEnj) {
+    function renderStep3BasSecenekleri(secenekler, enjBit) {
         var el = $('upStep3BasSecenekleri');
         if (!el) return;
         state.step3.secenekler = secenekler;
         el.innerHTML = '';
+        // Tek seçenek: enjeksiyon bitiş tarihi (backend >= kuralıyla uyumlu)
         var opts = [
-            { mode: 'enj_bas', key: enjBas, label: enjBas ? 'Enjeksiyon başlangıç günü' : 'Dönem başlangıcı' },
-            { mode: 'after_enj', key: afterEnj, label: 'Enjeksiyon tamamlandıktan sonraki uygun gün' },
+            { mode: 'enj_bit', key: enjBit, label: enjBit ? 'Enjeksiyon bitiş tarihi (en erken başlangıç)' : 'Dönem başlangıcı' },
         ];
         var firstSelectable = null;
         opts.forEach(function (opt) {
@@ -1084,6 +1075,10 @@
         });
 
         var customInp = $('upFormBasCustom');
+        if (customInp) {
+            // Min tarih her seferinde güncelle (enjBit değişebilir)
+            if (enjBit) customInp.min = enjBit;
+        }
         if (customInp && !customInp._bound) {
             customInp._bound = true;
             customInp.addEventListener('change', function () {
@@ -1091,6 +1086,14 @@
                 el.querySelectorAll('.up-step3-radio').forEach(function (r) {
                     r.classList.remove('selected');
                 });
+                // Manuel tarih enjBit'ten önce olamaz
+                var enjBitMin = customInp.min || '';
+                if (enjBitMin && customInp.value < enjBitMin) {
+                    showStep3Uyari('Başlangıç tarihi enjeksiyon bitişinden (' + fmtDateTr(enjBitMin) + ') önce olamaz');
+                    state.step3.saveBlocked = true;
+                    wizardUpdateNav();
+                    return;
+                }
                 fetchStep3OnCheck([customInp.value], function (secs) {
                     var s0 = secs[0] || {};
                     if (s0.dolu) {
@@ -1127,15 +1130,18 @@
         else { el.style.display = 'none'; }
     }
 
-    function step3ShowBitOneri(isoDate) {
+    function step3ShowBitHint(minIsoDate) {
         var el = $('upStep3BitOneri');
         if (!el) return;
-        if (isoDate) {
-            el.textContent = 'Öneri: ' + fmtDateTr(isoDate);
+        if (minIsoDate) {
+            el.textContent = 'En erken bitiş: ' + fmtDateTr(minIsoDate) + ' (başlangıç tarihinden önce olamaz)';
             el.style.display = '';
         } else {
             el.style.display = 'none';
         }
+        // upFormBit min değerini güncelle
+        var bitEl = $('upFormBit');
+        if (bitEl && minIsoDate) bitEl.min = minIsoDate;
     }
 
     function step3RenderManuelBadge(show) {

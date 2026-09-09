@@ -124,10 +124,58 @@ def test_js_oneri_don_listener(js):
 
 
 def test_js_suggested_start_from_injection_end(js):
-    """SUGGESTED_START_FROM_INJECTION_END: afterEnj önerilen başlangıç olarak kullanılmalı."""
-    assert 'afterEnj' in js
-    assert "mode: 'after_enj'" in js
-    assert 'Enjeksiyon tamamlandıktan sonraki uygun gün' in js
+    """SUGGESTED_START_FROM_INJECTION_END=PASS: başlangıç önerisi enjeksiyon bitiş tarihi olmalı.
+    
+    Kural: plan_baslangic >= enj_plan_bitis[:10] (backend _validate_general_after_enj ile uyumlu).
+    Keyfî +1 gün eklenmemeli — başlangıç doğrudan enjeksiyon bitiş tarihine eşit olabilir.
+    """
+    # Eski afterEnj (+1 gün) mantığı kaldırıldı
+    assert 'afterEnj' not in js, "afterEnj (+1 gün) kaldırılmış olmalı"
+    assert "mode: 'after_enj'" not in js, "after_enj modu kaldırılmış olmalı"
+    # Yeni kural: enjBit doğrudan başlangıç önerisi olarak kullanılıyor
+    assert "mode: 'enj_bit'" in js
+    assert 'Enjeksiyon bitiş tarihi (en erken başlangıç)' in js
+    # Backend validator korunmuş
+    assert '_validate_general_after_enj' in _REPO_PY.read_text(encoding='utf-8')
+
+
+def test_js_no_arbitrary_plus_one_day(js):
+    """NO_ARBITRARY_PLUS_ONE_DAY=PASS: +1 gün mantığı kaldırılmış olmalı."""
+    assert 'afterEnj' not in js
+    # d.setDate(d.getDate() + 1) mantığı initStep3 içinde olmamalı
+    init_idx = js.find('function initStep3(')
+    assert init_idx != -1
+    # initStep3 body'si (yaklaşık 80 satır)
+    end_idx = js.find('\n    function ', init_idx + 1)
+    init_body = js[init_idx:end_idx if end_idx != -1 else init_idx + 3000]
+    assert 'getDate() + 1' not in init_body, "initStep3 içinde +1 gün hesabı olmamalı"
+
+
+def test_js_start_equals_injection_end_allowed(js):
+    """START_EQUALS_OR_AFTER_INJECTION_END=PASS: başlangıç enjeksiyon bitişine eşit olabilir."""
+    # Backend: plan_baslangic < enj_bit[:10] ise hata; eşit ise geçerli
+    repo_txt = _REPO_PY.read_text(encoding='utf-8')
+    assert "str(plan_bas)[:10] < str(enj_bit)[:10]" in repo_txt
+    # '<=' değil '<' kullanılıyor — eşitliğe izin veriliyor
+    assert "str(plan_bas)[:10] <= str(enj_bit)[:10]" not in repo_txt
+
+
+def test_js_end_min_equals_start(js):
+    """END_EQUALS_OR_AFTER_START=PASS: bitiş min değeri başlangıca eşit set edilmeli."""
+    # applyStep3Baslangic upFormBit.min'i başlangıç tarihine set eder
+    assert "$('upFormBit').min = isoDate" in js or "upFormBit').min = isoDate" in js
+
+
+def test_js_suggestion_never_invalid(js):
+    """SUGGESTION_NEVER_INVALID=PASS: başlangıç önerisi her zaman bitiş min'inden küçük olmaz.
+    
+    Bitiş önerisi kaldırıldı (onerilenBit=null). Bitiş alanı min=enjBit ile manuel.
+    Bu sayede suggested_end < suggested_start durumu oluşamaz.
+    """
+    # onerilenBit null başlatılıyor
+    assert 'state.step3.onerilenBit = null' in js
+    # Bitiş için sahte öneri üretilmiyor
+    assert 'state.step3.onerilenBit = enjBit' not in js
 
 
 def test_js_general_start_before_injection_end_blocked(js):
