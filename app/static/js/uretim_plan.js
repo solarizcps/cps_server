@@ -2743,6 +2743,28 @@
         enjUpdateHesapBtn();
     }
 
+    /* ACCORDION TOGGLE — Makine Hız Geçmişi */
+    function enjInitSonHaftaToggle() {
+        var btn = $('upEnjSonHaftaToggle');
+        var icerik = $('upEnjSonHaftaIcerik');
+        if (!btn || !icerik) return;
+        // Yalnızca bir kez bağla
+        if (btn._toggleBound) return;
+        btn._toggleBound = true;
+        btn.addEventListener('click', function () {
+            var expanded = btn.getAttribute('aria-expanded') === 'true';
+            btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            if (expanded) {
+                icerik.hidden = true;
+            } else {
+                icerik.hidden = false;
+            }
+            // chevron güncelle
+            var chev = btn.querySelector('.up-enj-son-hafta-chevron');
+            if (chev) chev.textContent = expanded ? '▸' : '▾';
+        });
+    }
+
     function enjSonHaftaHizRender(veri, secilenMakine) {
         var kutu = $('upEnjSonHaftaHiz');
         var icerik = $('upEnjSonHaftaIcerik');
@@ -2788,7 +2810,20 @@
         });
 
         icerik.innerHTML = html;
+        /* ACCORDION: veri geldi, kutuyu göster ama KAPALI tut */
         kutu.style.display = '';
+        /* İçerik kapalı kalır — kullanıcı toggle ile açar */
+        var btn = $('upEnjSonHaftaToggle');
+        if (btn) {
+            btn.setAttribute('aria-expanded', 'false');
+            var chev = btn.querySelector('.up-enj-son-hafta-chevron');
+            if (chev) chev.textContent = '▸';
+            /* Veri özeti başlık yanında göster */
+            var ozet = $('upEnjSonHaftaOzet');
+            if (ozet) ozet.textContent = mkodlar.length + ' makine';
+        }
+        icerik.hidden = true;
+        enjInitSonHaftaToggle();
     }
 
     function enjYukleSonHaftaHiz(secilenMakine) {
@@ -2797,8 +2832,11 @@
         var kutu = $('upEnjSonHaftaHiz');
         var icerik = $('upEnjSonHaftaIcerik');
         if (!kutu || !icerik) return;
+        /* Accordion: yükleme sırasında kutuyu göster ama kapalı tut */
         kutu.style.display = '';
+        icerik.hidden = true; /* kapalı */
         icerik.innerHTML = '<span class="up-enj-son-hafta-yukleniyor">Yükleniyor…</span>';
+        enjInitSonHaftaToggle();
 
         function _hasAnyData(makineler) {
             for (var k in makineler) {

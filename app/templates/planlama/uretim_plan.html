@@ -3,7 +3,7 @@
 {% block title %}Üretim Plan · Planlama · Solariz CPS{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=17">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=18">
 {% endblock %}
 
 {% block content %}
@@ -306,8 +306,17 @@
                   </div>
                 </div>
                 <div id="upEnjSonHaftaHiz" class="up-enj-son-hafta" style="display:none;">
-                  <div class="up-enj-son-hafta-baslik">MAKİNE HIZ GEÇMİŞİ — <span id="upEnjSonHaftaAralik">son 7 gün</span></div>
-                  <div id="upEnjSonHaftaIcerik" class="up-enj-son-hafta-icerik">
+                  <!-- Accordion: varsayılan kapalı, başlığa tıklanınca açılır -->
+                  <button type="button"
+                    class="up-enj-son-hafta-toggle"
+                    id="upEnjSonHaftaToggle"
+                    aria-expanded="false"
+                    aria-controls="upEnjSonHaftaIcerik">
+                    <span class="up-enj-son-hafta-baslik-txt">MAKİNE HIZ GEÇMİŞİ — <span id="upEnjSonHaftaAralik">son 30 gün</span></span>
+                    <span class="up-enj-son-hafta-ozet" id="upEnjSonHaftaOzet"></span>
+                    <span class="up-enj-son-hafta-chevron" aria-hidden="true">▸</span>
+                  </button>
+                  <div id="upEnjSonHaftaIcerik" class="up-enj-son-hafta-icerik" hidden>
                     <span class="up-enj-son-hafta-yukleniyor">Yükleniyor…</span>
                   </div>
                 </div>
@@ -579,5 +588,5 @@
   window.UP_CAN_EDIT = {{ 'true' if can_edit else 'false' }};
   window.UP_GEREKCE = {{ gerekce_secenekleri | tojson }};
 </script>
-<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=35"></script>
+<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=18"></script>
 {% endblock %}

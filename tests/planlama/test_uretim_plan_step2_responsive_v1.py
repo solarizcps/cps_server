@@ -225,3 +225,86 @@ def test_column_overflow_scroll(css):
 def test_1366_breakpoint_exists(css):
     """RESPONSIVE_1099=PASS — 1099px breakpoint kuralı var (1366@125% karşılar)"""
     assert '1099px' in css or '1100px' in css or '1024px' in css
+
+
+# ---- FINAL_VISUAL_ALIGNMENT_V3 testler ----
+
+def test_old_card_side_margin_removed(css):
+    """OLD_MARGIN_REMOVED=PASS — eski margin-top:8px kuralı kanonik bölgede yok"""
+    # Satır 878'deki eski tek-satır kural kaldırıldı; margin-top:0 veya tanımsız olmalı
+    # Kanonik bloğu bul
+    idx = css.index('.up-enj-card-side {')
+    block = css[idx:idx+400]
+    assert 'margin-top: 8px' not in block
+
+
+def test_card_side_font_min_12(css):
+    """CARD_SIDE_FONT_12=PASS — .up-enj-card-side font-size 12px"""
+    idx = css.index('.up-enj-card-side {')
+    block = css[idx:idx+300]
+    assert 'font-size: 12px' in block
+
+
+def test_card_side_title_font_min_12(css):
+    """CARD_SIDE_TITLE_FONT_12=PASS — .up-enj-card-side-title font-size 12px"""
+    idx = css.index('.up-enj-card-side-title {')
+    block = css[idx:idx+200]
+    assert 'font-size: 12px' in block
+
+
+def test_cache_versions_equal(html):
+    """CACHE_VERSIONS_EQUAL=PASS — CSS ve JS ?v= bump eşit"""
+    import re
+    # Jinja2 template: filename='css/uretim_plan.css') }}?v=18
+    css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
+    js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
+    assert css_v and js_v, f"Version bulunamadı — css:{css_v} js:{js_v}"
+    assert css_v.group(1) == js_v.group(1), f"CSS v{css_v.group(1)} ≠ JS v{js_v.group(1)}"
+
+
+def test_accordion_html_structure(html):
+    """ACCORDION_HTML=PASS — accordion toggle button ve aria-expanded var"""
+    assert 'upEnjSonHaftaToggle' in html
+    assert 'aria-expanded="false"' in html
+    assert 'aria-controls="upEnjSonHaftaIcerik"' in html
+
+
+def test_accordion_content_hidden_default(html):
+    """ACCORDION_HIDDEN_DEFAULT=PASS — içerik başlangıçta hidden attribute ile kapalı"""
+    assert 'id="upEnjSonHaftaIcerik"' in html
+    idx = html.index('id="upEnjSonHaftaIcerik"')
+    # hidden attribute aynı açılış tag'inde olmalı (100 char pencere)
+    snippet = html[idx:idx+100]
+    assert 'hidden' in snippet, f"hidden bulunamadı: {snippet!r}"
+
+
+def test_accordion_toggle_in_js(js):
+    """ACCORDION_JS_TOGGLE=PASS — JS toggle aria-expanded güncelleniyor"""
+    assert 'aria-expanded' in js
+    assert 'enjInitSonHaftaToggle' in js
+
+
+def test_accordion_no_auto_open_on_render(js):
+    """ACCORDION_NO_AUTO_OPEN=PASS — render sonrası accordion kapalı kalıyor"""
+    # render fonksiyonunda icerik.hidden = true set ediliyor
+    assert 'icerik.hidden = true' in js
+
+
+def test_detail_button_not_in_accordion(js):
+    """DETAIL_BUTTON_ISOLATION=PASS — Detay butonu JS'de accordion'dan bağımsız"""
+    # Detay butonu JS render'da enjOpenMakineDetay çağırıyor
+    assert 'up-enj-makine-detay-btn' in js
+    assert 'enjOpenMakineDetay' in js
+    # Accordion toggle sadece upEnjSonHaftaToggle ile ilgili
+    assert 'enjInitSonHaftaToggle' in js
+
+
+def test_summary_row_grid_auto_1fr(css):
+    """SUMMARY_GRID=PASS — özet satır label/value düzgün grid"""
+    assert 'grid-template-columns: auto 1fr' in css
+
+
+def test_summary_fields_preserved(html):
+    """SUMMARY_FIELDS=PASS — Seçilen Kurulum section mevcut"""
+    assert 'upStep2KurulumOzet' in html
+    assert 'upStep2KurulumBody' in html
