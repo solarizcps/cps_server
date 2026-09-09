@@ -15,6 +15,10 @@ from modules.planlama.uretim_plan_service import (
     m_emirler_lazy,
     model_satir_by_canonical,
     proses_detay_lazy,
+    OrderLineNotFoundError,
+    OrderLineQuantityError,
+    OrderLineUnitMismatchError,
+    resolve_order_line_quantity,
     siparis_model_satirlari,
     stok_gorsel_yolu,
     y_emirler_lazy,
@@ -106,11 +110,31 @@ def api_plan_ekle():
     for k in required:
         if body.get(k) is None or body.get(k) == '':
             return jsonify({'ok': False, 'mesaj': f'Eksik alan: {k}'}), 400
+    order_total = None
+    if body.get('has_enjeksiyon'):
+        try:
+            order_total = resolve_order_line_quantity(
+                body['sip_no'], body['sip_harinx'],
+                body['mamul_skod'], body.get('rkod') or 0,
+            )['order_total_quantity']
+        except OrderLineNotFoundError as e:
+            return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+        except OrderLineUnitMismatchError as e:
+            return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+        except OrderLineQuantityError as e:
+            return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+
     try:
-        row = repo.plan_ekle(body, _uid())
+        row = repo.plan_ekle(body, _uid(), order_total=order_total)
     except ValueError as e:
         msg = str(e)
-        if 'zaten planlı' in msg or msg.startswith('CONFLICT'):
+        if (
+            'zaten planlı' in msg
+            or msg.startswith('CONFLICT')
+            or 'Kalan miktar' in msg
+            or 'Sipariş miktarı' in msg
+            or 'legacy plan' in msg
+        ):
             code = 409
             payload = {'ok': False, 'mesaj': msg, 'errors': [msg]}
             if msg.startswith('CONFLICT'):
@@ -169,12 +193,14 @@ def api_plan_ekle():
                 )
         finally:
             con.close()
+    qty_meta = (row or {}).pop('_quantity_meta', None) or {}
     return jsonify({
         'ok': True,
         'plan': row,
         'plan_id': row.get('id') if row else None,
         'calendar_ready': calendar_ready,
         'calendar_url': calendar_url,
+        **qty_meta,
     })
 
 
@@ -183,13 +209,37 @@ def api_plan_ekle():
 def api_plan_guncelle(plan_id):
     _plan_edit_required()
     body = request.get_json(silent=True) or {}
+    order_total = None
+    touches_enj = any(k in body for k in repo.ENJ_PAYLOAD_ANAHTARLARI)
+    if touches_enj or body.get('has_enjeksiyon'):
+        mevcut = repo.plan_get(plan_id)
+        if mevcut and (
+            body.get('has_enjeksiyon')
+            or mevcut.get('enj_makine_id')
+            or mevcut.get('enj_plan_baslangic')
+        ):
+            try:
+                order_total = resolve_order_line_quantity(
+                    mevcut['sip_no'], mevcut['sip_harinx'],
+                    mevcut['mamul_skod'], mevcut.get('rkod') or 0,
+                )['order_total_quantity']
+            except OrderLineNotFoundError as e:
+                return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+            except OrderLineUnitMismatchError as e:
+                return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+            except OrderLineQuantityError as e:
+                return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+
     try:
-        row = repo.plan_guncelle(plan_id, body, _uid())
+        row = repo.plan_guncelle(plan_id, body, _uid(), order_total=order_total)
     except ValueError as e:
-        return jsonify({'ok': False, 'mesaj': str(e)}), 404
+        msg = str(e)
+        code = 409 if 'Kalan miktar' in msg or 'Sipariş miktarı' in msg or 'legacy plan' in msg else 404
+        return jsonify({'ok': False, 'mesaj': msg, 'errors': [msg]}), code
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
-    return jsonify({'ok': True, 'plan': row})
+    qty_meta = (row or {}).pop('_quantity_meta', None) or {}
+    return jsonify({'ok': True, 'plan': row, **qty_meta})
 
 
 @uretim_plan_bp.route('/api/plan/<int:plan_id>', methods=['DELETE'])

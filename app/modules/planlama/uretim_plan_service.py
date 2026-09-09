@@ -2,8 +2,92 @@
 """Üretim Plan — Korgun read model (canonical: SipNo+SipHarinx+MamulSKOD+RKOD)."""
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
+
+
+class OrderLineQuantityError(ValueError):
+    """Sipariş kalemi miktar çözümlemesi başarısız."""
+
+
+class OrderLineNotFoundError(OrderLineQuantityError):
+    """Korgun önizlemede sipariş kalemi bulunamadı."""
+
+
+class OrderLineUnitMismatchError(OrderLineQuantityError):
+    """Sipariş birimi enjeksiyon plan çift birimiyle uyumsuz."""
+
+
+def _normalize_birim(birim: str | None) -> str:
+    b = (birim or 'CIFT').strip().upper()
+    return b.replace('İ', 'I').replace('Ç', 'C').replace('Ş', 'S').replace('Ğ', 'G').replace('Ü', 'U').replace('Ö', 'O')
+
+
+def _birim_cift_mi(birim: str | None) -> bool:
+    return _normalize_birim(birim) == 'CIFT'
+
+
+def parse_cift_quantity(value, *, field_label: str = 'Miktar') -> int:
+    """Pozitif tam sayı çift miktarı — NaN/Infinity ve ondalık reddedilir."""
+    if value is None or value == '':
+        raise ValueError(f'{field_label} boş olamaz.')
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        raise ValueError(f'{field_label} geçersiz.')
+    if isinstance(value, str) and value.strip().lower() in ('nan', 'infinity', '-infinity', 'inf', '-inf'):
+        raise ValueError(f'{field_label} geçersiz.')
+    try:
+        d = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError(f'{field_label} sayı olmalıdır.') from None
+    if not d.is_finite():
+        raise ValueError(f'{field_label} geçersiz.')
+    if d <= 0:
+        raise ValueError(f'{field_label} sıfırdan büyük olmalıdır.')
+    if d != d.to_integral_value():
+        raise ValueError(f'{field_label} tam sayı olmalıdır.')
+    return int(d)
+
+
+def resolve_order_line_quantity(
+    sip_no,
+    sip_harinx,
+    mamul_skod,
+    rkod=0,
+) -> dict:
+    """Server-side sipariş kalemi toplam miktarı — Korgun önizleme kaynağı.
+
+    İstemci payload'ındaki miktar alanına güvenilmez; model_satir_by_canonical
+    ile _build_satir (M emir giren toplamı veya Siparis_Har.Miktar) kullanılır.
+    """
+    from modules.common import korgun as kk
+
+    con = kk._baglan()
+    try:
+        satir = model_satir_by_canonical(
+            con, int(sip_no), int(sip_harinx), mamul_skod, int(rkod or 0),
+        )
+    finally:
+        con.close()
+    if not satir:
+        raise OrderLineNotFoundError(
+            f'Sipariş kalemi bulunamadı: sip={sip_no}, harinx={sip_harinx}, '
+            f'model={mamul_skod}, rkod={rkod}'
+        )
+    birim = (satir.get('birim') or 'CIFT').strip()
+    if not _birim_cift_mi(birim):
+        raise OrderLineUnitMismatchError(
+            f'Sipariş birimi ({birim}) enjeksiyon plan çift birimiyle uyumsuz.'
+        )
+    total = parse_cift_quantity(satir.get('miktar'), field_label='Sipariş miktarı')
+    return {
+        'order_total_quantity': total,
+        'siparis_toplam_miktar': total,
+        'birim': birim,
+        'canonical_key': satir.get('canonical_key'),
+        'source': 'korgun_model_satir',
+    }
 
 
 def _load_proses_adlari(cur, proses_kodlari):

@@ -2,10 +2,12 @@
 """Üretim Plan — CPS SQLite plan kayıtları."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import date, datetime, timedelta
 
 from db import get_conn
+from modules.planlama.uretim_plan_service import parse_cift_quantity
 
 PLAN_DONEMLERI = ('bu_hafta', 'gelecek_hafta', 'bu_ay', '3_ay', 'gecmis')
 GEREKCE_SECENEKLERI = (
@@ -435,7 +437,151 @@ def _validate_enj_istasyon_availability(con, payload: dict,
         )
 
 
-def plan_ekle(payload: dict, user_id: int) -> dict:
+def _planned_qty_from_row(row: dict) -> int | None:
+    """Aktif plandan güvenilir planlanan çift miktarını çöz.
+
+    Öncelik: enj_planlanacak_cift → enj_kapasite_snapshot.planlanacak_cift.
+    Çözülemezse None (legacy belirsizlik).
+    """
+    raw = row.get('enj_planlanacak_cift')
+    if raw is not None and raw != '':
+        try:
+            return parse_cift_quantity(raw, field_label='Planlanacak çift')
+        except ValueError:
+            pass
+
+    snap_raw = row.get('enj_kapasite_snapshot')
+    if snap_raw:
+        try:
+            snap = json.loads(snap_raw) if isinstance(snap_raw, str) else snap_raw
+            if isinstance(snap, dict) and snap.get('planlanacak_cift') is not None:
+                return parse_cift_quantity(
+                    snap['planlanacak_cift'], field_label='Planlanacak çift',
+                )
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    return None
+
+
+def _sum_already_planned(
+    con: sqlite3.Connection,
+    sip_no: int,
+    sip_harinx: int,
+    mamul_skod: str,
+    rkod: int,
+    *,
+    exclude_plan_id: int | None = None,
+) -> tuple[int, list[int]]:
+    """Aynı kanonik sipariş kalemi için aktif planların planlanan çift toplamı."""
+    sql = """
+        SELECT id, enj_planlanacak_cift, enj_kapasite_snapshot
+          FROM uretim_model_plan
+         WHERE aktif = 1
+           AND sip_no = ? AND sip_harinx = ? AND mamul_skod = ? AND rkod = ?
+    """
+    params: list = [int(sip_no), int(sip_harinx), mamul_skod, int(rkod or 0)]
+    if exclude_plan_id is not None:
+        sql += ' AND id <> ?'
+        params.append(int(exclude_plan_id))
+
+    already = 0
+    unresolved: list[int] = []
+    for row in con.execute(sql, params).fetchall():
+        d = dict(row)
+        pq = _planned_qty_from_row(d)
+        if pq is None:
+            unresolved.append(int(d['id']))
+        else:
+            already += pq
+    return already, unresolved
+
+
+def _quantity_error_message(
+    *,
+    remaining: int,
+    requested: int,
+    order_total: int,
+) -> str:
+    if requested > order_total:
+        return f'Sipariş miktarı {order_total} çift. {requested} çift planlanamaz.'
+    return f'Kalan miktar {remaining} çift. {requested} çift planlanamaz.'
+
+
+def _validate_enj_plan_quantity(
+    con: sqlite3.Connection,
+    payload: dict,
+    order_total: int,
+    *,
+    exclude_plan_id: int | None = None,
+) -> dict:
+    """Enjeksiyonlu plan create/update — kalan miktar guard.
+
+    order_total: server-side doğrulanmış sipariş kalemi toplamı (çift).
+    """
+    if not payload.get('has_enjeksiyon'):
+        return {}
+
+    requested = parse_cift_quantity(
+        payload.get('enj_planlanacak_cift'),
+        field_label='Planlanacak çift',
+    )
+    order_total_int = parse_cift_quantity(order_total, field_label='Sipariş miktarı')
+
+    already, unresolved = _sum_already_planned(
+        con,
+        int(payload['sip_no']),
+        int(payload['sip_harinx']),
+        payload['mamul_skod'],
+        int(payload.get('rkod') or 0),
+        exclude_plan_id=exclude_plan_id,
+    )
+    if unresolved:
+        ids = ', '.join(f'#{i}' for i in unresolved[:5])
+        raise ValueError(
+            'Bu sipariş kaleminde miktarı çözümlenemeyen legacy plan(lar) var '
+            f'({ids}). Kalan miktar güvenli hesaplanamıyor; plan kaydı yapılamaz.'
+        )
+
+    remaining = order_total_int - already
+    if requested > order_total_int:
+        raise ValueError(_quantity_error_message(
+            remaining=remaining, requested=requested, order_total=order_total_int,
+        ))
+    if requested > remaining:
+        raise ValueError(_quantity_error_message(
+            remaining=remaining, requested=requested, order_total=order_total_int,
+        ))
+
+    remaining_after = remaining - requested
+    return {
+        'order_total_quantity': order_total_int,
+        'already_planned_quantity': already,
+        'remaining_quantity': remaining,
+        'requested_quantity': requested,
+        'remaining_after_save': remaining_after,
+        'siparis_toplam_miktar': order_total_int,
+        'planlanmis_miktar': already,
+        'kalan_miktar': remaining,
+        'talep_miktar': requested,
+        'kayit_sonrasi_kalan': remaining_after,
+    }
+
+
+def _resolve_order_total_for_payload(payload: dict, order_total: int | None) -> int:
+    if order_total is not None:
+        return parse_cift_quantity(order_total, field_label='Sipariş miktarı')
+    from modules.planlama.uretim_plan_service import resolve_order_line_quantity
+
+    info = resolve_order_line_quantity(
+        payload['sip_no'],
+        payload['sip_harinx'],
+        payload['mamul_skod'],
+        payload.get('rkod') or 0,
+    )
+    return int(info['order_total_quantity'])
+
+
+def plan_ekle(payload: dict, user_id: int, *, order_total: int | None = None) -> dict:
     con = get_conn()
     try:
         _ensure_table(con)
@@ -452,6 +598,12 @@ def plan_ekle(payload: dict, user_id: int) -> dict:
 
         # ENJ validation: enjeksiyonlu üründe rezervasyon alanları zorunlu
         _validate_enj_required(payload)
+
+        qty_meta: dict = {}
+        if payload.get('has_enjeksiyon'):
+            ot = _resolve_order_total_for_payload(payload, order_total)
+            qty_meta = _validate_enj_plan_quantity(con, payload, ot)
+
         # Genel plan başlangıcı enjeksiyon bitişinden önce olamaz
         _validate_general_after_enj(payload)
 
@@ -490,7 +642,10 @@ def plan_ekle(payload: dict, user_id: int) -> dict:
             enj.get('enj_slot'), istasyonlar,
         )
         con.commit()
-        return plan_get(cur.lastrowid)
+        out = plan_get(cur.lastrowid)
+        if qty_meta:
+            out['_quantity_meta'] = qty_meta
+        return out
     except Exception:
         con.rollback()
         raise
@@ -498,7 +653,13 @@ def plan_ekle(payload: dict, user_id: int) -> dict:
         con.close()
 
 
-def plan_guncelle(plan_id: int, payload: dict, user_id: int) -> dict:
+def plan_guncelle(
+    plan_id: int,
+    payload: dict,
+    user_id: int,
+    *,
+    order_total: int | None = None,
+) -> dict:
     con = get_conn()
     try:
         _ensure_table(con)
@@ -522,12 +683,17 @@ def plan_guncelle(plan_id: int, payload: dict, user_id: int) -> dict:
         # dokunulmasa da enjeksiyon bitişinin önüne çekilemez.
         _validate_general_after_enj(birlesik)
 
+        qty_meta: dict = {}
         enj = None
         istasyonlar = None
         if _enj_payload_dokunuldu(payload):
             # plan_ekle ile aynı iş kuralları
             _validate_enj_required(birlesik)
             if birlesik.get('has_enjeksiyon'):
+                ot = _resolve_order_total_for_payload(birlesik, order_total)
+                qty_meta = _validate_enj_plan_quantity(
+                    con, birlesik, ot, exclude_plan_id=int(plan_id),
+                )
                 _validate_enj_istasyon_availability(
                     con, birlesik, haric_plan_id=int(plan_id)
                 )
@@ -565,7 +731,10 @@ def plan_guncelle(plan_id: int, payload: dict, user_id: int) -> dict:
                 enj.get('enj_slot'), istasyonlar,
             )
         con.commit()
-        return plan_get(plan_id)
+        out = plan_get(plan_id)
+        if qty_meta:
+            out['_quantity_meta'] = qty_meta
+        return out
     except Exception:
         con.rollback()
         raise
