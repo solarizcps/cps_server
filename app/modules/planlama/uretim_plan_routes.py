@@ -412,12 +412,16 @@ def api_enj_slot_durum():
 @uretim_plan_bp.route('/api/enj/kaliplar', methods=['GET'])
 @yetki_gerekli('planlama', 'can_view')
 def api_enj_kaliplar():
-    """Aktif kalıp master listesi — sipariş canonical modeline göre filtreli.
+    """Aktif kalıp master listesi — Korgun canonical mamul_skod ile filtreli.
 
     Zorunlu parametreler: sip_no, sip_harinx, mamul_skod, rkod
-    Yalnız canonical mamul_skod ile eşleşen aktif kalıplar döner.
-    Eşleşme yoksa kaliplar=[], güvenli mesaj — asla tüm kalıplara fallback yok.
+    Canonical mamul_skod Korgun'dan çözülür; istemci değeriyle karşılaştırılır.
+    Uyuşmazlık, Korgun erişilemez → FAIL-CLOSED (fallback yok).
     """
+    from modules.planlama.uretim_plan_service import (
+        resolve_canonical_mamul_skod, CanonicalResolveError,
+    )
+
     sip_no    = request.args.get('sip_no',    type=int)
     sip_har   = request.args.get('sip_harinx', type=int)
     mamul_raw = (request.args.get('mamul_skod') or '').strip()
@@ -430,27 +434,22 @@ def api_enj_kaliplar():
             'mesaj': 'sip_no, sip_harinx ve mamul_skod zorunludur',
         }), 400
 
-    # 2. Canonical doğrulama — temp SQLite'dan sipariş satırını oku
+    # 2. Korgun canonical resolver — istemci değerine güvenmiyoruz
+    try:
+        canonical_skod = resolve_canonical_mamul_skod(sip_no, sip_har, mamul_raw, rkod)
+    except CanonicalResolveError as cre:
+        msg = str(cre)
+        if 'uyuşmuyor' in msg or 'manipülasyon' in msg.lower():
+            return jsonify({'ok': False, 'mesaj': msg}), 409
+        # Korgun erişilemez veya satır bulunamadı → fail-closed
+        return jsonify({'ok': False, 'mesaj': msg}), 503
+    except Exception as exc:
+        return jsonify({'ok': False, 'mesaj': f'Canonical çözümleme hatası: {exc!s:.200}'}), 503
+
+    # 3. Canonical model ile kalıp listesi — istemci değil Korgun SKOD'u
+    norm_skod = canonical_skod.strip().upper()
     con = get_conn()
     try:
-        plan_row = con.execute(
-            'SELECT mamul_skod FROM uretim_model_plan '
-            'WHERE sip_no=? AND sip_harinx=? AND mamul_skod=? AND aktif=1 LIMIT 1',
-            (sip_no, sip_har, mamul_raw),
-        ).fetchone()
-        # Kayıtlı plan yoksa yeni sipariş olabilir — mamul_skod parametresini güvenli kabul et
-        # (duplicate kontrolü zaten plan_ekle'de yapılıyor)
-        canonical_skod = mamul_raw  # istemci gönderimi; plan varsa eşleşmesi lazım
-
-        if plan_row and plan_row['mamul_skod'].strip().upper() != mamul_raw.strip().upper():
-            return jsonify({
-                'ok': False,
-                'mesaj': 'Gönderilen mamul_skod kayıtlı planla uyuşmuyor.',
-            }), 409
-
-        # 3. Normalize: TRIM + UPPER karşılaştırma
-        norm_skod = canonical_skod.strip().upper()
-
         rows = con.execute("""
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad,
                    kalip_basi_cift, kapasite_cift
@@ -465,8 +464,12 @@ def api_enj_kaliplar():
             'Bu model için tanımlı liste kalıbı bulunamadı. '
             'Manuel Kalıp seçeneğini kullanabilirsiniz.'
         )
-        return jsonify({'ok': True, 'kaliplar': kaliplar, 'mesaj': mesaj})
-
+        return jsonify({
+            'ok': True,
+            'kaliplar': kaliplar,
+            'mesaj': mesaj,
+            'canonical_model': canonical_skod,   # bilgi amaçlı; frontend doğrulama için
+        })
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
     finally:
