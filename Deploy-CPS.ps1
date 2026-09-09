@@ -85,8 +85,9 @@ if ($ExpectedHead)         { $args_list += @('--expected-head', $ExpectedHead) }
 if ($AllowCanonical)       { $args_list += '--allow-canonical' }
 if ($SkipProcessCheck)     { $args_list += '--skip-process-check' }
 
-Write-Host "CPS Deploy V1 — MODE=$( if ($Execute) { 'EXECUTE' } else { 'PLAN' } )"
-Write-Host "TARGET_COMMIT=$TargetCommit"
+$deployMode = if ($Execute) { 'EXECUTE' } else { 'PLAN' }
+Write-Host ('CPS Deploy V1 - MODE=' + $deployMode)
+Write-Host ('TARGET_COMMIT=' + $TargetCommit)
 Write-Host ''
 
 & $py @args_list
