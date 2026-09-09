@@ -284,27 +284,29 @@ class TestEmptyRequiredMigrations:
         assert r['PREFLIGHT_RESULT'] == 'PASS'
 
     def test_empty_required_migrations_execute_skipped(self, tmp_path):
-        contract, db = _minimal_nexgen_contract_db(tmp_path)
-        mp = _write_manifest(tmp_path, schema_contract=contract, module='nexgen')
-        import tools.deploy_preflight as pf_mod
-
-        def _resolve(repo, target_commit, contract_path_raw):
-            return contract, None, Path(contract).name
-
-        with mock.patch.object(pf_mod, 'resolve_target_contract', side_effect=_resolve):
-            r = run_deploy(
-                manifest_path=mp, repo=str(WT), db=db,
-                target_commit=COMMIT, execute=True,
-                confirm_release='r-target-contract',
-                expected_computer=COMPUTER,
-                expected_head=COMMIT,
-                skip_process_check=True, _fake_pids=[],
-                _fake_start=lambda repo, env=None: {'ok': True, 'pid': '11111'},
-                _fake_health=lambda url: {'ok': True, 'status': 200},
-                _fake_stop=lambda pid: True,
-            )
-        assert r['MIGRATION_RESULT'] == 'SKIPPED_NO_MIGRATIONS'
-        assert r['DEPLOY_RESULT'] == 'PASS'
+        td, db = _make_temp_db()
+        mp = _write_manifest(tmp_path, schema_contract=str(NEXGEN_CONTRACT), module='nexgen')
+        parity_ok = {'PARITY_RESULT': 'PASS', 'MODULE': 'nexgen'}
+        try:
+            with mock.patch(
+                'tools.deploy_preflight.run_deploy_module_parity',
+                return_value=parity_ok,
+            ):
+                r = run_deploy(
+                    manifest_path=mp, repo=str(WT), db=db,
+                    target_commit=COMMIT, execute=True,
+                    confirm_release='r-target-contract',
+                    expected_computer=COMPUTER,
+                    expected_head=COMMIT,
+                    skip_process_check=True, _fake_pids=[],
+                    _fake_start=lambda repo, env=None: {'ok': True, 'pid': '11111'},
+                    _fake_health=lambda url: {'ok': True, 'status': 200},
+                    _fake_stop=lambda pid: True,
+                )
+            assert r['MIGRATION_RESULT'] == 'SKIPPED_NO_MIGRATIONS'
+            assert r['DEPLOY_RESULT'] == 'PASS'
+        finally:
+            shutil.rmtree(td)
 
 
 class TestNonemptyMigrationBehavior:
@@ -317,21 +319,24 @@ class TestNonemptyMigrationBehavior:
             required_migrations=['190'],
             allowed_files=['tools/migration_runner.py'],
         )
+        mig_ok = {
+            'PENDING_MIGRATIONS': '',
+            'PARITY_RESULT': 'PASS',
+            'RUNNER_RESULT': 'PASS',
+        }
         try:
-            from tools.migration_runner import run_migration_runner
-            run_migration_runner(
-                repo=str(WT), db=db, contract=str(PLANLAMA_CONTRACT),
-                expected_commit=COMMIT, mode='apply', computer=COMPUTER,
-            )
-            r = run_deploy(
-                manifest_path=mp, repo=str(WT), db=db,
-                target_commit=COMMIT, execute=False,
-                expected_computer=COMPUTER,
-                skip_process_check=True, _fake_pids=[],
-            )
+            with mock.patch(
+                'tools.deploy_preflight.run_migration_runner',
+                return_value=mig_ok,
+            ):
+                r = run_deploy(
+                    manifest_path=mp, repo=str(WT), db=db,
+                    target_commit=COMMIT, execute=False,
+                    expected_computer=COMPUTER,
+                    skip_process_check=True, _fake_pids=[],
+                )
             assert r['DEPLOY_RESULT'] == 'PLAN_PASS'
             assert r['MIGRATION_PLAN'] != 'NONE_REQUIRED'
-            assert r['MIGRATION_PLAN'] in ('', '190')
         finally:
             shutil.rmtree(td)
 

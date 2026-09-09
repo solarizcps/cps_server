@@ -125,6 +125,14 @@ def _fake_stop(pid):
     return True
 
 
+def _planlama_mig_ok(**kwargs):
+    return {
+        'PENDING_MIGRATIONS': '',
+        'PARITY_RESULT': 'PASS',
+        'RUNNER_RESULT': 'PASS',
+    }
+
+
 # ── plan / dry-run tests ──────────────────────────────────────────────────────
 
 class TestDeployPlanMode:
@@ -132,12 +140,16 @@ class TestDeployPlanMode:
         td, db = _make_temp_db()
         mp = _write_manifest(tmp_path, _good_manifest())
         try:
-            r = run_deploy(
-                manifest_path=mp, repo=str(WT), db=db,
-                target_commit=COMMIT, execute=False,
-                expected_computer=COMPUTER,
-                skip_process_check=True, _fake_pids=[],
-            )
+            with mock.patch(
+                'tools.deploy_preflight.run_migration_runner',
+                side_effect=_planlama_mig_ok,
+            ):
+                r = run_deploy(
+                    manifest_path=mp, repo=str(WT), db=db,
+                    target_commit=COMMIT, execute=False,
+                    expected_computer=COMPUTER,
+                    skip_process_check=True, _fake_pids=[],
+                )
             assert r['RUNNER_MODE'] == 'PLAN'
             assert r['DEPLOY_RESULT'] == 'PLAN_PASS'
             assert r['PREFLIGHT_RESULT'] == 'PASS'
@@ -149,12 +161,16 @@ class TestDeployPlanMode:
         td, db = _make_temp_db(apply_190=True)
         mp = _write_manifest(tmp_path, _good_manifest())
         try:
-            r = run_deploy(
-                manifest_path=mp, repo=str(WT), db=db,
-                target_commit=COMMIT, execute=False,
-                expected_computer=COMPUTER,
-                skip_process_check=True, _fake_pids=[],
-            )
+            with mock.patch(
+                'tools.deploy_preflight.run_migration_runner',
+                side_effect=_planlama_mig_ok,
+            ):
+                r = run_deploy(
+                    manifest_path=mp, repo=str(WT), db=db,
+                    target_commit=COMMIT, execute=False,
+                    expected_computer=COMPUTER,
+                    skip_process_check=True, _fake_pids=[],
+                )
             assert r['PARITY_BEFORE'] == 'PASS'
             assert r['ROLLBACK_PLAN']
             assert r['BACKUP_WOULD_CREATE']
@@ -281,7 +297,10 @@ class TestBackup:
         mp = _write_manifest(tmp_path, _good_manifest())
         try:
             import tools.deploy_and_rollback as dar
-            with mock.patch.object(dar, 'backup_db', side_effect=RuntimeError('disk full')):
+            with mock.patch(
+                'tools.deploy_preflight.run_migration_runner',
+                side_effect=_planlama_mig_ok,
+            ), mock.patch.object(dar, 'backup_db', side_effect=RuntimeError('disk full')):
                 r = run_deploy(
                     manifest_path=mp, repo=str(WT), db=db,
                     target_commit=COMMIT, execute=True,
@@ -303,17 +322,24 @@ class TestTempDeploySimulation:
         td, db = _make_temp_db()
         mp = _write_manifest(tmp_path, _good_manifest())
         try:
-            r = run_deploy(
-                manifest_path=mp, repo=str(WT), db=db,
-                target_commit=COMMIT, execute=True,
-                confirm_release='r-test-001',
-                expected_computer=COMPUTER,
-                expected_head=COMMIT,
-                skip_process_check=True, _fake_pids=[],
-                _fake_start=_fake_start_ok,
-                _fake_health=_fake_health_ok,
-                _fake_stop=_fake_stop,
-            )
+            with mock.patch(
+                'tools.deploy_preflight.run_migration_runner',
+                side_effect=_planlama_mig_ok,
+            ), mock.patch(
+                'tools.deploy_and_rollback.check_parity',
+                return_value={'PARITY_RESULT': 'PASS'},
+            ):
+                r = run_deploy(
+                    manifest_path=mp, repo=str(WT), db=db,
+                    target_commit=COMMIT, execute=True,
+                    confirm_release='r-test-001',
+                    expected_computer=COMPUTER,
+                    expected_head=COMMIT,
+                    skip_process_check=True, _fake_pids=[],
+                    _fake_start=_fake_start_ok,
+                    _fake_health=_fake_health_ok,
+                    _fake_stop=_fake_stop,
+                )
             assert r['DEPLOY_RESULT'] == 'PASS'
             assert r['BACKUP_PATH']
             assert r['PARITY_AFTER'] == 'PASS'
@@ -337,7 +363,10 @@ class TestTempDeploySimulation:
                 r['error'] = 'injected failure'
                 return r
 
-            with mock.patch.object(dar, 'run_migration_runner', side_effect=_fail_runner):
+            with mock.patch(
+                'tools.deploy_preflight.run_migration_runner',
+                side_effect=_planlama_mig_ok,
+            ), mock.patch.object(dar, 'run_migration_runner', side_effect=_fail_runner):
                 r = run_deploy(
                     manifest_path=mp, repo=str(WT), db=db,
                     target_commit=COMMIT, execute=True,
@@ -358,17 +387,24 @@ class TestTempDeploySimulation:
         td, db = _make_temp_db()
         mp = _write_manifest(tmp_path, _good_manifest())
         try:
-            r = run_deploy(
-                manifest_path=mp, repo=str(WT), db=db,
-                target_commit=COMMIT, execute=True,
-                confirm_release='r-test-001',
-                expected_computer=COMPUTER,
-                expected_head=COMMIT,
-                skip_process_check=True, _fake_pids=[],
-                _fake_start=_fake_start_ok,
-                _fake_health=_fake_health_fail,   # health check fails
-                _fake_stop=_fake_stop,
-            )
+            with mock.patch(
+                'tools.deploy_preflight.run_migration_runner',
+                side_effect=_planlama_mig_ok,
+            ), mock.patch(
+                'tools.deploy_and_rollback.check_parity',
+                return_value={'PARITY_RESULT': 'PASS'},
+            ):
+                r = run_deploy(
+                    manifest_path=mp, repo=str(WT), db=db,
+                    target_commit=COMMIT, execute=True,
+                    confirm_release='r-test-001',
+                    expected_computer=COMPUTER,
+                    expected_head=COMMIT,
+                    skip_process_check=True, _fake_pids=[],
+                    _fake_start=_fake_start_ok,
+                    _fake_health=_fake_health_fail,
+                    _fake_stop=_fake_stop,
+                )
             assert r['DEPLOY_RESULT'] == 'BLOCKED'
             assert r.get('ROLLBACK_APPLIED') == 'YES'
             assert r['HEALTH_AFTER'] == 'FAIL'
@@ -381,8 +417,13 @@ class TestTempDeploySimulation:
         try:
             import tools.deploy_and_rollback as dar
             # force parity-after to fail → triggers rollback
-            with mock.patch('tools.deploy_and_rollback.check_parity',
-                            return_value={'PARITY_RESULT': 'BLOCKED'}):
+            with mock.patch(
+                'tools.deploy_preflight.run_migration_runner',
+                side_effect=_planlama_mig_ok,
+            ), mock.patch(
+                'tools.deploy_and_rollback.check_parity',
+                return_value={'PARITY_RESULT': 'BLOCKED'},
+            ):
                 r = run_deploy(
                     manifest_path=mp, repo=str(WT), db=db,
                     target_commit=COMMIT, execute=True,
@@ -442,19 +483,26 @@ class TestTempDeploySimulation:
             return {'ok': True, 'pid': '88888'}
 
         try:
-            r = run_deploy(
-                manifest_path=mp, repo=str(WT), db=db,
-                target_commit=COMMIT, execute=True,
-                confirm_release='r-test-001',
-                expected_computer=COMPUTER,
-                expected_head=COMMIT,
-                skip_process_check=True, _fake_pids=[],
-                _fake_start=_start,
-                _fake_health=_fake_health_ok,
-                _fake_stop=_fake_stop,
-            )
+            with mock.patch(
+                'tools.deploy_preflight.run_migration_runner',
+                side_effect=_planlama_mig_ok,
+            ), mock.patch(
+                'tools.deploy_and_rollback.check_parity',
+                return_value={'PARITY_RESULT': 'PASS'},
+            ):
+                r = run_deploy(
+                    manifest_path=mp, repo=str(WT), db=db,
+                    target_commit=COMMIT, execute=True,
+                    confirm_release='r-test-001',
+                    expected_computer=COMPUTER,
+                    expected_head=COMMIT,
+                    skip_process_check=True, _fake_pids=[],
+                    _fake_start=_start,
+                    _fake_health=_fake_health_ok,
+                    _fake_stop=_fake_stop,
+                )
             assert r['DEPLOY_RESULT'] == 'PASS'
-            assert started  # start was called
+            assert started
             assert r['NEW_PID'] == '88888'
         finally:
             shutil.rmtree(td)

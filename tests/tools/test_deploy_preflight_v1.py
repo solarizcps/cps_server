@@ -306,12 +306,20 @@ class TestPreflightPass:
         td, db = _make_temp_db()
         mp = _write_manifest(tmp_path, _good_manifest())
         try:
-            report = run_preflight(
-                manifest_path=mp, repo=str(WT), db=db,
-                target_commit=COMMIT,
-                expected_computer=COMPUTER,
-                skip_process_check=True, _fake_pids=[],
-            )
+            with mock.patch(
+                'tools.deploy_preflight.run_migration_runner',
+                return_value={
+                    'PENDING_MIGRATIONS': '',
+                    'PARITY_RESULT': 'PASS',
+                    'RUNNER_RESULT': 'PASS',
+                },
+            ):
+                report = run_preflight(
+                    manifest_path=mp, repo=str(WT), db=db,
+                    target_commit=COMMIT,
+                    expected_computer=COMPUTER,
+                    skip_process_check=True, _fake_pids=[],
+                )
             assert report['PREFLIGHT_RESULT'] == 'PASS'
         finally:
             shutil.rmtree(td)
