@@ -38,3 +38,43 @@ def test_production_mold_list_route_preserved():
     up = (_REPO / 'app' / 'modules' / 'planlama' / 'uretim_plan_routes.py').read_text(encoding='utf-8')
     assert re.search(r"route\('/api/enj/kaliplar'", up)
     assert re.search(r"route\('/api/enj/kalip-serileri'", up)
+
+
+def test_ky_db_path_uses_config_mock_db_path():
+    assert 'Config.MOCK_DB_PATH' in _YON_ROUTES
+    assert "return _os_ky.path.join(base, 'mock_data.db')" not in _YON_ROUTES
+
+
+def test_ky_api_kaliplar_reads_temp_db(tmp_path, monkeypatch):
+    import sqlite3
+    import sys
+
+    db = tmp_path / 'kalip_test.db'
+    con = sqlite3.connect(db)
+    con.executescript("""
+        CREATE TABLE enj_kalip (
+            id INTEGER PRIMARY KEY, kalip_kod TEXT, kalip_tipi TEXT,
+            model_kod TEXT, model_ad TEXT, asorti TEXT,
+            kalip_basi_cift INTEGER, varsayilan_bagli_kalip INTEGER,
+            renk TEXT, gorsel_dosya TEXT, aktif INTEGER,
+            kapasite_cift INTEGER, kalip_durumu TEXT, aciklama TEXT,
+            cift_agirlik_gr REAL, pisme_suresi_sn INTEGER,
+            aktif_goz_sayisi INTEGER, kapasite_onayli INTEGER DEFAULT 0
+        );
+        INSERT INTO enj_kalip (id, kalip_kod, kalip_tipi, model_kod, kalip_basi_cift, aktif, kalip_durumu)
+        VALUES (1, 'TR-TEST', 'GOVDE', 'YZZ-9800', 1, 1, 'AKTIF');
+    """)
+    con.close()
+
+    monkeypatch.setenv('CPS_MOCK_DB_PATH', str(db))
+    sys.path.insert(0, str(_REPO / 'app'))
+    import importlib
+    import config as cfg
+    importlib.reload(cfg)
+    from modules.yonetim import routes as yroutes
+    importlib.reload(yroutes)
+
+    con = sqlite3.connect(yroutes._ky_db_path())
+    count = con.execute('SELECT COUNT(*) FROM enj_kalip').fetchone()[0]
+    con.close()
+    assert count == 1

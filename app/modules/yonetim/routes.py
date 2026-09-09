@@ -893,9 +893,8 @@ from PIL import Image as _PIL_Image, UnidentifiedImageError as _PIL_Unidentified
 
 
 def _ky_db_path():
-    """CPS standart DB yolu - app/mock_data.db"""
-    base = _os_ky.path.dirname(_os_ky.path.dirname(_os_ky.path.dirname(_os_ky.path.abspath(__file__))))
-    return _os_ky.path.join(base, 'mock_data.db')
+    """CPS standart DB yolu — Config.MOCK_DB_PATH (CPS_MOCK_DB_PATH destekli)."""
+    return Config.MOCK_DB_PATH
 
 
 def _ky_tam_sayi(body, alan, *, zorunlu=False, minimum=None, maksimum=None):
