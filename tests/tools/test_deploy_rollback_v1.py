@@ -489,7 +489,7 @@ class TestTempDeploySimulation:
         mp = _write_manifest(tmp_path, _good_manifest())
         started: list[str] = []
 
-        def _start(repo, env=None):
+        def _start(repo, env=None, **kwargs):
             started.append(repo)
             return {'ok': True, 'pid': '88888'}
 
