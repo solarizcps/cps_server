@@ -4,10 +4,10 @@
 # Execute requires ALL confirmation parameters.
 #
 # USAGE (plan):
-#   .\Deploy-CPS.ps1 -Manifest C:\...\manifest.json -Repo C:\...\repo -Db C:\...\app\mock_data.db -TargetCommit <40-char-hash>
+#   .\Deploy-CPS.ps1 -Manifest C:\...\manifest.json -Repo C:\...\repo -DatabasePath C:\...\app\mock_data.db -TargetCommit <40-char-hash>
 #
 # USAGE (execute):
-#   .\Deploy-CPS.ps1 -Manifest ... -Repo ... -Db ... -TargetCommit <hash> `
+#   .\Deploy-CPS.ps1 -Manifest ... -Repo ... -DatabasePath ... -TargetCommit <hash> `
 #                    -Execute `
 #                    -ConfirmRelease <release_id> `
 #                    -ExpectedComputer <HOSTNAME> `
@@ -23,7 +23,7 @@ param(
     [string]$Repo,
 
     [Parameter(Mandatory=$true)]
-    [string]$Db,
+    [string]$DatabasePath,
 
     [Parameter(Mandatory=$true)]
     [string]$TargetCommit,
@@ -73,7 +73,7 @@ $args_list = @(
     $script,
     '--manifest', $Manifest,
     '--repo',     $Repo,
-    '--db',       $Db,
+    '--db',       $DatabasePath,
     '--target-commit', $TargetCommit
 )
 
