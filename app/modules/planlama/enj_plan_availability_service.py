@@ -560,6 +560,26 @@ def build_makine_detay(
             planned['stations'] = []
 
         istasyonlar = list(range(1, n + 1))
+
+        # A) Base first available — bağımsız, plan anchor'ından etkilenmez
+        base_first_avail = None
+        base_first_disp = None
+        base_first_disp_tam = None
+        try:
+            base_ilk = find_first_available_start(
+                con, mid, slot, istasyonlar,
+                calisma_modu=calisma_modu,
+                hafta_sonu=hafta_sonu,
+                hs_vardiya=hs_vardiya,
+                from_dt=None,
+            )
+            base_first_avail = _iso(base_ilk)
+            base_first_disp = _fmt_kisa(base_ilk)
+            base_first_disp_tam = _fmt_tam(base_ilk)
+        except RuntimeError:
+            pass
+
+        # Geriye uyumluluk: first_available seçili anchor penceresinden (Machine Detail vb.)
         first_avail = None
         first_disp = None
         if anchor_bas:
@@ -587,6 +607,9 @@ def build_makine_detay(
                 'snapshot_vardiya': physical.get('snapshot_vardiya'),
             },
             'planned': planned,
+            'base_first_available': base_first_avail,
+            'base_first_available_gosterim': base_first_disp,
+            'base_first_available_tam': base_first_disp_tam,
             'first_available': first_avail,
             'first_available_gosterim': first_disp,
         }

@@ -1303,8 +1303,24 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 .up-enj-card-ilk-val {
   font-size: 12px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  white-space: nowrap;
+  text-align: right;
+}
+.up-enj-card-plan-row {
+  margin-top: 1px;
+}
+.up-enj-card-plan-lbl {
+  font-size: 12px;
+  color: #0369a1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.up-enj-card-plan-val {
+  font-size: 12px;
+  color: #0369a1;
+  min-width: 0;
+  overflow: visible;
   white-space: nowrap;
   text-align: right;
 }

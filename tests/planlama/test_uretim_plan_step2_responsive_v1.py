@@ -279,14 +279,14 @@ def test_card_side_title_font_min_12(css):
 
 
 def test_cache_versions_equal(html):
-    """CACHE_VERSIONS=PASS — CSS v22, JS v22 (hem CSS hem JS değişti)"""
+    """CACHE_VERSIONS=PASS — CSS v23, JS v23 (hem CSS hem JS değişti)"""
     import re
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     assert css_v, "CSS version bulunamadı"
     assert js_v,  "JS version bulunamadı"
-    assert css_v.group(1) == '22', f"CSS version beklenen 22, gerçek {css_v.group(1)}"
-    assert js_v.group(1)  == '22', f"JS version beklenen 22, gerçek {js_v.group(1)}"
+    assert css_v.group(1) == '23', f"CSS version beklenen 23, gerçek {css_v.group(1)}"
+    assert js_v.group(1)  == '23', f"JS version beklenen 23, gerçek {js_v.group(1)}"
 
 
 def test_accordion_html_structure(html):
@@ -379,14 +379,14 @@ def test_istasyon_before_kalip_in_html(html):
 
 
 def test_cache_v19_equal(html):
-    """CACHE_VERSIONS=PASS — CSS v22, JS v22 (her ikisi de değişti)"""
+    """CACHE_VERSIONS=PASS — CSS v23, JS v23 (her ikisi de değişti)"""
     import re
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     assert css_v, "CSS version bulunamadı"
     assert js_v,  "JS version bulunamadı"
-    assert css_v.group(1) == '22', f"CSS version bekleneni 22, bulundu {css_v.group(1)}"
-    assert js_v.group(1)  == '22', f"JS version bekleneni 22, bulundu {js_v.group(1)}"
+    assert css_v.group(1) == '23', f"CSS version bekleneni 23, bulundu {css_v.group(1)}"
+    assert js_v.group(1)  == '23', f"JS version bekleneni 23, bulundu {js_v.group(1)}"
 
 
 def test_durum_strip_css(css):

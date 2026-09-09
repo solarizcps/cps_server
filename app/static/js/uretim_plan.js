@@ -52,6 +52,8 @@
             refConfirmedGece: false,
             planOzetMap: {},
             slotOzetMap: {},
+            baseFirstAvailableMap: {},
+            slotOzetSeq: 0,
             makineDetayCache: {},
             makineDetayLoadingKey: null,
             makineDetayTriggerBtn: null,
@@ -1569,6 +1571,8 @@
         e.ilkUygunMap = {};
         e.planOzetMap = {};
         e.slotOzetMap = {};
+        e.baseFirstAvailableMap = {};
+        e.slotOzetSeq = 0;
         e.makineDetayCache = {};
         e.quantitySummary = null;
         e.istasyonPlanDurum = {};
@@ -1664,20 +1668,65 @@
         return { cls: 'bos', lbl: 'BOŞ' };
     }
 
-    function enjSideCardBlock(side, slotKey) {
-        /* A/B hücresi: başlık · ilk uygun · doluluk
-           Durum (uzun metin) kartın tam-genişlik alt satırına taşındı. */
+    function enjMergeBaseFromSlotOzet(makineler) {
+        var e = state.enj;
+        if (!e.baseFirstAvailableMap) e.baseFirstAvailableMap = {};
+        (makineler || []).forEach(function (m) {
+            var mid = m.makine_id;
+            if (!e.baseFirstAvailableMap[mid]) e.baseFirstAvailableMap[mid] = {};
+            ['A', 'B'].forEach(function (sk) {
+                var side = m[sk] || {};
+                var gos = side.base_first_available_gosterim;
+                if (gos) {
+                    e.baseFirstAvailableMap[mid][sk] = {
+                        iso: side.base_first_available || null,
+                        gosterim: gos,
+                        tam: side.base_first_available_tam || gos,
+                    };
+                }
+            });
+        });
+    }
+
+    function enjSideBaseDate(machineId, slotKey, side) {
+        var base = (state.enj.baseFirstAvailableMap[machineId] || {})[slotKey];
+        if (base && base.gosterim) {
+            return { kisa: base.gosterim, tam: base.tam || base.gosterim };
+        }
+        if (side && side.base_first_available_gosterim) {
+            return {
+                kisa: side.base_first_available_gosterim,
+                tam: side.base_first_available_tam || side.base_first_available_gosterim,
+            };
+        }
+        return { kisa: '—', tam: '—' };
+    }
+
+    function enjSideCardBlock(side, slotKey, machineId) {
+        /* A/B hücresi: base ilk uygun · (seçili tarafta Plan) · doluluk */
         if (!side) side = {};
         var phys = side.physical || {};
         var plan = side.planned || {};
         var total = phys.total_count || plan.total_count || 8;
         var occupied = phys.occupied_count || 0;
-        var ilk = side.first_available_gosterim || '—';
+        var baseDt = enjSideBaseDate(machineId, slotKey, side);
         var sideClass = slotKey === 'A' ? 'side-a' : 'side-b';
+        var planRow = '';
+        var e = state.enj;
+        if (e.makineId === machineId && e.slot === slotKey && e.baslangic) {
+            var planTam = enjFmtDtApi(e.baslangic);
+            var planKisa = enjFmtDtKisa(e.baslangic);
+            planRow = '<div class="up-enj-card-side-row up-enj-card-plan-row">' +
+                '<span class="up-enj-card-plan-lbl">Plan</span>' +
+                '<strong class="up-enj-card-plan-val" title="' + esc(planTam) + '">' +
+                esc(planKisa) + '</strong></div>';
+        }
         return '<div class="up-enj-card-side ' + sideClass + '">' +
             '<div class="up-enj-card-side-title">' + (slotKey === 'A' ? 'A TARAFI' : 'B TARAFI') + '</div>' +
             '<div class="up-enj-card-side-row"><span class="up-enj-card-ilk-uygun-lbl">İlk uygun</span>' +
-            '<strong class="up-enj-card-ilk-val">' + esc(ilk) + '</strong></div>' +
+            '<strong class="up-enj-card-ilk-val" title="' + esc(baseDt.tam) + '">' +
+            esc(baseDt.kisa) + '</strong></div>' +
+            planRow +
             '<div class="up-enj-card-side-row">' + occupied + '/' + total + ' dolu</div>' +
             '</div>';
     }
@@ -1998,20 +2047,65 @@
 
     function enjYukleSlotOzet(cb) {
         var e = state.enj;
+        var seq = ++e.slotOzetSeq;
+        var captureSip = state.seciliCreateData && state.seciliCreateData.sip_no;
         fetch('/planlama/uretim-plan/api/enj/makine-slot-ozet?' + enjSlotOzetParams(),
             { credentials: 'include' })
             .then(function (r) { return r.json(); })
             .then(function (d) {
-                e.slotOzetMap = {};
-                e.makineDetayCache = {};
+                if (seq !== e.slotOzetSeq) return;
+                if (captureSip !== (state.seciliCreateData && state.seciliCreateData.sip_no)) return;
                 if (d.ok && d.makineler) {
+                    enjMergeBaseFromSlotOzet(d.makineler);
+                    var newMap = {};
                     d.makineler.forEach(function (m) {
-                        e.slotOzetMap[m.makine_id] = m;
+                        newMap[m.makine_id] = m;
                     });
+                    e.slotOzetMap = newMap;
+                    e.makineDetayCache = {};
                 }
                 if (cb) cb();
             })
             .catch(function () { if (cb) cb(); });
+    }
+
+    function enjPruneInvalidStations(m) {
+        if (!m || !state.enj.istasyonlar.length) return false;
+        var planDurum = state.enj.istasyonPlanDurum || {};
+        var slot = state.enj.slot;
+        var grid = m.grid || [];
+        var removed = [];
+        state.enj.istasyonlar = state.enj.istasyonlar.filter(function (n) {
+            var row = grid[n - 1] || {};
+            var cell = slot ? (row[slot] || {}) : null;
+            var snapDurum = slot ? enjCellDurum(cell) : 'BOS';
+            var pd = planDurum[n];
+            var durum = snapDurum;
+            if (pd && pd.durum === 'PLANLI') durum = 'PLANLI';
+            var disabled = !slot || durum === 'PLANLI' || durum === 'DOLU' ||
+                durum === 'SETUP' || durum === 'ARIZA';
+            if (disabled) { removed.push(n); return false; }
+            return true;
+        });
+        var warn = $('upEnjIstasyonDateWarn');
+        if (removed.length) {
+            enjHesapGizle();
+            if (!warn) {
+                warn = document.createElement('div');
+                warn.id = 'upEnjIstasyonDateWarn';
+                warn.className = 'up-enj-warn-msg';
+                var gridEl = $('upEnjIstasyonGrid');
+                if (gridEl && gridEl.parentNode) {
+                    gridEl.parentNode.insertBefore(warn, gridEl.nextSibling);
+                }
+            }
+            warn.textContent = 'Tarih değişti: İST' + removed.join(', İST') +
+                ' artık uygun değil — seçim kaldırıldı.';
+            warn.style.display = '';
+            return true;
+        }
+        if (warn) warn.style.display = 'none';
+        return false;
     }
 
     function enjYuklePlanOzet(cb) {
@@ -2021,6 +2115,17 @@
     function enjDtLocalToApi(v) {
         if (!v) return null;
         return v.replace('T', ' ') + ':00';
+    }
+
+    function enjFmtDtKisa(v) {
+        if (!v) return '—';
+        var p = String(v).replace('T', ' ').slice(0, 16);
+        var sp = p.indexOf(' ');
+        if (sp < 0) return p;
+        var dp = p.slice(0, sp).split('-');
+        var tp = p.slice(sp + 1, sp + 6);
+        if (dp.length === 3) return dp[2] + '.' + dp[1] + ' ' + tp;
+        return p;
     }
 
     function enjFmtDtApi(v) {
@@ -2650,8 +2755,8 @@
                 '<strong>' + esc(kod) + '</strong>' +
                 '<span class="up-enj-card-ist-label">' + m.istasyon_sayisi + ' İSTASYON</span>' +
                 '<div class="up-enj-card-sides">' +
-                enjSideCardBlock(sideA, 'A') +
-                enjSideCardBlock(sideB, 'B') +
+                enjSideCardBlock(sideA, 'A', mid) +
+                enjSideCardBlock(sideB, 'B', mid) +
                 '</div>';
             card.addEventListener('click', function () {
                 enjRequestMakineChange(m, machines);
@@ -3137,7 +3242,10 @@
                             var m = (state.enj.gridData || []).find(function (x) {
                                 return (x.makine_id || x.id) === state.enj.makineId;
                             });
-                            if (m) enjRenderIstasyonGrid(m);
+                            if (m) {
+                                enjPruneInvalidStations(m);
+                                enjRenderIstasyonGrid(m);
+                            }
                         });
                         enjYukleSlotOzet(function () {
                             enjRenderMakineCards(state.enj.gridData || []);
@@ -3196,7 +3304,10 @@
                             var m = (state.enj.gridData || []).find(function (x) {
                                 return (x.makine_id || x.id) === state.enj.makineId;
                             });
-                            if (m) enjRenderIstasyonGrid(m);
+                            if (m) {
+                                enjPruneInvalidStations(m);
+                                enjRenderIstasyonGrid(m);
+                            }
                         });
                         enjYukleSlotOzet(function () {
                             enjRenderMakineCards(state.enj.gridData || []);
