@@ -968,7 +968,7 @@ def _ky_audit_guvenli(islem, kayit_id, aciklama):
 @yetki_gerekli('planlama.enjeksiyon.kalip', 'can_view')  # KALIP_FAZ_A: merkezi yetki sistemine alindi
 def ky_kalip_yonetimi_sayfa():
     """Kalip Yonetimi sayfasi (Master Data)."""
-    return render_template('yonetim/kalip_yonetimi.html')
+    return render_template('yonetim/kalip_yonetimi.html', kalip_read_only=False)
 
 
 @yonetim_bp.route('/api/kaliplar', methods=['GET'])
@@ -982,7 +982,8 @@ def ky_api_kaliplar():
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
                    kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
                    kapasite_cift, kalip_durumu, aciklama,
-                   cift_agirlik_gr, pisme_suresi_sn
+                   cift_agirlik_gr, pisme_suresi_sn,
+                   aktif_goz_sayisi, kapasite_onayli
             FROM enj_kalip
             ORDER BY aktif DESC, kalip_kod, model_kod, asorti
         """)
@@ -1008,6 +1009,8 @@ def ky_api_kaliplar():
                 'aciklama': r[13],
                 'cift_agirlik_gr': r[14],
                 'pisme_suresi_sn': r[15],
+                'aktif_goz_sayisi': r[16],
+                'kapasite_onayli': bool(r[17]) if len(r) > 17 else False,
             })
         return _jsonify_ky({'ok': True, 'sayi': len(kayitlar), 'kayitlar': kayitlar})
     except Exception as e:
@@ -1019,6 +1022,7 @@ _KY_PATCH_WHITELIST = {
     'kalip_basi_cift', 'varsayilan_bagli_kalip', 'renk', 'gorsel_dosya', 'aktif',
     'kapasite_cift', 'kalip_durumu', 'aciklama',
     'cift_agirlik_gr', 'pisme_suresi_sn',
+    'aktif_goz_sayisi', 'kapasite_onayli',
 }
 
 _KY_KALIP_DURUMU_SECENEKLER = {'AKTIF', 'BAKIMDA', 'ARIZALI', 'PASIF'}
@@ -1050,6 +1054,10 @@ def ky_api_kalip_patch(kalip_id):
                 guncel['pisme_suresi_sn'] = _ky_tam_sayi(guncel, 'pisme_suresi_sn', minimum=1)
             if 'cift_agirlik_gr' in guncel:
                 guncel['cift_agirlik_gr'] = _ky_sonlu_sayi(guncel, 'cift_agirlik_gr')
+            if 'aktif_goz_sayisi' in guncel:
+                guncel['aktif_goz_sayisi'] = _ky_tam_sayi(guncel, 'aktif_goz_sayisi', minimum=1)
+            if 'kapasite_onayli' in guncel:
+                guncel['kapasite_onayli'] = 0 if guncel['kapasite_onayli'] in (0, '0', False) else 1
         except ValueError as exc:
             return _jsonify_ky({'ok': False, 'hata': str(exc)}), 400
 
@@ -1235,6 +1243,143 @@ def ky_api_kalip_ekle():
         current_app.logger.exception('Yeni kalip olusturma tamamlanamadi')
         return _jsonify_ky({'ok': False, 'hata': 'Kalıp oluşturulamadı. Lütfen tekrar deneyin.'}), 500
 # === END: F_KALIP_EKLE ===
+
+
+# === BEGIN: F_KALIP_SERI_MASTER ===
+def _ky_user_id():
+    u = session.get('kullanici') or {}
+    return u.get('id')
+
+
+@yonetim_bp.route('/api/kalip-serileri', methods=['GET'])
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_view')
+def ky_api_kalip_serileri_liste():
+    from modules.planlama.enj_kalip_seri_service import list_seri
+    model_kod = (request.args.get('model_kod') or '').strip() or None
+    aktif_only = request.args.get('aktif', '1') not in ('0', 'false', 'False')
+    con = _sqlite3_ky.connect(_ky_db_path())
+    con.row_factory = _sqlite3_ky.Row
+    try:
+        rows = list_seri(con, model_kod=model_kod, aktif_only=aktif_only)
+        return _jsonify_ky({'ok': True, 'seriler': rows, 'sayi': len(rows)})
+    except Exception as exc:
+        return _jsonify_ky({'ok': False, 'hata': str(exc)[:200]}), 500
+    finally:
+        con.close()
+
+
+@yonetim_bp.route('/api/kalip-seri/<int:seri_id>', methods=['GET'])
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_view')
+def ky_api_kalip_seri_detay(seri_id):
+    from modules.planlama.enj_kalip_seri_service import get_seri_detail
+    con = _sqlite3_ky.connect(_ky_db_path())
+    con.row_factory = _sqlite3_ky.Row
+    try:
+        detail = get_seri_detail(con, seri_id, aktif_uyeler_only=False)
+        if not detail:
+            return _jsonify_ky({'ok': False, 'hata': 'Seri bulunamadı'}), 404
+        return _jsonify_ky({'ok': True, 'seri': detail})
+    except Exception as exc:
+        return _jsonify_ky({'ok': False, 'hata': str(exc)[:200]}), 500
+    finally:
+        con.close()
+
+
+@yonetim_bp.route('/api/kalip-seri/ekle', methods=['POST'])
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_create')
+def ky_api_kalip_seri_ekle():
+    from modules.planlama.enj_kalip_seri_service import create_seri, KalipSeriError
+    body = request.get_json(silent=True) or {}
+    con = _sqlite3_ky.connect(_ky_db_path())
+    con.row_factory = _sqlite3_ky.Row
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        seri = create_seri(con, body, user_id=_ky_user_id())
+        con.commit()
+        _ky_audit_guvenli('KALIP_SERI_CREATE', seri['id'], f"kod={seri.get('seri_kod')}")
+        return _jsonify_ky({'ok': True, 'seri': seri}), 201
+    except KalipSeriError as exc:
+        con.rollback()
+        return _jsonify_ky({'ok': False, 'hata': str(exc)}), 400
+    except Exception:
+        con.rollback()
+        current_app.logger.exception('Kalip seri create hatasi')
+        return _jsonify_ky({'ok': False, 'hata': 'Seri oluşturulamadı'}), 500
+    finally:
+        con.close()
+
+
+@yonetim_bp.route('/api/kalip-seri/<int:seri_id>', methods=['PATCH'])
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_update')
+def ky_api_kalip_seri_guncelle(seri_id):
+    from modules.planlama.enj_kalip_seri_service import update_seri, KalipSeriError
+    body = request.get_json(silent=True) or {}
+    con = _sqlite3_ky.connect(_ky_db_path())
+    con.row_factory = _sqlite3_ky.Row
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        seri = update_seri(con, seri_id, body, user_id=_ky_user_id())
+        con.commit()
+        _ky_audit_guvenli('KALIP_SERI_UPDATE', seri_id, f"alanlar={list(body.keys())}")
+        return _jsonify_ky({'ok': True, 'seri': seri})
+    except KalipSeriError as exc:
+        con.rollback()
+        return _jsonify_ky({'ok': False, 'hata': str(exc)}), 400
+    except Exception:
+        con.rollback()
+        current_app.logger.exception('Kalip seri update hatasi id=%s', seri_id)
+        return _jsonify_ky({'ok': False, 'hata': 'Seri güncellenemedi'}), 500
+    finally:
+        con.close()
+
+
+@yonetim_bp.route('/api/kalip-seri/<int:seri_id>/uye', methods=['POST'])
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_update')
+def ky_api_kalip_seri_uye_ekle(seri_id):
+    from modules.planlama.enj_kalip_seri_service import add_uye, KalipSeriError
+    body = request.get_json(silent=True) or {}
+    con = _sqlite3_ky.connect(_ky_db_path())
+    con.row_factory = _sqlite3_ky.Row
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        uye = add_uye(con, seri_id, body, user_id=_ky_user_id())
+        con.commit()
+        _ky_audit_guvenli('KALIP_SERI_UYE_ADD', seri_id, f"kalip_id={body.get('kalip_id')}")
+        return _jsonify_ky({'ok': True, 'uye': uye}), 201
+    except KalipSeriError as exc:
+        con.rollback()
+        return _jsonify_ky({'ok': False, 'hata': str(exc)}), 400
+    except Exception:
+        con.rollback()
+        current_app.logger.exception('Kalip seri uye add hatasi seri=%s', seri_id)
+        return _jsonify_ky({'ok': False, 'hata': 'Üye eklenemedi'}), 500
+    finally:
+        con.close()
+
+
+@yonetim_bp.route('/api/kalip-seri-uye/<int:uye_id>', methods=['PATCH'])
+@yetki_gerekli('planlama.enjeksiyon.kalip', 'can_update')
+def ky_api_kalip_seri_uye_guncelle(uye_id):
+    from modules.planlama.enj_kalip_seri_service import update_uye, KalipSeriError
+    body = request.get_json(silent=True) or {}
+    con = _sqlite3_ky.connect(_ky_db_path())
+    con.row_factory = _sqlite3_ky.Row
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        uye = update_uye(con, uye_id, body, user_id=_ky_user_id())
+        con.commit()
+        _ky_audit_guvenli('KALIP_SERI_UYE_UPDATE', uye_id, f"alanlar={list(body.keys())}")
+        return _jsonify_ky({'ok': True, 'uye': uye})
+    except KalipSeriError as exc:
+        con.rollback()
+        return _jsonify_ky({'ok': False, 'hata': str(exc)}), 400
+    except Exception:
+        con.rollback()
+        current_app.logger.exception('Kalip seri uye update hatasi uye=%s', uye_id)
+        return _jsonify_ky({'ok': False, 'hata': 'Üye güncellenemedi'}), 500
+    finally:
+        con.close()
+# === END: F_KALIP_SERI_MASTER ===
 
 
 # === END: F_KALIP_YONETIM_ENDPOINT ===

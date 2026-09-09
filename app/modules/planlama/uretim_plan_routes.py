@@ -476,6 +476,93 @@ def api_enj_kaliplar():
         con.close()
 
 
+@uretim_plan_bp.route('/api/enj/kalip-serileri', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_kalip_serileri_read():
+    """Read-only aktif kalıp serileri — canonical model koduna göre."""
+    from modules.planlama.uretim_plan_service import (
+        resolve_canonical_mamul_skod, CanonicalResolveError,
+    )
+    from modules.planlama.enj_kalip_seri_service import read_series_for_model
+
+    sip_no = request.args.get('sip_no', type=int)
+    sip_har = request.args.get('sip_harinx', type=int)
+    mamul_raw = (request.args.get('mamul_skod') or request.args.get('model_kod') or '').strip()
+    rkod = request.args.get('rkod', type=int, default=0)
+
+    if sip_no and sip_har is not None and mamul_raw:
+        try:
+            model_kod = resolve_canonical_mamul_skod(sip_no, sip_har, mamul_raw, rkod)
+        except CanonicalResolveError as cre:
+            msg = str(cre)
+            if 'uyuşmuyor' in msg or 'manipülasyon' in msg.lower():
+                return jsonify({'ok': False, 'mesaj': msg}), 409
+            return jsonify({'ok': False, 'mesaj': msg}), 503
+        except Exception as exc:
+            return jsonify({'ok': False, 'mesaj': f'Canonical çözümleme hatası: {exc!s:.200}'}), 503
+    elif mamul_raw:
+        model_kod = mamul_raw
+    else:
+        return jsonify({'ok': False, 'mesaj': 'model_kod veya sip_no+sip_harinx+mamul_skod zorunlu'}), 400
+
+    con = get_conn()
+    try:
+        seriler = read_series_for_model(con, model_kod)
+        return jsonify({
+            'ok': True,
+            'canonical_model': model_kod,
+            'seriler': seriler,
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/kalip-seri/<int:seri_id>', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_kalip_seri_read(seri_id):
+    """Read-only seri detay — yalnız aktif seri/üyeler."""
+    from modules.planlama.enj_kalip_seri_service import get_seri_detail
+
+    con = get_conn()
+    try:
+        detail = get_seri_detail(con, seri_id, aktif_uyeler_only=True)
+        if not detail or not detail.get('aktif'):
+            return jsonify({'ok': False, 'mesaj': 'Seri bulunamadı veya pasif'}), 404
+        uyeler = []
+        for u in detail.get('uyeler') or []:
+            uyeler.append({
+                'kalip_id': u['kalip_id'],
+                'kalip_kod': u['kalip_kod'],
+                'uye_rolu': u['uye_rolu'],
+                'beden_numara': u.get('beden_numara'),
+                'sira_no': u.get('sira_no'),
+                'kalip_basi_cift': u.get('kalip_basi_cift'),
+                'aktif_goz_sayisi': u.get('aktif_goz_sayisi'),
+                'varsayilan_fiziksel_adet': u.get('varsayilan_fiziksel_adet'),
+                'kapasite_onayli': bool(u.get('kapasite_onayli')),
+                'kalip_tipi': u.get('kalip_tipi'),
+                'asorti': u.get('asorti'),
+            })
+        return jsonify({
+            'ok': True,
+            'seri': {
+                'id': detail['id'],
+                'seri_kod': detail['seri_kod'],
+                'seri_ad': detail.get('seri_ad'),
+                'model_kod': detail['model_kod'],
+                'model_ad': detail.get('model_ad'),
+                'aktif': bool(detail.get('aktif')),
+            },
+            'uyeler': uyeler,
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
 @uretim_plan_bp.route('/api/enj/kalip-kapasite', methods=['GET'])
 @yetki_gerekli('planlama', 'can_view')
 def api_enj_kalip_kapasite():
