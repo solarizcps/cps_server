@@ -3,7 +3,7 @@
 {% block title %}Üretim Plan · Planlama · Solariz CPS{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=18">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=19">
 {% endblock %}
 
 {% block content %}
@@ -134,24 +134,18 @@
               <span class="up-step2-col-num">1</span>
               <span>MAKİNE VE TARAF</span>
             </div>
-            <p class="up-step2-col-desc">Planlamak istediğiniz makineyi ve tarafı seçin.</p>
             <div id="upEnjUyari" class="up-enj-uyari" style="display:none;"></div>
-
-            <section class="up-step2-section" id="upStep2SecMakine" aria-labelledby="upStep2LblMakine">
-              <div class="up-enj-doluluk-bant" id="upEnjDolulukBant" style="display:none;">
-                <span class="up-enj-doluluk-baslik">MAKİNE DURUMU</span>
-                <span class="up-enj-doluluk-mode" id="upEnjDolulukModeLabel"></span>
-              </div>
-              <div class="up-enj-makine-cards up-enj-makine-cards-2col" id="upEnjMakineCards"></div>
-            </section>
-
-            <section class="up-step2-section" id="upStep2SecSlot" aria-labelledby="upStep2LblSlot">
-              <h3 class="up-step2-sec-title" id="upStep2LblSlot">Taraf Seçimi</h3>
-              <div class="up-enj-slot-row up-enj-slot-row-big">
-                <button type="button" class="up-enj-slot-btn up-slot-a up-slot-btn-big" data-slot="A" id="upEnjSlotA">A TARAFI</button>
-                <button type="button" class="up-enj-slot-btn up-slot-b up-slot-btn-big" data-slot="B" id="upEnjSlotB">B TARAFI</button>
-              </div>
-            </section>
+            <div class="up-enj-doluluk-bant" id="upEnjDolulukBant" style="display:none;">
+              <span class="up-enj-doluluk-baslik">MAKİNE DURUMU</span>
+              <span class="up-enj-doluluk-mode" id="upEnjDolulukModeLabel"></span>
+            </div>
+            <!-- M1–M4 kartları 2×2 — JS ile doldurulur -->
+            <div class="up-enj-makine-cards up-enj-makine-cards-2col" id="upEnjMakineCards"></div>
+            <!-- Taraf seçimi kartların hemen altında -->
+            <div class="up-enj-slot-row up-enj-slot-row-big" id="upStep2SecSlot">
+              <button type="button" class="up-enj-slot-btn up-slot-a up-slot-btn-big" data-slot="A" id="upEnjSlotA">A TARAFI</button>
+              <button type="button" class="up-enj-slot-btn up-slot-b up-slot-btn-big" data-slot="B" id="upEnjSlotB">B TARAFI</button>
+            </div>
           </div><!-- /.up-step2-col-left -->
 
           <!-- ORTA KOLON: 2·İSTASYON VE KALIP -->
@@ -162,7 +156,8 @@
             </div>
             <p class="up-step2-col-desc">Kullanılacak istasyonları seçin ve kalıp bilgilerini girin.</p>
 
-            <section class="up-step2-section" id="upStep2SecTarih" aria-labelledby="upStep2LblTarih">
+            <!-- 1. Başlangıç Tarihi -->
+            <section class="up-step2-section up-step2-section-sm" id="upStep2SecTarih" aria-labelledby="upStep2LblTarih">
               <h3 class="up-step2-sec-title" id="upStep2LblTarih">Başlangıç Tarihi</h3>
               <label for="upEnjBas">
                 <input type="datetime-local" id="upEnjBas" disabled>
@@ -175,9 +170,17 @@
               <div id="upEnjBasConflict" class="up-enj-bas-conflict" style="display:none;" role="alert"></div>
             </section>
 
+            <!-- 2. İstasyonlar (taraf seçilmediyse disabled olarak görünür) -->
+            <section class="up-step2-section" id="upStep2SecIstasyon" aria-labelledby="upStep2LblIstasyon">
+              <h3 class="up-step2-sec-title" id="upStep2LblIstasyon">İstasyonlar</h3>
+              <div id="upEnjIstasyonGrid" class="up-enj-istasyon-grid"></div>
+              <div id="upEnjIstasyonUyari" class="up-enj-uyari" style="display:none;"></div>
+              <span class="up-field-hint" id="upEnjToplamGozHint"></span>
+            </section>
+
+            <!-- 3. Kalıp Ayarları -->
             <section class="up-step2-section" id="upStep2SecKalip" aria-labelledby="upStep2LblKalip">
               <h3 class="up-step2-sec-title" id="upStep2LblKalip">Kalıp Ayarları</h3>
-              <p class="up-step2-col-desc" style="margin-bottom:6px;">Kalıp, üretim bilgileri ve planlama parametrelerini belirleyin.</p>
               <div class="up-enj-kalip-mode-row">
                 <button type="button" class="up-enj-mode-btn selected" data-mode="liste" id="upEnjKalipModeListe">Kalıp Listeden Seç</button>
                 <button type="button" class="up-enj-mode-btn" data-mode="manuel" id="upEnjKalipModeManuel">Manuel Kalıp</button>
@@ -212,13 +215,7 @@
               </div>
             </section>
 
-            <section class="up-step2-section" id="upStep2SecIstasyon" aria-labelledby="upStep2LblIstasyon">
-              <h3 class="up-step2-sec-title" id="upStep2LblIstasyon">İstasyonlar</h3>
-              <div id="upEnjIstasyonGrid" class="up-enj-istasyon-grid"></div>
-              <div id="upEnjIstasyonUyari" class="up-enj-uyari" style="display:none;"></div>
-              <span class="up-field-hint" id="upEnjToplamGozHint">Toplam aktif göz = kalıp adedi × göz/kalıp</span>
-            </section>
-
+            <!-- 4. Planlanacak Çift + Miktar Özeti -->
             <section class="up-step2-section" id="upStep2SecMiktar" aria-labelledby="upStep2LblMiktar">
               <h3 class="up-step2-sec-title" id="upStep2LblMiktar">Planlanacak Çift</h3>
               <label for="upEnjPlanCift">
@@ -235,15 +232,9 @@
               <span class="up-step2-col-num">3</span>
               <span>VARDİYA VE HESAP</span>
             </div>
-            <p class="up-step2-col-desc">Üretim hızını ve planlama zamanını belirleyin.</p>
 
-            <!-- Kurulum özeti — ilk görünümde sağ kolon üstünde -->
-            <aside class="up-step2-summary" id="upStep2KurulumOzet" aria-labelledby="upStep2KurulumBaslik">
-              <h3 class="up-step2-summary-title" id="upStep2KurulumBaslik">Seçilen Kurulum</h3>
-              <div id="upStep2KurulumBody" class="up-step2-summary-body"></div>
-            </aside>
-
-            <section class="up-step2-section" id="upStep2SecVardiya" aria-labelledby="upStep2LblVardiya">
+            <!-- 1. Vardiya tabs -->
+            <section class="up-step2-section up-step2-section-sm" id="upStep2SecVardiya" aria-labelledby="upStep2LblVardiya">
               <div class="up-enj-calisma-tabs" id="upEnjCalismaTabBar" role="tablist" aria-label="Çalışma modu">
                 <button type="button" class="up-enj-calisma-tab" data-val="GUNDUZ" role="tab">Gündüz</button>
                 <button type="button" class="up-enj-calisma-tab" data-val="GECE" role="tab">Gece</button>
@@ -254,37 +245,21 @@
                 <option value="GECE">Gece</option>
                 <option value="GUNDUZ_GECE" selected>Gündüz + Gece</option>
               </select>
+              <!-- Gündüz + Gece hız kartları yan yana -->
               <div id="upEnjVardiyaSaatBant" class="up-enj-vardiya-saat-bant"></div>
             </section>
 
-            <section class="up-step2-section" id="upStep2SecHs" aria-labelledby="upStep2LblHs">
-              <h3 class="up-step2-sec-title" id="upStep2LblHs">Hafta Sonu / Mesai</h3>
-              <div class="up-enj-hs-row">
-                <label for="upEnjHaftaSonu" class="up-enj-hs-inline-lbl">Hafta Sonu</label>
-                <select id="upEnjHaftaSonu" class="up-enj-hs-select">
-                  <option value="HAYIR" selected>Hayır</option>
-                  <option value="EVET">Evet</option>
-                </select>
-              </div>
-              <label id="upEnjHsVardiyaWrap" style="display:none;" for="upEnjHsVardiya">HS Vardiya
-                <select id="upEnjHsVardiya">
-                  <option value="GUNDUZ">Gündüz</option>
-                  <option value="GECE">Gece</option>
-                  <option value="GUNDUZ_GECE">Gündüz + Gece</option>
-                </select>
-              </label>
-            </section>
-
+            <!-- 2. Tur / Hız inputları -->
             <section class="up-step2-section" id="upStep2SecTur" aria-labelledby="upStep2LblTur">
-              <h3 class="up-step2-sec-title" id="upStep2LblTur">Tur / Hız</h3>
               <div class="up-enj-ref-mode">
                 <div id="upEnjRefKaynakDurum" class="up-enj-ref-kaynak-durum" style="display:none;"></div>
-                <div id="upEnjManualRefWrap" class="up-enj-manual-ref">
+                <!-- Gündüz + Gece inputları yan yana grid -->
+                <div id="upEnjManualRefWrap" class="up-enj-manual-ref up-enj-manual-ref-2col">
                   <div id="upEnjManualGunduzWrap" class="up-enj-manual-row">
                     <label for="upEnjManualGunduz" class="up-enj-manual-label">
                       <span class="up-enj-vd-pill up-vd-gunduz">Gündüz</span>
                       <span class="up-enj-vd-saat">07:00–17:00 · 10h</span>
-                      Tur / Vardiya
+                      <span class="up-enj-vd-lbl">Tur / Vardiya</span>
                     </label>
                     <div class="up-enj-ref-input-row">
                       <input type="number" id="upEnjManualGunduz" min="1" step="1" placeholder="ör. 60">
@@ -296,7 +271,7 @@
                     <label for="upEnjManualGece" class="up-enj-manual-label">
                       <span class="up-enj-vd-pill up-vd-gece">Gece</span>
                       <span class="up-enj-vd-saat">17:00–07:00 · 14h</span>
-                      Tur / Vardiya
+                      <span class="up-enj-vd-lbl">Tur / Vardiya</span>
                     </label>
                     <div class="up-enj-ref-input-row">
                       <input type="number" id="upEnjManualGece" min="1" step="1" placeholder="ör. 55">
@@ -305,8 +280,8 @@
                     <div id="upEnjAutoRefGeceHint" class="up-enj-ref-hint" style="display:none;"></div>
                   </div>
                 </div>
+                <!-- Hız geçmişi accordion — varsayılan kapalı -->
                 <div id="upEnjSonHaftaHiz" class="up-enj-son-hafta" style="display:none;">
-                  <!-- Accordion: varsayılan kapalı, başlığa tıklanınca açılır -->
                   <button type="button"
                     class="up-enj-son-hafta-toggle"
                     id="upEnjSonHaftaToggle"
@@ -323,7 +298,61 @@
               </div>
             </section>
 
+            <!-- 3. Hafta Sonu + Enjeksiyon Başlangıcı aynı satır -->
+            <section class="up-step2-section up-step2-section-sm" id="upStep2SecHs" aria-labelledby="upStep2LblHs">
+              <div class="up-enj-hs-bas-row">
+                <div class="up-enj-hs-item">
+                  <label for="upEnjHaftaSonu" class="up-enj-hs-inline-lbl">Hafta Sonu</label>
+                  <select id="upEnjHaftaSonu" class="up-enj-hs-select">
+                    <option value="HAYIR" selected>Hayır</option>
+                    <option value="EVET">Evet</option>
+                  </select>
+                </div>
+                <div class="up-enj-hs-item" id="upEnjBaslangicWrap">
+                  <label for="upEnjBas2" class="up-enj-hs-inline-lbl">Enjeksiyon Başlangıcı</label>
+                  <!-- Başlangıç tarihi görsel kopyası — asıl input orta kolonda -->
+                  <span class="up-enj-bas2-mirror" id="upEnjBas2Mirror">—</span>
+                </div>
+              </div>
+              <label id="upEnjHsVardiyaWrap" style="display:none;" for="upEnjHsVardiya">HS Vardiya
+                <select id="upEnjHsVardiya">
+                  <option value="GUNDUZ">Gündüz</option>
+                  <option value="GECE">Gece</option>
+                  <option value="GUNDUZ_GECE">Gündüz + Gece</option>
+                </select>
+              </label>
+            </section>
+
+            <!-- 4. Hesap durumu kutuları + HESAPLA butonu -->
             <section class="up-step2-section" id="upStep2SecHesap" aria-labelledby="upStep2LblHesap">
+              <!-- 5 durum kutusu: Makine / İstasyon / Kalıp / Hız / Başlangıç -->
+              <div class="up-enj-durum-strip" id="upEnjDurumStrip">
+                <div class="up-enj-durum-kutu" id="upEnjDurumMakine">
+                  <span class="up-enj-durum-icon">⬤</span>
+                  <span class="up-enj-durum-lbl">Makine</span>
+                  <strong class="up-enj-durum-val" id="upEnjDurumMakineVal">Seçildi</strong>
+                </div>
+                <div class="up-enj-durum-kutu" id="upEnjDurumIstasyon">
+                  <span class="up-enj-durum-icon">⬤</span>
+                  <span class="up-enj-durum-lbl">İstasyon</span>
+                  <strong class="up-enj-durum-val" id="upEnjDurumIstasyonVal">7 seçli</strong>
+                </div>
+                <div class="up-enj-durum-kutu" id="upEnjDurumKalip">
+                  <span class="up-enj-durum-icon">⬤</span>
+                  <span class="up-enj-durum-lbl">Kalıp</span>
+                  <strong class="up-enj-durum-val" id="upEnjDurumKalipVal">Tanımlı</strong>
+                </div>
+                <div class="up-enj-durum-kutu" id="upEnjDurumHiz">
+                  <span class="up-enj-durum-icon">⬤</span>
+                  <span class="up-enj-durum-lbl">Hız</span>
+                  <strong class="up-enj-durum-val" id="upEnjDurumHizVal">Hazır</strong>
+                </div>
+                <div class="up-enj-durum-kutu" id="upEnjDurumBas">
+                  <span class="up-enj-durum-icon">⬤</span>
+                  <span class="up-enj-durum-lbl">Başlangıç</span>
+                  <strong class="up-enj-durum-val" id="upEnjDurumBasVal">Belirli</strong>
+                </div>
+              </div>
               <div id="upEnjHesapReqList" class="up-enj-hesap-req-list" aria-live="polite"></div>
               <button type="button" class="up-btn up-btn-accent up-btn-hesapla" id="upEnjHesapBtn" disabled>
                 <span class="up-hesapla-icon">&#9636;</span> ENJEKSİYON HESAPLA
@@ -498,10 +527,18 @@
       </div>
     </div>
     <div class="up-modal-foot up-create-foot">
-      <button type="button" class="up-btn up-btn-ghost" id="upCreateCancel">İptal</button>
-      <button type="button" class="up-btn" id="upWizardBackBtn" style="display:none;">Geri</button>
-      <button type="button" class="up-btn" id="upWizardNextBtn" disabled>İleri</button>
-      <button type="button" class="up-btn up-btn-accent" id="upPlanaEkleBtn" style="display:none;" disabled>PLAN KAYDET</button>
+      <!-- Sol: Seçilen Kurulum kompakt özet (step2'de görünür) -->
+      <div class="up-create-foot-kurulum" id="upStep2FootKurulum" style="display:none;">
+        <span class="up-create-foot-kurulum-icon">📋</span>
+        <span class="up-create-foot-kurulum-txt" id="upStep2KurulumBody">—</span>
+      </div>
+      <!-- Sağ: navigasyon butonları -->
+      <div class="up-create-foot-nav">
+        <button type="button" class="up-btn up-btn-ghost" id="upCreateCancel">İptal</button>
+        <button type="button" class="up-btn" id="upWizardBackBtn" style="display:none;">Geri</button>
+        <button type="button" class="up-btn" id="upWizardNextBtn" disabled>İleri</button>
+        <button type="button" class="up-btn up-btn-accent" id="upPlanaEkleBtn" style="display:none;" disabled>PLAN KAYDET</button>
+      </div>
     </div>
   </div>
 </div>
@@ -588,5 +625,5 @@
   window.UP_CAN_EDIT = {{ 'true' if can_edit else 'false' }};
   window.UP_GEREKCE = {{ gerekce_secenekleri | tojson }};
 </script>
-<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=18"></script>
+<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=19"></script>
 {% endblock %}

@@ -1161,9 +1161,97 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   background: #fff;
   box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
   z-index: 2;
-  /* Footer her zaman panel içinde en altta — columns üzerine binmez */
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
 }
+/* Footer sol: Seçilen Kurulum kompakt özet */
+.up-create-foot-kurulum {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #0f172a;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.up-create-foot-kurulum-icon { font-size: 14px; flex-shrink: 0; }
+.up-create-foot-kurulum-txt {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #15803d;
+}
+/* Footer sağ: nav butonları */
+.up-create-foot-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+/* 5 Durum strip */
+.up-enj-durum-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.up-enj-durum-kutu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 2px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  text-align: center;
+  font-size: 12px;
+}
+.up-enj-durum-kutu.ok { border-color: #bbf7d0; background: #f0fdf4; }
+.up-enj-durum-kutu.pending { border-color: #e2e8f0; background: #f8fafc; }
+.up-enj-durum-icon { font-size: 10px; color: #94a3b8; }
+.up-enj-durum-kutu.ok .up-enj-durum-icon { color: #16a34a; }
+.up-enj-durum-lbl { font-size: 10px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+.up-enj-durum-val { font-size: 11px; color: #0f172a; font-weight: 700; }
+/* Tur/Hız 2 kolon yan yana */
+.up-enj-manual-ref-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+/* Compact section */
+.up-step2-section-sm {
+  margin-bottom: 6px !important;
+  padding-bottom: 4px !important;
+}
+/* Hafta Sonu + Başlangıç yan yana */
+.up-enj-hs-bas-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: start;
+}
+.up-enj-hs-item { display: flex; flex-direction: column; gap: 3px; }
+.up-enj-bas2-mirror {
+  font-size: 12px;
+  color: #0f172a;
+  font-weight: 600;
+  padding: 4px 6px;
+  background: #f1f5f9;
+  border-radius: 5px;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+}
+/* Vd label stil */
+.up-enj-vd-lbl { font-size: 12px; color: #475569; }
 .up-wizard-siparis-strip {
   font-size: 12px;
   color: #475569;
@@ -1189,13 +1277,14 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 .up-step2-layout {
   display: grid;
   grid-template-columns:
-    minmax(310px, 340px)
-    minmax(430px, 520px)
-    minmax(380px, 430px);
+    minmax(300px, 330px)
+    minmax(400px, 1fr)
+    minmax(360px, 420px);
   gap: 0;
   align-items: stretch;
   min-height: 0;
   height: 100%;
+  overflow: hidden; /* tek body scroll — kolon scrollbar göstermez */
 }
 .up-step2-col {
   display: flex;
@@ -1204,8 +1293,12 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  /* alt padding footer yüksekliğinden bağımsız — kolon kendi scroll'unda */
-  padding: 10px 12px 12px;
+  padding: 10px 12px 16px;
+  scrollbar-width: thin;           /* Firefox: ince scrollbar */
+  scrollbar-color: transparent transparent; /* gizle */
+}
+.up-step2-col:hover {
+  scrollbar-color: #cbd5e1 transparent; /* hover'da görünür */
 }
 .up-step2-col-left {
   border-right: 1px solid #e2e8f0;

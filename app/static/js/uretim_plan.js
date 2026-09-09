@@ -585,57 +585,42 @@
     }
 
     function enjUpdateKurulumOzet() {
+        /* Footer kompakt tek-satır özet: "M1 · A Tarafı · 7 istasyon · 23L1" */
         var body = $('upStep2KurulumBody');
-        if (!body) return;
-        var o = state.seciliCreateData || {};
+        var footKurulum = $('upStep2FootKurulum');
         var e = state.enj;
-        var qs = e.quantitySummary || {};
-        var req = parseInt(($('upEnjPlanCift') && $('upEnjPlanCift').value) || e.planCift || 0, 10) || 0;
-        var rem = qs.remaining_quantity;  // null → legacy block
-        var legacyBlock = (qs.quantity_calculable === false);
-        var after = (rem != null && req > 0) ? (rem - req) : null;
-        var istStr = e.istasyonlar && e.istasyonlar.length
-            ? e.istasyonlar.map(function (x) { return 'İST' + x; }).join(', ')
-            : null;
-        var hsLbl = e.haftaSonu === 'EVET'
-            ? enjCalismaLabel(e.hsVardiya || 'GUNDUZ_GECE') : 'Çalışma yok';
-        var turG = e.manualRefGunduz != null ? (Math.round(e.manualRefGunduz) + ' tur/vardiya') : null;
-        var turE = e.manualRefGece != null ? (Math.round(e.manualRefGece) + ' tur/vardiya') : null;
-        var hesapLbl = e.hesapOk ? 'Hesaplandı' : (e.motorResult ? 'Geçersiz — yeniden hesaplayın' : 'Bekleniyor');
-        var bitisLbl = e.hesapOk && (e.motorResult && e.motorResult.tahmini_bitis)
-            ? enjFmtDtApi(e.motorResult.tahmini_bitis) : null;
-        var rows = [
-            ['Sipariş no', o.sip_no || null],
-            ['Model / Renk', o.model_kod ? (o.model_kod + ' · ' + (o.renk || '')) : null],
-            ['Toplam sipariş', qs.order_total_quantity != null ? fmtN(qs.order_total_quantity) + ' çift' : null],
-            ['Önceden planlanan', qs.already_planned_quantity != null
-                ? (legacyBlock ? 'En az ' + fmtN(qs.already_planned_quantity) + ' çift' : fmtN(qs.already_planned_quantity) + ' çift')
-                : null],
-            ['Kalan', legacyBlock ? 'Hesaplanamıyor' : (rem != null ? fmtN(rem) + ' çift' : null)],
-            ['Bu planda', req > 0 ? fmtN(req) + ' çift' : null],
-            ['Planlama sonrası', legacyBlock ? 'Hesaplanamıyor' : (after != null ? fmtN(after) + ' çift' : null)],
-            ['Makine', e.makineKod],
-            ['Slot', e.slot],
-            ['Başlangıç', e.baslangic ? enjFmtDtApi(e.baslangic) : null],
-            ['Kalıp', e.kalipKod],
-            ['Sipariş asortisi', o.asorti ? ('Sipariş asortisi: ' + o.asorti) : null],
-            ['İstasyonlar', istStr],
-            ['Kalıp adedi', e.kalipAdedi > 0 ? String(e.kalipAdedi) : null],
-            ['Çalışma modu', e.calismaModu ? enjCalismaLabel(e.calismaModu) : null],
-            ['Hafta sonu', hsLbl],
-            ['Gündüz tur', turG],
-            ['Gece tur', turE],
-            ['Hesap durumu', hesapLbl],
-            ['Tahmini bitiş', bitisLbl],
-        ];
-        body.innerHTML = rows.map(function (r) {
-            var v = r[1];
-            var cls = (v === null || v === undefined || v === '') ? 'pending' : '';
-            var disp = (v === null || v === undefined || v === '')
-                ? 'Bekleniyor' : v;
-            return '<div class="up-step2-summary-row"><dt>' + esc(r[0]) +
-                '</dt><dd class="' + cls + '">' + esc(String(disp)) + '</dd></div>';
-        }).join('');
+        var parts = [];
+        if (e.makineKod) parts.push(e.makineKod);
+        if (e.slot)      parts.push(e.slot + ' Tarafı');
+        if (e.istasyonlar && e.istasyonlar.length) parts.push(e.istasyonlar.length + ' istasyon');
+        if (e.kalipKod)  parts.push(e.kalipKod);
+        var txt = parts.length ? parts.join(' · ') : '—';
+        if (body) body.textContent = txt;
+        /* Footer'ı step2'de göster */
+        if (footKurulum) {
+            footKurulum.style.display = (state.createStep === 2) ? '' : 'none';
+        }
+        /* Durum strip güncellemesi */
+        enjUpdateDurumStrip();
+    }
+
+    function enjUpdateDurumStrip() {
+        var e = state.enj;
+        function setKutu(id, val, ok) {
+            var el = $(id);
+            if (!el) return;
+            el.className = 'up-enj-durum-kutu' + (ok ? ' ok' : ' pending');
+            var icon = el.querySelector('.up-enj-durum-icon');
+            if (icon) icon.style.color = ok ? '#16a34a' : '#94a3b8';
+        }
+        setKutu('upEnjDurumMakine',    e.makineKod || null,                     !!e.makineKod);
+        setKutu('upEnjDurumIstasyon',  e.istasyonlar && e.istasyonlar.length,   !!(e.istasyonlar && e.istasyonlar.length));
+        setKutu('upEnjDurumKalip',     e.kalipKod || null,                      !!e.kalipKod);
+        setKutu('upEnjDurumHiz',       e.manualRefGunduz != null,               e.manualRefGunduz != null);
+        setKutu('upEnjDurumBas',       !!e.baslangic,                           !!e.baslangic);
+        /* Başlangıç mirror */
+        var mirror = $('upEnjBas2Mirror');
+        if (mirror) mirror.textContent = e.baslangic ? enjFmtDtApi(e.baslangic) : '—';
     }
 
     function enjUpdateMiktarOzet() {

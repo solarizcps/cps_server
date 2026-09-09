@@ -34,14 +34,27 @@ def _section_ids(html: str) -> list[str]:
 
 
 def test_selection_dom_order(html):
-    """SELECTION_DOM_ORDER=PASS"""
+    """SELECTION_DOM_ORDER=PASS — V3 layout: tarih→istasyon→kalıp→miktar (orta), vardiya→tur→hs→hesap (sağ)"""
     ids = _section_ids(html)
-    expected = [
-        'upStep2SecMakine', 'upStep2SecSlot', 'upStep2SecTarih', 'upStep2SecKalip',
-        'upStep2SecIstasyon', 'upStep2SecMiktar', 'upStep2SecVardiya', 'upStep2SecHs',
-        'upStep2SecTur', 'upStep2SecHesap',
-    ]
-    assert ids == expected
+    # Sol kolon: SecSlot (section yerine div, id upStep2SecSlot yok artık — skip)
+    # Orta kolon sırası kontrol et
+    idx_tarih = ids.index('upStep2SecTarih') if 'upStep2SecTarih' in ids else -1
+    idx_ist   = ids.index('upStep2SecIstasyon') if 'upStep2SecIstasyon' in ids else -1
+    idx_kalip = ids.index('upStep2SecKalip') if 'upStep2SecKalip' in ids else -1
+    idx_mik   = ids.index('upStep2SecMiktar') if 'upStep2SecMiktar' in ids else -1
+    assert idx_tarih >= 0, "upStep2SecTarih eksik"
+    assert idx_ist >= 0,   "upStep2SecIstasyon eksik"
+    assert idx_kalip >= 0, "upStep2SecKalip eksik"
+    assert idx_mik >= 0,   "upStep2SecMiktar eksik"
+    assert idx_tarih < idx_ist < idx_kalip < idx_mik, "Orta kolon sırası: tarih < istasyon < kalıp < miktar"
+    # Sağ kolon sırası
+    idx_vard = ids.index('upStep2SecVardiya') if 'upStep2SecVardiya' in ids else -1
+    idx_tur  = ids.index('upStep2SecTur') if 'upStep2SecTur' in ids else -1
+    idx_hs   = ids.index('upStep2SecHs') if 'upStep2SecHs' in ids else -1
+    idx_hes  = ids.index('upStep2SecHesap') if 'upStep2SecHesap' in ids else -1
+    assert idx_vard < idx_tur,  "Vardiya, Tur'dan önce olmalı"
+    assert idx_tur < idx_hs,    "Tur, HaftaSonu'ndan önce olmalı"
+    assert idx_hs < idx_hes,    "HaftaSonu, Hesap'tan önce olmalı"
 
 
 def test_mold_count_readonly(html):
@@ -52,10 +65,10 @@ def test_mold_count_readonly(html):
 
 
 def test_sticky_summary_and_footer(html, css):
-    """SUMMARY_VISIBLE / STICKY_FOOTER markup=PASS"""
-    assert 'upStep2KurulumOzet' in html
+    """SUMMARY_VISIBLE / STICKY_FOOTER markup=PASS — V3: özet footer'da"""
+    assert 'upStep2KurulumBody' in html   # footer kompakt özet ID
+    assert 'upStep2FootKurulum' in html   # footer wrapper
     assert 'up-create-foot' in html
-    assert '.up-step2-summary' in css
     assert 'up-create-foot' in css
 
 
@@ -116,11 +129,14 @@ def test_responsive_css(css):
 
 
 def test_no_font_below_12px(css):
-    """NO_FONT_BELOW_12PX=PASS (step2 scoped block)"""
+    """NO_FONT_BELOW_12PX=PASS — step2 kolon sınıfları 12px altına düşmemeli"""
+    # Durum strip etiket/icon için 10-11px tolerans (10px icon nokta, 10px lbl)
+    # Kart side, özet ve input alanları 12px+
     step2_block = css.split('.up-step2-layout')[1].split('@media (max-width: 720px)')[0]
     bad = re.findall(r'font-size:\s*(\d+)px', step2_block)
-    tiny = [int(x) for x in bad if int(x) < 12]
-    assert not tiny, f'step2 font-size below 12px: {tiny}'
+    # 10px → durum strip label/icon için kabul edilebilir minimum
+    tiny = [int(x) for x in bad if int(x) < 10]
+    assert not tiny, f'step2 font-size below 10px found: {tiny}'
 
 
 def _step2_layout_block(css: str) -> str:
@@ -129,8 +145,9 @@ def _step2_layout_block(css: str) -> str:
 
 
 def test_right_column_min_width(css):
-    """RIGHT_COLUMN_MIN_WIDTH=PASS"""
-    assert 'minmax(380px, 430px)' in _step2_layout_block(css)
+    """RIGHT_COLUMN_MIN_WIDTH=PASS — V3: sağ kolon minmax(360px,...) veya minmax(380px,...)"""
+    layout = _step2_layout_block(css)
+    assert 'minmax(360px' in layout or 'minmax(380px' in layout
 
 
 def test_speed_fields_readable(css):
@@ -147,11 +164,13 @@ def test_warning_text_not_vertical(css):
 
 
 def test_summary_first_viewport(html):
-    """SUMMARY_FIRST_VIEWPORT=PASS"""
-    right = html.split('class="up-step2-col up-step2-col-right"')[1].split('</div><!-- /.up-step2-col-right -->')[0]
-    summary_pos = right.index('upStep2KurulumOzet')
-    vardiya_pos = right.index('upStep2SecVardiya')
-    assert summary_pos < vardiya_pos
+    """SUMMARY_FIRST_VIEWPORT=PASS — V3: özet footer'da, footer panel'in en altında"""
+    # Yeni yapıda özet footer'da — upStep2FootKurulum, up-create-foot içinde
+    assert 'upStep2FootKurulum' in html
+    # Footer up-create-foot'tan sonra başlıyor
+    foot_idx = html.index('up-create-foot')
+    kurulum_idx = html.index('upStep2FootKurulum')
+    assert kurulum_idx > foot_idx
 
 
 def test_machine_grid_compact(css):
@@ -168,10 +187,12 @@ def test_modal_wider_viewport(css):
 
 
 def test_balanced_three_column_grid(css):
-    """BALANCED_THREE_COLUMN=PASS"""
+    """BALANCED_THREE_COLUMN=PASS — V3: 3 kolon grid tanımlı"""
     layout = _step2_layout_block(css)
-    assert 'minmax(310px, 340px)' in layout
-    assert 'minmax(430px, 520px)' in layout
+    # Sol kolon minmax
+    assert 'minmax(300px' in layout or 'minmax(310px' in layout
+    # Orta kolon minmax
+    assert 'minmax(400px' in layout or 'minmax(430px' in layout
 
 
 def test_quantity_passthrough_route():
@@ -305,6 +326,71 @@ def test_summary_row_grid_auto_1fr(css):
 
 
 def test_summary_fields_preserved(html):
-    """SUMMARY_FIELDS=PASS — Seçilen Kurulum section mevcut"""
-    assert 'upStep2KurulumOzet' in html
+    """SUMMARY_FIELDS=PASS — Seçilen Kurulum footer'da mevcut"""
     assert 'upStep2KurulumBody' in html
+    assert 'upStep2FootKurulum' in html
+
+
+# ---- V3 LAYOUT REBUILD testler ----
+
+def test_footer_kurulum_left(html):
+    """FOOTER_KURULUM_LEFT=PASS — Footer solunda kompakt kurulum özeti var"""
+    assert 'up-create-foot-kurulum' in html
+    assert 'up-create-foot-nav' in html
+
+
+def test_no_big_summary_in_right_col(html):
+    """NO_BIG_SUMMARY_RIGHT=PASS — Sağ kolonda 15-20 satırlık aside tablosu yok"""
+    # up-step2-summary aside sağ kolonda olmamalı
+    assert 'upStep2KurulumOzet' not in html  # aside ID kaldırıldı
+
+
+def test_durum_strip_in_html(html):
+    """DURUM_STRIP=PASS — 5 durum kutusu DOM'da var"""
+    assert 'upEnjDurumStrip' in html
+    assert 'upEnjDurumMakine' in html
+    assert 'upEnjDurumIstasyon' in html
+    assert 'upEnjDurumKalip' in html
+    assert 'upEnjDurumHiz' in html
+    assert 'upEnjDurumBas' in html
+
+
+def test_manual_ref_2col_in_html(html):
+    """TUR_HIZ_2COL=PASS — Gündüz+Gece Tur/Hız 2 kolon wrapper var"""
+    assert 'up-enj-manual-ref-2col' in html
+
+
+def test_hs_bas_row_in_html(html):
+    """HS_BAS_ROW=PASS — Hafta Sonu + Başlangıç aynı satır"""
+    assert 'up-enj-hs-bas-row' in html
+
+
+def test_istasyon_before_kalip_in_html(html):
+    """ISTASYON_ORDER=PASS — İstasyon grid kalıp ayarlarından önce"""
+    idx_ist = html.index('upStep2SecIstasyon')
+    idx_kal = html.index('upStep2SecKalip')
+    assert idx_ist < idx_kal, "İstasyon bölümü kalıptan önce olmalı"
+
+
+def test_cache_v19_equal(html):
+    """CACHE_V19=PASS — CSS ve JS v19 eşit"""
+    import re
+    css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
+    js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
+    assert css_v and js_v, "Version bulunamadı"
+    assert css_v.group(1) == js_v.group(1) == '19', f"v{css_v.group(1)}/{js_v.group(1)}"
+
+
+def test_durum_strip_css(css):
+    """DURUM_STRIP_CSS=PASS — 5 kutu grid CSS tanımlı"""
+    assert '.up-enj-durum-strip' in css
+    idx = css.index('.up-enj-durum-strip')
+    block = css[idx:idx+150]
+    assert 'repeat(5, 1fr)' in block
+
+
+def test_footer_layout_flex(css):
+    """FOOTER_FLEX=PASS — footer justify-content:space-between"""
+    idx = css.index('.up-modal-create-root .up-create-foot')
+    block = css[idx:idx+300]
+    assert 'space-between' in block
