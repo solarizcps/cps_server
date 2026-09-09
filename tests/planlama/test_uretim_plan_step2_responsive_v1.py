@@ -145,9 +145,9 @@ def _step2_layout_block(css: str) -> str:
 
 
 def test_right_column_min_width(css):
-    """RIGHT_COLUMN_MIN_WIDTH=PASS — V3: sağ kolon minmax(360px,...) veya minmax(380px,...)"""
+    """RIGHT_COLUMN_MIN_WIDTH=PASS — V5: sağ kolon 38fr ile geniş"""
     layout = _step2_layout_block(css)
-    assert 'minmax(360px' in layout or 'minmax(380px' in layout
+    assert '38fr' in layout
 
 
 def test_speed_fields_readable(css):
@@ -190,12 +190,11 @@ def test_modal_wider_viewport(css):
 
 
 def test_balanced_three_column_grid(css):
-    """BALANCED_THREE_COLUMN=PASS — V3: 3 kolon grid tanımlı"""
+    """BALANCED_THREE_COLUMN=PASS — V5: 32fr/30fr/38fr oranları"""
     layout = _step2_layout_block(css)
-    # Sol kolon minmax
-    assert 'minmax(300px' in layout or 'minmax(310px' in layout
-    # Orta kolon minmax
-    assert 'minmax(400px' in layout or 'minmax(430px' in layout
+    assert '32fr' in layout, "Sol kolon 32fr eksik"
+    assert '30fr' in layout, "Orta kolon 30fr eksik"
+    assert '38fr' in layout, "Sağ kolon 38fr eksik"
 
 
 def test_quantity_passthrough_route():
@@ -279,13 +278,15 @@ def test_card_side_title_font_min_12(css):
 
 
 def test_cache_versions_equal(html):
-    """CACHE_VERSIONS_EQUAL=PASS — CSS ve JS ?v= bump eşit"""
+    """CACHE_VERSIONS=PASS — CSS v21, JS v20 (CSS-only değişim turu)"""
     import re
-    # Jinja2 template: filename='css/uretim_plan.css') }}?v=18
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
-    assert css_v and js_v, f"Version bulunamadı — css:{css_v} js:{js_v}"
-    assert css_v.group(1) == js_v.group(1), f"CSS v{css_v.group(1)} ≠ JS v{js_v.group(1)}"
+    assert css_v, f"CSS version bulunamadı"
+    assert js_v,  f"JS version bulunamadı"
+    # Her ikisi de sayısal ve geçerli
+    assert int(css_v.group(1)) >= 20, f"CSS version çok eski: v{css_v.group(1)}"
+    assert int(js_v.group(1))  >= 20, f"JS version çok eski: v{js_v.group(1)}"
 
 
 def test_accordion_html_structure(html):
@@ -378,12 +379,14 @@ def test_istasyon_before_kalip_in_html(html):
 
 
 def test_cache_v19_equal(html):
-    """CACHE_V20=PASS — CSS ve JS v20 eşit"""
+    """CACHE_VERSIONS=PASS — CSS v21, JS v20 (JS değişmedi)"""
     import re
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
-    assert css_v and js_v, "Version bulunamadı"
-    assert css_v.group(1) == js_v.group(1) == '20', f"v{css_v.group(1)}/{js_v.group(1)}"
+    assert css_v, "CSS version bulunamadı"
+    assert js_v,  "JS version bulunamadı"
+    assert css_v.group(1) == '21', f"CSS version bekleneni 21, bulundu {css_v.group(1)}"
+    assert js_v.group(1)  == '20', f"JS version bekleneni 20, bulundu {js_v.group(1)}"
 
 
 def test_durum_strip_css(css):
@@ -520,9 +523,16 @@ def test_durum_min_font_12(css):
 
 
 def test_card_side_row_css(css):
-    """CARD_SIDE_ROW=PASS — yeni kompakt kart stili tanımlı"""
+    """CARD_SIDE_ROW=PASS — yeni kompakt kart stili; durum metni kesilmiyor"""
     assert '.up-enj-card-side-row' in css
     assert '.up-enj-card-durum' in css
+    # .up-enj-card-durum bloğunda ellipsis/hidden yok
+    idx = css.index('.up-enj-card-durum {')
+    block = css[idx:idx+300]
+    import re as _re
+    assert 'text-overflow' not in block, "ellipsis kullanılıyor — kaldırılmalı"
+    assert not _re.search(r'overflow\s*:\s*hidden', block), "overflow:hidden — durum metni kesiliyor"
+    assert 'white-space: normal' in block, "white-space:normal olmalı"
 
 
 def test_machine_card_compact_js(js):

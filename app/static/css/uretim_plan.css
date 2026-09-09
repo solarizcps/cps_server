@@ -1288,23 +1288,28 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 .up-enj-card-side-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
   font-size: 12px;
   line-height: 1.3;
   flex-wrap: wrap;
+  overflow: visible;     /* kesilme yok */
 }
 .up-enj-card-ilk-uygun-lbl {
   font-size: 12px;
   color: #64748b;
-  white-space: nowrap;
+  white-space: nowrap;   /* kısa etiket — nowrap OK */
+  flex-shrink: 0;
 }
 .up-enj-card-durum {
-  font-size: 11px;
+  font-size: 12px;          /* min 12px — ellipsis/hidden yok */
   font-weight: 700;
   padding: 1px 4px;
   border-radius: 4px;
-  white-space: nowrap;
+  white-space: normal;      /* doğal wrap — kesme yok */
+  word-break: break-word;
+  max-width: 100%;
+  text-align: right;
 }
 .up-enj-card-durum.bos { color: #15803d; background: #f0fdf4; }
 .up-enj-card-durum.planli { color: #1d4ed8; background: #eff6ff; }
@@ -1381,12 +1386,9 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 /* ===== 3-KOLON STEP2 LAYOUT ===== */
 .up-step2-layout {
   display: grid;
-  grid-template-columns:
-    minmax(300px, 330px)
-    minmax(400px, 1fr)
-    minmax(360px, 420px);
+  grid-template-columns: 32fr 30fr 38fr;   /* ~32% / ~30% / ~38% */
   gap: 0;
-  align-items: start;   /* kolonlar kendi yüksekliklerinde */
+  align-items: start;
 }
 /* H: Bağımsız kolon scroll kaldırıldı — tek modal body scroll */
 .up-step2-col {
