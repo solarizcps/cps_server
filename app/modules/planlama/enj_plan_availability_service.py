@@ -264,3 +264,384 @@ def enrich_conflict_payload(
             f"İlk uygun: {_fmt_tam(ilk)}."
         ) if c0 else None,
     }
+
+
+_SLOTS = ('A', 'B')
+_CHILD_TABLO = 'uretim_model_plan_enj_istasyon'
+
+
+def _child_tablosu_var(con: sqlite3.Connection) -> bool:
+    return bool(con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (_CHILD_TABLO,),
+    ).fetchone())
+
+
+def _parse_istasyon_nos(raw) -> list[int]:
+    if raw is None or raw == '':
+        return []
+    if isinstance(raw, int):
+        return [raw] if raw > 0 else []
+    s = str(raw).strip()
+    if not s:
+        return []
+    out: set[int] = set()
+    for part in s.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            n = int(part)
+            if n > 0:
+                out.add(n)
+        except ValueError:
+            continue
+    return sorted(out)
+
+
+def _plans_overlap(plan_bas: datetime, plan_bit: datetime,
+                   win_bas: datetime, win_bit: datetime) -> bool:
+    return plan_bas < win_bit and win_bas < plan_bit
+
+
+def _load_side_reservations(
+    con: sqlite3.Connection,
+    makine_id: int,
+    slot: str,
+    win_bas: datetime,
+    win_bit: datetime,
+) -> list[dict]:
+    """Aktif plan rezervasyonları — child + legacy (NOT EXISTS), istasyon bazlı."""
+    slot = slot.upper()
+    child_exists = _child_tablosu_var(con)
+    by_key: dict[tuple[int, int], dict] = {}
+
+    def _add(pid, ist_no, row):
+        key = (int(pid), int(ist_no))
+        if key in by_key:
+            return
+        try:
+            pb = _parse_dt(row['enj_plan_baslangic'])
+            pe = _parse_dt(row['enj_plan_bitis']) if row['enj_plan_bitis'] else pb + timedelta(hours=1)
+        except ValueError:
+            return
+        if not _plans_overlap(pb, pe, win_bas, win_bit):
+            return
+        by_key[key] = {
+            'plan_id': int(pid),
+            'istasyon_no': int(ist_no),
+            'slot': slot,
+            'sip_no': row['sip_no'],
+            'sip_harinx': row['sip_harinx'] if 'sip_harinx' in row.keys() else None,
+            'mamul_skod': row['mamul_skod'],
+            'rkod': row['rkod'] if 'rkod' in row.keys() else 0,
+            'model_adi': row['model_adi'] if 'model_adi' in row.keys() else None,
+            'renk_adi': row['renk_adi'],
+            'enj_kalip_id': row['enj_kalip_id'] if 'enj_kalip_id' in row.keys() else None,
+            'enj_kalip_kod': row['enj_kalip_kod'] if 'enj_kalip_kod' in row.keys() else None,
+            'enj_planlanacak_cift': row['enj_planlanacak_cift'] if 'enj_planlanacak_cift' in row.keys() else None,
+            'enj_calisma_modu': row['enj_calisma_modu'] if 'enj_calisma_modu' in row.keys() else None,
+            'enj_plan_baslangic': row['enj_plan_baslangic'],
+            'enj_plan_bitis': row['enj_plan_bitis'],
+            'plan_bas_gosterim': _fmt_tam(row['enj_plan_baslangic']),
+            'plan_bit_gosterim': _fmt_tam(row['enj_plan_bitis']),
+        }
+
+    if child_exists:
+        rows = con.execute(
+            f"""
+            SELECT p.id, p.sip_no, p.sip_harinx, p.mamul_skod, p.rkod, p.model_adi, p.renk_adi,
+                   p.enj_kalip_id, p.enj_kalip_kod, p.enj_planlanacak_cift, p.enj_calisma_modu,
+                   p.enj_plan_baslangic, p.enj_plan_bitis, c.istasyon_no
+              FROM uretim_model_plan p
+              JOIN {_CHILD_TABLO} c ON c.plan_id = p.id
+             WHERE p.aktif = 1
+               AND c.enj_makine_id = ?
+               AND c.enj_slot = ?
+               AND p.enj_plan_baslangic IS NOT NULL
+               AND p.enj_plan_baslangic <= ?
+               AND COALESCE(p.enj_plan_bitis, p.enj_plan_baslangic) >= ?
+            """,
+            (int(makine_id), slot, _iso(win_bit), _iso(win_bas)),
+        ).fetchall()
+        for row in rows:
+            _add(row['id'], row['istasyon_no'], row)
+
+    q_legacy = """
+        SELECT id, sip_no, sip_harinx, mamul_skod, rkod, model_adi, renk_adi,
+               enj_kalip_id, enj_kalip_kod, enj_planlanacak_cift, enj_calisma_modu,
+               enj_plan_baslangic, enj_plan_bitis, enj_istasyon_no
+          FROM uretim_model_plan
+         WHERE aktif = 1
+           AND enj_makine_id = ?
+           AND UPPER(enj_slot) = ?
+           AND enj_plan_baslangic IS NOT NULL
+           AND enj_plan_baslangic <= ?
+           AND COALESCE(enj_plan_bitis, enj_plan_baslangic) >= ?
+    """
+    params_legacy = [int(makine_id), slot, _iso(win_bit), _iso(win_bas)]
+    if child_exists:
+        q_legacy += f"""
+           AND NOT EXISTS (
+               SELECT 1 FROM {_CHILD_TABLO} c WHERE c.plan_id = uretim_model_plan.id
+           )
+        """
+    for row in con.execute(q_legacy, params_legacy).fetchall():
+        for ist_no in _parse_istasyon_nos(row['enj_istasyon_no']):
+            _add(row['id'], ist_no, row)
+
+    return list(by_key.values())
+
+
+def _resolve_anchor_window(
+    plan_baslangic: str | None,
+    plan_bitis: str | None,
+) -> tuple[datetime | None, datetime | None]:
+    if not plan_baslangic:
+        return None, None
+    try:
+        bas = _parse_dt(plan_baslangic)
+    except ValueError:
+        return None, None
+    if plan_bitis:
+        try:
+            bit = _parse_dt(plan_bitis)
+        except ValueError:
+            bit = bas + timedelta(minutes=1)
+    else:
+        bit = bas + timedelta(minutes=1)
+    if bit <= bas:
+        bit = bas + timedelta(minutes=1)
+    return bas, bit
+
+
+def _station_planned_status(
+    reservation: dict | None,
+    *,
+    anchor_bas: datetime,
+    anchor_bit: datetime,
+    secim_bas: datetime | None,
+    secim_bit: datetime | None,
+) -> str:
+    if not reservation:
+        return 'BOS'
+    try:
+        pb = _parse_dt(reservation['enj_plan_baslangic'])
+        pe = _parse_dt(reservation['enj_plan_bitis']) if reservation['enj_plan_bitis'] else pb + timedelta(hours=1)
+    except ValueError:
+        return 'BOS'
+    if not _plans_overlap(pb, pe, anchor_bas, anchor_bit):
+        return 'BOS'
+    if secim_bas and secim_bit and _plans_overlap(pb, pe, secim_bas, secim_bit):
+        return 'CAKISAN'
+    return 'PLANLI'
+
+
+def build_side_planned_block(
+    con: sqlite3.Connection,
+    makine_id: int,
+    slot: str,
+    istasyon_sayisi: int,
+    *,
+    anchor_bas: datetime,
+    anchor_bit: datetime,
+    secim_bas: datetime | None = None,
+    secim_bit: datetime | None = None,
+    asorti_map: dict | None = None,
+) -> dict:
+    """Seçilen tarih penceresinde planlı istasyon özeti."""
+    reservations = _load_side_reservations(
+        con, int(makine_id), slot, anchor_bas, anchor_bit,
+    )
+    by_ist: dict[int, dict] = {}
+    for r in reservations:
+        by_ist[int(r['istasyon_no'])] = r
+
+    stations: list[dict] = []
+    planned_count = 0
+    for no in range(1, int(istasyon_sayisi) + 1):
+        res = by_ist.get(no)
+        durum = _station_planned_status(
+            res,
+            anchor_bas=anchor_bas,
+            anchor_bit=anchor_bit,
+            secim_bas=secim_bas,
+            secim_bit=secim_bit,
+        )
+        if durum in ('PLANLI', 'CAKISAN'):
+            planned_count += 1
+        row = {
+            'istasyon_no': no,
+            'slot': slot.upper(),
+            'durum': durum,
+        }
+        if res and durum != 'BOS':
+            ak = (asorti_map or {}).get(
+                (int(res['sip_no']), int(res.get('sip_harinx') or 0),
+                 str(res['mamul_skod']), int(res.get('rkod') or 0)),
+            )
+            row.update({
+                'sip_no': res.get('sip_no'),
+                'model': res.get('mamul_skod') or res.get('model_adi'),
+                'renk': res.get('renk_adi'),
+                'kalip_kod': res.get('enj_kalip_kod'),
+                'planlanacak_cift': res.get('enj_planlanacak_cift'),
+                'plan_baslangic': res.get('enj_plan_baslangic'),
+                'plan_bitis': res.get('enj_plan_bitis'),
+                'plan_bas_gosterim': res.get('plan_bas_gosterim'),
+                'plan_bit_gosterim': res.get('plan_bit_gosterim'),
+                'calisma_modu': res.get('enj_calisma_modu'),
+                'asorti': ak if ak else None,
+            })
+        stations.append(row)
+
+    total = int(istasyon_sayisi)
+    return {
+        'planned_count': planned_count,
+        'available_count': max(0, total - planned_count),
+        'total_count': total,
+        'stations': stations,
+    }
+
+
+def build_makine_detay(
+    con: sqlite3.Connection,
+    makine_id: int,
+    *,
+    plan_baslangic: str | None = None,
+    plan_bitis: str | None = None,
+    secim_baslangic: str | None = None,
+    secim_bitis: str | None = None,
+    calisma_modu: str = 'GUNDUZ_GECE',
+    hafta_sonu: str = 'HAYIR',
+    hs_vardiya: str | None = None,
+    asorti_map: dict | None = None,
+    include_stations: bool = True,
+) -> dict | None:
+    """Makine kart/detay — fiziksel + planlı ayrı sayım."""
+    mk = con.execute(
+        'SELECT id, kod, istasyon_sayisi FROM enj_makine WHERE id=? AND aktif=1',
+        (int(makine_id),),
+    ).fetchone()
+    if not mk:
+        return None
+
+    mid = int(mk['id'])
+    n = int(mk['istasyon_sayisi'] or 8)
+    anchor_bas, anchor_bit = _resolve_anchor_window(plan_baslangic, plan_bitis)
+    secim_bas, secim_bit = _resolve_anchor_window(secim_baslangic, secim_bitis)
+    if secim_bas and not secim_bitis:
+        secim_bit = secim_bas + timedelta(minutes=1)
+
+    from modules.planlama.enj_kapasite_read_service import build_side_physical_block
+
+    sides: dict[str, dict] = {}
+    for slot in _SLOTS:
+        physical = build_side_physical_block(con, mid, slot, n)
+        planned = {
+            'planned_count': 0,
+            'available_count': n,
+            'total_count': n,
+            'stations': [] if include_stations else None,
+            'plan_tarih_secilmedi': anchor_bas is None,
+        }
+        if anchor_bas and anchor_bit:
+            planned = build_side_planned_block(
+                con, mid, slot, n,
+                anchor_bas=anchor_bas,
+                anchor_bit=anchor_bit,
+                secim_bas=secim_bas,
+                secim_bit=secim_bit,
+                asorti_map=asorti_map,
+            )
+            if not include_stations:
+                planned['stations'] = None
+        elif include_stations:
+            planned['stations'] = []
+
+        istasyonlar = list(range(1, n + 1))
+        first_avail = None
+        first_disp = None
+        if anchor_bas:
+            try:
+                ilk = find_first_available_start(
+                    con, mid, slot, istasyonlar,
+                    calisma_modu=calisma_modu,
+                    hafta_sonu=hafta_sonu,
+                    hs_vardiya=hs_vardiya,
+                    from_dt=anchor_bas,
+                )
+                first_avail = _iso(ilk)
+                first_disp = _fmt_tam(ilk)
+            except RuntimeError:
+                pass
+
+        sides[slot] = {
+            'physical': {
+                'occupied_count': physical['occupied_count'],
+                'empty_count': physical['empty_count'],
+                'total_count': physical['total_count'],
+                'stations': physical['stations'] if include_stations else None,
+                'snapshot_at': physical.get('snapshot_at'),
+                'snapshot_tarih': physical.get('snapshot_tarih'),
+                'snapshot_vardiya': physical.get('snapshot_vardiya'),
+            },
+            'planned': planned,
+            'first_available': first_avail,
+            'first_available_gosterim': first_disp,
+        }
+
+    anchor_out = {
+        'baslangic': plan_baslangic,
+        'bitis': plan_bitis,
+        'secim_baslangic': secim_baslangic,
+        'secim_bitis': secim_bitis,
+    }
+    return {
+        'makine': {
+            'id': mid,
+            'kod': mk['kod'],
+            'istasyon_sayisi': n,
+        },
+        'anchor': anchor_out,
+        'sides': sides,
+    }
+
+
+def build_makine_slot_ozet_all(
+    con: sqlite3.Connection,
+    *,
+    plan_baslangic: str | None = None,
+    plan_bitis: str | None = None,
+    secim_baslangic: str | None = None,
+    secim_bitis: str | None = None,
+    calisma_modu: str = 'GUNDUZ_GECE',
+    hafta_sonu: str = 'HAYIR',
+    hs_vardiya: str | None = None,
+) -> list[dict]:
+    """M1–M4 kart özeti — istasyon satırı olmadan hafif sayım."""
+    rows = con.execute(
+        'SELECT id FROM enj_makine WHERE aktif=1 ORDER BY sira, kod',
+    ).fetchall()
+    out: list[dict] = []
+    for r in rows:
+        det = build_makine_detay(
+            con, int(r['id']),
+            plan_baslangic=plan_baslangic,
+            plan_bitis=plan_bitis,
+            secim_baslangic=secim_baslangic,
+            secim_bitis=secim_bitis,
+            calisma_modu=calisma_modu,
+            hafta_sonu=hafta_sonu,
+            hs_vardiya=hs_vardiya,
+            include_stations=False,
+        )
+        if det:
+            out.append({
+                'makine_id': det['makine']['id'],
+                'makine_kod': det['makine']['kod'],
+                'istasyon_sayisi': det['makine']['istasyon_sayisi'],
+                'A': det['sides']['A'],
+                'B': det['sides']['B'],
+            })
+    return out

@@ -637,6 +637,30 @@ def _resolve_asorti(cur, sip_no, sip_harinx, mamul_skod, rkod):
     return ''
 
 
+def resolve_asorti_for_plan_keys(plan_keys: list[tuple]) -> dict[tuple, str]:
+    """Sipariş kalemi anahtarları için asorti — Korgun read-only, batch."""
+    out: dict[tuple, str] = {}
+    if not plan_keys:
+        return out
+    try:
+        from modules.common import korgun as kk
+        con = kk._baglan()
+        try:
+            cur = con.cursor()
+            for sip_no, sip_harinx, mamul_skod, rkod in plan_keys:
+                key = (int(sip_no), int(sip_harinx or 0), str(mamul_skod), int(rkod or 0))
+                if key in out:
+                    continue
+                val = _resolve_asorti(cur, key[0], key[1], key[2], key[3])
+                if val:
+                    out[key] = val
+        finally:
+            con.close()
+    except Exception:
+        pass
+    return out
+
+
 def _build_satir(cur, sip_no, sip_harinx, mamul_skod, rkod, har_ctx, sip_meta,
                  include_lots=False, plan_fields=None):
     plan_fields = plan_fields or {}

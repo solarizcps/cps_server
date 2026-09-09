@@ -51,6 +51,10 @@
             refConfirmedGunduz: false,
             refConfirmedGece: false,
             planOzetMap: {},
+            slotOzetMap: {},
+            makineDetayCache: {},
+            makineDetayLoadingKey: null,
+            makineDetayTriggerBtn: null,
             istasyonPlanDurum: {},
             reservation: null,
             pendingConflict: null,
@@ -1187,24 +1191,219 @@
             : 'Toplam aktif göz = kalıp adedi × göz/kalıp';
     }
 
-    function enjSideTimelineHtml(sideData, sideClass) {
-        if (!sideData) return '';
-        var rows = (sideData.timeline || []).slice(0, 3).map(function (seg) {
-            var bas = enjFmtDtApi(seg.bas);
-            var bit = enjFmtDtApi(seg.bit);
-            var cls = seg.tip === 'DOLU' ? 'dolu' : 'bos';
-            var lbl = seg.tip === 'DOLU'
-                ? ('DOLU — ' + (seg.label || seg.sip_no || ''))
-                : 'BOŞ / PLANLANABİLİR';
-            return '<div class="up-enj-timeline-row ' + cls + '">' +
-                esc(bas) + ' → ' + esc(bit) + '<br>' + esc(lbl) + '</div>';
-        }).join('');
-        var ilk = sideData.ilk_uygun_gosterim || sideData.ilk_uygun_tam || '—';
+    function enjSlotOzetParams() {
+        var e = state.enj;
+        var q = 'calisma_modu=' + encodeURIComponent(e.calismaModu || 'GUNDUZ_GECE') +
+            '&hafta_sonu_calisma=' + encodeURIComponent(e.haftaSonu || 'HAYIR');
+        if (e.haftaSonu === 'EVET' && e.hsVardiya) {
+            q += '&hafta_sonu_vardiya=' + encodeURIComponent(e.hsVardiya);
+        }
+        if (e.baslangic) {
+            q += '&plan_baslangic=' + encodeURIComponent(e.baslangic);
+            q += '&secim_baslangic=' + encodeURIComponent(e.baslangic);
+        }
+        var bit = (e.motorResult && e.motorResult.tahmini_bitis) || e.bitis;
+        if (bit) {
+            q += '&secim_bitis=' + encodeURIComponent(bit);
+        }
+        return q;
+    }
+
+    function enjMakineDetayCacheKey(makineId) {
+        return String(makineId) + '|' + (state.enj.baslangic || '') + '|' +
+            ((state.enj.motorResult && state.enj.motorResult.tahmini_bitis) || state.enj.bitis || '');
+    }
+
+    function enjSideCardBlock(side, slotKey) {
+        if (!side) side = {};
+        var phys = side.physical || {};
+        var plan = side.planned || {};
+        var total = phys.total_count || plan.total_count || 8;
+        var ilk = side.first_available_gosterim || '—';
+        var sideClass = slotKey === 'A' ? 'side-a' : 'side-b';
+        var planLine = plan.plan_tarih_secilmedi
+            ? '<div class="up-enj-card-metric up-enj-plan"><span class="up-enj-metric-lbl">Plan:</span> tarih seçilmedi</div>'
+            : '<div class="up-enj-card-metric up-enj-plan"><span class="up-enj-metric-lbl">Seçilen tarihte:</span> ' +
+                '<strong>' + (plan.planned_count || 0) + '</strong>/' + total +
+                ' <span class="up-enj-plan-lbl">planlı</span></div>';
         return '<div class="up-enj-card-side ' + sideClass + '">' +
-            '<div class="up-enj-card-side-title">' + (sideClass === 'side-a' ? 'A TARAFI' : 'B TARAFI') + '</div>' +
-            '<div>İlk uygun: <strong>' + esc(ilk) + '</strong></div>' +
-            rows +
+            '<div class="up-enj-card-side-title">' + (slotKey === 'A' ? 'A TARAFI' : 'B TARAFI') + '</div>' +
+            '<div class="up-enj-card-metric up-enj-phys"><span class="up-enj-metric-lbl">Fiziksel:</span> ' +
+                '<strong>' + (phys.occupied_count || 0) + '</strong>/' + total +
+                ' <span class="up-enj-dolu-lbl">dolu</span></div>' +
+            planLine +
+            '<div class="up-enj-card-ilk-uygun">En erken uygun: <strong>' + esc(ilk) + '</strong></div>' +
             '</div>';
+    }
+
+    function enjMdBadge(durum) {
+        var d = String(durum || 'BOS').toUpperCase();
+        var lbl = d === 'CAKISAN' ? 'ÇAKIŞAN' : d;
+        var cls = d === 'PLANLI' ? 'planli' : d === 'CAKISAN' ? 'cakisan' : d === 'DOLU' ? 'dolu' : 'bos';
+        return '<span class="up-enj-md-badge ' + cls + '">' + esc(lbl) + '</span>';
+    }
+
+    function enjMdStationRows(stations, mode) {
+        if (!stations || !stations.length) {
+            return '<p class="up-enj-md-hint">Kayıt yok</p>';
+        }
+        var headPhys = ['İstasyon', 'Taraf', 'Durum', 'Kalıp', 'Snapshot'];
+        var headPlan = ['İstasyon', 'Taraf', 'Durum', 'Sipariş', 'Model', 'Renk', 'Kalıp', 'Asorti', 'Çift', 'Başlangıç', 'Bitiş', 'Mod'];
+        var head = mode === 'phys' ? headPhys : headPlan;
+        var tbl = '<div class="up-enj-md-table-wrap"><table class="up-enj-md-table"><thead><tr>' +
+            head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>';
+        var cards = '<div class="up-enj-md-station-cards">';
+        stations.forEach(function (st) {
+            var no = st.istasyon_no;
+            var slot = st.slot || '—';
+            var durum = st.durum || 'BOS';
+            if (mode === 'phys') {
+                var snap = st.snapshot_at || '';
+                tbl += '<tr><td>İST' + no + '</td><td>' + esc(slot) + '</td><td>' + enjMdBadge(durum) +
+                    '</td><td>' + esc(st.kalip_kod || '—') + '</td><td>' + esc(snap || '—') + '</td></tr>';
+                cards += '<div class="up-enj-md-station-card"><dl>' +
+                    '<dt>İstasyon</dt><dd>İST' + no + ' · ' + esc(slot) + '</dd>' +
+                    '<dt>Durum</dt><dd>' + enjMdBadge(durum) + '</dd>' +
+                    '<dt>Kalıp</dt><dd>' + esc(st.kalip_kod || '—') + '</dd>' +
+                    '<dt>Snapshot</dt><dd>' + esc(snap || '—') + '</dd></dl></div>';
+            } else {
+                var asorti = st.asorti ? ('Asorti: ' + st.asorti) : '—';
+                tbl += '<tr><td>İST' + no + '</td><td>' + esc(slot) + '</td><td>' + enjMdBadge(durum) +
+                    '</td><td>' + esc(st.sip_no || '—') + '</td><td>' + esc(st.model || '—') + '</td>' +
+                    '<td>' + esc(st.renk || '—') + '</td><td>' + esc(st.kalip_kod || '—') + '</td>' +
+                    '<td>' + esc(asorti) + '</td><td>' + esc(st.planlanacak_cift != null ? fmtN(st.planlanacak_cift) : '—') +
+                    '</td><td>' + esc(st.plan_bas_gosterim || enjFmtDtApi(st.plan_baslangic)) +
+                    '</td><td>' + esc(st.plan_bit_gosterim || enjFmtDtApi(st.plan_bitis)) +
+                    '</td><td>' + esc(st.calisma_modu || '—') + '</td></tr>';
+                cards += '<div class="up-enj-md-station-card"><dl>' +
+                    '<dt>İstasyon</dt><dd>İST' + no + ' · ' + esc(slot) + '</dd>' +
+                    '<dt>Durum</dt><dd>' + enjMdBadge(durum) + '</dd>' +
+                    '<dt>Sipariş</dt><dd>' + esc(st.sip_no || '—') + '</dd>' +
+                    '<dt>Model</dt><dd>' + esc(st.model || '—') + '</dd>' +
+                    '<dt>Renk</dt><dd>' + esc(st.renk || '—') + '</dd>' +
+                    '<dt>Kalıp</dt><dd>' + esc(st.kalip_kod || '—') + '</dd>' +
+                    '<dt>Asorti</dt><dd>' + esc(asorti) + '</dd>' +
+                    '<dt>Çift</dt><dd>' + esc(st.planlanacak_cift != null ? fmtN(st.planlanacak_cift) : '—') + '</dd>' +
+                    '<dt>Başlangıç</dt><dd>' + esc(st.plan_bas_gosterim || enjFmtDtApi(st.plan_baslangic)) + '</dd>' +
+                    '<dt>Bitiş</dt><dd>' + esc(st.plan_bit_gosterim || enjFmtDtApi(st.plan_bitis)) + '</dd>' +
+                    '<dt>Mod</dt><dd>' + esc(st.calisma_modu || '—') + '</dd></dl></div>';
+            }
+        });
+        tbl += '</tbody></table></div>';
+        cards += '</div>';
+        return tbl + cards;
+    }
+
+    function enjRenderMakineDetayBody(data) {
+        var body = $('upEnjMakineDetayBody');
+        var title = $('upEnjMakineDetayTitle');
+        if (!body || !data || !data.makine) return;
+        var mk = data.makine;
+        var anchor = data.anchor || {};
+        var basLbl = anchor.baslangic
+            ? enjFmtDtApi(anchor.baslangic)
+            : 'Plan tarihi seçilmedi';
+        if (title) {
+            title.textContent = (mk.kod || 'Makine') + ' — ' + (mk.istasyon_sayisi || 8) + ' istasyon';
+        }
+        var meta = '<div class="up-enj-md-meta">' +
+            '<span>Makine: <strong>' + esc(mk.kod) + '</strong></span>' +
+            '<span>Kapasite: <strong>' + (mk.istasyon_sayisi || 8) + ' istasyon</strong></span>' +
+            '<span>Başlangıç: <strong>' + esc(basLbl) + '</strong></span></div>';
+        var sides = data.sides || {};
+        var html = meta;
+        ['A', 'B'].forEach(function (slotKey) {
+            var side = sides[slotKey] || {};
+            var phys = side.physical || {};
+            var plan = side.planned || {};
+            var snap = phys.snapshot_at || phys.snapshot_tarih || '';
+            if (phys.snapshot_vardiya && phys.snapshot_tarih) {
+                snap = phys.snapshot_tarih + ' ' + phys.snapshot_vardiya;
+            }
+            html += '<div class="up-enj-md-section">' +
+                '<h3 class="up-enj-md-section-title phys">' + slotKey + ' — ŞU ANKİ FİZİKSEL DURUM</h3>';
+            if (snap) {
+                html += '<p class="up-hint" style="margin:0 0 6px;font-size:11px;">Snapshot: ' + esc(snap) + '</p>';
+            }
+            var physSt = (phys.stations || []).map(function (st) {
+                var row = Object.assign({}, st);
+                if (snap) row.snapshot_at = snap;
+                return row;
+            });
+            html += enjMdStationRows(physSt, 'phys') + '</div>';
+            html += '<div class="up-enj-md-section">' +
+                '<h3 class="up-enj-md-section-title plan">' + slotKey + ' — SEÇİLEN TARİHTEKİ PLAN DURUMU</h3>';
+            if (plan.plan_tarih_secilmedi) {
+                html += '<p class="up-enj-md-hint">Plan durumunu görmek için başlangıç tarihi seçin.</p>';
+            } else {
+                html += enjMdStationRows(plan.stations || [], 'plan');
+            }
+            html += '</div>';
+        });
+        body.innerHTML = html;
+    }
+
+    function enjCloseMakineDetay() {
+        var modal = $('upEnjMakineDetayModal');
+        if (modal) modal.hidden = true;
+        var btn = state.enj.makineDetayTriggerBtn;
+        state.enj.makineDetayLoadingKey = null;
+        if (btn && typeof btn.focus === 'function') btn.focus();
+        state.enj.makineDetayTriggerBtn = null;
+    }
+
+    function enjOpenMakineDetay(makineId, makineKod, triggerBtn) {
+        var modal = $('upEnjMakineDetayModal');
+        var body = $('upEnjMakineDetayBody');
+        if (!modal || !body) return;
+        state.enj.makineDetayTriggerBtn = triggerBtn || null;
+        modal.hidden = false;
+        var panel = modal.querySelector('.up-enj-makine-detay-panel');
+        if (panel) panel.focus();
+        var cacheKey = enjMakineDetayCacheKey(makineId);
+        var cached = state.enj.makineDetayCache[cacheKey];
+        if (cached) {
+            enjRenderMakineDetayBody(cached);
+            return;
+        }
+        if (state.enj.makineDetayLoadingKey === cacheKey) return;
+        state.enj.makineDetayLoadingKey = cacheKey;
+        body.innerHTML = '<div class="up-loading">Yükleniyor…</div>';
+        fetch('/planlama/uretim-plan/api/enj/makine-detay?' +
+            'makine_id=' + encodeURIComponent(makineId) + '&' + enjSlotOzetParams(),
+            { credentials: 'include' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (state.enj.makineDetayLoadingKey !== cacheKey) return;
+                state.enj.makineDetayLoadingKey = null;
+                if (!d.ok) {
+                    body.innerHTML = '<p class="up-enj-md-hint">' + esc(d.mesaj || 'Detay yüklenemedi') + '</p>';
+                    return;
+                }
+                state.enj.makineDetayCache[cacheKey] = d;
+                enjRenderMakineDetayBody(d);
+            })
+            .catch(function () {
+                state.enj.makineDetayLoadingKey = null;
+                body.innerHTML = '<p class="up-enj-md-hint">Detay yüklenemedi</p>';
+            });
+    }
+
+    function enjBindMakineDetayModal() {
+        var modal = $('upEnjMakineDetayModal');
+        if (!modal) return;
+        ['upEnjMakineDetayClose', 'upEnjMakineDetayKapat'].forEach(function (id) {
+            if ($(id)) $(id).addEventListener('click', enjCloseMakineDetay);
+        });
+        if ($('upEnjMakineDetayBackdrop')) {
+            $('upEnjMakineDetayBackdrop').addEventListener('click', enjCloseMakineDetay);
+        }
+        document.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Escape' && modal && !modal.hidden) {
+                ev.stopPropagation();
+                enjCloseMakineDetay();
+            }
+        });
     }
 
     function enjShowConflictModal(detail) {
@@ -1346,23 +1545,26 @@
           .catch(function () { if (cb) cb(); });
     }
 
-    function enjYuklePlanOzet(cb) {
+    function enjYukleSlotOzet(cb) {
         var e = state.enj;
-        var q = 'days=7&calisma_modu=' + encodeURIComponent(e.calismaModu || 'GUNDUZ_GECE') +
-            '&hafta_sonu_calisma=' + encodeURIComponent(e.haftaSonu || 'HAYIR');
-        if (e.baslangic) q += '&anchor=' + encodeURIComponent(e.baslangic.slice(0, 10));
-        fetch('/planlama/uretim-plan/api/enj/makine-plan-ozet?' + q, { credentials: 'include' })
+        fetch('/planlama/uretim-plan/api/enj/makine-slot-ozet?' + enjSlotOzetParams(),
+            { credentials: 'include' })
             .then(function (r) { return r.json(); })
             .then(function (d) {
-                e.planOzetMap = {};
+                e.slotOzetMap = {};
+                e.makineDetayCache = {};
                 if (d.ok && d.makineler) {
                     d.makineler.forEach(function (m) {
-                        e.planOzetMap[m.makine_id] = m;
+                        e.slotOzetMap[m.makine_id] = m;
                     });
                 }
                 if (cb) cb();
             })
             .catch(function () { if (cb) cb(); });
+    }
+
+    function enjYuklePlanOzet(cb) {
+        enjYukleSlotOzet(cb);
     }
 
     function enjDtLocalToApi(v) {
@@ -1856,6 +2058,35 @@
           });
     }
 
+    function enjSelectMakine(m, machines) {
+        var mid = m.makine_id || m.id;
+        var kod = m.makine_kod || m.kod || m.code;
+        state.enj.makineId = mid;
+        state.enj.makineKod = kod;
+        state.enj.istasyonSayisi = m.istasyon_sayisi;
+        state.enj.istasyonlar = [];
+        state.enj.slot = null;
+        state.enj.baslangicManuel = false;
+        state.enj.baslangic = null;
+        state.enj.baslangicOneri = null;
+        state.enj.ilkUygunMap = {};
+        state.enj.istasyonPlanDurum = {};
+        if ($('upEnjBas')) $('upEnjBas').value = '';
+        if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
+        enjHesapGizle();
+        enjRenderMakineCards(machines);
+        enjRenderIstasyonGrid(m);
+        if ($('upEnjSlotA')) $('upEnjSlotA').classList.remove('selected');
+        if ($('upEnjSlotB')) $('upEnjSlotB').classList.remove('selected');
+        if ($('upEnjKalip')) $('upEnjKalip').disabled = false;
+        enjUpdateHesapBtn();
+        if (state.enj._sonHaftaVeri) {
+            enjSonHaftaHizRender(state.enj._sonHaftaVeri, kod);
+            enjLoadAutoRefFromSonHafta(kod, state.enj.slot);
+        }
+        enjUpdateAutoRefHints();
+    }
+
     function enjRenderMakineCards(machines) {
         var el = $('upEnjMakineCards');
         if (!el) return;
@@ -1863,52 +2094,35 @@
         machines.forEach(function (m) {
             var mid = m.makine_id || m.id;
             var kod = m.makine_kod || m.kod || m.code;
-            var oz = state.enj.planOzetMap[mid] || {};
+            var oz = state.enj.slotOzetMap[mid] || {};
+            var sideA = oz.A || {};
+            var sideB = oz.B || {};
+            var wrap = document.createElement('div');
+            wrap.className = 'up-enj-makine-card-wrap' + (state.enj.makineId === mid ? ' selected' : '');
             var card = document.createElement('button');
             card.type = 'button';
-            var aSnap = m.A || (m.slots && m.slots.A) || {};
-            var bSnap = m.B || (m.slots && m.slots.B) || {};
-            var aPlan = oz.A || {};
-            var bPlan = oz.B || {};
-            card.className = 'up-enj-makine-card' + (state.enj.makineId === mid ? ' selected' : '');
+            card.className = 'up-enj-makine-card';
             card.innerHTML =
                 '<strong>' + esc(kod) + '</strong>' +
                 '<span class="up-enj-card-ist-label">' + m.istasyon_sayisi + ' İSTASYON</span>' +
-                enjSideTimelineHtml(Object.assign({ dolu: aSnap.dolu }, aPlan), 'side-a') +
-                enjSideTimelineHtml(Object.assign({ dolu: bSnap.dolu }, bPlan), 'side-b') +
-                '<div class="up-enj-card-slots">' +
-                '<span class="up-slot-a">A &nbsp;<b class="up-enj-dolu-sayi">' + (aSnap.dolu || 0) + '</b> / ' + m.istasyon_sayisi + ' <span class="up-enj-dolu-lbl">DOLU</span></span>' +
-                '<span class="up-slot-b">B &nbsp;<b class="up-enj-dolu-sayi">' + (bSnap.dolu || 0) + '</b> / ' + m.istasyon_sayisi + ' <span class="up-enj-dolu-lbl">DOLU</span></span>' +
-                '</div>';
+                enjSideCardBlock(sideA, 'A') +
+                enjSideCardBlock(sideB, 'B');
             card.addEventListener('click', function () {
-                state.enj.makineId = mid;
-                state.enj.makineKod = kod;
-                state.enj.istasyonSayisi = m.istasyon_sayisi;
-                state.enj.istasyonlar = [];
-                state.enj.slot = null;
-                state.enj.baslangicManuel = false;
-                state.enj.baslangic = null;
-                state.enj.baslangicOneri = null;
-                // Makine değişince stale ilkUygunMap temizle
-                state.enj.ilkUygunMap = {};
-                state.enj.istasyonPlanDurum = {};
-                if ($('upEnjBas')) $('upEnjBas').value = '';
-                if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
-                enjHesapGizle();
-                enjRenderMakineCards(machines);
-                enjRenderIstasyonGrid(m);
-                if ($('upEnjSlotA')) $('upEnjSlotA').classList.remove('selected');
-                if ($('upEnjSlotB')) $('upEnjSlotB').classList.remove('selected');
-                if ($('upEnjKalip')) $('upEnjKalip').disabled = false;
-                enjUpdateHesapBtn();
-                // B2: SON 1 HAFTA kutusunda seçili makineyi vurgula + autoRef yükle
-                if (state.enj._sonHaftaVeri) {
-                    enjSonHaftaHizRender(state.enj._sonHaftaVeri, kod);
-                    enjLoadAutoRefFromSonHafta(kod, e.slot);
-                }
-                enjUpdateAutoRefHints();
+                enjSelectMakine(m, machines);
             });
-            el.appendChild(card);
+            var detBtn = document.createElement('button');
+            detBtn.type = 'button';
+            detBtn.className = 'up-enj-makine-detay-btn';
+            detBtn.textContent = 'Detay';
+            detBtn.setAttribute('aria-label', kod + ' makine detayını aç');
+            detBtn.addEventListener('click', function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                enjOpenMakineDetay(mid, kod, detBtn);
+            });
+            wrap.appendChild(card);
+            wrap.appendChild(detBtn);
+            el.appendChild(wrap);
         });
     }
 
@@ -2012,7 +2226,7 @@
     }
 
     function enjYukleKapasite() {
-        enjYuklePlanOzet(function () {
+        enjYukleSlotOzet(function () {
             fetch('/planlama/uretim-plan/api/enj-kapasite?days=90', { credentials: 'include' })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
@@ -2247,6 +2461,9 @@
                             });
                             if (m) enjRenderIstasyonGrid(m);
                         });
+                        enjYukleSlotOzet(function () {
+                            enjRenderMakineCards(state.enj.gridData || []);
+                        });
                     } else if (id === 'upEnjKalipAdedi' || id === 'upEnjCalismaModu') {
                         state.enj.baslangicManuel = false;
                         if (id === 'upEnjCalismaModu') {
@@ -2300,6 +2517,9 @@
                                 return (x.makine_id || x.id) === state.enj.makineId;
                             });
                             if (m) enjRenderIstasyonGrid(m);
+                        });
+                        enjYukleSlotOzet(function () {
+                            enjRenderMakineCards(state.enj.gridData || []);
                         });
                     }
                     if (id === 'upEnjKalipAdedi' || id === 'upEnjGozPerKalip') enjUpdateToplamGozHint();
@@ -2415,6 +2635,7 @@
             $('upStep3EnjDegistir').addEventListener('click', function () { wizardShowStep(2); });
         }
         if ($('upFormBit')) $('upFormBit').addEventListener('change', validateStep3Tarihleri);
+        enjBindMakineDetayModal();
         enjUpdateManualRefVisibility();
     }
 

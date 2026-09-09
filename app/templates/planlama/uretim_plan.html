@@ -349,6 +349,23 @@
   </div>
 </div>
 
+<!-- ENJ MAKİNE DETAY (bilgi amaçlı, seçim yapmaz) -->
+<div id="upEnjMakineDetayModal" class="up-modal up-enj-makine-detay-modal" hidden>
+  <div class="up-modal-backdrop" id="upEnjMakineDetayBackdrop"></div>
+  <div class="up-modal-panel up-enj-makine-detay-panel" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="upEnjMakineDetayTitle">
+    <div class="up-modal-head">
+      <h2 id="upEnjMakineDetayTitle">Makine Detay</h2>
+      <button type="button" class="up-modal-x" id="upEnjMakineDetayClose" aria-label="Makine detayını kapat">×</button>
+    </div>
+    <div class="up-modal-body up-enj-makine-detay-body" id="upEnjMakineDetayBody">
+      <div class="up-loading">Yükleniyor…</div>
+    </div>
+    <div class="up-modal-foot">
+      <button type="button" class="up-btn up-btn-ghost" id="upEnjMakineDetayKapat">Kapat</button>
+    </div>
+  </div>
+</div>
+
 <!-- DETAY POPUP -->
 <div id="upDetayModal" class="up-modal" hidden>
   <div class="up-modal-backdrop" data-close="1"></div>
@@ -397,5 +414,5 @@
   window.UP_CAN_EDIT = {{ 'true' if can_edit else 'false' }};
   window.UP_GEREKCE = {{ gerekce_secenekleri | tojson }};
 </script>
-<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=31"></script>
+<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=32"></script>
 {% endblock %}

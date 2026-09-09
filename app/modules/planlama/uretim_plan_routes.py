@@ -811,6 +811,138 @@ def api_enj_makine_plan_ozet():
         con.close()
 
 
+def _parse_plan_dt_param(raw: str | None, field: str) -> datetime | None:
+    from modules.planlama.enj_kapasite_motor import _parse_dt
+    if not raw or not str(raw).strip():
+        return None
+    s = str(raw).strip()
+    try:
+        if len(s) <= 10:
+            return _parse_dt(s + ' 07:00:00')
+        return _parse_dt(s)
+    except ValueError as exc:
+        raise ValueError(f'Geçersiz {field} tarihi') from exc
+
+
+@uretim_plan_bp.route('/api/enj/makine-slot-ozet', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_makine_slot_ozet():
+    """Makine kartları — fiziksel/planlı sayım özeti (istasyon satırı yok)."""
+    plan_bas = (request.args.get('plan_baslangic') or request.args.get('anchor') or '').strip()
+    plan_bit = (request.args.get('plan_bitis') or '').strip()
+    secim_bas = (request.args.get('secim_baslangic') or '').strip()
+    secim_bit = (request.args.get('secim_bitis') or '').strip()
+    calisma = (request.args.get('calisma_modu') or 'GUNDUZ_GECE').upper()
+    hs = (request.args.get('hafta_sonu_calisma') or 'HAYIR').upper()
+    hs_v = request.args.get('hafta_sonu_vardiya')
+    if hs == 'HAYIR':
+        hs_v = None
+    con = get_conn()
+    try:
+        from modules.planlama.enj_plan_availability_service import build_makine_slot_ozet_all
+        makineler = build_makine_slot_ozet_all(
+            con,
+            plan_baslangic=plan_bas or None,
+            plan_bitis=plan_bit or None,
+            secim_baslangic=secim_bas or None,
+            secim_bitis=secim_bit or None,
+            calisma_modu=calisma,
+            hafta_sonu=hs,
+            hs_vardiya=hs_v,
+        )
+        return jsonify({'ok': True, 'makineler': makineler, 'anchor': {
+            'baslangic': plan_bas or None,
+            'bitis': plan_bit or None,
+        }})
+    except ValueError as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/makine-detay', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_makine_detay():
+    """Makine detay — fiziksel + planlı istasyon bilgisi (read-only)."""
+    makine_id = request.args.get('makine_id', type=int)
+    if not makine_id or makine_id < 1:
+        return jsonify({'ok': False, 'mesaj': 'Geçerli makine_id gerekli'}), 400
+
+    slot = (request.args.get('slot') or '').upper()
+    if slot and slot not in ('A', 'B'):
+        return jsonify({'ok': False, 'mesaj': 'slot yalnız A veya B olabilir'}), 400
+
+    plan_bas = (request.args.get('plan_baslangic') or request.args.get('anchor') or '').strip()
+    plan_bit = (request.args.get('plan_bitis') or '').strip()
+    secim_bas = (request.args.get('secim_baslangic') or '').strip()
+    secim_bit = (request.args.get('secim_bitis') or '').strip()
+    calisma = (request.args.get('calisma_modu') or 'GUNDUZ_GECE').upper()
+    hs = (request.args.get('hafta_sonu_calisma') or 'HAYIR').upper()
+    hs_v = request.args.get('hafta_sonu_vardiya')
+    if hs == 'HAYIR':
+        hs_v = None
+
+    for raw, lbl in ((plan_bas, 'plan_baslangic'), (plan_bit, 'plan_bitis'),
+                     (secim_bas, 'secim_baslangic'), (secim_bit, 'secim_bitis')):
+        if raw:
+            try:
+                _parse_plan_dt_param(raw, lbl)
+            except ValueError as e:
+                return jsonify({'ok': False, 'mesaj': str(e)}), 400
+
+    con = get_conn()
+    try:
+        from modules.planlama.enj_plan_availability_service import (
+            build_makine_detay,
+            _load_side_reservations,
+            _resolve_anchor_window,
+        )
+        from modules.planlama.uretim_plan_service import resolve_asorti_for_plan_keys
+
+        asorti_map = None
+        anchor_bas, anchor_bit = _resolve_anchor_window(plan_bas or None, plan_bit or None)
+        if anchor_bas and anchor_bit:
+            keys: set[tuple] = set()
+            for s in ('A', 'B'):
+                if slot and s != slot:
+                    continue
+                for r in _load_side_reservations(con, makine_id, s, anchor_bas, anchor_bit):
+                    keys.add((
+                        int(r['sip_no']),
+                        int(r.get('sip_harinx') or 0),
+                        str(r['mamul_skod']),
+                        int(r.get('rkod') or 0),
+                    ))
+            if keys:
+                asorti_map = resolve_asorti_for_plan_keys(list(keys))
+
+        det = build_makine_detay(
+            con, int(makine_id),
+            plan_baslangic=plan_bas or None,
+            plan_bitis=plan_bit or None,
+            secim_baslangic=secim_bas or None,
+            secim_bitis=secim_bit or None,
+            calisma_modu=calisma,
+            hafta_sonu=hs,
+            hs_vardiya=hs_v,
+            asorti_map=asorti_map,
+            include_stations=True,
+        )
+        if not det:
+            return jsonify({'ok': False, 'mesaj': 'Makine bulunamadı'}), 404
+        if slot:
+            det['sides'] = {slot: det['sides'][slot]}
+        return jsonify({'ok': True, **det})
+    except ValueError as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
 @uretim_plan_bp.route('/api/enj/istasyon-plan-durum', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def api_enj_istasyon_plan_durum():

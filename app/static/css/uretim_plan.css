@@ -783,10 +783,53 @@
 .up-wizard-step { font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 999px; background: #f1f5f9; color: #64748b; }
 .up-wizard-step.active { background: #ea580c; color: #fff; }
 .up-enj-makine-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
-.up-enj-makine-card { text-align: left; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; background: #fff; cursor: pointer; }
-.up-enj-makine-card.selected { border-color: #ea580c; box-shadow: 0 0 0 2px #ea580c33; }
+.up-enj-makine-card-wrap { display: flex; flex-direction: column; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; overflow: hidden; }
+.up-enj-makine-card-wrap.selected { border-color: #ea580c; box-shadow: 0 0 0 2px #ea580c33; }
+.up-enj-makine-card { text-align: left; border: none; border-radius: 0; padding: 10px 10px 6px; background: transparent; cursor: pointer; width: 100%; font: inherit; color: inherit; }
+.up-enj-makine-card:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.up-enj-makine-card-wrap.selected .up-enj-makine-card { background: #fff7ed22; }
 .up-enj-makine-card strong { display: block; font-size: 14px; }
 .up-enj-makine-card span { font-size: 11px; color: #64748b; }
+.up-enj-makine-detay-btn { align-self: flex-start; margin: 0 10px 8px; padding: 4px 10px; font-size: 11px; font-weight: 700; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; color: #334155; cursor: pointer; }
+.up-enj-makine-detay-btn:hover { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+.up-enj-makine-detay-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 1px; }
+.up-enj-card-metric { font-size: 11px; line-height: 1.45; margin-top: 2px; }
+.up-enj-card-metric.up-enj-phys { color: #b45309; }
+.up-enj-card-metric.up-enj-plan { color: #1d4ed8; }
+.up-enj-metric-lbl { font-weight: 600; color: #64748b; }
+.up-enj-plan-lbl { font-size: 10px; font-weight: 600; letter-spacing: .04em; opacity: .85; }
+.up-enj-card-ilk-uygun { margin-top: 4px; font-size: 10px; color: #475569; }
+.up-enj-makine-detay-panel { width: min(92vw, 960px); max-height: min(90vh, 820px); display: flex; flex-direction: column; overflow: hidden; }
+.up-enj-makine-detay-body { overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0; }
+.up-enj-md-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; color: #475569; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
+.up-enj-md-meta strong { color: #0f172a; }
+.up-enj-md-section { margin-bottom: 16px; }
+.up-enj-md-section-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin: 0 0 8px; }
+.up-enj-md-section-title.phys { color: #b45309; }
+.up-enj-md-section-title.plan { color: #1d4ed8; }
+.up-enj-md-hint { font-size: 12px; color: #64748b; padding: 10px 12px; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e1; }
+.up-enj-md-table-wrap { overflow-x: hidden; }
+.up-enj-md-table { width: 100%; border-collapse: collapse; font-size: 11.5px; table-layout: fixed; }
+.up-enj-md-table th, .up-enj-md-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; text-align: left; vertical-align: top; word-break: break-word; }
+.up-enj-md-table th { font-size: 10px; text-transform: uppercase; color: #64748b; background: #f8fafc; position: sticky; top: 0; z-index: 1; }
+.up-enj-md-station-cards { display: none; gap: 8px; }
+.up-enj-md-station-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; font-size: 11.5px; background: #fff; }
+.up-enj-md-station-card dl { display: grid; grid-template-columns: 92px 1fr; gap: 4px 8px; margin: 0; }
+.up-enj-md-station-card dt { color: #64748b; font-weight: 600; }
+.up-enj-md-station-card dd { margin: 0; color: #0f172a; }
+.up-enj-md-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; letter-spacing: .03em; }
+.up-enj-md-badge.dolu, .up-enj-md-badge.cakisan { background: #fef3c7; color: #92400e; }
+.up-enj-md-badge.bos { background: #ecfdf5; color: #047857; }
+.up-enj-md-badge.planli { background: #dbeafe; color: #1e40af; }
+.up-enj-md-badge.cakisan { background: #fee2e2; color: #b91c1c; }
+@media (max-width: 720px) {
+  .up-enj-md-table-wrap { display: none; }
+  .up-enj-md-station-cards { display: flex; flex-direction: column; }
+  .up-enj-makine-cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .up-enj-makine-cards { grid-template-columns: 1fr; }
+}
 .up-enj-card-slots { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; font-size: 11px; }
 .up-slot-a { color: #2563eb; }
 .up-slot-b { color: #16a34a; }
