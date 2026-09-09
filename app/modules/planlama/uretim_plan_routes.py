@@ -587,6 +587,35 @@ def api_enj_cakisma_kontrol():
         con.close()
 
 
+@uretim_plan_bp.route('/api/plan/kalem-miktar-ozet', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_plan_kalem_miktar_ozet():
+    """Sipariş kalemi toplam / planlanmış / kalan miktar — read-only passthrough."""
+    sip_no = request.args.get('sip_no', type=int)
+    sip_harinx = request.args.get('sip_harinx', type=int)
+    mamul_skod = (request.args.get('mamul_skod') or '').strip()
+    rkod = request.args.get('rkod', 0, type=int)
+    if not sip_no or not mamul_skod:
+        return jsonify({'ok': False, 'mesaj': 'sip_no ve mamul_skod gerekli'}), 400
+    try:
+        from modules.planlama.uretim_plan_service import (
+            resolve_line_quantity_summary,
+            OrderLineNotFoundError,
+            OrderLineUnitMismatchError,
+            OrderLineQuantityError,
+        )
+        summary = resolve_line_quantity_summary(
+            sip_no, int(sip_harinx or 0), mamul_skod, int(rkod or 0),
+        )
+        return jsonify({'ok': True, **summary})
+    except OrderLineNotFoundError as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 404
+    except (OrderLineUnitMismatchError, OrderLineQuantityError) as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+
+
 @uretim_plan_bp.route('/api/plan/on-check', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def api_plan_on_check():

@@ -90,6 +90,44 @@ def resolve_order_line_quantity(
     }
 
 
+def resolve_line_quantity_summary(
+    sip_no: int,
+    sip_harinx: int,
+    mamul_skod: str,
+    rkod: int = 0,
+) -> dict:
+    """Sipariş kalemi miktar özeti — read-only, Remaining Quantity V1 alanları."""
+    from db import get_conn
+    from modules.planlama.uretim_plan_repo import _sum_already_planned
+
+    info = resolve_order_line_quantity(sip_no, sip_harinx, mamul_skod, rkod)
+    order_total = int(info['order_total_quantity'])
+    con = get_conn()
+    try:
+        already, unresolved = _sum_already_planned(
+            con, int(sip_no), int(sip_harinx), mamul_skod, int(rkod or 0),
+        )
+    finally:
+        con.close()
+    if unresolved:
+        ids = ', '.join(f'#{i}' for i in unresolved[:5])
+        raise OrderLineQuantityError(
+            'Bu sipariş kaleminde miktarı çözümlenemeyen legacy plan(lar) var '
+            f'({ids}). Kalan miktar güvenli hesaplanamıyor.'
+        )
+    remaining = order_total - already
+    return {
+        'order_total_quantity': order_total,
+        'already_planned_quantity': already,
+        'remaining_quantity': remaining,
+        'siparis_toplam_miktar': order_total,
+        'planlanmis_miktar': already,
+        'kalan_miktar': remaining,
+        'birim': info.get('birim') or 'CIFT',
+        'source': info.get('source'),
+    }
+
+
 def _load_proses_adlari(cur, proses_kodlari):
     if not proses_kodlari:
         return {}

@@ -911,3 +911,184 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   .up-proses-ozet-grid { grid-template-columns: 1fr 1fr; }
   .up-enj-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* Plan Oluştur modal — scoped sticky layout */
+.up-modal-create-root .up-modal-panel.up-modal-create {
+  width: min(96vw, 1180px);
+  max-height: min(100dvh, 96vh);
+  max-height: min(96vh, 100dvh);
+  min-height: 0;
+  overflow: hidden;
+}
+.up-modal-create-root .up-create-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 16px 16px;
+}
+.up-modal-create-root .up-create-foot {
+  flex-shrink: 0;
+  background: #fff;
+  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
+  z-index: 2;
+}
+.up-wizard-siparis-strip {
+  font-size: 12px;
+  color: #475569;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  line-height: 1.45;
+}
+.up-sr-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.up-step2-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  gap: 14px;
+  align-items: start;
+  min-height: 0;
+}
+.up-step2-main { min-width: 0; min-height: 0; }
+.up-step2-section {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.up-step2-section.up-step2-locked { opacity: 0.55; pointer-events: none; }
+.up-step2-sec-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.up-step2-summary {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: calc(100dvh - 220px);
+  max-height: calc(96vh - 220px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.up-step2-summary-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #0f172a;
+  letter-spacing: 0.04em;
+}
+.up-step2-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.up-step2-summary-row:last-child { border-bottom: none; }
+.up-step2-summary-row dt { color: #64748b; font-weight: 600; margin: 0; }
+.up-step2-summary-row dd { margin: 0; text-align: right; font-weight: 600; color: #0f172a; }
+.up-step2-summary-row dd.pending { color: #94a3b8; font-weight: 500; font-style: italic; }
+.up-enj-miktar-ozet {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.up-enj-miktar-ozet strong { color: #1e40af; }
+.up-enj-miktar-uyari {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #b91c1c;
+  font-weight: 600;
+}
+.up-enj-bas-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.up-enj-ilk-uygun-lbl strong { color: #1d4ed8; }
+.up-enj-bas-conflict {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #991b1b;
+}
+.up-enj-hesap-req-list {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.up-enj-hesap-req-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+.up-enj-hesap-req-list li.ok { color: #047857; }
+.up-enj-hesap-req-list li.missing { color: #64748b; }
+.up-enj-hesap-req-list li.missing a,
+.up-enj-hesap-req-list li.missing button.up-req-link {
+  color: #2563eb;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+#upEnjKalipAdedi[readonly] {
+  background: #f1f5f9;
+  color: #475569;
+  cursor: not-allowed;
+}
+@media (max-width: 1099px) {
+  .up-step2-layout { grid-template-columns: 1fr; }
+  .up-step2-summary {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    max-height: none;
+    margin-bottom: 10px;
+  }
+}
+@media (max-width: 720px) {
+  .up-modal-create-root .up-modal-panel.up-modal-create { width: 98vw; }
+  .up-create-foot { flex-wrap: wrap; justify-content: stretch; }
+  .up-create-foot .up-btn { flex: 1 1 auto; min-width: 88px; font-size: 12px; }
+}
