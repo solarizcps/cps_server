@@ -67,6 +67,9 @@
             secenekler: [],
             saveBlocked: false,
             bitisUyari: null,
+            onerilenBit: null,
+            manuelDegisti: false,
+            oncekiPlanlar: [],
         },
     };
 
@@ -870,6 +873,9 @@
         state.step3.basMode = null;
         state.step3.saveBlocked = false;
         state.step3.bitisUyari = null;
+        state.step3.onerilenBit = null;
+        state.step3.manuelDegisti = false;
+        state.step3.oncekiPlanlar = [];
         wizardShowStep(1);
         if ($('upStep1Readonly')) {
             $('upStep1Readonly').style.display = 'block';
@@ -907,6 +913,8 @@
         if (scroll) {
             if (n === 2) scroll.classList.add('step2-active');
             else scroll.classList.remove('step2-active');
+            if (n === 3) scroll.classList.add('step3-active');
+            else scroll.classList.remove('step3-active');
         }
         if (n === 2) {
             fetchQuantitySummary(function () { enjUpdateStep2Ui(); });
@@ -976,6 +984,10 @@
 
     function initStep3() {
         enjRenderStep3Reservation();
+        step3RenderOneriKural(null);
+        step3RenderManuelBadge(false);
+        step3RenderOncekiPlanlar([]);
+        step3FetchMiktarOzet();
 
         var rez = state.enj.reservation || {};
         var enjBas = dateOnlyFromApi(rez.baslangic || state.enj.baslangic);
@@ -991,23 +1003,45 @@
         }
 
         state.step3.basMode = null;
+        state.step3.manuelDegisti = false;
 
         // Enjeksiyon yoksa donem_aralik'tan üretilen tarihleri kullan
         if (!enjBas && !afterEnj) {
             var donem = ($('upFormDonem') && $('upFormDonem').value) || 'bu_hafta';
             var aralik = donemAralikJs(donem);
-            // upFormBit'i dönem bitiş tarihiyle doldur
             if ($('upFormBit') && !$('upFormBit').value) {
                 $('upFormBit').value = aralik.bit;
             }
-            // Başlangıç seçeneğini dönem başı olarak sun
+            state.step3.onerilenBit = aralik.bit;
+            step3ShowBitOneri(aralik.bit);
             var fakeSecenekler = [{ tarih: aralik.bas, dolu: false, oneri_donem: donem }];
             renderStep3BasSecenekleri(fakeSecenekler, aralik.bas, null);
+            step3FetchOncekiPlanlar(aralik.bas, aralik.bit);
             return;
+        }
+
+        // Bitiş önerisi: enjeksiyon bitişi
+        if (enjBit) {
+            state.step3.onerilenBit = enjBit;
+            step3ShowBitOneri(enjBit);
+            if ($('upFormBit') && !$('upFormBit').value) {
+                $('upFormBit').value = enjBit;
+            }
+        }
+
+        // Öneri kuralını göster
+        if (afterEnj) {
+            step3RenderOneriKural('Güvenli başlangıç: enjeksiyon tamamlandıktan sonraki gün (' + fmtDateTr(afterEnj) + ')');
+        } else if (enjBas) {
+            step3RenderOneriKural('Başlangıç: enjeksiyon başlangıç günü (' + fmtDateTr(enjBas) + ')');
         }
 
         fetchStep3OnCheck([enjBas, afterEnj].filter(Boolean), function (secenekler) {
             renderStep3BasSecenekleri(secenekler, enjBas, afterEnj);
+            // afterEnj seçildiyse önceki plan kontrolü yap
+            var tarihBas = afterEnj || enjBas;
+            var tarihBit = $('upFormBit') ? $('upFormBit').value : enjBit;
+            step3FetchOncekiPlanlar(tarihBas, tarihBit);
         });
     }
 
@@ -1086,6 +1120,129 @@
         else { el.style.display = 'none'; }
     }
 
+    function step3RenderOneriKural(msg) {
+        var el = $('upStep3OneriKural');
+        if (!el) return;
+        if (msg) { el.textContent = msg; el.style.display = 'block'; }
+        else { el.style.display = 'none'; }
+    }
+
+    function step3ShowBitOneri(isoDate) {
+        var el = $('upStep3BitOneri');
+        if (!el) return;
+        if (isoDate) {
+            el.textContent = 'Öneri: ' + fmtDateTr(isoDate);
+            el.style.display = '';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+
+    function step3RenderManuelBadge(show) {
+        var el = $('upStep3ManuelBadge');
+        if (!el) return;
+        el.style.display = show ? '' : 'none';
+        var btn = $('upStep3OneriDon');
+        if (btn) btn.style.display = show ? '' : 'none';
+    }
+
+    function step3FetchOncekiPlanlar(tarihBas, tarihBit) {
+        var wrap = $('upStep3OncekiPlanWrap');
+        if (!wrap) return;
+        var o = state.seciliCreateData;
+        if (!o) { step3RenderOncekiPlanlar([]); return; }
+        var loading = $('upStep3OncekiLoading');
+        if (loading) loading.style.display = '';
+        var list = $('upStep3OncekiPlanList');
+        if (list) list.innerHTML = '';
+        fetch('/planlama/uretim-plan/api/plan/onceki?' + new URLSearchParams({
+            sip_no: o.sip_no || '',
+            sip_harinx: o.sip_harinx || 0,
+            mamul_skod: o.model_kod || o.mamul_skod || '',
+            rkod: o.rkod || 0,
+            tarih_bas: tarihBas || '',
+            tarih_bit: tarihBit || '',
+        }), { credentials: 'include' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (loading) loading.style.display = 'none';
+            state.step3.oncekiPlanlar = (d.ok && d.planlar) ? d.planlar : [];
+            step3RenderOncekiPlanlar(state.step3.oncekiPlanlar, tarihBas, tarihBit);
+        })
+        .catch(function () {
+            if (loading) loading.style.display = 'none';
+            state.step3.oncekiPlanlar = [];
+            step3RenderOncekiPlanlar([]);
+        });
+    }
+
+    function step3RenderOncekiPlanlar(planlar, tarihBas, tarihBit) {
+        var listEl = $('upStep3OncekiPlanList');
+        var cakismaEl = $('upStep3CakismaUyari');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+        if (!planlar || !planlar.length) {
+            listEl.innerHTML = '<div class="up-step3-onceki-none">Bu dönemde önceki aktif plan yok.</div>';
+            if (cakismaEl) cakismaEl.style.display = 'none';
+            return;
+        }
+        var cakismaVar = false;
+        planlar.forEach(function (p) {
+            var pb = (p.plan_baslangic || '').slice(0, 10);
+            var pe = (p.plan_bitis || '').slice(0, 10);
+            var overlaps = tarihBas && tarihBit && pb && pe &&
+                !(pe < tarihBas || pb > tarihBit);
+            if (overlaps) cakismaVar = true;
+            var item = document.createElement('div');
+            item.className = 'up-step3-onceki-item' + (overlaps ? ' conflict' : '');
+            var durumClass = (p.aktif == 1 || p.aktif === true) ? ' aktif' : '';
+            var durumLabel = (p.aktif == 1 || p.aktif === true) ? 'AKTİF' : 'PASİF';
+            item.innerHTML =
+                '<div class="up-step3-onceki-donem">' + esc(p.plan_donemi || '—') + '</div>' +
+                '<div class="up-step3-onceki-tarih">' + esc(pb || '—') + ' → ' + esc(pe || '—') + '</div>' +
+                '<div class="up-step3-onceki-durum' + durumClass + '">' + esc(durumLabel) + '</div>';
+            listEl.appendChild(item);
+        });
+        if (cakismaEl) {
+            if (cakismaVar) {
+                cakismaEl.textContent = 'Bu dönemde mevcut aktif planla çakışma var! Tarihleri kontrol edin.';
+                cakismaEl.style.display = '';
+            } else {
+                cakismaEl.style.display = 'none';
+            }
+        }
+    }
+
+    function step3FetchMiktarOzet() {
+        var wrap = $('upStep3MiktarOzet');
+        if (!wrap) return;
+        var o = state.seciliCreateData;
+        if (!o) return;
+        fetch('/planlama/uretim-plan/api/plan/kalem-miktar-ozet?' + new URLSearchParams({
+            sip_no: o.sip_no || '',
+            sip_harinx: o.sip_harinx || 0,
+            mamul_skod: o.model_kod || o.mamul_skod || '',
+            rkod: o.rkod || 0,
+        }), { credentials: 'include' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (!d.ok) return;
+            var rez = state.enj.reservation;
+            var buPlan = rez ? (rez.planCift || 0) : 0;
+            var kalan = (d.kalan_miktar || 0) - buPlan;
+            var ozetEl = function (id, val) {
+                var el = $(id);
+                if (el) el.textContent = fmtN(val) + ' çift';
+            };
+            ozetEl('upStep3OzetSipToplam', d.siparis_toplam);
+            ozetEl('upStep3OzetOnceden', d.planlanan_miktar);
+            ozetEl('upStep3OzetBuPlan', buPlan);
+            ozetEl('upStep3OzetKalan', kalan >= 0 ? kalan : 0);
+            wrap.style.display = '';
+        })
+        .catch(function () {});
+    }
+
     function applyStep3Baslangic(isoDate, oneriDonem) {
         if ($('upFormBas')) $('upFormBas').value = isoDate || '';
         if (oneriDonem && $('upFormDonem')) $('upFormDonem').value = oneriDonem;
@@ -1097,6 +1254,8 @@
         }
         state.step3.saveBlocked = false;
         validateStep3Tarihleri();
+        var tarihBit = $('upFormBit') ? $('upFormBit').value : '';
+        step3FetchOncekiPlanlar(isoDate, tarihBit);
     }
 
     function fetchStep3OnCheck(tarihler, cb) {
@@ -1137,6 +1296,12 @@
         }
         state.step3.bitisUyari = uyari || null;
         showStep3Uyari(uyari);
+        // Bitiş uyarısını da göster
+        var bitUyariEl = $('upStep3BitUyari');
+        if (bitUyariEl) {
+            if (uyari) { bitUyariEl.textContent = uyari; bitUyariEl.style.display = ''; }
+            else { bitUyariEl.style.display = 'none'; }
+        }
         wizardUpdateNav();
     }
 
@@ -1733,16 +1898,21 @@
             if (legacy) legacy.style.display = 'none';
             return;
         }
-        wrap.style.display = 'block';
+        wrap.style.display = '';
         if (legacy) legacy.style.display = 'none';
+        var modLabel = rez.calismaModu === 'GUNDUZ' ? 'Gündüz'
+            : rez.calismaModu === 'GECE' ? 'Gece' : 'Gündüz+Gece';
         body.innerHTML =
-            '<div class="up-step3-rezerv-line"><strong>' + esc(rez.makineKod) + ' / ' + esc(rez.slot) +
-            '</strong> · ' + esc(rez.istStr) + ' · ' + esc(rez.kalipAdedi) + ' kalıp</div>' +
-            '<div class="up-step3-rezerv-line">' + esc(rez.kalipKod || '—') + '</div>' +
-            '<div class="up-step3-rezerv-line">' + fmtN(rez.planCift) + ' çift · ' +
-            esc(rez.gerekliTur) + ' tur · Referans: ' + esc(rez.refLabel) + '</div>' +
-            '<div class="up-step3-rezerv-line">' + esc(enjFmtDtApi(rez.baslangic)) + ' → ' +
-            esc(enjFmtDtApi(rez.bitis)) + '</div>';
+            '<div class="up-step3-rezerv-grid">' +
+              '<div class="up-step3-rg-item"><span>Makine</span><strong>' + esc(rez.makineKod || '—') + '</strong></div>' +
+              '<div class="up-step3-rg-item"><span>Taraf</span><strong>' + esc(rez.slot || '—') + '</strong></div>' +
+              '<div class="up-step3-rg-item"><span>İstasyonlar</span><strong>' + esc(rez.istStr || '—') + '</strong></div>' +
+              '<div class="up-step3-rg-item"><span>Kalıp</span><strong>' + esc(rez.kalipKod || '—') + ' (' + esc(rez.kalipAdedi) + ')</strong></div>' +
+              '<div class="up-step3-rg-item"><span>Planlanacak çift</span><strong>' + fmtN(rez.planCift) + '</strong></div>' +
+              '<div class="up-step3-rg-item"><span>Çalışma modu</span><strong>' + esc(modLabel) + '</strong></div>' +
+              '<div class="up-step3-rg-item up-step3-rg-span2"><span>Enjeksiyon başlangıcı</span><strong>' + esc(enjFmtDtApi(rez.baslangic)) + '</strong></div>' +
+              '<div class="up-step3-rg-item up-step3-rg-span2"><span>Hesaplanan bitiş</span><strong>' + esc(enjFmtDtApi(rez.bitis)) + '</strong></div>' +
+            '</div>';
     }
 
     function enjFetchIstasyonPlanDurum(cb) {
@@ -2938,7 +3108,33 @@
         if ($('upStep3EnjDegistir')) {
             $('upStep3EnjDegistir').addEventListener('click', function () { wizardShowStep(2); });
         }
-        if ($('upFormBit')) $('upFormBit').addEventListener('change', validateStep3Tarihleri);
+        if ($('upFormBit')) {
+            $('upFormBit').addEventListener('change', function () {
+                validateStep3Tarihleri();
+                // Manuel değişiklik takibi
+                if (state.step3.onerilenBit && $('upFormBit').value !== state.step3.onerilenBit) {
+                    state.step3.manuelDegisti = true;
+                } else {
+                    state.step3.manuelDegisti = false;
+                }
+                step3RenderManuelBadge(state.step3.manuelDegisti);
+                // Önceki plan güncelle
+                var bas = $('upFormBas') ? $('upFormBas').value : '';
+                step3FetchOncekiPlanlar(bas, $('upFormBit').value);
+            });
+        }
+        if ($('upStep3OneriDon')) {
+            $('upStep3OneriDon').addEventListener('click', function () {
+                if (state.step3.onerilenBit && $('upFormBit')) {
+                    $('upFormBit').value = state.step3.onerilenBit;
+                    state.step3.manuelDegisti = false;
+                    step3RenderManuelBadge(false);
+                    validateStep3Tarihleri();
+                    var bas = $('upFormBas') ? $('upFormBas').value : '';
+                    step3FetchOncekiPlanlar(bas, state.step3.onerilenBit);
+                }
+            });
+        }
         enjBindMakineDetayModal();
         enjUpdateManualRefVisibility();
     }
@@ -3341,6 +3537,13 @@
         if ($('upFormBit')) $('upFormBit').addEventListener('change', function () {
             validateStep3Tarihleri();
             clearPlanErrors();
+            // Manuel değişiklik takibi (eğer ilk listener'dan kaçtıysa)
+            if (state.step3.onerilenBit && $('upFormBit').value !== state.step3.onerilenBit) {
+                state.step3.manuelDegisti = true;
+            } else {
+                state.step3.manuelDegisti = false;
+            }
+            step3RenderManuelBadge(state.step3.manuelDegisti);
         });
         if ($('upFormDonem')) $('upFormDonem').addEventListener('change', function () {
             clearPlanErrors();

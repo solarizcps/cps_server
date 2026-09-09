@@ -901,6 +901,191 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 .up-step3-genel-not { font-size: 11px; color: #64748b; margin: 0 0 8px; }
 .up-btn-sm { font-size: 11px; padding: 4px 10px; }
 
+/* ───── ADIM 3 — 2-KOLON LAYOUT ───── */
+.up-step3-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+.up-step3-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+/* Panel kartları */
+.up-step3-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.up-step3-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+.up-step3-panel-head > strong {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #475569;
+  flex: 1;
+}
+.up-step3-panel-icon { font-size: 14px; flex-shrink: 0; }
+
+/* Panel renklenmeleri */
+.up-step3-panel-enj { background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border-color: #fdba74; }
+.up-step3-panel-enj .up-step3-panel-head > strong { color: #c2410c; }
+.up-step3-panel-tarih { background: #f0f9ff; border-color: #bae6fd; }
+.up-step3-panel-tarih .up-step3-panel-head > strong { color: #0369a1; }
+.up-step3-panel-doluluk { background: #f8fafc; border-color: #cbd5e1; }
+.up-step3-panel-kayit { background: #f0fdf4; border-color: #86efac; }
+.up-step3-panel-kayit .up-step3-panel-head > strong { color: #166534; }
+
+/* Manuel değiştirildi badge */
+.up-step3-manuel-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+}
+
+/* Değiştir butonu */
+.up-step3-degistir-btn { margin-left: auto; flex-shrink: 0; }
+
+/* Öneri kural açıklaması */
+.up-step3-oneri-kural {
+  font-size: 11px;
+  color: #0369a1;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 5px;
+  padding: 5px 8px;
+  margin-bottom: 4px;
+}
+
+/* Başlık etiketleri */
+.up-step3-baslik { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
+.up-step3-baslik-mt { margin-top: 10px; }
+
+/* Bitiş tarihi satırı */
+.up-step3-bit-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.up-step3-bit-label { flex: 1; min-width: 130px; }
+.up-step3-bit-input { width: 100%; }
+.up-step3-bit-oneri {
+  font-size: 11px;
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 4px;
+  padding: 3px 7px;
+}
+.up-step3-bit-uyari { font-size: 11.5px; color: #dc2626; margin-top: 4px; }
+.up-step3-oneri-don-btn { flex-shrink: 0; }
+
+/* Dönem seçimi */
+.up-step3-donem-sel { width: 100%; margin-top: 4px; }
+
+/* Çakışma uyarısı */
+.up-step3-cakisma-uyari {
+  font-size: 12px;
+  font-weight: 600;
+  color: #b91c1c;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 6px;
+}
+
+/* Önceki plan listesi */
+.up-step3-onceki-body { font-size: 12px; }
+.up-step3-onceki-loading { color: #64748b; font-size: 12px; }
+.up-step3-onceki-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  padding: 7px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  background: #fff;
+}
+.up-step3-onceki-item.conflict { border-color: #fca5a5; background: #fff1f2; }
+.up-step3-onceki-donem { font-weight: 700; color: #334155; grid-column: 1/-1; }
+.up-step3-onceki-tarih { color: #64748b; font-size: 11px; }
+.up-step3-onceki-durum {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #e2e8f0;
+  color: #475569;
+  height: fit-content;
+  align-self: center;
+}
+.up-step3-onceki-durum.aktif { background: #dcfce7; color: #166534; }
+.up-step3-onceki-none { color: #94a3b8; font-size: 12px; font-style: italic; }
+
+/* Miktar özeti */
+.up-step3-miktar-ozet {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+.up-step3-ozet-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  font-size: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.up-step3-ozet-row:last-child { border-bottom: none; }
+.up-step3-ozet-row span:first-child { color: #64748b; }
+.up-step3-ozet-row span:last-child { font-weight: 600; color: #1e293b; }
+.up-step3-ozet-this span:last-child { color: #2563eb; }
+.up-step3-ozet-kalan span:last-child { color: #16a34a; font-weight: 700; }
+
+/* Step3 form grid */
+.up-step3-form-grid { margin-top: 4px; }
+
+/* Responsive: tek kolon */
+/* Rezervasyon detay grid */
+.up-step3-rezerv-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+}
+.up-step3-rg-item { display: flex; flex-direction: column; font-size: 12px; }
+.up-step3-rg-item > span { font-size: 10px; color: #92400e; text-transform: uppercase; }
+.up-step3-rg-item > strong { color: #431407; }
+.up-step3-rg-span2 { grid-column: 1 / -1; }
+
+@media (max-width: 860px) {
+  .up-step3-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .up-step3-layout { padding: 10px; gap: 10px; }
+  .up-step3-bit-row { flex-direction: column; align-items: stretch; }
+}
+
 .up-enj-detay-ozet { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
 .up-enj-detay-ozet h4 { margin: 0 0 10px; font-size: 12px; font-weight: 800; color: #ea580c; text-transform: uppercase; }
 .up-enj-ozet-dl { grid-template-columns: repeat(3, 1fr); }
@@ -934,16 +1119,28 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   display: flex;
   flex-direction: column;
 }
-/* Wizard header elements shrink-0 in step2 mode */
+/* On step3, same approach */
+.up-modal-create-root .up-create-scroll.step3-active {
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* Wizard header elements shrink-0 in step2/step3 mode */
 .up-create-scroll.step2-active .up-wizard-siparis-strip,
 .up-create-scroll.step2-active .up-wizard-steps,
 .up-create-scroll.step2-active .up-plan-error-summary,
-.up-create-scroll.step2-active .up-sr-live {
+.up-create-scroll.step2-active .up-sr-live,
+.up-create-scroll.step3-active .up-wizard-siparis-strip,
+.up-create-scroll.step3-active .up-wizard-steps,
+.up-create-scroll.step3-active .up-plan-error-summary,
+.up-create-scroll.step3-active .up-sr-live {
   flex-shrink: 0;
   padding-left: 16px;
   padding-right: 16px;
 }
-.up-create-scroll.step2-active .up-wizard-steps {
+.up-create-scroll.step2-active .up-wizard-steps,
+.up-create-scroll.step3-active .up-wizard-steps {
   padding-top: 10px;
 }
 /* Step2 panel fills entire scroll area */
@@ -951,6 +1148,11 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+/* Step3 panel fills remaining area and scrolls internally */
+.up-create-scroll.step3-active #upStep3 {
+  flex: 1;
+  min-height: 0;
 }
 .up-create-scroll.step2-active .up-step2-layout {
   height: 100%;

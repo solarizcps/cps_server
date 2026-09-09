@@ -616,6 +616,47 @@ def api_plan_kalem_miktar_ozet():
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
 
 
+@uretim_plan_bp.route('/api/plan/onceki', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_plan_onceki():
+    """Adım 3 — aynı sipariş/model/renk için önceki aktif planlar (read-only)."""
+    sip_no = request.args.get('sip_no', type=int)
+    sip_harinx = request.args.get('sip_harinx', 0, type=int)
+    mamul_skod = (request.args.get('mamul_skod') or '').strip()
+    rkod = request.args.get('rkod', 0, type=int)
+    tarih_bas = (request.args.get('tarih_bas') or '').strip()[:10]
+    tarih_bit = (request.args.get('tarih_bit') or '').strip()[:10]
+    if not sip_no or not mamul_skod:
+        return jsonify({'ok': False, 'mesaj': 'sip_no ve mamul_skod gerekli'}), 400
+    con = get_conn()
+    try:
+        repo._ensure_table(con)
+        rows = con.execute("""
+            SELECT id, plan_donemi, plan_baslangic, plan_bitis, aktif, oncelik
+              FROM uretim_model_plan
+             WHERE sip_no=? AND sip_harinx=? AND mamul_skod=? AND rkod=? AND aktif=1
+             ORDER BY plan_baslangic DESC
+             LIMIT 20
+        """, (int(sip_no), int(sip_harinx), mamul_skod, int(rkod))).fetchall()
+        planlar = []
+        for r in rows:
+            pb = (r['plan_baslangic'] or '')[:10]
+            pe = (r['plan_bitis'] or '')[:10]
+            planlar.append({
+                'id': r['id'],
+                'plan_donemi': r['plan_donemi'],
+                'plan_baslangic': pb,
+                'plan_bitis': pe,
+                'aktif': r['aktif'],
+                'oncelik': r['oncelik'],
+            })
+        return jsonify({'ok': True, 'planlar': planlar})
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
 @uretim_plan_bp.route('/api/plan/on-check', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def api_plan_on_check():
