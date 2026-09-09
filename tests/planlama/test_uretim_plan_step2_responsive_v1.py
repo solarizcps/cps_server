@@ -157,7 +157,8 @@ def test_summary_first_viewport(html):
 def test_machine_grid_compact(css):
     """MACHINE_GRID_COMPACT=PASS"""
     assert '.up-step2-col-left .up-enj-makine-card' in css
-    assert 'padding: 6px 8px 4px' in css
+    # v17: kompakt — önceki 6px 8px 4px → 5px 6px 3px
+    assert 'padding: 5px 6px 3px' in css
 
 
 def test_modal_wider_viewport(css):
@@ -180,3 +181,47 @@ def test_quantity_passthrough_route():
     assert 'kalem-miktar-ozet' in routes
     assert 'resolve_line_quantity_summary' in service
     assert 'already_planned_quantity' in service
+
+
+# ---- OVERFLOW_FIX_V1 yeni testler ----
+
+def test_ab_sides_horizontal_css(css):
+    """AB_SIDES_HORIZONTAL=PASS — .up-enj-card-sides grid tanımlı ve 1fr 1fr"""
+    assert '.up-enj-card-sides' in css
+    idx = css.index('.up-enj-card-sides')
+    block = css[idx:idx+200]
+    assert '1fr 1fr' in block
+
+
+def test_ab_sides_wrapper_in_js(js):
+    """AB_SIDES_JS_WRAPPER=PASS — JS A/B taraflarını up-enj-card-sides içine alıyor"""
+    assert 'up-enj-card-sides' in js
+
+
+def test_footer_not_position_absolute(css):
+    """FOOTER_NOT_ABSOLUTE=PASS — create-foot position:relative, fixed veya absolute değil"""
+    idx = css.index('.up-modal-create-root .up-create-foot')
+    block = css[idx:idx+250]
+    assert 'position: absolute' not in block
+    assert 'position: fixed' not in block
+    # relative veya hiç yok — her ikisi de kabul
+    assert 'position: relative' in block or 'position' not in block.replace('position: relative', '')
+
+
+def test_modal_panel_height_bound(css):
+    """MODAL_PANEL_HEIGHT=PASS — modal yüksekliği 100dvh veya 96vh ile sınırlı"""
+    idx = css.index('.up-modal-create-root .up-modal-panel.up-modal-create')
+    block = css[idx:idx+350]
+    assert 'dvh' in block or '96vh' in block
+
+
+def test_column_overflow_scroll(css):
+    """COLUMN_SCROLL=PASS — kolonlar overflow-y:auto ile kendi kaydırır"""
+    idx = css.index('.up-step2-col {')
+    block = css[idx:idx+200]
+    assert 'overflow-y: auto' in block
+
+
+def test_1366_breakpoint_exists(css):
+    """RESPONSIVE_1099=PASS — 1099px breakpoint kuralı var (1366@125% karşılar)"""
+    assert '1099px' in css or '1100px' in css or '1024px' in css

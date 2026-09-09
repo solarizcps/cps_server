@@ -1100,10 +1100,12 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 /* Plan Oluştur modal — scoped sticky layout */
 .up-modal-create-root .up-modal-panel.up-modal-create {
   width: min(calc(100vw - 32px), 1480px);
-  max-height: min(100dvh, 96vh);
+  height: min(calc(100dvh - 32px), calc(100vh - 32px));
   max-height: min(96vh, 100dvh);
   min-height: 0;
   overflow: hidden;
+  /* modal panel kendisi flex-column: head / scroll / foot — hiç taşmaz */
+  flex-shrink: 0;
 }
 .up-modal-create-root .up-create-scroll {
   flex: 1;
@@ -1163,6 +1165,8 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   background: #fff;
   box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
   z-index: 2;
+  /* Footer her zaman panel içinde en altta — columns üzerine binmez */
+  position: relative;
 }
 .up-wizard-siparis-strip {
   font-size: 12px;
@@ -1204,7 +1208,8 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px 14px 16px;
+  /* alt padding footer yüksekliğinden bağımsız — kolon kendi scroll'unda */
+  padding: 10px 12px 12px;
 }
 .up-step2-col-left {
   border-right: 1px solid #e2e8f0;
@@ -1247,8 +1252,8 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   line-height: 1.4;
 }
 .up-step2-section {
-  margin-bottom: 10px;
-  padding-bottom: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px solid #f1f5f9;
 }
 .up-step2-section:last-of-type { border-bottom: none; }
@@ -1264,46 +1269,76 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 /* Makine kartları sol kolonda 2'li grid — kompakt */
 .up-enj-makine-cards-2col {
   grid-template-columns: repeat(2, 1fr) !important;
-  gap: 6px !important;
-  margin-bottom: 8px !important;
+  gap: 5px !important;
+  margin-bottom: 6px !important;
 }
 .up-step2-col-left .up-enj-makine-card {
-  padding: 6px 8px 4px;
+  padding: 5px 6px 3px;
 }
 .up-step2-col-left .up-enj-makine-card strong {
   font-size: 12px;
-  line-height: 1.25;
+  line-height: 1.2;
+  margin-bottom: 2px;
+  display: block;
 }
 .up-step2-col-left .up-enj-makine-card span,
 .up-step2-col-left .up-enj-card-metric {
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 .up-step2-col-left .up-enj-card-metric {
-  margin-top: 1px;
+  margin-top: 0;
 }
 .up-step2-col-left .up-enj-makine-detay-btn {
-  margin: 0 8px 5px;
-  padding: 3px 8px;
+  margin: 0 6px 4px;
+  padding: 2px 6px;
   font-size: 12px;
 }
 .up-step2-col-left .up-enj-card-slots {
-  gap: 2px;
-  margin-top: 3px;
+  gap: 1px;
+  margin-top: 2px;
   font-size: 12px;
 }
 .up-step2-col-left .up-enj-doluluk-bant {
-  margin-bottom: 6px;
-  padding: 5px 8px;
+  margin-bottom: 5px;
+  padding: 4px 6px;
   font-size: 12px;
 }
 .up-step2-col-left .up-step2-col-desc {
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 .up-step2-col-left .up-step2-section {
-  margin-bottom: 8px;
-  padding-bottom: 6px;
+  margin-bottom: 6px;
+  padding-bottom: 5px;
 }
+/* A/B tarafları yan yana — ROOT CAUSE FIX */
+.up-enj-card-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12px;
+  padding: 3px 0;
+}
+.up-enj-card-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 3px;
+}
+.up-step2-col-left .up-enj-makine-card .up-enj-card-sides {
+  grid-template-columns: 1fr 1fr;
+}
+.up-enj-card-side-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 1px;
+}
+.up-enj-card-side.side-a .up-enj-card-side-title { color: #1d4ed8; }
+.up-enj-card-side.side-b .up-enj-card-side-title { color: #15803d; }
+.up-enj-card-ilk-uygun { margin-top: 2px; font-size: 10px; color: #475569; }
 /* Büyük slot butonları */
 .up-enj-slot-row-big { gap: 8px; display: flex; }
 .up-slot-btn-big {
@@ -1360,19 +1395,22 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 .up-step2-summary {
   background: #f0fdf4;
   border: 1px solid #bbf7d0;
-  border-radius: 10px;
-  padding: 8px 10px;
+  border-radius: 8px;
+  padding: 6px 8px;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.4;
+}
+.up-step2-summary-title {
+  margin: 0 0 4px !important;
 }
 .up-step2-summary-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2px 12px;
+  gap: 1px 10px;
 }
 .up-step2-summary-body .up-step2-summary-row {
   border-bottom: none;
-  padding: 2px 0;
+  padding: 1px 0;
 }
 .up-step2-summary-title {
   margin: 0 0 8px;

@@ -2568,8 +2568,10 @@
             card.innerHTML =
                 '<strong>' + esc(kod) + '</strong>' +
                 '<span class="up-enj-card-ist-label">' + m.istasyon_sayisi + ' İSTASYON</span>' +
+                '<div class="up-enj-card-sides">' +
                 enjSideCardBlock(sideA, 'A') +
-                enjSideCardBlock(sideB, 'B');
+                enjSideCardBlock(sideB, 'B') +
+                '</div>';
             card.addEventListener('click', function () {
                 enjRequestMakineChange(m, machines);
             });
