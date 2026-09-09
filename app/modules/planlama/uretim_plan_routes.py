@@ -590,7 +590,13 @@ def api_enj_cakisma_kontrol():
 @uretim_plan_bp.route('/api/plan/kalem-miktar-ozet', methods=['GET'])
 @yetki_gerekli('planlama', 'can_view')
 def api_plan_kalem_miktar_ozet():
-    """Sipariş kalemi toplam / planlanmış / kalan miktar — read-only passthrough."""
+    """Sipariş kalemi toplam / planlanmış / kalan miktar — read-only passthrough.
+
+    Legacy planlar varsa (quantity_calculable=False):
+    - HTTP 200 döner (blocker değil)
+    - ok=True, quantity_calculable=False, remaining_quantity=null
+    - warning alanında açıklama mesajı
+    """
     sip_no = request.args.get('sip_no', type=int)
     sip_harinx = request.args.get('sip_harinx', type=int)
     mamul_skod = (request.args.get('mamul_skod') or '').strip()
@@ -606,6 +612,7 @@ def api_plan_kalem_miktar_ozet():
         )
         summary = resolve_line_quantity_summary(
             sip_no, int(sip_harinx or 0), mamul_skod, int(rkod or 0),
+            view_only=True,
         )
         return jsonify({'ok': True, **summary})
     except OrderLineNotFoundError as e:

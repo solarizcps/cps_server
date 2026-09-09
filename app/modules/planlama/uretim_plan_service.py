@@ -95,8 +95,18 @@ def resolve_line_quantity_summary(
     sip_harinx: int,
     mamul_skod: str,
     rkod: int = 0,
+    *,
+    view_only: bool = False,
 ) -> dict:
-    """Sipariş kalemi miktar özeti — read-only, Remaining Quantity V1 alanları."""
+    """Sipariş kalemi miktar özeti — read-only, Remaining Quantity V1 alanları.
+
+    view_only=True (GET görüntüleme):
+        Çözülemeyen legacy planlar varsa hata fırlatmaz; quantity_calculable=False
+        ile partial sonuç döner. Create/update doğrulaması bu modda ÇAĞRILMAZ.
+
+    view_only=False (varsayılan, create/update guard):
+        Önceki FAIL-CLOSED davranışı — unresolved varsa OrderLineQuantityError.
+    """
     from db import get_conn
     from modules.planlama.uretim_plan_repo import _sum_already_planned
 
@@ -109,22 +119,49 @@ def resolve_line_quantity_summary(
         )
     finally:
         con.close()
+
     if unresolved:
-        ids = ', '.join(f'#{i}' for i in unresolved[:5])
-        raise OrderLineQuantityError(
-            'Bu sipariş kaleminde miktarı çözümlenemeyen legacy plan(lar) var '
-            f'({ids}). Kalan miktar güvenli hesaplanamıyor.'
-        )
+        if not view_only:
+            # Create/update: FAIL-CLOSED — mevcut davranış korunur
+            ids = ', '.join(f'#{i}' for i in unresolved[:5])
+            raise OrderLineQuantityError(
+                'Bu sipariş kaleminde miktarı çözümlenemeyen legacy plan(lar) var '
+                f'({ids}). Kalan miktar güvenli hesaplanamıyor.'
+            )
+        # Görüntüleme modunda: partial sonuç, quantity_calculable=False
+        warning_ids = ', '.join(f'#{i}' for i in unresolved[:5])
+        return {
+            'order_total_quantity': order_total,
+            'already_planned_quantity': already,
+            'remaining_quantity': None,
+            'remaining_after_save': None,
+            'siparis_toplam_miktar': order_total,
+            'planlanmis_miktar': already,
+            'kalan_miktar': None,
+            'birim': info.get('birim') or 'CIFT',
+            'source': info.get('source'),
+            'quantity_calculable': False,
+            'unresolved_plan_ids': unresolved,
+            'warning': (
+                f'Aktif eski plan {warning_ids} miktarı bilinmediği için '
+                'kesin kalan miktar hesaplanamıyor.'
+            ),
+        }
+
     remaining = order_total - already
     return {
         'order_total_quantity': order_total,
         'already_planned_quantity': already,
         'remaining_quantity': remaining,
+        'remaining_after_save': None,
         'siparis_toplam_miktar': order_total,
         'planlanmis_miktar': already,
         'kalan_miktar': remaining,
         'birim': info.get('birim') or 'CIFT',
         'source': info.get('source'),
+        'quantity_calculable': True,
+        'unresolved_plan_ids': [],
+        'warning': None,
     }
 
 

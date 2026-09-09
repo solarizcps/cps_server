@@ -565,7 +565,8 @@
         fetch('/planlama/uretim-plan/api/plan/kalem-miktar-ozet?' + q, { credentials: 'include' })
             .then(function (r) { return r.json(); })
             .then(function (d) {
-                state.enj.quantitySummary = d.ok ? d : null;
+                // ok=true (normal) veya quantity_calculable=false (legacy partial) kabul edilir
+                state.enj.quantitySummary = (d.ok || (d && d.quantity_calculable === false)) ? d : null;
                 enjUpdateMiktarOzet();
                 enjUpdateKurulumOzet();
                 if (cb) cb();
@@ -590,7 +591,8 @@
         var e = state.enj;
         var qs = e.quantitySummary || {};
         var req = parseInt(($('upEnjPlanCift') && $('upEnjPlanCift').value) || e.planCift || 0, 10) || 0;
-        var rem = qs.remaining_quantity;
+        var rem = qs.remaining_quantity;  // null → legacy block
+        var legacyBlock = (qs.quantity_calculable === false);
         var after = (rem != null && req > 0) ? (rem - req) : null;
         var istStr = e.istasyonlar && e.istasyonlar.length
             ? e.istasyonlar.map(function (x) { return 'İST' + x; }).join(', ')
@@ -606,10 +608,12 @@
             ['Sipariş no', o.sip_no || null],
             ['Model / Renk', o.model_kod ? (o.model_kod + ' · ' + (o.renk || '')) : null],
             ['Toplam sipariş', qs.order_total_quantity != null ? fmtN(qs.order_total_quantity) + ' çift' : null],
-            ['Önceden planlanan', qs.already_planned_quantity != null ? fmtN(qs.already_planned_quantity) + ' çift' : null],
-            ['Kalan', qs.remaining_quantity != null ? fmtN(qs.remaining_quantity) + ' çift' : null],
+            ['Önceden planlanan', qs.already_planned_quantity != null
+                ? (legacyBlock ? 'En az ' + fmtN(qs.already_planned_quantity) + ' çift' : fmtN(qs.already_planned_quantity) + ' çift')
+                : null],
+            ['Kalan', legacyBlock ? 'Hesaplanamıyor' : (rem != null ? fmtN(rem) + ' çift' : null)],
             ['Bu planda', req > 0 ? fmtN(req) + ' çift' : null],
-            ['Planlama sonrası', after != null ? fmtN(after) + ' çift' : null],
+            ['Planlama sonrası', legacyBlock ? 'Hesaplanamıyor' : (after != null ? fmtN(after) + ' çift' : null)],
             ['Makine', e.makineKod],
             ['Slot', e.slot],
             ['Başlangıç', e.baslangic ? enjFmtDtApi(e.baslangic) : null],
@@ -645,16 +649,25 @@
             if (warn) warn.style.display = 'none';
             return;
         }
-        var rem = qs.remaining_quantity;
+        var rem = qs.remaining_quantity;  // null ise hesaplanamıyor
+        var legacyBlock = (qs.quantity_calculable === false);
         var after = (rem != null && req > 0) ? rem - req : null;
+        var alreadyLbl = qs.already_planned_quantity != null
+            ? (legacyBlock ? 'En az ' + fmtN(qs.already_planned_quantity) + ' çift' : fmtN(qs.already_planned_quantity) + ' çift')
+            : '—';
+        var remLbl = legacyBlock ? 'Hesaplanamıyor' : (rem != null ? fmtN(rem) + ' çift' : '—');
+        var afterLbl = legacyBlock ? 'Hesaplanamıyor' : (after != null ? fmtN(after) + ' çift' : '—');
         el.innerHTML =
             '<div><strong>TOPLAM SİPARİŞ:</strong> ' + fmtN(qs.order_total_quantity) + ' çift</div>' +
-            '<div><strong>ÖNCEDEN PLANLANAN:</strong> ' + fmtN(qs.already_planned_quantity) + ' çift</div>' +
-            '<div><strong>KALAN:</strong> ' + fmtN(rem) + ' çift</div>' +
+            '<div><strong>ÖNCEDEN PLANLANAN:</strong> ' + alreadyLbl + '</div>' +
+            '<div><strong>KALAN:</strong> ' + remLbl + '</div>' +
             '<div><strong>BU PLAN:</strong> ' + (req > 0 ? fmtN(req) : '—') + ' çift</div>' +
-            '<div><strong>PLANLAMA SONRASI:</strong> ' + (after != null ? fmtN(after) : '—') + ' çift</div>';
+            '<div><strong>PLANLAMA SONRASI:</strong> ' + afterLbl + '</div>';
         if (warn) {
-            if (req > 0 && rem != null && req > rem) {
+            if (legacyBlock) {
+                warn.textContent = qs.warning || 'Legacy plan miktarı düzeltilmeden kayıt yapılamaz.';
+                warn.style.display = 'block';
+            } else if (req > 0 && rem != null && req > rem) {
                 warn.textContent = 'Bu plan miktarı kalan miktarı (' + fmtN(rem) + ' çift) aşıyor. Kayıt sunucuda reddedilir.';
                 warn.style.display = 'block';
             } else if (req > 0 && after === 0) {
@@ -1509,12 +1522,14 @@
         back.style.display = state.createStep > 1 ? '' : 'none';
         next.style.display = state.createStep < 3 ? '' : 'none';
         save.style.display = state.createStep === 3 ? '' : 'none';
+        var qs = state.enj.quantitySummary;
+        var legacyBlockNav = (qs && qs.quantity_calculable === false);
         if (state.createStep === 1) {
             next.disabled = !state.seciliCreate;
         } else if (state.createStep === 2) {
-            next.disabled = state.requiresEnj && !state.enj.hesapOk;
+            next.disabled = legacyBlockNav || (state.requiresEnj && !state.enj.hesapOk);
         } else {
-            save.disabled = state.requiresEnj && !state.enj.hesapOk;
+            save.disabled = legacyBlockNav || (state.requiresEnj && !state.enj.hesapOk);
         }
     }
 
