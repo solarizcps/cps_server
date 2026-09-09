@@ -151,9 +151,12 @@ def test_right_column_min_width(css):
 
 
 def test_speed_fields_readable(css):
-    """SPEED_FIELDS_READABLE=PASS"""
-    assert '.up-step2-col-right .up-enj-manual-ref' in css
-    assert 'grid-template-columns: 1fr' in css.split('.up-step2-col-right .up-enj-manual-ref')[1][:120]
+    """SPEED_FIELDS_READABLE=PASS — V4: 2col override kaldırıldı, up-enj-manual-ref-2col aktif"""
+    assert 'up-enj-manual-ref-2col' in css
+    # 2col grid tanımlı
+    idx = css.index('.up-enj-manual-ref-2col')
+    block = css[idx:idx+150]
+    assert 'grid-template-columns: 1fr 1fr' in block
 
 
 def test_warning_text_not_vertical(css):
@@ -237,10 +240,12 @@ def test_modal_panel_height_bound(css):
 
 
 def test_column_overflow_scroll(css):
-    """COLUMN_SCROLL=PASS — kolonlar overflow-y:auto ile kendi kaydırır"""
+    """COLUMN_SCROLL=PASS — V4: kolon bağımsız scroll kaldırıldı (overflow:visible)"""
     idx = css.index('.up-step2-col {')
     block = css[idx:idx+200]
-    assert 'overflow-y: auto' in block
+    import re as _re
+    # overflow-y: auto/scroll olmamalı bu blokta
+    assert not _re.search(r'overflow-y\s*:\s*(auto|scroll)', block), "Kolon bağımsız scroll mevcut"
 
 
 def test_1366_breakpoint_exists(css):
@@ -373,12 +378,12 @@ def test_istasyon_before_kalip_in_html(html):
 
 
 def test_cache_v19_equal(html):
-    """CACHE_V19=PASS — CSS ve JS v19 eşit"""
+    """CACHE_V20=PASS — CSS ve JS v20 eşit"""
     import re
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     assert css_v and js_v, "Version bulunamadı"
-    assert css_v.group(1) == js_v.group(1) == '19', f"v{css_v.group(1)}/{js_v.group(1)}"
+    assert css_v.group(1) == js_v.group(1) == '20', f"v{css_v.group(1)}/{js_v.group(1)}"
 
 
 def test_durum_strip_css(css):
@@ -394,3 +399,134 @@ def test_footer_layout_flex(css):
     idx = css.index('.up-modal-create-root .up-create-foot')
     block = css[idx:idx+300]
     assert 'space-between' in block
+
+
+# ---- V4 UI GAPS FIX testler ----
+
+def test_istasyon_placeholder_in_js(js):
+    """ISTASYON_PLACEHOLDER=PASS — placeholder fonksiyonu JS'de var"""
+    assert 'enjRenderIstasyonPlaceholder' in js
+    assert 'up-enj-ist-placeholder' in js
+
+
+def test_istasyon_summary_function_in_js(js):
+    """ISTASYON_SUMMARY=PASS — özet satırı fonksiyonu JS'de var"""
+    assert 'enjUpdateIstasyonOzetSatir' in js
+    # Encoding-safe: makine kelimesi JS'de var
+    assert 'makine' in js.lower()
+
+
+def test_istasyon_grid_no_early_return_without_machine(js):
+    """ISTASYON_NO_EARLY_RETURN=PASS — makine yoksa placeholder çağırıyor"""
+    idx = js.index('function enjRenderIstasyonGrid')
+    block = js[idx:idx+400]
+    assert 'enjRenderIstasyonPlaceholder' in block
+
+
+def test_tur_hiz_override_removed(css):
+    """TUR_HIZ_OVERRIDE_REMOVED=PASS — 2col override kaldırıldı"""
+    # Eski override: .up-step2-col-right .up-enj-manual-ref { grid-template-columns:1fr }
+    # Yeni: yalnız yorum satırı var
+    pattern = r'\.up-step2-col-right\s+\.up-enj-manual-ref\s*\{[^}]*grid-template-columns\s*:\s*1fr\s*[;]'
+    import re as _re
+    assert not _re.search(pattern, css), "1fr override hâlâ mevcut"
+
+
+def test_durum_val_initial_state(html):
+    """DURUM_INITIAL=PASS — Durum kutuları başlangıçta pending + gerçek metin"""
+    assert 'Seçilmedi' in html       # Makine
+    assert 'Tanımlı değil' in html   # Kalıp
+    assert 'Belirlenmedi' in html    # Başlangıç
+    assert 'Eksik' in html           # Hız
+
+
+def test_durum_val_dynamic_in_js(js):
+    """DURUM_DYNAMIC=PASS — JS durum kutularını querySelector ile güncelliyor"""
+    assert 'enjUpdateDurumStrip' in js
+    # querySelector ile .up-enj-durum-val elementini buluyor
+    assert 'up-enj-durum-val' in js
+    # Dinamik güncelleme fonksiyonu tanımlı
+    assert 'setKutu' in js
+    # Makine/istasyon/kalıp/hız/başlangıç kapsanıyor
+    assert 'upEnjDurumMakine' in js
+    assert 'upEnjDurumIstasyon' in js
+    assert 'upEnjDurumHiz' in js
+
+
+def test_req_list_default_closed(js):
+    """REQ_LIST_DEFAULT_CLOSED=PASS — gereksinim listesi varsayılan hidden"""
+    assert 'up-req-liste' in js
+    assert "setAttribute('hidden'" in js or 'setAttribute("hidden"' in js
+
+
+def test_req_list_ozet_in_js(js):
+    """REQ_OZET=PASS — tek satır özet render ediliyor"""
+    assert 'up-req-ozet' in js
+    assert 'Eksikler:' in js
+
+
+def test_hesap_bandi_in_html(html):
+    """HESAP_BANDI_HTML=PASS — kompakt hesap bandı DOM'da var"""
+    assert 'upEnjHesapBandi' in html
+    assert 'up-enj-hesap-bandi' in html
+
+
+def test_hesap_bandi_in_js(js):
+    """HESAP_BANDI_JS=PASS — JS hesap bandını güncelliyor"""
+    assert 'enjUpdateHesapBandi' in js
+    assert 'upEnjHesapBandi' in js
+
+
+def test_bitis_placeholder_in_html(html):
+    """BITIS_PLACEHOLDER=PASS — tahmini bitiş placeholder DOM'da"""
+    assert 'upEnjBitisPlaceholder' in html
+    assert 'Tahmini bitiş hesaplama sonrası' in html
+
+
+def test_footer_empty_state_text(html, js):
+    """FOOTER_EMPTY=PASS — footer boş durum metni mevcut"""
+    assert 'Henüz makine ve taraf seçilmedi' in html or 'Henüz makine ve taraf seçilmedi' in js
+
+
+def test_footer_label_in_html(html):
+    """FOOTER_LABEL=PASS — footer'da 'Seçilen Kurulum' başlığı var"""
+    assert 'up-create-foot-kurulum-lbl' in html
+    assert 'Seçilen Kurulum' in html
+
+
+def test_col_overflow_removed(css):
+    """COL_OVERFLOW_REMOVED=PASS — kolon bağımsız scroll yok"""
+    # .up-step2-col overflow:visible veya overflow:hidden değil auto/scroll
+    idx = css.index('.up-step2-col {')
+    block = css[idx:idx+200]
+    import re as _re
+    # overflow-y: auto/scroll olmamalı bu blokta
+    assert not _re.search(r'overflow-y\s*:\s*(auto|scroll)', block), "Kolon bağımsız scroll mevcut"
+
+
+def test_single_body_scroll(css):
+    """SINGLE_BODY_SCROLL=PASS — step2-active'de body scroll açık"""
+    idx = css.index('.up-modal-create-root .up-create-scroll.step2-active')
+    block = css[idx:idx+200]
+    assert 'overflow-y: auto' in block or 'overflow: auto' in block
+
+
+def test_durum_min_font_12(css):
+    """DURUM_MIN_FONT=PASS — durum strip min 12px"""
+    idx = css.index('.up-enj-durum-lbl')
+    block = css[idx:idx+80]
+    m = __import__('re').search(r'font-size:\s*(\d+)px', block)
+    assert m and int(m.group(1)) >= 12, f"durum-lbl font: {block}"
+
+
+def test_card_side_row_css(css):
+    """CARD_SIDE_ROW=PASS — yeni kompakt kart stili tanımlı"""
+    assert '.up-enj-card-side-row' in css
+    assert '.up-enj-card-durum' in css
+
+
+def test_machine_card_compact_js(js):
+    """MACHINE_CARD_COMPACT=PASS — uzun metin chain yok, side-row var"""
+    assert 'up-enj-card-side-row' in js
+    # Eski uzun format anahtar string yok
+    assert 'En erken uygun:' not in js

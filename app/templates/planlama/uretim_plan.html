@@ -3,7 +3,7 @@
 {% block title %}Üretim Plan · Planlama · Solariz CPS{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=19">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=20">
 {% endblock %}
 
 {% block content %}
@@ -325,39 +325,46 @@
 
             <!-- 4. Hesap durumu kutuları + HESAPLA butonu -->
             <section class="up-step2-section" id="upStep2SecHesap" aria-labelledby="upStep2LblHesap">
-              <!-- 5 durum kutusu: Makine / İstasyon / Kalıp / Hız / Başlangıç -->
+              <!-- Kompakt hesap bandı -->
+              <div class="up-enj-hesap-bandi" id="upEnjHesapBandi">—</div>
+              <!-- 5 durum kutusu -->
               <div class="up-enj-durum-strip" id="upEnjDurumStrip">
-                <div class="up-enj-durum-kutu" id="upEnjDurumMakine">
+                <div class="up-enj-durum-kutu pending" id="upEnjDurumMakine">
                   <span class="up-enj-durum-icon">⬤</span>
                   <span class="up-enj-durum-lbl">Makine</span>
-                  <strong class="up-enj-durum-val" id="upEnjDurumMakineVal">Seçildi</strong>
+                  <strong class="up-enj-durum-val" id="upEnjDurumMakineVal">Seçilmedi</strong>
                 </div>
-                <div class="up-enj-durum-kutu" id="upEnjDurumIstasyon">
+                <div class="up-enj-durum-kutu pending" id="upEnjDurumIstasyon">
                   <span class="up-enj-durum-icon">⬤</span>
                   <span class="up-enj-durum-lbl">İstasyon</span>
-                  <strong class="up-enj-durum-val" id="upEnjDurumIstasyonVal">7 seçli</strong>
+                  <strong class="up-enj-durum-val" id="upEnjDurumIstasyonVal">Seçilmedi</strong>
                 </div>
-                <div class="up-enj-durum-kutu" id="upEnjDurumKalip">
+                <div class="up-enj-durum-kutu pending" id="upEnjDurumKalip">
                   <span class="up-enj-durum-icon">⬤</span>
                   <span class="up-enj-durum-lbl">Kalıp</span>
-                  <strong class="up-enj-durum-val" id="upEnjDurumKalipVal">Tanımlı</strong>
+                  <strong class="up-enj-durum-val" id="upEnjDurumKalipVal">Tanımlı değil</strong>
                 </div>
-                <div class="up-enj-durum-kutu" id="upEnjDurumHiz">
+                <div class="up-enj-durum-kutu pending" id="upEnjDurumHiz">
                   <span class="up-enj-durum-icon">⬤</span>
                   <span class="up-enj-durum-lbl">Hız</span>
-                  <strong class="up-enj-durum-val" id="upEnjDurumHizVal">Hazır</strong>
+                  <strong class="up-enj-durum-val" id="upEnjDurumHizVal">Eksik</strong>
                 </div>
-                <div class="up-enj-durum-kutu" id="upEnjDurumBas">
+                <div class="up-enj-durum-kutu pending" id="upEnjDurumBas">
                   <span class="up-enj-durum-icon">⬤</span>
                   <span class="up-enj-durum-lbl">Başlangıç</span>
-                  <strong class="up-enj-durum-val" id="upEnjDurumBasVal">Belirli</strong>
+                  <strong class="up-enj-durum-val" id="upEnjDurumBasVal">Belirlenmedi</strong>
                 </div>
               </div>
+              <!-- Tek satır eksik özeti — varsayılan kapalı tam liste -->
               <div id="upEnjHesapReqList" class="up-enj-hesap-req-list" aria-live="polite"></div>
               <button type="button" class="up-btn up-btn-accent up-btn-hesapla" id="upEnjHesapBtn" disabled>
                 <span class="up-hesapla-icon">&#9636;</span> ENJEKSİYON HESAPLA
               </button>
               <div id="upEnjHesapBtnHint" class="up-enj-hesap-hint" style="display:none;"></div>
+              <!-- Tahmini bitiş placeholder — her zaman görünür -->
+              <p class="up-enj-bitis-placeholder" id="upEnjBitisPlaceholder">
+                ⏱ Tahmini bitiş hesaplama sonrası gösterilecek.
+              </p>
             </section>
 
             <div id="upEnjHesapOzet" class="up-enj-hesap-ozet" style="display:none;">
@@ -530,7 +537,9 @@
       <!-- Sol: Seçilen Kurulum kompakt özet (step2'de görünür) -->
       <div class="up-create-foot-kurulum" id="upStep2FootKurulum" style="display:none;">
         <span class="up-create-foot-kurulum-icon">📋</span>
-        <span class="up-create-foot-kurulum-txt" id="upStep2KurulumBody">—</span>
+        <span class="up-create-foot-kurulum-lbl">Seçilen Kurulum</span>
+        <span class="up-create-foot-kurulum-sep">—</span>
+        <span class="up-create-foot-kurulum-txt" id="upStep2KurulumBody">Henüz makine ve taraf seçilmedi.</span>
       </div>
       <!-- Sağ: navigasyon butonları -->
       <div class="up-create-foot-nav">
@@ -625,5 +634,5 @@
   window.UP_CAN_EDIT = {{ 'true' if can_edit else 'false' }};
   window.UP_GEREKCE = {{ gerekce_secenekleri | tojson }};
 </script>
-<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=19"></script>
+<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=20"></script>
 {% endblock %}

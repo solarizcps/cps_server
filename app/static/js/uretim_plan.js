@@ -585,7 +585,7 @@
     }
 
     function enjUpdateKurulumOzet() {
-        /* Footer kompakt tek-satır özet: "M1 · A Tarafı · 7 istasyon · 23L1" */
+        /* Footer kompakt tek-satır özet */
         var body = $('upStep2KurulumBody');
         var footKurulum = $('upStep2FootKurulum');
         var e = state.enj;
@@ -594,7 +594,8 @@
         if (e.slot)      parts.push(e.slot + ' Tarafı');
         if (e.istasyonlar && e.istasyonlar.length) parts.push(e.istasyonlar.length + ' istasyon');
         if (e.kalipKod)  parts.push(e.kalipKod);
-        var txt = parts.length ? parts.join(' · ') : '—';
+        /* Boş durum açıklayıcı metin */
+        var txt = parts.length ? parts.join(' · ') : 'Henüz makine ve taraf seçilmedi.';
         if (body) body.textContent = txt;
         /* Footer'ı step2'de göster */
         if (footKurulum) {
@@ -606,21 +607,55 @@
 
     function enjUpdateDurumStrip() {
         var e = state.enj;
-        function setKutu(id, val, ok) {
+        function setKutu(id, valTxt, ok) {
             var el = $(id);
             if (!el) return;
             el.className = 'up-enj-durum-kutu' + (ok ? ' ok' : ' pending');
             var icon = el.querySelector('.up-enj-durum-icon');
-            if (icon) icon.style.color = ok ? '#16a34a' : '#94a3b8';
+            if (icon) icon.textContent = ok ? '✓' : '⬤';
+            var valEl = el.querySelector('.up-enj-durum-val');
+            if (valEl && valTxt !== undefined) valEl.textContent = valTxt;
         }
-        setKutu('upEnjDurumMakine',    e.makineKod || null,                     !!e.makineKod);
-        setKutu('upEnjDurumIstasyon',  e.istasyonlar && e.istasyonlar.length,   !!(e.istasyonlar && e.istasyonlar.length));
-        setKutu('upEnjDurumKalip',     e.kalipKod || null,                      !!e.kalipKod);
-        setKutu('upEnjDurumHiz',       e.manualRefGunduz != null,               e.manualRefGunduz != null);
-        setKutu('upEnjDurumBas',       !!e.baslangic,                           !!e.baslangic);
+        /* Makine */
+        setKutu('upEnjDurumMakine', e.makineKod || 'Seçilmedi', !!e.makineKod);
+        /* İstasyon */
+        var istSayisi = e.istasyonlar ? e.istasyonlar.length : 0;
+        setKutu('upEnjDurumIstasyon', istSayisi > 0 ? istSayisi + ' seçili' : 'Seçilmedi', istSayisi > 0);
+        /* Kalıp */
+        var kalipGoster = e.kalipMode === 'manuel' ? (e.kalipKod || null) : (e.kalipKod || null);
+        setKutu('upEnjDurumKalip', kalipGoster || 'Tanımlı değil', !!kalipGoster);
+        /* Hız */
+        var hizOk = e.calismaModu === 'GECE'
+            ? (e.manualRefGece != null)
+            : e.calismaModu === 'GUNDUZ'
+                ? (e.manualRefGunduz != null)
+                : (e.manualRefGunduz != null && e.manualRefGece != null);
+        setKutu('upEnjDurumHiz', hizOk ? 'Hazır' : 'Eksik', hizOk);
+        /* Başlangıç */
+        var basGoster = e.baslangic ? enjFmtDtApi(e.baslangic) : 'Belirlenmedi';
+        setKutu('upEnjDurumBas', basGoster, !!e.baslangic);
         /* Başlangıç mirror */
         var mirror = $('upEnjBas2Mirror');
         if (mirror) mirror.textContent = e.baslangic ? enjFmtDtApi(e.baslangic) : '—';
+        /* Kompakt hesap bandı güncelle */
+        enjUpdateHesapBandi();
+    }
+
+    function enjUpdateHesapBandi() {
+        var bant = $('upEnjHesapBandi');
+        if (!bant) return;
+        var e = state.enj;
+        var parts = [];
+        var planCift = parseInt(($('upEnjPlanCift') && $('upEnjPlanCift').value) || e.planCift || 0, 10);
+        if (planCift > 0) parts.push(fmtN(planCift) + ' çift');
+        if (e.kalipAdedi > 0 && e.gozPerKalip > 0) {
+            parts.push((e.kalipAdedi * (e.gozPerKalip || 1)) + ' aktif göz');
+        } else if (e.istasyonlar && e.istasyonlar.length > 0) {
+            parts.push(e.istasyonlar.length + ' istasyon');
+        }
+        if (e.makineKod && e.slot) parts.push(e.makineKod + '/' + e.slot);
+        if (e.calismaModu) parts.push(enjCalismaLabel(e.calismaModu));
+        bant.textContent = parts.length ? parts.join(' · ') : '—';
     }
 
     function enjUpdateMiktarOzet() {
@@ -916,6 +951,8 @@
         }
         if (n === 2) {
             fetchQuantitySummary(function () { enjUpdateStep2Ui(); });
+            /* Makine seçilmemişse placeholder göster */
+            if (!state.enj.makineId) enjRenderIstasyonPlaceholder();
         }
         enjUpdateWizardSiparisStrip();
         if (n === 3) initStep3();
@@ -1542,7 +1579,7 @@
         e._sonHaftaVeri = null;
         enjHesapGizle();
         if ($('upEnjMakineCards')) $('upEnjMakineCards').innerHTML = '';
-        if ($('upEnjIstasyonGrid')) $('upEnjIstasyonGrid').innerHTML = '';
+        enjRenderIstasyonPlaceholder();
         if ($('upEnjKalip')) { $('upEnjKalip').value = ''; $('upEnjKalip').disabled = true; }
         if ($('upEnjKalipManuelKod')) $('upEnjKalipManuelKod').value = '';
         if ($('upEnjKalipManuelKbc')) $('upEnjKalipManuelKbc').value = '';
@@ -1616,24 +1653,29 @@
     }
 
     function enjSideCardBlock(side, slotKey) {
+        /* Kompakt format: başlık · ilk uygun · doluluk · durum rozeti
+           Ayrıntılar Detay popup'ında korunuyor. */
         if (!side) side = {};
         var phys = side.physical || {};
         var plan = side.planned || {};
         var total = phys.total_count || plan.total_count || 8;
+        var occupied = phys.occupied_count || 0;
         var ilk = side.first_available_gosterim || '—';
         var sideClass = slotKey === 'A' ? 'side-a' : 'side-b';
-        var planLine = plan.plan_tarih_secilmedi
-            ? '<div class="up-enj-card-metric up-enj-plan"><span class="up-enj-metric-lbl">Plan:</span> tarih seçilmedi</div>'
-            : '<div class="up-enj-card-metric up-enj-plan"><span class="up-enj-metric-lbl">Seçilen tarihte:</span> ' +
-                '<strong>' + (plan.planned_count || 0) + '</strong>/' + total +
-                ' <span class="up-enj-plan-lbl">planlı</span></div>';
+        /* Durum: fiziksel doluluk veya plan durumu */
+        var durumCls, durumLbl;
+        if (occupied >= total) {
+            durumCls = 'dolu'; durumLbl = 'DOLU';
+        } else if (plan.planned_count > 0 && !plan.plan_tarih_secilmedi) {
+            durumCls = 'planli'; durumLbl = 'PLANLI';
+        } else {
+            durumCls = 'bos'; durumLbl = 'BOŞ / PLANLANABİLİR';
+        }
         return '<div class="up-enj-card-side ' + sideClass + '">' +
             '<div class="up-enj-card-side-title">' + (slotKey === 'A' ? 'A TARAFI' : 'B TARAFI') + '</div>' +
-            '<div class="up-enj-card-metric up-enj-phys"><span class="up-enj-metric-lbl">Fiziksel:</span> ' +
-                '<strong>' + (phys.occupied_count || 0) + '</strong>/' + total +
-                ' <span class="up-enj-dolu-lbl">dolu</span></div>' +
-            planLine +
-            '<div class="up-enj-card-ilk-uygun">En erken uygun: <strong>' + esc(ilk) + '</strong></div>' +
+            '<div class="up-enj-card-side-row"><span class="up-enj-card-ilk-uygun-lbl">İlk uygun</span><strong>' + esc(ilk) + '</strong></div>' +
+            '<div class="up-enj-card-side-row"><span>' + occupied + '/' + total + ' dolu</span>' +
+            '<span class="up-enj-card-durum ' + durumCls + '">' + durumLbl + '</span></div>' +
             '</div>';
     }
 
@@ -2162,31 +2204,65 @@
     }
 
     function enjRenderHesapRequirements() {
-        var list = $('upEnjHesapReqList');
-        if (!list) return;
+        var wrap = $('upEnjHesapReqList');
+        if (!wrap) return;
         var reqs = enjHesaplaRequirements();
-        var firstMissing = null;
-        list.innerHTML = reqs.map(function (r) {
-            if (!r.ok && !firstMissing) firstMissing = r;
+        var missing = reqs.filter(function (r) { return !r.ok; });
+        var allOk = missing.length === 0;
+
+        /* Tek satır özet */
+        var ozet = wrap.querySelector('.up-req-ozet');
+        if (!ozet) {
+            ozet = document.createElement('div');
+            ozet.className = 'up-req-ozet';
+            wrap.appendChild(ozet);
+        }
+        if (allOk) {
+            ozet.innerHTML = '<span class="up-req-hazir">✓ Hesaplama için hazır</span>';
+        } else {
+            var eksikler = missing.map(function (r) {
+                if (!r.focus) return esc(r.label);
+                return '<button type="button" class="up-req-link" data-focus="' + r.focus + '">' + esc(r.label) + '</button>';
+            }).join(', ');
+            ozet.innerHTML = '<span class="up-req-eksik-lbl">Eksikler:</span> ' + eksikler +
+                ' &nbsp;<button type="button" class="up-req-toggle" aria-expanded="false">▸ Detay</button>';
+        }
+
+        /* Tam liste — varsayılan kapalı */
+        var liste = wrap.querySelector('.up-req-liste');
+        if (!liste) {
+            liste = document.createElement('ul');
+            liste.className = 'up-req-liste';
+            liste.setAttribute('hidden', '');
+            wrap.appendChild(liste);
+        }
+        liste.innerHTML = reqs.map(function (r) {
             var cls = r.ok ? 'ok' : 'missing';
-            var mark = r.ok ? '✓ Tamam' : '○';
-            var link = '';
-            if (!r.ok && r.focus) {
-                link = ' <button type="button" class="up-req-link" data-focus="' + r.focus + '">Git</button>';
-            }
+            var mark = r.ok ? '✓' : '○';
+            var link = (!r.ok && r.focus)
+                ? ' <button type="button" class="up-req-link" data-focus="' + r.focus + '">Git</button>'
+                : '';
             return '<li class="' + cls + '"><span>' + mark + '</span> ' + esc(r.label) + link + '</li>';
         }).join('');
-        list.querySelectorAll('.up-req-link').forEach(function (btn) {
+
+        /* Event: toggle */
+        wrap.querySelectorAll('.up-req-toggle').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var open = btn.getAttribute('aria-expanded') === 'true';
+                btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+                btn.textContent = open ? '▸ Detay' : '▾ Gizle';
+                if (open) liste.setAttribute('hidden', ''); else liste.removeAttribute('hidden');
+            });
+        });
+        /* Event: git */
+        wrap.querySelectorAll('.up-req-link').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var id = btn.getAttribute('data-focus');
                 var t = $(id);
-                if (t) {
-                    t.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    if (typeof t.focus === 'function') t.focus();
-                }
+                if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (typeof t.focus === 'function') t.focus(); }
             });
         });
-        if (firstMissing) list.dataset.firstMissing = firstMissing.focus;
+        if (missing.length) wrap.dataset.firstMissing = missing[0].focus;
     }
 
     function enjUpdateHesapBtn() {
@@ -2356,6 +2432,8 @@
         var e = state.enj;
         var istStr = e.istasyonlar.map(function (x) { return 'İST' + x; }).join('–');
         if ($('upEnjHesapOzet')) $('upEnjHesapOzet').style.display = 'block';
+        /* Hesaplama sonrası bitiş placeholder'ı gizle */
+        if ($('upEnjBitisPlaceholder')) $('upEnjBitisPlaceholder').style.display = 'none';
         if ($('upEnjOzetMakine')) $('upEnjOzetMakine').textContent = (e.makineKod || 'M?') + ' / ' + e.slot;
         if ($('upEnjOzetIstasyon')) $('upEnjOzetIstasyon').textContent = istStr;
         if ($('upEnjOzetKalip')) $('upEnjOzetKalip').textContent = e.kalipKod || '—';
@@ -2587,13 +2665,51 @@
         return 'BOS';
     }
 
+    function enjRenderIstasyonPlaceholder() {
+        /* Makine/taraf seçilmeden önce IST1–IST8 disabled placeholder */
+        var el = $('upEnjIstasyonGrid');
+        if (!el) return;
+        el.innerHTML = '';
+        for (var i = 1; i <= 8; i++) {
+            var lbl = document.createElement('label');
+            lbl.className = 'up-enj-ist-cell disabled up-enj-ist-placeholder';
+            lbl.innerHTML = '<input type="checkbox" disabled> İST' + i +
+                '<small>—</small>';
+            el.appendChild(lbl);
+        }
+        enjUpdateIstasyonOzetSatir(null, null);
+    }
+
+    function enjUpdateIstasyonOzetSatir(m, uygunSayisi) {
+        /* "X uygun istasyon · Y seçili · Y kalıp" veya açıklama metni */
+        var hint = $('upEnjToplamGozHint');
+        if (!hint) return;
+        var e = state.enj;
+        if (!e.makineId || !e.slot || !e.baslangic) {
+            hint.textContent = 'İstasyon seçimi için makine, taraf ve tarih seçin.';
+            return;
+        }
+        var secilenSayisi = e.istasyonlar ? e.istasyonlar.length : 0;
+        var kalipAdedi = e.kalipAdedi || secilenSayisi;
+        var goz = parseInt(($('upEnjGozPerKalip') && $('upEnjGozPerKalip').value) || '1', 10) || 1;
+        var uygunTxt = uygunSayisi != null ? (uygunSayisi + ' uygun istasyon · ') : '';
+        hint.textContent = uygunTxt + secilenSayisi + ' seçili · ' + kalipAdedi + ' kalıp' +
+            (kalipAdedi > 0 ? ' · Toplam ' + (kalipAdedi * goz) + ' aktif göz' : '');
+    }
+
     function enjRenderIstasyonGrid(m) {
         var el = $('upEnjIstasyonGrid');
-        if (!el || !state.enj.makineId) return;
+        if (!el) return;
+        /* Makine seçilmemişse placeholder göster */
+        if (!state.enj.makineId) {
+            enjRenderIstasyonPlaceholder();
+            return;
+        }
         el.innerHTML = '';
         var slot = state.enj.slot;
         var grid = (m.grid || []);
         var planDurum = state.enj.istasyonPlanDurum || {};
+        var uygunSayisi = 0;
         for (var i = 1; i <= state.enj.istasyonSayisi; i++) {
             var row = grid[i - 1] || {};
             var cell = slot ? (row[slot] || {}) : null;
@@ -2610,6 +2726,7 @@
             // ENJ_IST_PARITY_FIX: KAPALI = fiziksel execution durdurulmuş, planlama açısından BOŞ/uygun
             var disabled = !slot || durum === 'PLANLI' || durum === 'DOLU' || durum === 'SETUP' ||
                 durum === 'ARIZA';
+            if (!disabled) uygunSayisi++;
             var lbl = document.createElement('label');
             lbl.className = 'up-enj-ist-cell' +
                 (state.enj.istasyonlar.indexOf(i) >= 0 ? ' selected' : '') +
@@ -2640,6 +2757,7 @@
             }
             el.appendChild(lbl);
         }
+        enjUpdateIstasyonOzetSatir(m, uygunSayisi);
     }
 
     function enjSelectSlot(slot) {
