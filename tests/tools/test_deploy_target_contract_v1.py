@@ -291,6 +291,9 @@ class TestEmptyRequiredMigrations:
             with mock.patch(
                 'tools.deploy_preflight.run_deploy_module_parity',
                 return_value=parity_ok,
+            ), mock.patch(
+                'tools.deploy_and_rollback.run_deploy_module_parity',
+                return_value=parity_ok,
             ):
                 r = run_deploy(
                     manifest_path=mp, repo=str(WT), db=db,

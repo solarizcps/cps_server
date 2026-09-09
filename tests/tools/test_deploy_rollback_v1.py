@@ -130,7 +130,12 @@ def _planlama_mig_ok(**kwargs):
         'PENDING_MIGRATIONS': '',
         'PARITY_RESULT': 'PASS',
         'RUNNER_RESULT': 'PASS',
+        'MIGRATION_RESULT': '190=OK',
     }
+
+
+def _planlama_apply_ok(**kwargs):
+    return _planlama_mig_ok(**kwargs)
 
 
 # ── plan / dry-run tests ──────────────────────────────────────────────────────
@@ -326,6 +331,9 @@ class TestTempDeploySimulation:
                 'tools.deploy_preflight.run_migration_runner',
                 side_effect=_planlama_mig_ok,
             ), mock.patch(
+                'tools.deploy_and_rollback.run_migration_runner',
+                side_effect=_planlama_apply_ok,
+            ), mock.patch(
                 'tools.deploy_and_rollback.check_parity',
                 return_value={'PARITY_RESULT': 'PASS'},
             ):
@@ -390,6 +398,9 @@ class TestTempDeploySimulation:
             with mock.patch(
                 'tools.deploy_preflight.run_migration_runner',
                 side_effect=_planlama_mig_ok,
+            ), mock.patch(
+                'tools.deploy_and_rollback.run_migration_runner',
+                side_effect=_planlama_apply_ok,
             ), mock.patch(
                 'tools.deploy_and_rollback.check_parity',
                 return_value={'PARITY_RESULT': 'PASS'},
@@ -486,6 +497,9 @@ class TestTempDeploySimulation:
             with mock.patch(
                 'tools.deploy_preflight.run_migration_runner',
                 side_effect=_planlama_mig_ok,
+            ), mock.patch(
+                'tools.deploy_and_rollback.run_migration_runner',
+                side_effect=_planlama_apply_ok,
             ), mock.patch(
                 'tools.deploy_and_rollback.check_parity',
                 return_value={'PARITY_RESULT': 'PASS'},
