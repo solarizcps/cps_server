@@ -211,7 +211,7 @@ class TestDeployProcessIntegration:
                     confirm_release='r-test-001',
                     expected_computer=COMPUTER,
                     expected_head=COMMIT,
-                    skip_process_check=True, _fake_pids=['6820'],
+                    skip_process_check=False, _fake_pids=['6820'],
                     _fake_start=_start,
                     _fake_health=_fake_health_ok,
                     _fake_stop=_stop,

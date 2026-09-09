@@ -302,7 +302,7 @@ class TestEmptyRequiredMigrations:
                     expected_computer=COMPUTER,
                     expected_head=COMMIT,
                     skip_process_check=True, _fake_pids=[],
-                    _fake_start=lambda repo, env=None: {'ok': True, 'pid': '11111'},
+                    _fake_start=lambda repo, env=None, **kwargs: {'ok': True, 'pid': '11111'},
                     _fake_health=lambda url: {'ok': True, 'status': 200},
                     _fake_stop=lambda pid: True,
                 )
