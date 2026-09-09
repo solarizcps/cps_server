@@ -26,7 +26,13 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from tools.release_manifest import load_manifest, require_valid_manifest
-from tools.deploy_preflight import run_preflight, print_preflight_report, PreflightError
+from tools.deploy_preflight import (
+    run_preflight,
+    print_preflight_report,
+    PreflightError,
+    normalize_contract_relative_path,
+)
+from tools.infra_contract_loader import load_contract
 from tools.migration_runner import run_migration_runner
 from tools.schema_parity_check import check_parity
 
@@ -323,11 +329,31 @@ def run_deploy(
 
     # ── MIGRATION APPLY ──────────────────────────────────────────────────────
     contract_path_raw = manifest.get('schema_contract', '')
-    contract_path = (
-        contract_path_raw if os.path.isabs(contract_path_raw)
-        else str(Path(repo) / contract_path_raw)
-    )
-    if os.path.isfile(contract_path):
+    try:
+        rel_contract = normalize_contract_relative_path(repo, contract_path_raw)
+    except PreflightError as exc:
+        report['error'] = str(exc)
+        restore_db(backup_path, db)
+        if target_commit != old_head:
+            git_reset_hard(repo, old_head)
+        report['ROLLBACK_APPLIED'] = 'YES'
+        return report
+
+    contract_path = str(Path(repo) / rel_contract)
+    if not os.path.isfile(contract_path):
+        report['error'] = f'contract not found after checkout: {contract_path}'
+        restore_db(backup_path, db)
+        if target_commit != old_head:
+            git_reset_hard(repo, old_head)
+        report['ROLLBACK_APPLIED'] = 'YES'
+        return report
+
+    contract_data = load_contract(contract_path)
+    required = contract_data.get('required_migrations') or []
+
+    if not required:
+        report['MIGRATION_RESULT'] = 'SKIPPED_NO_MIGRATIONS'
+    else:
         mig = run_migration_runner(
             repo=repo, db=db, contract=contract_path,
             expected_commit=target_commit,
@@ -337,31 +363,27 @@ def run_deploy(
         report['MIGRATION_RESULT'] = mig.get('MIGRATION_RESULT', '')
         if mig.get('RUNNER_RESULT') != 'PASS':
             report['error'] = f'migration failed: {mig.get("error")}'
-            # rollback DB
             restore_db(backup_path, db)
             if target_commit != old_head:
                 git_reset_hard(repo, old_head)
             report['ROLLBACK_APPLIED'] = 'YES'
             return report
-    else:
-        report['MIGRATION_RESULT'] = 'NO_CONTRACT'
 
     # ── SCHEMA PARITY AFTER ──────────────────────────────────────────────────
-    if os.path.isfile(contract_path):
-        parity_after = check_parity(
-            contract_path=contract_path,
-            db_path=db,
-            repo_path=repo,
-            expected_commit=target_commit,
-        )
-        report['PARITY_AFTER'] = parity_after['PARITY_RESULT']
-        if parity_after['PARITY_RESULT'] != 'PASS':
-            report['error'] = 'post-migration parity BLOCKED'
-            restore_db(backup_path, db)
-            if target_commit != old_head:
-                git_reset_hard(repo, old_head)
-            report['ROLLBACK_APPLIED'] = 'YES'
-            return report
+    parity_after = check_parity(
+        contract_path=contract_path,
+        db_path=db,
+        repo_path=repo,
+        expected_commit=target_commit,
+    )
+    report['PARITY_AFTER'] = parity_after['PARITY_RESULT']
+    if parity_after['PARITY_RESULT'] != 'PASS':
+        report['error'] = 'post-migration parity BLOCKED'
+        restore_db(backup_path, db)
+        if target_commit != old_head:
+            git_reset_hard(repo, old_head)
+        report['ROLLBACK_APPLIED'] = 'YES'
+        return report
 
     # ── STOP OLD PROCESS ─────────────────────────────────────────────────────
     active_pid = pf.get('ACTIVE_PID', '')

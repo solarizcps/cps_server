@@ -9,6 +9,7 @@ import socket
 import sqlite3
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from tools.release_manifest import load_manifest, require_valid_manifest
+from tools.infra_contract_loader import load_contract
 from tools.migration_runner import run_migration_runner
 from tools.schema_parity_check import check_parity
 
@@ -117,6 +119,79 @@ def _untracked(repo: str) -> list[str]:
         for line in out.splitlines()
         if line.startswith('?? ')
     ]
+
+
+def normalize_contract_relative_path(repo: str, contract_path_raw: str) -> str:
+    """Return repo-relative contract path; block traversal and out-of-repo paths."""
+    if not contract_path_raw or not str(contract_path_raw).strip():
+        raise PreflightError('CONTRACT_PATH', 'schema_contract is empty')
+
+    repo_abs = os.path.abspath(repo)
+    raw = str(contract_path_raw).strip()
+
+    if os.path.isabs(raw):
+        norm = os.path.normpath(raw)
+        try:
+            rel = os.path.relpath(norm, repo_abs)
+        except ValueError as exc:
+            raise PreflightError(
+                'CONTRACT_PATH',
+                f'contract outside repo: {contract_path_raw}',
+            ) from exc
+        if rel.startswith('..'):
+            raise PreflightError(
+                'CONTRACT_PATH',
+                f'contract outside repo: {contract_path_raw}',
+            )
+    else:
+        rel = raw.replace('\\', '/')
+
+    rel_posix = Path(rel).as_posix()
+    if rel_posix.startswith('../') or '/../' in f'/{rel_posix}':
+        raise PreflightError(
+            'CONTRACT_PATH',
+            f'path traversal blocked: {contract_path_raw}',
+        )
+    if any(part == '..' for part in Path(rel_posix).parts):
+        raise PreflightError(
+            'CONTRACT_PATH',
+            f'path traversal blocked: {contract_path_raw}',
+        )
+    return rel_posix
+
+
+def extract_contract_from_target(
+    repo: str,
+    target_commit: str,
+    rel_contract: str,
+) -> tuple[str, tempfile.TemporaryDirectory[str]]:
+    """Read contract from target commit tree into a temp file (read-only)."""
+    proc = subprocess.run(
+        ['git', 'show', f'{target_commit}:{rel_contract}'],
+        cwd=repo,
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise PreflightError(
+            'CONTRACT_NOT_FOUND',
+            f'contract missing at {target_commit[:12]}:{rel_contract}',
+        )
+
+    tmp = tempfile.TemporaryDirectory(prefix='cps_target_contract_')
+    dest = Path(tmp.name) / Path(rel_contract).name
+    dest.write_bytes(proc.stdout)
+    return str(dest.resolve()), tmp
+
+
+def resolve_target_contract(
+    repo: str,
+    target_commit: str,
+    contract_path_raw: str,
+) -> tuple[str, tempfile.TemporaryDirectory[str], str]:
+    """Resolve manifest contract against TARGET_COMMIT git tree."""
+    rel_contract = normalize_contract_relative_path(repo, contract_path_raw)
+    contract_path, tmp = extract_contract_from_target(repo, target_commit, rel_contract)
+    return contract_path, tmp, rel_contract
 
 
 def _deploy_diff_files(repo: str, old_head: str, new_head: str) -> list[str]:
@@ -344,26 +419,39 @@ def run_preflight(
             f'diff contains forbidden paths: {violations}',
         )
 
-    # 16. MIGRATION plan
+    # 16. MIGRATION plan + parity-before (contract from TARGET_COMMIT tree)
     contract_path_raw = manifest.get('schema_contract', '')
-    contract_path = (
-        contract_path_raw if os.path.isabs(contract_path_raw)
-        else str(Path(repo) / contract_path_raw)
-    )
-    if os.path.isfile(contract_path):
-        mig_report = run_migration_runner(
-            repo=repo,
-            db=db,
-            contract=contract_path,
-            expected_commit=old_head,  # check against current HEAD
-            mode='plan',
-            computer=platform.node(),
+    contract_tmp: tempfile.TemporaryDirectory[str] | None = None
+    try:
+        contract_path, contract_tmp, _rel_contract = resolve_target_contract(
+            repo, target_commit, contract_path_raw,
         )
-        report['MIGRATION_PLAN'] = mig_report.get('PENDING_MIGRATIONS', '')
-        report['PARITY_BEFORE'] = mig_report.get('PARITY_RESULT', '')
-    else:
-        report['MIGRATION_PLAN'] = 'CONTRACT_NOT_FOUND'
-        report['PARITY_BEFORE'] = 'SKIPPED'
+        contract_data = load_contract(contract_path)
+        required = contract_data.get('required_migrations') or []
+
+        if not required:
+            report['MIGRATION_PLAN'] = 'NONE_REQUIRED'
+            parity = check_parity(
+                contract_path=contract_path,
+                db_path=db,
+                repo_path=repo,
+                expected_commit=old_head,
+            )
+            report['PARITY_BEFORE'] = parity['PARITY_RESULT']
+        else:
+            mig_report = run_migration_runner(
+                repo=repo,
+                db=db,
+                contract=contract_path,
+                expected_commit=old_head,
+                mode='plan',
+                computer=platform.node(),
+            )
+            report['MIGRATION_PLAN'] = mig_report.get('PENDING_MIGRATIONS', '')
+            report['PARITY_BEFORE'] = mig_report.get('PARITY_RESULT', '')
+    finally:
+        if contract_tmp is not None:
+            contract_tmp.cleanup()
 
     report['PREFLIGHT_RESULT'] = 'PASS'
     return report

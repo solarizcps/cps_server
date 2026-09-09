@@ -251,8 +251,11 @@ def run_migration_runner(
 
     if apply_mode:
         if not apply_candidates:
-            report['error'] = 'no supported migrations to apply'
-            return report
+            if not runner_apply:
+                report['MIGRATION_RESULT'] = 'SKIPPED_NO_MIGRATIONS'
+            else:
+                report['error'] = 'no supported migrations to apply'
+                return report
 
         backup_dir = tempfile.mkdtemp(prefix='mig_runner_backup_')
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
