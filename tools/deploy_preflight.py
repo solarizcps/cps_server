@@ -20,7 +20,7 @@ if str(_REPO_ROOT) not in sys.path:
 from tools.release_manifest import load_manifest, require_valid_manifest
 from tools.infra_contract_loader import load_contract
 from tools.migration_runner import run_migration_runner
-from tools.schema_parity_check import check_parity
+from tools.module_schema_parity_check import check_contract_file
 
 
 class PreflightError(Exception):
@@ -192,6 +192,20 @@ def resolve_target_contract(
     rel_contract = normalize_contract_relative_path(repo, contract_path_raw)
     contract_path, tmp = extract_contract_from_target(repo, target_commit, rel_contract)
     return contract_path, tmp, rel_contract
+
+
+def run_deploy_module_parity(
+    *,
+    contract_path: str,
+    db_path: str,
+    manifest_module: str,
+) -> dict[str, Any]:
+    """Module-scoped parity for deploy orchestration (read-only)."""
+    return check_contract_file(
+        contract_path,
+        db_path,
+        manifest_module=manifest_module or None,
+    )
 
 
 def _deploy_diff_files(repo: str, old_head: str, new_head: str) -> list[str]:
@@ -427,28 +441,48 @@ def run_preflight(
             repo, target_commit, contract_path_raw,
         )
         contract_data = load_contract(contract_path)
+        manifest_module = manifest.get('module', '')
+        contract_module = contract_data.get('module', '')
+        if manifest_module and contract_module and manifest_module != contract_module:
+            raise PreflightError(
+                'MODULE_MISMATCH',
+                f'manifest.module={manifest_module!r} != contract.module={contract_module!r}',
+            )
+
         required = contract_data.get('required_migrations') or []
 
-        if not required:
-            report['MIGRATION_PLAN'] = 'NONE_REQUIRED'
-            parity = check_parity(
-                contract_path=contract_path,
-                db_path=db,
-                repo_path=repo,
-                expected_commit=old_head,
+        try:
+            if not required:
+                report['MIGRATION_PLAN'] = 'NONE_REQUIRED'
+                parity = run_deploy_module_parity(
+                    contract_path=contract_path,
+                    db_path=db,
+                    manifest_module=manifest_module,
+                )
+                if parity.get('error') and parity.get('PARITY_RESULT') != 'PASS':
+                    raise PreflightError('PARITY_BEFORE', parity['error'])
+                report['PARITY_BEFORE'] = parity.get('PARITY_RESULT', 'BLOCKED')
+            else:
+                mig_report = run_migration_runner(
+                    repo=repo,
+                    db=db,
+                    contract=contract_path,
+                    expected_commit=old_head,
+                    mode='plan',
+                    computer=platform.node(),
+                )
+                report['MIGRATION_PLAN'] = mig_report.get('PENDING_MIGRATIONS', '')
+                report['PARITY_BEFORE'] = mig_report.get('PARITY_RESULT', 'BLOCKED')
+        except PreflightError:
+            raise
+        except Exception as exc:
+            raise PreflightError('PARITY_BEFORE', str(exc)) from exc
+
+        if report['PARITY_BEFORE'] != 'PASS':
+            raise PreflightError(
+                'PARITY_BEFORE',
+                f'module parity blocked: {report["PARITY_BEFORE"]}',
             )
-            report['PARITY_BEFORE'] = parity['PARITY_RESULT']
-        else:
-            mig_report = run_migration_runner(
-                repo=repo,
-                db=db,
-                contract=contract_path,
-                expected_commit=old_head,
-                mode='plan',
-                computer=platform.node(),
-            )
-            report['MIGRATION_PLAN'] = mig_report.get('PENDING_MIGRATIONS', '')
-            report['PARITY_BEFORE'] = mig_report.get('PARITY_RESULT', '')
     finally:
         if contract_tmp is not None:
             contract_tmp.cleanup()

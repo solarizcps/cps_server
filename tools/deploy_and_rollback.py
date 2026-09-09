@@ -31,6 +31,7 @@ from tools.deploy_preflight import (
     print_preflight_report,
     PreflightError,
     normalize_contract_relative_path,
+    run_deploy_module_parity,
 )
 from tools.infra_contract_loader import load_contract
 from tools.migration_runner import run_migration_runner
@@ -260,6 +261,7 @@ def run_deploy(
         )
     except PreflightError as exc:
         report['PREFLIGHT_RESULT'] = f'BLOCKED:{exc.gate}'
+        report['DEPLOY_ALLOWED'] = 'NO'
         report['error'] = str(exc)
         return report
     except Exception as exc:
@@ -287,6 +289,13 @@ def run_deploy(
         f'5. Health check old version',
     ]
     report['ROLLBACK_PLAN'] = ' | '.join(rollback_steps)
+
+    if pf.get('PARITY_BEFORE') != 'PASS':
+        report['DEPLOY_ALLOWED'] = 'NO'
+        report['DEPLOY_RESULT'] = 'BLOCKED'
+        report['error'] = f'parity before blocked: {pf.get("PARITY_BEFORE")}'
+        return report
+
     report['DEPLOY_ALLOWED'] = 'YES' if not execute else 'EXECUTE_PENDING'
 
     if not execute:
@@ -370,12 +379,20 @@ def run_deploy(
             return report
 
     # ── SCHEMA PARITY AFTER ──────────────────────────────────────────────────
-    parity_after = check_parity(
-        contract_path=contract_path,
-        db_path=db,
-        repo_path=repo,
-        expected_commit=target_commit,
-    )
+    manifest_module = manifest.get('module', '')
+    if not required:
+        parity_after = run_deploy_module_parity(
+            contract_path=contract_path,
+            db_path=db,
+            manifest_module=manifest_module,
+        )
+    else:
+        parity_after = check_parity(
+            contract_path=contract_path,
+            db_path=db,
+            repo_path=repo,
+            expected_commit=target_commit,
+        )
     report['PARITY_AFTER'] = parity_after['PARITY_RESULT']
     if parity_after['PARITY_RESULT'] != 'PASS':
         report['error'] = 'post-migration parity BLOCKED'

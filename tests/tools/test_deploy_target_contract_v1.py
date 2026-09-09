@@ -41,6 +41,8 @@ from tools.deploy_preflight import (
     normalize_contract_relative_path,
 )
 from tools.deploy_and_rollback import run_deploy
+from tools.module_schema_parity_check import check_contract_file
+from tools.deploy_preflight import run_deploy_module_parity
 
 
 def _write_manifest(tmp: Path, **kwargs) -> str:
@@ -152,8 +154,62 @@ class TestTargetContractResolution:
         assert exc.value.gate == 'CONTRACT_PATH'
 
 
-class TestEmptyRequiredMigrations:
-    def test_empty_required_migrations_plan(self, tmp_path):
+def _minimal_nexgen_contract_db(tmp_path: Path) -> tuple[str, str]:
+    contract = tmp_path / 'nexgen_mini.toml'
+    contract.write_text(
+        'module = "nexgen"\n'
+        'required_migrations = []\n'
+        '[[tables]]\n'
+        'name = "nexgen_planlama_siparis"\n'
+        '[[tables.columns]]\n'
+        'name = "id"\n'
+        'type = "INTEGER"\n'
+        'not_null = true\n',
+        encoding='utf-8',
+    )
+    db = str(tmp_path / 'mini.db')
+    con = sqlite3.connect(db)
+    con.execute(
+        'CREATE TABLE nexgen_planlama_siparis (id INTEGER NOT NULL PRIMARY KEY)'
+    )
+    con.commit()
+    con.close()
+    return str(contract), db
+
+
+class TestModuleParityOrchestration:
+    def test_nexgen_direct_parity_pass(self, tmp_path):
+        contract, db = _minimal_nexgen_contract_db(tmp_path)
+        r = check_contract_file(contract, db, manifest_module='nexgen')
+        assert r['PARITY_RESULT'] == 'PASS'
+        assert r['MODULE'] == 'nexgen'
+
+    def test_nexgen_orchestrator_parity_pass(self, tmp_path):
+        contract, db = _minimal_nexgen_contract_db(tmp_path)
+        mp = _write_manifest(
+            tmp_path,
+            schema_contract=contract,
+            module='nexgen',
+        )
+        import tools.deploy_preflight as pf_mod
+        real_resolve = pf_mod.resolve_target_contract
+
+        def _resolve(repo, target_commit, contract_path_raw):
+            return contract, None, Path(contract).name
+
+        with mock.patch.object(pf_mod, 'resolve_target_contract', side_effect=_resolve):
+            r = run_deploy(
+                manifest_path=mp, repo=str(WT), db=db,
+                target_commit=COMMIT, execute=False,
+                expected_computer=COMPUTER,
+                skip_process_check=True, _fake_pids=[],
+            )
+        assert r['PARITY_BEFORE'] == 'PASS'
+        assert r['DEPLOY_RESULT'] == 'PLAN_PASS'
+        assert r['DEPLOY_ALLOWED'] == 'YES'
+        assert r['MIGRATION_PLAN'] == 'NONE_REQUIRED'
+
+    def test_parity_blocked_means_deploy_allowed_no(self, tmp_path):
         td, db = _make_temp_db()
         mp = _write_manifest(tmp_path, schema_contract=str(NEXGEN_CONTRACT))
         try:
@@ -163,20 +219,19 @@ class TestEmptyRequiredMigrations:
                 expected_computer=COMPUTER,
                 skip_process_check=True, _fake_pids=[],
             )
-            assert r['DEPLOY_RESULT'] == 'PLAN_PASS'
-            assert r['MIGRATION_PLAN'] == 'NONE_REQUIRED'
-            assert r['PREFLIGHT_RESULT'] == 'PASS'
+            assert r['DEPLOY_RESULT'] == 'BLOCKED'
+            assert r['DEPLOY_ALLOWED'] == 'NO'
+            assert 'PARITY_BEFORE' in r['PREFLIGHT_RESULT']
         finally:
             shutil.rmtree(td)
 
-    def test_empty_required_migrations_execute_skipped(self, tmp_path):
+    def test_parity_exception_blocks_before_backup(self, tmp_path):
         td, db = _make_temp_db()
         mp = _write_manifest(tmp_path, schema_contract=str(NEXGEN_CONTRACT))
         try:
-            import tools.deploy_and_rollback as dar
-            with mock.patch.object(
-                dar, 'check_parity',
-                return_value={'PARITY_RESULT': 'PASS'},
+            with mock.patch(
+                'tools.deploy_preflight.run_deploy_module_parity',
+                side_effect=RuntimeError('parity tool failure'),
             ):
                 r = run_deploy(
                     manifest_path=mp, repo=str(WT), db=db,
@@ -185,14 +240,71 @@ class TestEmptyRequiredMigrations:
                     expected_computer=COMPUTER,
                     expected_head=COMMIT,
                     skip_process_check=True, _fake_pids=[],
-                    _fake_start=lambda repo, env=None: {'ok': True, 'pid': '11111'},
-                    _fake_health=lambda url: {'ok': True, 'status': 200},
-                    _fake_stop=lambda pid: True,
                 )
-            assert r['MIGRATION_RESULT'] == 'SKIPPED_NO_MIGRATIONS'
-            assert r['DEPLOY_RESULT'] == 'PASS'
+            assert r['DEPLOY_RESULT'] == 'BLOCKED'
+            assert r['DEPLOY_ALLOWED'] == 'NO'
+            assert r['BACKUP_PATH'] == ''
+            assert 'PARITY_BEFORE' in r['PREFLIGHT_RESULT']
         finally:
             shutil.rmtree(td)
+
+    def test_orchestrator_uses_module_parity_not_legacy(self, tmp_path):
+        contract, db = _minimal_nexgen_contract_db(tmp_path)
+        with mock.patch(
+            'tools.deploy_preflight.check_contract_file',
+            wraps=check_contract_file,
+        ) as wrapped:
+            r = run_deploy_module_parity(
+                contract_path=contract,
+                db_path=db,
+                manifest_module='nexgen',
+            )
+        wrapped.assert_called_once()
+        assert r['PARITY_RESULT'] == 'PASS'
+
+
+class TestEmptyRequiredMigrations:
+    def test_empty_required_migrations_plan(self, tmp_path):
+        contract, db = _minimal_nexgen_contract_db(tmp_path)
+        mp = _write_manifest(tmp_path, schema_contract=contract, module='nexgen')
+        import tools.deploy_preflight as pf_mod
+
+        def _resolve(repo, target_commit, contract_path_raw):
+            return contract, None, Path(contract).name
+
+        with mock.patch.object(pf_mod, 'resolve_target_contract', side_effect=_resolve):
+            r = run_deploy(
+                manifest_path=mp, repo=str(WT), db=db,
+                target_commit=COMMIT, execute=False,
+                expected_computer=COMPUTER,
+                skip_process_check=True, _fake_pids=[],
+            )
+        assert r['DEPLOY_RESULT'] == 'PLAN_PASS'
+        assert r['MIGRATION_PLAN'] == 'NONE_REQUIRED'
+        assert r['PREFLIGHT_RESULT'] == 'PASS'
+
+    def test_empty_required_migrations_execute_skipped(self, tmp_path):
+        contract, db = _minimal_nexgen_contract_db(tmp_path)
+        mp = _write_manifest(tmp_path, schema_contract=contract, module='nexgen')
+        import tools.deploy_preflight as pf_mod
+
+        def _resolve(repo, target_commit, contract_path_raw):
+            return contract, None, Path(contract).name
+
+        with mock.patch.object(pf_mod, 'resolve_target_contract', side_effect=_resolve):
+            r = run_deploy(
+                manifest_path=mp, repo=str(WT), db=db,
+                target_commit=COMMIT, execute=True,
+                confirm_release='r-target-contract',
+                expected_computer=COMPUTER,
+                expected_head=COMMIT,
+                skip_process_check=True, _fake_pids=[],
+                _fake_start=lambda repo, env=None: {'ok': True, 'pid': '11111'},
+                _fake_health=lambda url: {'ok': True, 'status': 200},
+                _fake_stop=lambda pid: True,
+            )
+        assert r['MIGRATION_RESULT'] == 'SKIPPED_NO_MIGRATIONS'
+        assert r['DEPLOY_RESULT'] == 'PASS'
 
 
 class TestNonemptyMigrationBehavior:
@@ -234,7 +346,10 @@ class TestParityBeforeTargetContract:
             schema_contract='tools/module_schema_contracts/nexgen.toml',
         )
         try:
-            with mock.patch('tools.deploy_preflight._git') as mock_git:
+            with mock.patch('tools.deploy_preflight._git') as mock_git, mock.patch(
+                'tools.deploy_preflight.run_deploy_module_parity',
+                return_value={'PARITY_RESULT': 'PASS', 'MODULE': 'nexgen'},
+            ):
                 def _fake_git(args, cwd):
                     if args[:2] == ['rev-parse', 'HEAD']:
                         return base
@@ -242,11 +357,7 @@ class TestParityBeforeTargetContract:
                         return 'main'
                     if args[0] == 'merge-base':
                         return base
-                    if args[0] == 'fetch':
-                        return ''
-                    if args[0] == 'status':
-                        return ''
-                    if args[0] == 'diff':
+                    if args[0] in ('fetch', 'status', 'diff'):
                         return ''
                     return subprocess.run(
                         ['git'] + args, cwd=cwd,
@@ -261,7 +372,7 @@ class TestParityBeforeTargetContract:
                 )
             assert pf['PREFLIGHT_RESULT'] == 'PASS'
             assert pf['MIGRATION_PLAN'] == 'NONE_REQUIRED'
-            assert pf['PARITY_BEFORE'] in ('PASS', 'BLOCKED')
+            assert pf['PARITY_BEFORE'] == 'PASS'
         finally:
             shutil.rmtree(td)
 

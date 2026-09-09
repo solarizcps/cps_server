@@ -158,6 +158,70 @@ def check_module(contract: dict, con: sqlite3.Connection) -> dict:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def check_contract_file(
+    contract_path: str | Path,
+    db_path: str | Path,
+    *,
+    manifest_module: str | None = None,
+) -> dict:
+    """
+    Orchestrator entry: compare one contract file against a DB (read-only).
+
+    Returns dict with PARITY_RESULT in PASS / BLOCKED / PARTIAL and MODULE name.
+    """
+    contract_path = Path(contract_path)
+    db_path = Path(db_path)
+    result: dict = {
+        'PARITY_RESULT': 'BLOCKED',
+        'MODULE': '',
+        'ERRORS': [],
+        'WARNINGS': [],
+        'error': '',
+    }
+
+    if not contract_path.is_file():
+        result['error'] = f'contract not found: {contract_path}'
+        return result
+    if not db_path.is_file():
+        result['error'] = f'db not found: {db_path}'
+        return result
+    if db_path.stat().st_size == 0:
+        result['error'] = 'db is zero bytes'
+        return result
+
+    contract = _load_contract(contract_path)
+    contract_module = contract.get('module', contract_path.stem)
+    result['MODULE'] = contract_module
+
+    if manifest_module and contract_module != manifest_module:
+        result['error'] = (
+            f'module mismatch: manifest={manifest_module!r} contract={contract_module!r}'
+        )
+        result['ERRORS'] = [result['error']]
+        return result
+
+    con = sqlite3.connect(f'file:{db_path.as_posix()}?mode=ro', uri=True)
+    try:
+        ic = con.execute('PRAGMA integrity_check').fetchone()[0]
+        if ic != 'ok':
+            result['error'] = f'integrity_check={ic}'
+            return result
+        mod_result = check_module(contract, con)
+    finally:
+        con.close()
+
+    result['ERRORS'] = mod_result['errors']
+    result['WARNINGS'] = mod_result['warnings']
+    status = mod_result['status']
+    if status == 'PASS':
+        result['PARITY_RESULT'] = 'PASS'
+    elif status == 'PARTIAL':
+        result['PARITY_RESULT'] = 'PARTIAL'
+    else:
+        result['PARITY_RESULT'] = 'BLOCKED'
+    return result
+
+
 def run_module_parity(
     db_path: Path,
     module_filter: str | None = None,

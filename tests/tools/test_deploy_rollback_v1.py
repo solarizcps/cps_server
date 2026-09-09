@@ -236,9 +236,9 @@ class TestDeployBlockedGuards:
                 expected_computer=COMPUTER,
                 skip_process_check=True, _fake_pids=[],
             )
-            # plan mode returns PLAN_PASS but reports migration pending
-            assert r['MIGRATION_PLAN'] == '190'
-            assert r['PARITY_BEFORE'] == 'BLOCKED'
+            assert r['DEPLOY_RESULT'] == 'BLOCKED'
+            assert r['DEPLOY_ALLOWED'] == 'NO'
+            assert 'PARITY_BEFORE' in r['PREFLIGHT_RESULT']
         finally:
             shutil.rmtree(td)
 
@@ -252,7 +252,8 @@ class TestDeployBlockedGuards:
                 expected_computer=COMPUTER,
                 skip_process_check=True, _fake_pids=[],
             )
-            assert r['PARITY_BEFORE'] == 'BLOCKED'
+            assert r['DEPLOY_RESULT'] == 'BLOCKED'
+            assert r['DEPLOY_ALLOWED'] == 'NO'
         finally:
             shutil.rmtree(td)
 
