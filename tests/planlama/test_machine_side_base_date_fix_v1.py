@@ -165,8 +165,10 @@ def test_css_plan_row_styles(css):
 
 
 def test_cache_v23(html):
+    """CSS ve JS versiyonları eşit ve >=23 olmalı"""
     import re
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     js_v = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
-    assert css_v and css_v.group(1) == '23'
-    assert js_v and js_v.group(1) == '23'
+    assert css_v and int(css_v.group(1)) >= 23
+    assert js_v and int(js_v.group(1)) >= 23
+    assert css_v.group(1) == js_v.group(1)
