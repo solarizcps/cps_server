@@ -130,7 +130,8 @@ def test_js_side_card_uses_base_not_anchor(js):
 def test_js_plan_row_selected_side_only(js):
     idx = js.index('function enjSideCardBlock')
     block = js[idx:idx+1200]
-    assert 'up-enj-card-plan-row' in block
+    # V25: up-mcard-side-plan veya V24: up-enj-card-plan-row
+    assert ('up-mcard-side-plan' in block or 'up-enj-card-plan-row' in block)
     assert 'e.makineId === machineId' in block
     assert 'e.slot === slotKey' in block
 

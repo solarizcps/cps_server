@@ -3,7 +3,7 @@
 {% block title %}Üretim Plan · Planlama · Solariz CPS{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=24">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=31">
 {% endblock %}
 
 {% block content %}
@@ -96,18 +96,18 @@
 <div id="upCreateModal" class="up-modal up-modal-create-root" hidden>
   <div class="up-modal-backdrop" id="upCreateBackdrop"></div>
   <div class="up-modal-panel up-modal-create">
-    <div class="up-modal-head">
-      <h2>Plan Oluştur</h2>
-      <button type="button" class="up-modal-x" id="upCreateClose" aria-label="Plan oluşturmayı kapat">×</button>
-    </div>
-    <div class="up-modal-body up-create-scroll">
-      <div id="upWizardSiparisStrip" class="up-wizard-siparis-strip" style="display:none;" aria-live="polite"></div>
-      <div id="upStep2Live" class="up-sr-live" aria-live="polite" aria-atomic="true"></div>
+    <div class="up-modal-head up-modal-head-with-steps">
+      <h2 class="up-modal-head-title">Plan Oluştur</h2>
       <div class="up-wizard-steps" id="upWizardSteps">
         <span class="up-wizard-step active" data-step="1">1 SİPARİŞ</span>
         <span class="up-wizard-step" data-step="2" id="upWizardStep2">2 ENJEKSİYON</span>
         <span class="up-wizard-step" data-step="3">3 GENEL PLAN</span>
       </div>
+      <button type="button" class="up-modal-x" id="upCreateClose" aria-label="Plan oluşturmayı kapat">×</button>
+    </div>
+    <div class="up-modal-body up-create-scroll">
+      <div id="upWizardSiparisStrip" class="up-wizard-siparis-strip" style="display:none;" aria-live="polite" aria-hidden="true"></div>
+      <div id="upStep2Live" class="up-sr-live" aria-live="polite" aria-atomic="true"></div>
       <div id="upPlanErrorSummary" class="up-plan-error-summary" hidden></div>
 
       <!-- ADIM 1 -->
@@ -134,6 +134,7 @@
               <span class="up-step2-col-num">1</span>
               <span>MAKİNE VE TARAF</span>
             </div>
+            <p class="up-step2-col-desc">Planlamak istediğiniz makineyi ve tarafı seçin.</p>
             <div id="upEnjUyari" class="up-enj-uyari" style="display:none;"></div>
             <div class="up-enj-doluluk-bant" id="upEnjDolulukBant" style="display:none;">
               <span class="up-enj-doluluk-baslik">MAKİNE DURUMU</span>
@@ -142,10 +143,35 @@
             <!-- M1–M4 kartları 2×2 — JS ile doldurulur -->
             <div class="up-enj-makine-cards up-enj-makine-cards-2col" id="upEnjMakineCards"></div>
             <!-- Taraf seçimi kartların hemen altında -->
-            <div class="up-enj-slot-row up-enj-slot-row-big" id="upStep2SecSlot">
-              <button type="button" class="up-enj-slot-btn up-slot-a up-slot-btn-big" data-slot="A" id="upEnjSlotA">A TARAFI</button>
-              <button type="button" class="up-enj-slot-btn up-slot-b up-slot-btn-big" data-slot="B" id="upEnjSlotB">B TARAFI</button>
+            <div class="up-step2-taraf-sec" id="upStep2SecSlot">
+              <p class="up-step2-taraf-lbl" id="upStep2TarafLbl" style="display:none;"></p>
+              <div class="up-step2-taraf-btns">
+                <button type="button" class="up-enj-slot-btn up-slot-a up-slot-btn-big" data-slot="A" id="upEnjSlotA">A TARAFI</button>
+                <button type="button" class="up-enj-slot-btn up-slot-b up-slot-btn-big" data-slot="B" id="upEnjSlotB">B TARAFI</button>
+              </div>
             </div>
+
+            <!-- Seçilen Ürün kartı -->
+            <div id="upSelectedProductEmpty" class="up-selected-product-empty">Henüz ürün seçilmedi.</div>
+            <div id="upSelectedProductCard" class="up-selected-product-card" style="display:none;" aria-live="polite">
+              <div class="up-selected-product-head">
+                <span class="up-selected-product-icon" aria-hidden="true">📦</span>
+                <span class="up-selected-product-title">SEÇİLEN ÜRÜN</span>
+              </div>
+              <div id="upSelectedModelRow" class="up-selected-product-body"></div>
+            </div>
+
+            <!-- Planlanacak Çift + Miktar Özeti -->
+            <section class="up-step2-section up-step2-sec-miktar-left" id="upStep2SecMiktar" aria-labelledby="upStep2LblMiktar">
+              <div class="up-miktar-head-row">
+                <h3 class="up-step2-sec-title" id="upStep2LblMiktar">Planlanacak Çift</h3>
+                <label for="upEnjPlanCift" class="up-miktar-input-wrap">
+                  <input type="number" id="upEnjPlanCift" min="1" placeholder="ör. 4000">
+                </label>
+              </div>
+              <div id="upEnjMiktarOzet" class="up-enj-miktar-ozet"></div>
+              <div id="upEnjMiktarUyari" class="up-enj-miktar-uyari" style="display:none;" role="alert"></div>
+            </section>
           </div><!-- /.up-step2-col-left -->
 
           <!-- ORTA KOLON: 2·İSTASYON VE KALIP -->
@@ -159,29 +185,32 @@
             <!-- 1. Başlangıç Tarihi -->
             <section class="up-step2-section up-step2-section-sm" id="upStep2SecTarih" aria-labelledby="upStep2LblTarih">
               <h3 class="up-step2-sec-title" id="upStep2LblTarih">Başlangıç Tarihi</h3>
-              <label for="upEnjBas">
-                <input type="datetime-local" id="upEnjBas" disabled>
-              </label>
-              <div class="up-enj-bas-meta">
+              <div class="up-tarih-panel">
+                <label for="upEnjBas" class="up-tarih-input-wrap">
+                  <input type="datetime-local" id="upEnjBas" disabled>
+                </label>
+                <button type="button" class="up-btn up-btn-sm up-tarih-kullan-btn" id="upEnjBasIlkUygunBtn" disabled>En erken tarihi kullan</button>
+              </div>
+              <div class="up-tarih-meta">
                 <span id="upEnjBasOneri" class="up-enj-bas-oneri" style="display:none;">Önerilen</span>
                 <span id="upEnjIlkUygunLbl" class="up-enj-ilk-uygun-lbl">En erken uygun: <strong id="upEnjIlkUygunVal">—</strong></span>
-                <button type="button" class="up-btn up-btn-sm" id="upEnjBasIlkUygunBtn" disabled>En erken tarihi kullan</button>
               </div>
               <div id="upEnjBasConflict" class="up-enj-bas-conflict" style="display:none;" role="alert"></div>
             </section>
 
-            <!-- 2. İstasyonlar (taraf seçilmediyse disabled olarak görünür) -->
+            <!-- 2. İstasyonlar -->
             <section class="up-step2-section" id="upStep2SecIstasyon" aria-labelledby="upStep2LblIstasyon">
               <h3 class="up-step2-sec-title" id="upStep2LblIstasyon">İstasyonlar</h3>
               <div id="upEnjIstasyonGrid" class="up-enj-istasyon-grid"></div>
               <div id="upEnjIstasyonUyari" class="up-enj-uyari" style="display:none;"></div>
-              <span class="up-field-hint" id="upEnjToplamGozHint"></span>
+              <div class="up-ist-ozet" id="upEnjToplamGozHint"></div>
             </section>
 
             <!-- 3. Kalıp Ayarları -->
             <section class="up-step2-section" id="upStep2SecKalip" aria-labelledby="upStep2LblKalip">
               <h3 class="up-step2-sec-title" id="upStep2LblKalip">Kalıp Ayarları</h3>
-              <div class="up-enj-kalip-mode-row">
+              <p class="up-step2-col-desc" style="margin-bottom:8px;">Kalıp, üretim bilgileri ve planlama parametrelerini belirleyin.</p>
+              <div class="up-kalip-mode-seg">
                 <button type="button" class="up-enj-mode-btn selected" data-mode="liste" id="upEnjKalipModeListe">Kalıp Listeden Seç</button>
                 <button type="button" class="up-enj-mode-btn" data-mode="manuel" id="upEnjKalipModeManuel">Manuel Kalıp</button>
               </div>
@@ -214,16 +243,6 @@
                 </div>
               </div>
             </section>
-
-            <!-- 4. Planlanacak Çift + Miktar Özeti -->
-            <section class="up-step2-section" id="upStep2SecMiktar" aria-labelledby="upStep2LblMiktar">
-              <h3 class="up-step2-sec-title" id="upStep2LblMiktar">Planlanacak Çift</h3>
-              <label for="upEnjPlanCift">
-                <input type="number" id="upEnjPlanCift" min="1" placeholder="ör. 4000">
-              </label>
-              <div id="upEnjMiktarOzet" class="up-enj-miktar-ozet"></div>
-              <div id="upEnjMiktarUyari" class="up-enj-miktar-uyari" style="display:none;" role="alert"></div>
-            </section>
           </div><!-- /.up-step2-col-mid -->
 
           <!-- SAĞ KOLON: 3·VARDİYA VE HESAP -->
@@ -232,8 +251,9 @@
               <span class="up-step2-col-num">3</span>
               <span>VARDİYA VE HESAP</span>
             </div>
+            <p class="up-step2-col-desc">Üretim hızını ve planlama zamanını belirleyin.</p>
 
-            <!-- 1. Vardiya tabs -->
+            <!-- 1. Vardiya segmented control -->
             <section class="up-step2-section up-step2-section-sm" id="upStep2SecVardiya" aria-labelledby="upStep2LblVardiya">
               <div class="up-enj-calisma-tabs" id="upEnjCalismaTabBar" role="tablist" aria-label="Çalışma modu">
                 <button type="button" class="up-enj-calisma-tab" data-val="GUNDUZ" role="tab">Gündüz</button>
@@ -245,55 +265,61 @@
                 <option value="GECE">Gece</option>
                 <option value="GUNDUZ_GECE" selected>Gündüz + Gece</option>
               </select>
-              <!-- Gündüz + Gece hız kartları yan yana -->
+              <!-- Vardiya saat bandı (JS tarafından doldurulur — sadece saat gösterimi) -->
               <div id="upEnjVardiyaSaatBant" class="up-enj-vardiya-saat-bant"></div>
             </section>
 
-            <!-- 2. Tur / Hız inputları -->
+            <!-- 2. Gündüz/Gece hız kartları yan yana + accordion -->
             <section class="up-step2-section" id="upStep2SecTur" aria-labelledby="upStep2LblTur">
-              <div class="up-enj-ref-mode">
-                <div id="upEnjRefKaynakDurum" class="up-enj-ref-kaynak-durum" style="display:none;"></div>
-                <!-- Gündüz + Gece inputları yan yana grid -->
-                <div id="upEnjManualRefWrap" class="up-enj-manual-ref up-enj-manual-ref-2col">
-                  <div id="upEnjManualGunduzWrap" class="up-enj-manual-row">
-                    <label for="upEnjManualGunduz" class="up-enj-manual-label">
-                      <span class="up-enj-vd-pill up-vd-gunduz">Gündüz</span>
-                      <span class="up-enj-vd-saat">07:00–17:00 · 10h</span>
-                      <span class="up-enj-vd-lbl">Tur / Vardiya</span>
-                    </label>
-                    <div class="up-enj-ref-input-row">
-                      <input type="number" id="upEnjManualGunduz" min="1" step="1" placeholder="ör. 60">
-                      <button type="button" class="up-enj-autofill-btn" id="upEnjAutoFillGunduz" style="display:none;" title="Geçmiş veriyi gündüz alanına aktar">Kullan</button>
+              <div id="upEnjRefKaynakDurum" class="up-enj-ref-kaynak-durum" style="display:none;"></div>
+              <!-- İki bağımsız hız kartı yan yana -->
+              <div id="upEnjManualRefWrap" class="up-hiz-kart-grid">
+                <!-- Gündüz hız kartı -->
+                <div id="upEnjManualGunduzWrap" class="up-hiz-kart up-hiz-kart-gunduz">
+                  <div class="up-hiz-kart-head">
+                    <span class="up-hiz-icon up-hiz-icon-gunduz">☀</span>
+                    <div>
+                      <div class="up-hiz-kart-title">Gündüz</div>
+                      <div class="up-hiz-kart-saat">07:00–17:00 · 10 saat/vardiya</div>
                     </div>
-                    <div id="upEnjAutoRefGunduzHint" class="up-enj-ref-hint" style="display:none;"></div>
                   </div>
-                  <div id="upEnjManualGeceWrap" class="up-enj-manual-row">
-                    <label for="upEnjManualGece" class="up-enj-manual-label">
-                      <span class="up-enj-vd-pill up-vd-gece">Gece</span>
-                      <span class="up-enj-vd-saat">17:00–07:00 · 14h</span>
-                      <span class="up-enj-vd-lbl">Tur / Vardiya</span>
-                    </label>
-                    <div class="up-enj-ref-input-row">
-                      <input type="number" id="upEnjManualGece" min="1" step="1" placeholder="ör. 55">
-                      <button type="button" class="up-enj-autofill-btn" id="upEnjAutoFillGece" style="display:none;" title="Geçmiş veriyi gece alanına aktar">Kullan</button>
-                    </div>
-                    <div id="upEnjAutoRefGeceHint" class="up-enj-ref-hint" style="display:none;"></div>
+                  <label for="upEnjManualGunduz" class="up-hiz-kart-label">Tur / Vardiya</label>
+                  <div class="up-hiz-kart-input-row">
+                    <input type="number" id="upEnjManualGunduz" class="up-hiz-kart-input" min="1" step="1" placeholder="ör. 60">
+                    <button type="button" class="up-enj-autofill-btn" id="upEnjAutoFillGunduz" style="display:none;" title="Geçmiş veriyi gündüz alanına aktar">Kullan</button>
                   </div>
+                  <div id="upEnjAutoRefGunduzHint" class="up-enj-ref-hint" style="display:none;"></div>
                 </div>
-                <!-- Hız geçmişi accordion — varsayılan kapalı -->
-                <div id="upEnjSonHaftaHiz" class="up-enj-son-hafta" style="display:none;">
-                  <button type="button"
-                    class="up-enj-son-hafta-toggle"
-                    id="upEnjSonHaftaToggle"
-                    aria-expanded="false"
-                    aria-controls="upEnjSonHaftaIcerik">
-                    <span class="up-enj-son-hafta-baslik-txt">MAKİNE HIZ GEÇMİŞİ — <span id="upEnjSonHaftaAralik">son 30 gün</span></span>
-                    <span class="up-enj-son-hafta-ozet" id="upEnjSonHaftaOzet"></span>
-                    <span class="up-enj-son-hafta-chevron" aria-hidden="true">▸</span>
-                  </button>
-                  <div id="upEnjSonHaftaIcerik" class="up-enj-son-hafta-icerik" hidden>
-                    <span class="up-enj-son-hafta-yukleniyor">Yükleniyor…</span>
+                <!-- Gece hız kartı -->
+                <div id="upEnjManualGeceWrap" class="up-hiz-kart up-hiz-kart-gece">
+                  <div class="up-hiz-kart-head">
+                    <span class="up-hiz-icon up-hiz-icon-gece">☾</span>
+                    <div>
+                      <div class="up-hiz-kart-title">Gece</div>
+                      <div class="up-hiz-kart-saat">17:00–07:00 · 14 saat/vardiya</div>
+                    </div>
                   </div>
+                  <label for="upEnjManualGece" class="up-hiz-kart-label">Tur / Vardiya</label>
+                  <div class="up-hiz-kart-input-row">
+                    <input type="number" id="upEnjManualGece" class="up-hiz-kart-input" min="1" step="1" placeholder="ör. 55">
+                    <button type="button" class="up-enj-autofill-btn" id="upEnjAutoFillGece" style="display:none;" title="Geçmiş veriyi gece alanına aktar">Kullan</button>
+                  </div>
+                  <div id="upEnjAutoRefGeceHint" class="up-enj-ref-hint" style="display:none;"></div>
+                </div>
+              </div>
+              <!-- Hız geçmişi accordion — varsayılan kapalı -->
+              <div id="upEnjSonHaftaHiz" class="up-enj-son-hafta" style="display:none;">
+                <button type="button"
+                  class="up-enj-son-hafta-toggle"
+                  id="upEnjSonHaftaToggle"
+                  aria-expanded="false"
+                  aria-controls="upEnjSonHaftaIcerik">
+                  <span class="up-enj-son-hafta-baslik-txt">Makine hız geçmişini göster (<span id="upEnjSonHaftaAralik">son 30 gün</span>)</span>
+                  <span class="up-enj-son-hafta-ozet" id="upEnjSonHaftaOzet"></span>
+                  <span class="up-enj-son-hafta-chevron" aria-hidden="true">▾</span>
+                </button>
+                <div id="upEnjSonHaftaIcerik" class="up-enj-son-hafta-icerik" hidden>
+                  <span class="up-enj-son-hafta-yukleniyor">Yükleniyor…</span>
                 </div>
               </div>
             </section>
@@ -310,7 +336,6 @@
                 </div>
                 <div class="up-enj-hs-item" id="upEnjBaslangicWrap">
                   <label for="upEnjBas2" class="up-enj-hs-inline-lbl">Enjeksiyon Başlangıcı</label>
-                  <!-- Başlangıç tarihi görsel kopyası — asıl input orta kolonda -->
                   <span class="up-enj-bas2-mirror" id="upEnjBas2Mirror">—</span>
                 </div>
               </div>
@@ -323,45 +348,43 @@
               </label>
             </section>
 
-            <!-- 4. Hesap durumu kutuları + HESAPLA butonu -->
+            <!-- 4. Hesap özeti bandı + 5 durum kutusu + HESAPLA -->
             <section class="up-step2-section" id="upStep2SecHesap" aria-labelledby="upStep2LblHesap">
-              <!-- Kompakt hesap bandı -->
+              <!-- Açık mavi hesap özet bandı -->
               <div class="up-enj-hesap-bandi" id="upEnjHesapBandi">—</div>
-              <!-- 5 durum kutusu -->
-              <div class="up-enj-durum-strip" id="upEnjDurumStrip">
-                <div class="up-enj-durum-kutu pending" id="upEnjDurumMakine">
-                  <span class="up-enj-durum-icon">⬤</span>
-                  <span class="up-enj-durum-lbl">Makine</span>
-                  <strong class="up-enj-durum-val" id="upEnjDurumMakineVal">Seçilmedi</strong>
+              <!-- 5 hazır olma kutusu -->
+              <div class="up-durum-strip" id="upEnjDurumStrip">
+                <div class="up-durum-kutu pending" id="upEnjDurumMakine">
+                  <span class="up-durum-check" aria-hidden="true"></span>
+                  <span class="up-durum-lbl">Makine</span>
+                  <strong class="up-durum-val" id="upEnjDurumMakineVal">Seçilmedi</strong>
                 </div>
-                <div class="up-enj-durum-kutu pending" id="upEnjDurumIstasyon">
-                  <span class="up-enj-durum-icon">⬤</span>
-                  <span class="up-enj-durum-lbl">İstasyon</span>
-                  <strong class="up-enj-durum-val" id="upEnjDurumIstasyonVal">Seçilmedi</strong>
+                <div class="up-durum-kutu pending" id="upEnjDurumIstasyon">
+                  <span class="up-durum-check" aria-hidden="true"></span>
+                  <span class="up-durum-lbl">İstasyon</span>
+                  <strong class="up-durum-val" id="upEnjDurumIstasyonVal">Seçilmedi</strong>
                 </div>
-                <div class="up-enj-durum-kutu pending" id="upEnjDurumKalip">
-                  <span class="up-enj-durum-icon">⬤</span>
-                  <span class="up-enj-durum-lbl">Kalıp</span>
-                  <strong class="up-enj-durum-val" id="upEnjDurumKalipVal">Tanımlı değil</strong>
+                <div class="up-durum-kutu pending" id="upEnjDurumKalip">
+                  <span class="up-durum-check" aria-hidden="true"></span>
+                  <span class="up-durum-lbl">Kalıp</span>
+                  <strong class="up-durum-val" id="upEnjDurumKalipVal">Tanımlı değil</strong>
                 </div>
-                <div class="up-enj-durum-kutu pending" id="upEnjDurumHiz">
-                  <span class="up-enj-durum-icon">⬤</span>
-                  <span class="up-enj-durum-lbl">Hız</span>
-                  <strong class="up-enj-durum-val" id="upEnjDurumHizVal">Eksik</strong>
+                <div class="up-durum-kutu pending" id="upEnjDurumHiz">
+                  <span class="up-durum-check" aria-hidden="true"></span>
+                  <span class="up-durum-lbl">Hız</span>
+                  <strong class="up-durum-val" id="upEnjDurumHizVal">Eksik</strong>
                 </div>
-                <div class="up-enj-durum-kutu pending" id="upEnjDurumBas">
-                  <span class="up-enj-durum-icon">⬤</span>
-                  <span class="up-enj-durum-lbl">Başlangıç</span>
-                  <strong class="up-enj-durum-val" id="upEnjDurumBasVal">Belirlenmedi</strong>
+                <div class="up-durum-kutu pending" id="upEnjDurumBas">
+                  <span class="up-durum-check" aria-hidden="true"></span>
+                  <span class="up-durum-lbl">Başlangıç</span>
+                  <strong class="up-durum-val" id="upEnjDurumBasVal">Belirlenmedi</strong>
                 </div>
               </div>
-              <!-- Tek satır eksik özeti — varsayılan kapalı tam liste -->
               <div id="upEnjHesapReqList" class="up-enj-hesap-req-list" aria-live="polite"></div>
               <button type="button" class="up-btn up-btn-accent up-btn-hesapla" id="upEnjHesapBtn" disabled>
-                <span class="up-hesapla-icon">&#9636;</span> ENJEKSİYON HESAPLA
+                &#9636; ENJEKSİYON HESAPLA
               </button>
               <div id="upEnjHesapBtnHint" class="up-enj-hesap-hint" style="display:none;"></div>
-              <!-- Tahmini bitiş placeholder — her zaman görünür -->
               <p class="up-enj-bitis-placeholder" id="upEnjBitisPlaceholder">
                 ⏱ Tahmini bitiş hesaplama sonrası gösterilecek.
               </p>
@@ -634,5 +657,5 @@
   window.UP_CAN_EDIT = {{ 'true' if can_edit else 'false' }};
   window.UP_GEREKCE = {{ gerekce_secenekleri | tojson }};
 </script>
-<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=24"></script>
+<script src="{{ url_for('static', filename='js/uretim_plan.js') }}?v=31"></script>
 {% endblock %}

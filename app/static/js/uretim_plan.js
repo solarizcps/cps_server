@@ -612,10 +612,13 @@
         function setKutu(id, valTxt, ok) {
             var el = $(id);
             if (!el) return;
-            el.className = 'up-enj-durum-kutu' + (ok ? ' ok' : ' pending');
-            var icon = el.querySelector('.up-enj-durum-icon');
-            if (icon) icon.textContent = ok ? '✓' : '⬤';
-            var valEl = el.querySelector('.up-enj-durum-val');
+            /* Hem yeni (.up-durum-kutu) hem eski (.up-enj-durum-kutu) class adını destekle */
+            var baseClass = el.className.indexOf('up-durum-kutu') >= 0 ? 'up-durum-kutu' : 'up-enj-durum-kutu';
+            el.className = baseClass + (ok ? ' ok' : ' pending');
+            /* Yeni HTML: .up-durum-check / .up-durum-val  |  Eski: .up-enj-durum-icon / .up-enj-durum-val */
+            var icon = el.querySelector('.up-durum-check') || el.querySelector('.up-enj-durum-icon');
+            if (icon) icon.textContent = ok ? '✓' : '';
+            var valEl = el.querySelector('.up-durum-val') || el.querySelector('.up-enj-durum-val');
             if (valEl && valTxt !== undefined) valEl.textContent = valTxt;
         }
         /* Makine */
@@ -679,12 +682,16 @@
             : '—';
         var remLbl = legacyBlock ? 'Hesaplanamıyor' : (rem != null ? fmtN(rem) + ' çift' : '—');
         var afterLbl = legacyBlock ? 'Hesaplanamıyor' : (after != null ? fmtN(after) + ' çift' : '—');
+        function mikRow(lbl, val) {
+            return '<div class="up-miktar-row"><span class="up-miktar-lbl">' + lbl + '</span>' +
+                '<span class="up-miktar-val">' + val + '</span></div>';
+        }
         el.innerHTML =
-            '<div><strong>TOPLAM SİPARİŞ:</strong> ' + fmtN(qs.order_total_quantity) + ' çift</div>' +
-            '<div><strong>ÖNCEDEN PLANLANAN:</strong> ' + alreadyLbl + '</div>' +
-            '<div><strong>KALAN:</strong> ' + remLbl + '</div>' +
-            '<div><strong>BU PLAN:</strong> ' + (req > 0 ? fmtN(req) : '—') + ' çift</div>' +
-            '<div><strong>PLANLAMA SONRASI:</strong> ' + afterLbl + '</div>';
+            mikRow('Toplam Sipariş', fmtN(qs.order_total_quantity) + ' çift') +
+            mikRow('Önceden Planlanan', alreadyLbl) +
+            mikRow('Kalan', remLbl) +
+            mikRow('Bu Plan', (req > 0 ? fmtN(req) : '—') + ' çift') +
+            mikRow('Planlama Sonrası', afterLbl);
         if (warn) {
             if (legacyBlock) {
                 warn.textContent = qs.warning || 'Legacy plan miktarı düzeltilmeden kayıt yapılamaz.';
@@ -762,6 +769,40 @@
         strip.style.display = 'block';
         strip.innerHTML = '<strong>' + esc(o.model_kod) + '</strong> · ' + esc(o.renk) +
             ' · Sipariş ' + esc(o.sip_no) + ' · ' + fmtN(o.miktar) + ' ' + esc(o.birim || 'CIFT');
+        // V31: sol kolon SEÇİLEN ÜRÜN kartı
+        var card = $('upSelectedProductCard');
+        var empty = $('upSelectedProductEmpty');
+        var row = $('upSelectedModelRow');
+        if (!card && !row) return;
+        if (!o || state.createStep === 1) {
+            if (card) card.style.display = 'none';
+            if (empty) empty.style.display = '';
+            if (row) row.innerHTML = '';
+            return;
+        }
+        if (card) card.style.display = '';
+        if (empty) empty.style.display = 'none';
+        if (!row) return;
+        var modelLine = esc(o.model_kod || '');
+        if (o.renk) modelLine += ' · ' + esc(o.renk);
+        var birimLbl = (o.birim || 'çift').toLowerCase();
+        var sipLine = 'Sipariş ' + esc(o.sip_no);
+        if (o.miktar != null && !isNaN(o.miktar)) {
+            sipLine += ' · ' + fmtN(o.miktar) + ' ' + esc(birimLbl);
+        }
+        var html = '<div class="up-selected-product-model">' + modelLine + '</div>' +
+            '<div class="up-selected-product-meta">' + sipLine + '</div>';
+        var emirTxt = '';
+        if (o.emir_no && o.emir_no !== '-' && String(o.emir_no).trim()) {
+            emirTxt = String(o.emir_no).trim();
+        } else if (o.emir_nos && o.emir_nos.length === 1) {
+            emirTxt = String(o.emir_nos[0]);
+        }
+        if (emirTxt) {
+            html += '<div class="up-selected-product-emir">Emir ' + esc(emirTxt) + '</div>';
+        }
+        row.innerHTML = html;
+        if (card) card.title = (o.model_kod || '') + ' · Sipariş ' + (o.sip_no || '');
     }
 
     function enjUpdateStep2Ui() {
@@ -1716,18 +1757,15 @@
         if (e.makineId === machineId && e.slot === slotKey && e.baslangic) {
             var planTam = enjFmtDtApi(e.baslangic);
             var planKisa = enjFmtDtKisa(e.baslangic);
-            planRow = '<div class="up-enj-card-side-row up-enj-card-plan-row">' +
-                '<span class="up-enj-card-plan-lbl">Plan</span>' +
-                '<strong class="up-enj-card-plan-val" title="' + esc(planTam) + '">' +
-                esc(planKisa) + '</strong></div>';
+            planRow = '<div class="up-mcard-side-plan">' +
+                '<span class="up-mcard-side-plan-lbl">Plan:</span> ' +
+                '<strong title="' + esc(planTam) + '">' + esc(planKisa) + '</strong></div>';
         }
-        return '<div class="up-enj-card-side ' + sideClass + '">' +
-            '<div class="up-enj-card-side-title">' + (slotKey === 'A' ? 'A TARAFI' : 'B TARAFI') + '</div>' +
-            '<div class="up-enj-card-side-row"><span class="up-enj-card-ilk-uygun-lbl">İlk uygun</span>' +
-            '<strong class="up-enj-card-ilk-val" title="' + esc(baseDt.tam) + '">' +
-            esc(baseDt.kisa) + '</strong></div>' +
+        return '<div class="up-mcard-side ' + sideClass + '">' +
+            '<div class="up-mcard-side-title">' + (slotKey === 'A' ? 'A Tarafı' : 'B Tarafı') + '</div>' +
+            '<div class="up-mcard-side-date" title="' + esc(baseDt.tam) + '">' + esc(baseDt.kisa) + '</div>' +
             planRow +
-            '<div class="up-enj-card-side-row">' + occupied + '/' + total + ' dolu</div>' +
+            '<div class="up-mcard-side-fill">' + occupied + '/' + total + ' dolu</div>' +
             '</div>';
     }
 
@@ -2731,45 +2769,55 @@
             var oz = state.enj.slotOzetMap[mid] || {};
             var sideA = oz.A || {};
             var sideB = oz.B || {};
-            /* Tam genişlik durum satırı — A ve B'yi karşılaştır */
+            /* Durum satırı — A ve B'yi karşılaştır */
             var dA = enjSideDurum(sideA);
             var dB = enjSideDurum(sideB);
             var footerCls, footerLbl;
             if (dA.cls === dB.cls) {
-                /* İkisi aynı: kısa → uzun açıklama */
                 footerCls = dA.cls;
                 footerLbl = dA.cls === 'bos' ? 'BOŞ / PLANLANABİLİR'
-                          : dA.cls === 'planli' ? 'PLANLI'
-                          : 'DOLU';
+                          : dA.cls === 'planli' ? 'PLANLI' : 'DOLU';
             } else {
-                /* Farklı: "A: BOŞ · B: PLANLI" */
                 footerCls = 'karisik';
                 footerLbl = 'A: ' + dA.lbl + ' · B: ' + dB.lbl;
             }
+            var isSelected = (state.enj.makineId === mid);
+            /* Radio göstergesi - sağ üstte */
+            var radioHtml = '<span class="up-mcard-radio' + (isSelected ? ' selected' : '') + '" aria-hidden="true"></span>';
+            /* Kart wrapper */
             var wrap = document.createElement('div');
-            wrap.className = 'up-enj-makine-card-wrap' + (state.enj.makineId === mid ? ' selected' : '');
+            wrap.className = 'up-mcard-wrap' + (isSelected ? ' selected' : '');
+            /* Tıklanabilir makine başlık + içerik alanı */
             var card = document.createElement('button');
             card.type = 'button';
-            card.className = 'up-enj-makine-card';
+            card.className = 'up-mcard-btn';
+            card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
             card.innerHTML =
-                '<strong>' + esc(kod) + '</strong>' +
-                '<span class="up-enj-card-ist-label">' + m.istasyon_sayisi + ' İSTASYON</span>' +
-                '<div class="up-enj-card-sides">' +
-                enjSideCardBlock(sideA, 'A', mid) +
-                enjSideCardBlock(sideB, 'B', mid) +
+                '<div class="up-mcard-head">' +
+                  '<div class="up-mcard-head-left">' +
+                    '<strong class="up-mcard-kod">' + esc(kod) + '</strong>' +
+                    '<span class="up-mcard-ist">' + m.istasyon_sayisi + ' İSTASYON</span>' +
+                  '</div>' +
+                  radioHtml +
+                '</div>' +
+                '<div class="up-mcard-sides">' +
+                  enjSideCardBlock(sideA, 'A', mid) +
+                  enjSideCardBlock(sideB, 'B', mid) +
                 '</div>';
             card.addEventListener('click', function () {
                 enjRequestMakineChange(m, machines);
             });
-            /* Tam genişlik alt satır: durum + Detay yan yana */
+            /* Alt satır: durum noktası + durum metni + Detay butonu */
             var footer = document.createElement('div');
-            footer.className = 'up-enj-card-footer';
+            footer.className = 'up-mcard-foot';
+            var durumDot = document.createElement('span');
+            durumDot.className = 'up-mcard-dot ' + footerCls;
             var durumSpan = document.createElement('span');
-            durumSpan.className = 'up-enj-card-durum ' + footerCls;
+            durumSpan.className = 'up-mcard-durum-lbl';
             durumSpan.textContent = footerLbl;
             var detBtn = document.createElement('button');
             detBtn.type = 'button';
-            detBtn.className = 'up-enj-makine-detay-btn';
+            detBtn.className = 'up-mcard-detay-btn';
             detBtn.textContent = 'Detay ›';
             detBtn.setAttribute('aria-label', kod + ' makine detayını aç');
             detBtn.addEventListener('click', function (ev) {
@@ -2777,6 +2825,7 @@
                 ev.stopPropagation();
                 enjOpenMakineDetay(mid, kod, detBtn);
             });
+            footer.appendChild(durumDot);
             footer.appendChild(durumSpan);
             footer.appendChild(detBtn);
             wrap.appendChild(card);
@@ -2803,9 +2852,12 @@
         el.innerHTML = '';
         for (var i = 1; i <= 8; i++) {
             var lbl = document.createElement('label');
-            lbl.className = 'up-enj-ist-cell disabled up-enj-ist-placeholder';
-            lbl.innerHTML = '<input type="checkbox" disabled> İST' + i +
-                '<small>—</small>';
+            lbl.className = 'up-ist-card disabled';
+            lbl.innerHTML =
+                '<input type="checkbox" disabled>' +
+                '<span class="up-ist-dot neutral"></span>' +
+                '<span class="up-ist-kod">İST' + i + '</span>' +
+                '<span class="up-ist-durum">—</span>';
             el.appendChild(lbl);
         }
         enjUpdateIstasyonOzetSatir(null, null);
@@ -2858,16 +2910,22 @@
             var disabled = !slot || durum === 'PLANLI' || durum === 'DOLU' || durum === 'SETUP' ||
                 durum === 'ARIZA';
             if (!disabled) uygunSayisi++;
+            var isChecked = state.enj.istasyonlar.indexOf(i) >= 0;
+            /* durum sınıfı: bos / planli / dolu */
+            var durumCls = durum === 'PLANLI' ? 'planli' : (durum === 'DOLU' || durum === 'SETUP' || durum === 'ARIZA') ? 'dolu' : 'bos';
+            var durumLbl = durum === 'KAPALI' ? 'BOŞ' : (durum === 'BOS' ? 'BOŞ' : durum);
             var lbl = document.createElement('label');
-            lbl.className = 'up-enj-ist-cell' +
-                (state.enj.istasyonlar.indexOf(i) >= 0 ? ' selected' : '') +
-                (disabled ? ' disabled' : '') +
-                (slot === 'A' ? ' slot-a' : slot === 'B' ? ' slot-b' : '');
-            lbl.innerHTML = '<input type="checkbox" value="' + i + '"' +
-                (disabled ? ' disabled' : '') +
-                (state.enj.istasyonlar.indexOf(i) >= 0 ? ' checked' : '') + '> İST' + i +
-                '<small class="' + (durum === 'PLANLI' ? 'planli' : durum === 'DOLU' ? 'dolu' : '') + '">' +
-                (durum === 'KAPALI' ? 'BOŞ' : durum) + (detail ? '<br>' + esc(detail) : '') + '</small>';
+            lbl.className = 'up-ist-card ' + durumCls +
+                (isChecked ? ' selected' : '') +
+                (disabled ? ' disabled' : '');
+            lbl.innerHTML =
+                '<input type="checkbox" value="' + i + '"' +
+                  (disabled ? ' disabled' : '') +
+                  (isChecked ? ' checked' : '') + '>' +
+                '<span class="up-ist-dot ' + durumCls + '"></span>' +
+                '<span class="up-ist-kod">İST' + i + '</span>' +
+                '<span class="up-ist-durum">' + durumLbl + '</span>' +
+                (detail ? '<span class="up-ist-detail">' + esc(detail) + '</span>' : '');
             if (!disabled) {
                 lbl.querySelector('input').addEventListener('change', function (ev) {
                     var n = parseInt(ev.target.value, 10);
