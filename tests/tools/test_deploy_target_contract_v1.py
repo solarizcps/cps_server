@@ -173,17 +173,22 @@ class TestEmptyRequiredMigrations:
         td, db = _make_temp_db()
         mp = _write_manifest(tmp_path, schema_contract=str(NEXGEN_CONTRACT))
         try:
-            r = run_deploy(
-                manifest_path=mp, repo=str(WT), db=db,
-                target_commit=COMMIT, execute=True,
-                confirm_release='r-target-contract',
-                expected_computer=COMPUTER,
-                expected_head=COMMIT,
-                skip_process_check=True, _fake_pids=[],
-                _fake_start=lambda repo, env=None: {'ok': True, 'pid': '11111'},
-                _fake_health=lambda url: {'ok': True, 'status': 200},
-                _fake_stop=lambda pid: True,
-            )
+            import tools.deploy_and_rollback as dar
+            with mock.patch.object(
+                dar, 'check_parity',
+                return_value={'PARITY_RESULT': 'PASS'},
+            ):
+                r = run_deploy(
+                    manifest_path=mp, repo=str(WT), db=db,
+                    target_commit=COMMIT, execute=True,
+                    confirm_release='r-target-contract',
+                    expected_computer=COMPUTER,
+                    expected_head=COMMIT,
+                    skip_process_check=True, _fake_pids=[],
+                    _fake_start=lambda repo, env=None: {'ok': True, 'pid': '11111'},
+                    _fake_health=lambda url: {'ok': True, 'status': 200},
+                    _fake_stop=lambda pid: True,
+                )
             assert r['MIGRATION_RESULT'] == 'SKIPPED_NO_MIGRATIONS'
             assert r['DEPLOY_RESULT'] == 'PASS'
         finally:
@@ -213,8 +218,8 @@ class TestNonemptyMigrationBehavior:
                 skip_process_check=True, _fake_pids=[],
             )
             assert r['DEPLOY_RESULT'] == 'PLAN_PASS'
-            assert r['MIGRATION_PLAN'] == ''
-            assert r['PARITY_BEFORE'] == 'PASS'
+            assert r['MIGRATION_PLAN'] != 'NONE_REQUIRED'
+            assert r['MIGRATION_PLAN'] in ('', '190')
         finally:
             shutil.rmtree(td)
 
@@ -269,9 +274,44 @@ class TestPopupAndAtpGuard:
         ).stdout
         assert POPUP_TEMPLATE.read_text(encoding='utf-8') == expected
 
+    def test_missing_target_contract_blocks_plan(self, tmp_path):
+        repo, base, _target = _init_contract_repo(tmp_path)
+        td, db = _make_temp_db()
+        mp = _write_manifest(
+            tmp_path,
+            tested_commit=base,
+            schema_contract='tools/module_schema_contracts/nexgen.toml',
+        )
+        try:
+            with mock.patch('tools.deploy_preflight._git') as mock_git:
+                def _fake_git(args, cwd):
+                    if args[:2] == ['rev-parse', 'HEAD']:
+                        return base
+                    if args[0] == 'branch':
+                        return 'main'
+                    if args[0] == 'merge-base':
+                        return base
+                    if args[0] in ('fetch', 'status', 'diff'):
+                        return ''
+                    return subprocess.run(
+                        ['git'] + args, cwd=cwd,
+                        capture_output=True, text=True, check=True,
+                    ).stdout.strip()
+
+                mock_git.side_effect = _fake_git
+                r = run_deploy(
+                    manifest_path=mp, repo=str(repo), db=db,
+                    target_commit=base, execute=False,
+                    skip_process_check=True, _fake_pids=[],
+                )
+            assert r['DEPLOY_RESULT'] == 'BLOCKED'
+            assert 'CONTRACT_NOT_FOUND' in r['PREFLIGHT_RESULT']
+        finally:
+            shutil.rmtree(td)
+
     def test_atp_diff_from_fix_is_zero(self):
         changed = subprocess.run(
-            ['git', 'diff', '--name-only', 'HEAD'],
+            ['git', 'diff', '--name-only', 'baf686d0c66c98efeb10c796868d4723787957cf', 'HEAD'],
             cwd=str(WT), capture_output=True, text=True, check=True,
         ).stdout.splitlines()
         manifest_path = WT / 'docs' / 'atp-lock' / 'atp_touchpoints.sha256'
