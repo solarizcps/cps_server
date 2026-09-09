@@ -914,7 +914,7 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 
 /* Plan Oluştur modal — scoped sticky layout */
 .up-modal-create-root .up-modal-panel.up-modal-create {
-  width: min(96vw, 1180px);
+  width: min(96vw, 1200px);
   max-height: min(100dvh, 96vh);
   max-height: min(96vh, 100dvh);
   min-height: 0;
@@ -925,7 +925,36 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px 16px 16px;
+  padding: 12px 16px 0;
+}
+/* On step2, disable outer scroll and let columns scroll */
+.up-modal-create-root .up-create-scroll.step2-active {
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* Wizard header elements shrink-0 in step2 mode */
+.up-create-scroll.step2-active .up-wizard-siparis-strip,
+.up-create-scroll.step2-active .up-wizard-steps,
+.up-create-scroll.step2-active .up-plan-error-summary,
+.up-create-scroll.step2-active .up-sr-live {
+  flex-shrink: 0;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.up-create-scroll.step2-active .up-wizard-steps {
+  padding-top: 10px;
+}
+/* Step2 panel fills entire scroll area */
+.up-create-scroll.step2-active #upStep2 {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.up-create-scroll.step2-active .up-step2-layout {
+  height: 100%;
+  min-height: 0;
 }
 .up-modal-create-root .up-create-foot {
   flex-shrink: 0;
@@ -954,19 +983,70 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   white-space: nowrap;
   border: 0;
 }
+/* ===== 3-KOLON STEP2 LAYOUT ===== */
 .up-step2-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
-  gap: 14px;
-  align-items: start;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) minmax(260px, 300px);
+  gap: 0;
+  align-items: stretch;
   min-height: 0;
+  height: 100%;
 }
-.up-step2-main { min-width: 0; min-height: 0; }
+.up-step2-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 14px 12px;
+}
+.up-step2-col-left {
+  border-right: 1px solid #e2e8f0;
+  background: #fafafa;
+}
+.up-step2-col-mid {
+  border-right: 1px solid #e2e8f0;
+}
+.up-step2-col-right {
+  background: #fafafa;
+}
+.up-step2-col-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #0f172a;
+}
+.up-step2-col-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ea580c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.up-step2-col-desc {
+  font-size: 11.5px;
+  color: #64748b;
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
 .up-step2-section {
-  margin-bottom: 14px;
-  padding-bottom: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid #f1f5f9;
 }
+.up-step2-section:last-of-type { border-bottom: none; }
 .up-step2-section.up-step2-locked { opacity: 0.55; pointer-events: none; }
 .up-step2-sec-title {
   margin: 0 0 8px;
@@ -976,20 +1056,67 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   text-transform: uppercase;
   color: #64748b;
 }
-.up-step2-summary {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  max-height: calc(100dvh - 220px);
-  max-height: calc(96vh - 220px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: #f8fafc;
+/* Makine kartları sol kolonda 2'li grid */
+.up-enj-makine-cards-2col {
+  grid-template-columns: repeat(2, 1fr) !important;
+}
+/* Büyük slot butonları */
+.up-enj-slot-row-big { gap: 8px; display: flex; }
+.up-slot-btn-big {
+  flex: 1;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.up-slot-btn-big.selected { border-color: #ea580c; background: #fff7ed; color: #ea580c; }
+.up-slot-btn-big:hover:not(.selected) { border-color: #94a3b8; }
+/* Vardiya tab butonları */
+.up-enj-calisma-tabs {
+  display: flex;
   border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.up-enj-calisma-tab {
+  flex: 1;
+  padding: 8px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: #fff;
+  cursor: pointer;
+  border-right: 1px solid #e2e8f0;
+  color: #64748b;
+  transition: background .15s, color .15s;
+}
+.up-enj-calisma-tab:last-child { border-right: none; }
+.up-enj-calisma-tab.selected { background: #ea580c; color: #fff; }
+/* Hafta sonu inline */
+.up-enj-hs-row { display: flex; align-items: center; gap: 8px; }
+.up-enj-hs-inline-lbl { font-size: 12px; font-weight: 600; color: #475569; white-space: nowrap; }
+.up-enj-hs-select { flex: 1; }
+/* Hesapla butonu tam genişlik */
+.up-btn-hesapla {
+  width: 100%;
+  padding: 12px;
+  font-size: 14px;
+  margin-top: 4px;
+}
+/* Kurulum özeti sağ kolon entegre */
+.up-step2-summary {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 12px;
   line-height: 1.45;
+  margin-top: 4px;
 }
 .up-step2-summary-title {
   margin: 0 0 8px;
@@ -1078,17 +1205,14 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   cursor: not-allowed;
 }
 @media (max-width: 1099px) {
-  .up-step2-layout { grid-template-columns: 1fr; }
-  .up-step2-summary {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    max-height: none;
-    margin-bottom: 10px;
-  }
+  .up-step2-layout { grid-template-columns: 1fr 1fr; }
+  .up-step2-col-right { border-right: none; grid-column: span 2; border-top: 1px solid #e2e8f0; }
 }
 @media (max-width: 720px) {
   .up-modal-create-root .up-modal-panel.up-modal-create { width: 98vw; }
   .up-create-foot { flex-wrap: wrap; justify-content: stretch; }
   .up-create-foot .up-btn { flex: 1 1 auto; min-width: 88px; font-size: 12px; }
+  .up-step2-layout { grid-template-columns: 1fr; }
+  .up-step2-col-left, .up-step2-col-mid, .up-step2-col-right { border-right: none; border-top: 1px solid #e2e8f0; }
+  .up-step2-col-right { grid-column: auto; }
 }

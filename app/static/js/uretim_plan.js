@@ -899,10 +899,15 @@
         clearPlanErrors();
         [1, 2, 3].forEach(function (s) {
             var p = $('upStep' + s);
-            if (p) p.style.display = (s === n) ? 'block' : 'none';
+            if (p) p.style.display = (s === n) ? '' : 'none';
             var st = document.querySelector('.up-wizard-step[data-step="' + s + '"]');
             if (st) st.classList.toggle('active', s === n);
         });
+        var scroll = document.querySelector('.up-create-scroll');
+        if (scroll) {
+            if (n === 2) scroll.classList.add('step2-active');
+            else scroll.classList.remove('step2-active');
+        }
         if (n === 2) {
             fetchQuantitySummary(function () { enjUpdateStep2Ui(); });
         }
@@ -2822,6 +2827,21 @@
             enjHesapGizle();
             enjFetchIlkUygun();
             enjUpdateHesapBtn();
+        });
+        // Tab-stili çalışma modu
+        document.querySelectorAll('.up-enj-calisma-tab').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var val = btn.dataset.val;
+                document.querySelectorAll('.up-enj-calisma-tab').forEach(function (b) {
+                    b.classList.toggle('selected', b.dataset.val === val);
+                    b.setAttribute('aria-selected', b.dataset.val === val ? 'true' : 'false');
+                });
+                var sel = $('upEnjCalismaModu');
+                if (sel) {
+                    sel.value = val;
+                    sel.dispatchEvent(new Event('change'));
+                }
+            });
         });
         if ($('upEnjHesapBtn')) $('upEnjHesapBtn').addEventListener('click', enjHesaplaMotor);
         document.querySelectorAll('input[name="upEnjRefMode"]').forEach(function (r) {
