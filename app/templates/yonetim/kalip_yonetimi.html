@@ -90,21 +90,10 @@
   .ky-ekle-kaydet { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
   .ky-ekle-kaydet:hover { background: #059669; }
   .ky-ekle-kaydet:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; }
-  .ky-tabs { display:flex; gap:8px; margin-bottom:12px; }
-  .ky-tab { padding:10px 18px; border:1px solid #e5e7eb; border-radius:8px; background:#fff; font-weight:700; cursor:pointer; }
-  .ky-tab.active { background:#fef3c7; border-color:#f59e0b; color:#78350f; }
-  .ky-panel { display:none; }
-  .ky-panel.active { display:block; }
-  .ky-onay-evet { color:#059669; font-weight:700; font-size:11px; }
-  .ky-onay-hayir { color:#9ca3af; font-size:11px; }
-  .ky-seri-grid { display:grid; grid-template-columns:320px 1fr; gap:12px; }
-  @media (max-width: 1100px) { .ky-seri-grid { grid-template-columns:1fr; } }
-  .ky-seri-list { background:#fff; border:1px solid #e5e7eb; border-radius:12px; max-height:520px; overflow:auto; }
-  .ky-seri-item { padding:10px 12px; border-bottom:1px solid #f3f4f6; cursor:pointer; }
-  .ky-seri-item.active, .ky-seri-item:hover { background:#fefce8; }
-  .ky-seri-detail { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px; }
-  .ky-read-only .ky-write-only { display:none !important; }
-  .ky-read-only input, .ky-read-only select, .ky-read-only textarea { pointer-events:none; background:#f9fafb; }
+  .ky-read-only .ky-write-only { display: none !important; }
+  .ky-read-only input, .ky-read-only select, .ky-read-only textarea { pointer-events: none; background: #f9fafb; }
+  .ky-read-only .ky-upload-btn, .ky-read-only .ky-kaydet-btn, .ky-read-only .ky-pasif-btn,
+  .ky-read-only .ky-aciklama-toggle, .ky-read-only .ky-aktif { pointer-events: none; }
 </style>
 
 <div class="ky-container{% if kalip_read_only %} ky-read-only{% endif %}">
@@ -113,15 +102,9 @@
     <div class="ky-stats" id="ky-toplam">Yükleniyor...</div>
   </div>
 
-  <div class="ky-tabs">
-    <button type="button" class="ky-tab active" data-ky-tab="kaliplar">KALIPLAR</button>
-    <button type="button" class="ky-tab" data-ky-tab="seriler">KALIP SERİLERİ</button>
-  </div>
-
-  <div id="ky-panel-kaliplar" class="ky-panel active">
   <div class="ky-info ky-write-only">ℹ️ Görsel önerilen ölçü: <b>300×300px</b> (kare). Format: JPG/PNG/WEBP. Max boyut: 5MB.</div>
 
-  <div class="ky-toolbar">
+  <div class="ky-toolbar ky-write-only">
     <input type="text" class="ky-search" id="ky-arama" placeholder="🔍 Kalıp kodu, model veya renk ara...">
     <select id="ky-filtre-tip">
       <option value="">Tüm Tipler</option>
@@ -144,11 +127,8 @@
           <th style="width:110px">📷 GÖRSEL</th>
           <th style="width:120px">KOD</th>
           <th>MODEL</th>
-          <th style="width:70px" title="Kalıp başına çift/tur">KBÇ</th>
-          <th style="width:70px" title="Aktif göz sayısı">A.GÖZ</th>
-          <th style="width:70px" title="Varsayılan fiziksel adet (öneri)">VF.ADET</th>
-          <th style="width:80px" title="Kapasite çift (legacy)">KAP.ÇİFT</th>
-          <th style="width:55px" title="Kapasite onaylı">ONAY</th>
+          <th style="width:80px">KBÇ</th>
+          <th style="width:80px" title="Kalıp başı toplam çift kapasitesi">KAP.ÇİFT</th>
           <th style="width:75px" title="Çift başı ağırlık (gr)">GR/ÇFT</th>
           <th style="width:70px" title="Önerilen pişme süresi (sn)">PİŞME</th>
           <th style="width:100px">ASORTI</th>
@@ -160,23 +140,9 @@
         </tr>
       </thead>
       <tbody id="ky-tbody">
-        <tr><td colspan="16" style="text-align:center; padding:30px; color:#9ca3af">Yükleniyor...</td></tr>
+        <tr><td colspan="13" style="text-align:center; padding:30px; color:#9ca3af">Yükleniyor...</td></tr>
       </tbody>
     </table>
-  </div>
-  </div><!-- /ky-panel-kaliplar -->
-
-  <div id="ky-panel-seriler" class="ky-panel">
-    <div class="ky-toolbar ky-write-only">
-      <button class="ky-btn ky-btn-yeni" id="ky-btn-yeni-seri" type="button">+ Yeni Seri</button>
-      <input type="text" class="ky-search" id="ky-seri-arama" placeholder="🔍 Seri kodu veya model ara..." style="max-width:320px">
-    </div>
-    <div class="ky-seri-grid">
-      <div class="ky-seri-list" id="ky-seri-list"><div style="padding:20px;color:#9ca3af">Yükleniyor…</div></div>
-      <div class="ky-seri-detail" id="ky-seri-detail">
-        <p style="color:#9ca3af;margin:0">Seri seçin veya yeni seri oluşturun.</p>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -284,7 +250,7 @@
 
     const tbody = document.getElementById('ky-tbody');
     if (filtre.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="16" style="text-align:center; padding:30px; color:#9ca3af">Kayıt bulunamadı</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:30px; color:#9ca3af">Kayıt bulunamadı</td></tr>';
       return;
     }
 
@@ -304,28 +270,17 @@
         : '<div class="ky-gorsel-adi ky-gorsel-yok">YOK</div>';
 
       const tipClass = k.kalip_tipi === 'GOVDE' ? 'ky-tip-govde' : 'ky-tip-atki';
-      const tipLbl = k.kalip_tipi === 'GOVDE' ? 'GÖVDE' : 'ATKI';
       const aktifIcon = k.aktif ? '✅' : '⭕';
       const aktifClass = k.aktif ? 'ky-aktif-evet' : 'ky-aktif-hayir';
-      const onayCls = k.kapasite_onayli ? 'ky-onay-evet' : 'ky-onay-hayir';
-      const onayTxt = k.kapasite_onayli ? 'Onaylı' : 'Onaysız';
-      const ozet = escapeHtml(k.kalip_kod) + ' · ' + escapeHtml(k.model_kod || '-') + ' · ' + tipLbl +
-        ' · ' + (k.kalip_basi_cift || '—') + ' çift/tur' +
-        (k.aktif_goz_sayisi ? (' · ' + k.aktif_goz_sayisi + ' aktif göz') : '');
 
-      return '<tr data-id="' + k.id + '" title="' + ozet + '">' +
+      return '<tr data-id="' + k.id + '">' +
         '<td class="ky-gorsel-cell">' + gorselHTML + gorselAd +
           '<button class="ky-upload-btn" data-upload title="Önerilen: 300×300px JPG/PNG/WEBP max 5MB">📂 Yükle</button>' +
         '</td>' +
         '<td><strong>' + escapeHtml(k.kalip_kod) + '</strong></td>' +
         '<td>' + escapeHtml(k.model_kod || '-') + (k.model_ad ? ' · ' + escapeHtml(k.model_ad) : '') + '</td>' +
-        '<td><input type="number" class="ky-kbc-input" min="1" max="20" value="' + (k.kalip_basi_cift||1) + '" data-field="kalip_basi_cift" data-orig="' + (k.kalip_basi_cift||1) + '" title="Kalıp başına çift/tur"></td>' +
-        '<td><input type="number" class="ky-kbc-input" min="1" max="99" value="' + (k.aktif_goz_sayisi||'') + '" data-field="aktif_goz_sayisi" data-orig="' + (k.aktif_goz_sayisi||'') + '" placeholder="—" title="Aktif göz"></td>' +
-        '<td><input type="number" class="ky-kbc-input" min="1" max="99" value="' + (k.varsayilan_bagli_kalip||'') + '" data-field="varsayilan_bagli_kalip" data-orig="' + (k.varsayilan_bagli_kalip||'') + '" placeholder="—" title="Varsayılan fiziksel adet (öneri)"></td>' +
-        '<td><input type="number" class="ky-kbc-input" min="1" max="9999" value="' + (k.kapasite_cift||'') + '" data-field="kapasite_cift" data-orig="' + (k.kapasite_cift||'') + '" placeholder="—" title="Legacy kapasite çift"></td>' +
-        '<td><select class="ky-durum-select" data-field="kapasite_onayli" data-orig="' + (k.kapasite_onayli ? '1' : '0') + '" style="width:72px">' +
-          '<option value="0"' + (!k.kapasite_onayli ? ' selected' : '') + '>Onaysız</option>' +
-          '<option value="1"' + (k.kapasite_onayli ? ' selected' : '') + '>Onaylı</option></select></td>' +
+        '<td><input type="number" class="ky-kbc-input" min="1" max="20" value="' + (k.kalip_basi_cift||1) + '" data-field="kalip_basi_cift" data-orig="' + (k.kalip_basi_cift||1) + '"></td>' +
+        '<td><input type="number" class="ky-kbc-input" min="1" max="9999" value="' + (k.kapasite_cift||'') + '" data-field="kapasite_cift" data-orig="' + (k.kapasite_cift||'') + '" placeholder="—" title="Toplam kalıp kapasitesi (çift)"></td>' +
         '<td><input type="number" class="ky-kbc-input" min="0.1" max="9999" step="0.1" value="' + (k.cift_agirlik_gr||'') + '" data-field="cift_agirlik_gr" data-orig="' + (k.cift_agirlik_gr||'') + '" placeholder="—" title="Çift başı ağırlık (gr)" style="width:65px"></td>' +
         '<td><input type="number" class="ky-kbc-input" min="1" max="9999" value="' + (k.pisme_suresi_sn||'') + '" data-field="pisme_suresi_sn" data-orig="' + (k.pisme_suresi_sn||'') + '" placeholder="—" title="Önerilen pişme süresi (sn)" style="width:60px"></td>' +
         '<td><input type="text" class="ky-input-text" value="' + escapeHtml(k.asorti||'') + '" data-field="asorti" data-orig="' + escapeHtml(k.asorti||'') + '" placeholder="-"></td>' +
@@ -344,7 +299,7 @@
         '</td>' +
         '</tr>' +
         '<tr class="ky-aciklama-row' + (k.aciklama ? ' show' : '') + '" id="ky-aciklama-row-' + k.id + '" data-id="' + k.id + '">' +
-          '<td class="ky-aciklama-cell" colspan="16">' +
+          '<td class="ky-aciklama-cell" colspan="13">' +
             '<textarea class="ky-aciklama-input" rows="2" data-field="aciklama" data-orig="' + escapeHtml(k.aciklama||'') + '" placeholder="Açıklama / not..." maxlength="500">' + escapeHtml(k.aciklama||'') + '</textarea>' +
           '</td>' +
         '</tr>';
@@ -490,14 +445,13 @@
       if (el.tagName === 'SPAN') val = (el.dataset.now != null ? el.dataset.now : orig);
       else val = el.value;
       let degisti = false;
-      var intFields = ['kalip_basi_cift', 'aktif', 'varsayilan_bagli_kalip', 'aktif_goz_sayisi', 'kapasite_onayli', 'kapasite_cift', 'pisme_suresi_sn'];
-      if (intFields.indexOf(f) >= 0) {
+      if (f === 'kalip_basi_cift' || f === 'aktif' || f === 'varsayilan_bagli_kalip') {
         degisti = parseInt(val||0,10) !== parseInt(orig||0,10);
       } else {
         degisti = String(val||'').trim() !== String(orig||'').trim();
       }
       if (degisti) {
-        payload[f] = intFields.indexOf(f) >= 0 ? parseInt(val,10) : val;
+        payload[f] = (f === 'kalip_basi_cift' || f === 'aktif' || f === 'varsayilan_bagli_kalip') ? parseInt(val,10) : val;
       }
     });
 
@@ -697,186 +651,6 @@
       mesaj('❌ Bağlantı hatası: ' + e, 'hata');
     });
   });
-
-  /* --- Sekmeler --- */
-  document.querySelectorAll('.ky-tab').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('.ky-tab').forEach(function(b){ b.classList.remove('active'); });
-      document.querySelectorAll('.ky-panel').forEach(function(p){ p.classList.remove('active'); });
-      btn.classList.add('active');
-      var tab = btn.getAttribute('data-ky-tab');
-      document.getElementById('ky-panel-' + tab).classList.add('active');
-      if (tab === 'seriler') seriYukle();
-    });
-  });
-
-  /* --- Kalıp Serileri --- */
-  var SERILER = [];
-  var SECILI_SERI_ID = null;
-
-  function seriYukle() {
-    fetch('/yonetim/api/kalip-serileri?aktif=')
-      .then(function(r){ return r.json(); })
-      .then(function(d) {
-        if (!d.ok) { mesaj('❌ Seri listesi: ' + (d.hata || '?'), 'hata'); return; }
-        SERILER = d.seriler || [];
-        seriRenderListe();
-      })
-      .catch(function(e){ mesaj('❌ Seri bağlantı hatası: ' + e, 'hata'); });
-  }
-
-  function seriRenderListe() {
-    var q = (document.getElementById('ky-seri-arama') || {}).value || '';
-    q = q.toLowerCase().trim();
-    var list = SERILER.filter(function(s) {
-      if (!q) return true;
-      var t = (s.seri_kod + ' ' + (s.model_kod||'') + ' ' + (s.seri_ad||'')).toLowerCase();
-      return t.indexOf(q) >= 0;
-    });
-    var el = document.getElementById('ky-seri-list');
-    if (!list.length) {
-      el.innerHTML = '<div style="padding:20px;color:#9ca3af">Kayıt yok</div>';
-      return;
-    }
-    el.innerHTML = list.map(function(s) {
-      return '<div class="ky-seri-item' + (SECILI_SERI_ID === s.id ? ' active' : '') + '" data-id="' + s.id + '">' +
-        '<strong>' + escapeHtml(s.seri_kod) + '</strong><br>' +
-        '<small>' + escapeHtml(s.model_kod || '') + ' · ' + (s.uye_sayisi || 0) + ' üye · ' +
-        (s.aktif ? 'Aktif' : 'Pasif') + '</small></div>';
-    }).join('');
-    el.querySelectorAll('.ky-seri-item').forEach(function(item) {
-      item.addEventListener('click', function() {
-        SECILI_SERI_ID = parseInt(item.getAttribute('data-id'), 10);
-        seriRenderListe();
-        seriDetayYukle(SECILI_SERI_ID);
-      });
-    });
-  }
-
-  function seriDetayYukle(id) {
-    fetch('/yonetim/api/kalip-seri/' + id)
-      .then(function(r){ return r.json(); })
-      .then(function(d) {
-        if (!d.ok) { mesaj('❌ Seri detay: ' + (d.hata || '?'), 'hata'); return; }
-        seriDetayRender(d.seri);
-      });
-  }
-
-  function seriDetayRender(seri) {
-    var el = document.getElementById('ky-seri-detail');
-    var uyeler = seri.uyeler || [];
-    var readOnly = document.querySelector('.ky-container').classList.contains('ky-read-only');
-    var html = '<h3 style="margin:0 0 8px">' + escapeHtml(seri.seri_kod) + '</h3>' +
-      '<div style="font-size:13px;color:#374151;margin-bottom:10px">' +
-      escapeHtml(seri.model_kod || '') + (seri.model_ad ? ' · ' + escapeHtml(seri.model_ad) : '') +
-      ' · ' + (seri.aktif ? 'Aktif' : 'Pasif') + '</div>';
-    if (seri.aciklama) html += '<p style="font-size:13px;color:#6b7280">' + escapeHtml(seri.aciklama) + '</p>';
-    html += '<table class="ky-tablo" style="margin-top:10px"><thead><tr>' +
-      '<th>Kalıp</th><th>Rol</th><th>Beden</th><th>Sıra</th><th>VF.Adet</th><th>Durum</th>' +
-      (readOnly ? '' : '<th>İşlem</th>') + '</tr></thead><tbody>';
-    if (!uyeler.length) {
-      html += '<tr><td colspan="' + (readOnly ? 6 : 7) + '" style="text-align:center;color:#9ca3af">Üye yok</td></tr>';
-    } else {
-      uyeler.forEach(function(u) {
-        html += '<tr><td><strong>' + escapeHtml(u.kalip_kod) + '</strong><br><small>' +
-          escapeHtml(u.kalip_tipi || '') + ' · KBÇ ' + (u.kalip_basi_cift || '—') + '</small></td>' +
-          '<td>' + escapeHtml(u.uye_rolu) + '</td>' +
-          '<td>' + escapeHtml(u.beden_numara || '—') + '</td>' +
-          '<td>' + (u.sira_no || '—') + '</td>' +
-          '<td>' + (u.varsayilan_fiziksel_adet != null ? u.varsayilan_fiziksel_adet : '—') + '</td>' +
-          '<td>' + (u.aktif ? 'Aktif' : 'Pasif') + '</td>';
-        if (!readOnly) {
-          html += '<td>' + (u.aktif ?
-            '<button type="button" class="ky-mini-pasif" data-uye="' + u.id + '">Pasifle</button>' :
-            '<button type="button" class="ky-mini-aktif" data-uye="' + u.id + '">Aktif et</button>') + '</td>';
-        }
-        html += '</tr>';
-      });
-    }
-    html += '</tbody></table>';
-    if (!readOnly) {
-      html += '<div class="ky-write-only" style="margin-top:14px;padding-top:12px;border-top:1px solid #e5e7eb">' +
-        '<strong>Üye Ekle</strong><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">' +
-        '<select id="ky-seri-uye-kalip"><option value="">— Kalıp seç —</option></select>' +
-        '<select id="ky-seri-uye-rol"><option value="GOVDE">Gövde</option><option value="ATKI">Atkı</option><option value="DIGER">Diğer</option></select>' +
-        '<input type="text" id="ky-seri-uye-beden" placeholder="Beden/numara">' +
-        '<input type="number" id="ky-seri-uye-sira" min="1" placeholder="Sıra">' +
-        '<input type="number" id="ky-seri-uye-vf" min="1" placeholder="Önerilen fiz. adet">' +
-        '</div><button type="button" class="ky-btn ky-btn-yeni" id="ky-seri-uye-ekle" style="margin-top:8px">+ Üye Ekle</button></div>';
-    }
-    el.innerHTML = html;
-    if (!readOnly) {
-      var sel = document.getElementById('ky-seri-uye-kalip');
-      TUMU.filter(function(k) {
-        return k.aktif && String(k.model_kod || '').toUpperCase() === String(seri.model_kod || '').toUpperCase();
-      }).forEach(function(k) {
-        var opt = document.createElement('option');
-        opt.value = k.id;
-        opt.textContent = k.kalip_kod + ' · ' + (k.kalip_tipi || '');
-        sel.appendChild(opt);
-      });
-      document.getElementById('ky-seri-uye-ekle').addEventListener('click', function() {
-        var payload = {
-          kalip_id: parseInt(sel.value, 10),
-          uye_rolu: document.getElementById('ky-seri-uye-rol').value,
-          beden_numara: document.getElementById('ky-seri-uye-beden').value.trim() || null,
-          sira_no: document.getElementById('ky-seri-uye-sira').value || null,
-          varsayilan_fiziksel_adet: document.getElementById('ky-seri-uye-vf').value || null
-        };
-        if (!payload.kalip_id) { mesaj('❌ Kalıp seçin', 'hata'); return; }
-        fetch('/yonetim/api/kalip-seri/' + seri.id + '/uye', {
-          method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
-        }).then(function(r){ return r.json(); }).then(function(d) {
-          if (d.ok) { mesaj('✅ Üye eklendi', 'ok'); seriDetayYukle(seri.id); seriYukle(); }
-          else mesaj('❌ ' + (d.hata || 'Hata'), 'hata');
-        });
-      });
-      el.querySelectorAll('.ky-mini-pasif').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          fetch('/yonetim/api/kalip-seri-uye/' + btn.getAttribute('data-uye'), {
-            method: 'PATCH', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({aktif: 0})
-          }).then(function(r){ return r.json(); }).then(function(d) {
-            if (d.ok) { mesaj('✅ Üye pasifleştirildi', 'ok'); seriDetayYukle(seri.id); seriYukle(); }
-          });
-        });
-      });
-      el.querySelectorAll('.ky-mini-aktif').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-          fetch('/yonetim/api/kalip-seri-uye/' + btn.getAttribute('data-uye'), {
-            method: 'PATCH', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({aktif: 1})
-          }).then(function(r){ return r.json(); }).then(function(d) {
-            if (d.ok) { mesaj('✅ Üye aktif edildi', 'ok'); seriDetayYukle(seri.id); seriYukle(); }
-          });
-        });
-      });
-    }
-  }
-
-  var btnYeniSeri = document.getElementById('ky-btn-yeni-seri');
-  if (btnYeniSeri) {
-    btnYeniSeri.addEventListener('click', function() {
-      var kod = prompt('Seri kodu (benzersiz):');
-      if (!kod) return;
-      var model = prompt('Model kodu (ör. YZZ-9800):');
-      if (!model) return;
-      var ad = prompt('Seri adı (opsiyonel):') || null;
-      fetch('/yonetim/api/kalip-seri/ekle', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({seri_kod: kod.trim(), model_kod: model.trim(), seri_ad: ad})
-      }).then(function(r){ return r.json(); }).then(function(d) {
-        if (d.ok) {
-          mesaj('✅ Seri oluşturuldu', 'ok');
-          SECILI_SERI_ID = d.seri.id;
-          seriYukle();
-          seriDetayYukle(d.seri.id);
-        } else mesaj('❌ ' + (d.hata || 'Hata'), 'hata');
-      });
-    });
-  }
-  var seriArama = document.getElementById('ky-seri-arama');
-  if (seriArama) seriArama.addEventListener('input', seriRenderListe);
 
   yukle();
 })();
