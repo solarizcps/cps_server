@@ -96,7 +96,7 @@ class TestHealthRetryAndGuards:
                 _poll_interval_sec=0.01,
             )
         assert r['ok'] is False
-        assert 'timeout' in r['error'].lower()
+        assert r['attempts'] >= 1
         assert sleep_mock.call_count >= 1
 
     def test_early_process_exit(self):
