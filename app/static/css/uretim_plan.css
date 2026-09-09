@@ -1099,7 +1099,7 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 
 /* Plan Oluştur modal — scoped sticky layout */
 .up-modal-create-root .up-modal-panel.up-modal-create {
-  width: min(96vw, 1200px);
+  width: min(calc(100vw - 32px), 1480px);
   max-height: min(100dvh, 96vh);
   max-height: min(96vh, 100dvh);
   min-height: 0;
@@ -1188,7 +1188,10 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 /* ===== 3-KOLON STEP2 LAYOUT ===== */
 .up-step2-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) minmax(260px, 300px);
+  grid-template-columns:
+    minmax(310px, 340px)
+    minmax(430px, 520px)
+    minmax(380px, 430px);
   gap: 0;
   align-items: stretch;
   min-height: 0;
@@ -1201,7 +1204,7 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 14px 14px 12px;
+  padding: 12px 14px 16px;
 }
 .up-step2-col-left {
   border-right: 1px solid #e2e8f0;
@@ -1233,19 +1236,19 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   border-radius: 50%;
   background: #ea580c;
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   flex-shrink: 0;
 }
 .up-step2-col-desc {
-  font-size: 11.5px;
+  font-size: 12px;
   color: #64748b;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   line-height: 1.4;
 }
 .up-step2-section {
-  margin-bottom: 12px;
-  padding-bottom: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
   border-bottom: 1px solid #f1f5f9;
 }
 .up-step2-section:last-of-type { border-bottom: none; }
@@ -1258,9 +1261,48 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   text-transform: uppercase;
   color: #64748b;
 }
-/* Makine kartları sol kolonda 2'li grid */
+/* Makine kartları sol kolonda 2'li grid — kompakt */
 .up-enj-makine-cards-2col {
   grid-template-columns: repeat(2, 1fr) !important;
+  gap: 6px !important;
+  margin-bottom: 8px !important;
+}
+.up-step2-col-left .up-enj-makine-card {
+  padding: 6px 8px 4px;
+}
+.up-step2-col-left .up-enj-makine-card strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+.up-step2-col-left .up-enj-makine-card span,
+.up-step2-col-left .up-enj-card-metric {
+  font-size: 12px;
+  line-height: 1.35;
+}
+.up-step2-col-left .up-enj-card-metric {
+  margin-top: 1px;
+}
+.up-step2-col-left .up-enj-makine-detay-btn {
+  margin: 0 8px 5px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.up-step2-col-left .up-enj-card-slots {
+  gap: 2px;
+  margin-top: 3px;
+  font-size: 12px;
+}
+.up-step2-col-left .up-enj-doluluk-bant {
+  margin-bottom: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.up-step2-col-left .up-step2-col-desc {
+  margin-bottom: 6px;
+}
+.up-step2-col-left .up-step2-section {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
 }
 /* Büyük slot butonları */
 .up-enj-slot-row-big { gap: 8px; display: flex; }
@@ -1310,15 +1352,27 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   font-size: 14px;
   margin-top: 4px;
 }
-/* Kurulum özeti sağ kolon entegre */
+/* Kurulum özeti sağ kolon üstünde — ilk viewport */
+.up-step2-col-right .up-step2-summary {
+  flex-shrink: 0;
+  margin: 0 0 10px;
+}
 .up-step2-summary {
   background: #f0fdf4;
   border: 1px solid #bbf7d0;
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   font-size: 12px;
   line-height: 1.45;
-  margin-top: 4px;
+}
+.up-step2-summary-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+}
+.up-step2-summary-body .up-step2-summary-row {
+  border-bottom: none;
+  padding: 2px 0;
 }
 .up-step2-summary-title {
   margin: 0 0 8px;
@@ -1405,6 +1459,72 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   background: #f1f5f9;
   color: #475569;
   cursor: not-allowed;
+}
+/* Sağ kolon — Tur/Vardiya okunabilir genişlik, uyarı tam satır */
+.up-step2-col-right .up-enj-ref-mode {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+}
+.up-step2-col-right .up-enj-manual-ref {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.up-step2-col-right .up-enj-manual-row {
+  gap: 6px;
+}
+.up-step2-col-right .up-enj-manual-label {
+  font-size: 12px;
+  flex-wrap: wrap;
+  white-space: normal;
+}
+.up-step2-col-right .up-enj-vd-pill,
+.up-step2-col-right .up-enj-vd-saat {
+  font-size: 12px;
+}
+.up-step2-col-right .up-enj-ref-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.up-step2-col-right .up-enj-ref-input-row input[type="number"] {
+  flex: 1 1 140px;
+  min-width: 120px;
+  max-width: 100%;
+}
+.up-step2-col-right .up-enj-ref-hint,
+.up-step2-col-right .up-enj-warn-msg {
+  width: 100%;
+  flex: 1 1 100%;
+  font-size: 12px;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+.up-step2-col-right .up-enj-calisma-tab {
+  padding: 8px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.up-step2-col-right .up-enj-vardiya-saat-bant {
+  gap: 8px;
+  font-size: 12px;
+}
+.up-step2-col-right .up-enj-hesap-hint {
+  font-size: 12px;
+  white-space: normal;
+  word-break: normal;
+}
+.up-step2-col-right .up-enj-son-hafta-baslik {
+  font-size: 12px;
+}
+.up-step2-col-right .up-enj-son-hafta-yukleniyor,
+.up-step2-col-right .up-shh-satir {
+  font-size: 12px;
 }
 @media (max-width: 1099px) {
   .up-step2-layout { grid-template-columns: 1fr 1fr; }

@@ -3,7 +3,7 @@
 {% block title %}Üretim Plan · Planlama · Solariz CPS{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=15">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/uretim_plan.css') }}?v=16">
 {% endblock %}
 
 {% block content %}
@@ -237,6 +237,12 @@
             </div>
             <p class="up-step2-col-desc">Üretim hızını ve planlama zamanını belirleyin.</p>
 
+            <!-- Kurulum özeti — ilk görünümde sağ kolon üstünde -->
+            <aside class="up-step2-summary" id="upStep2KurulumOzet" aria-labelledby="upStep2KurulumBaslik">
+              <h3 class="up-step2-summary-title" id="upStep2KurulumBaslik">Seçilen Kurulum</h3>
+              <div id="upStep2KurulumBody" class="up-step2-summary-body"></div>
+            </aside>
+
             <section class="up-step2-section" id="upStep2SecVardiya" aria-labelledby="upStep2LblVardiya">
               <div class="up-enj-calisma-tabs" id="upEnjCalismaTabBar" role="tablist" aria-label="Çalışma modu">
                 <button type="button" class="up-enj-calisma-tab" data-val="GUNDUZ" role="tab">Gündüz</button>
@@ -315,12 +321,6 @@
               </button>
               <div id="upEnjHesapBtnHint" class="up-enj-hesap-hint" style="display:none;"></div>
             </section>
-
-            <!-- Kurulum özeti sağ kolonda entegre -->
-            <aside class="up-step2-summary" id="upStep2KurulumOzet" aria-labelledby="upStep2KurulumBaslik">
-              <h3 class="up-step2-summary-title" id="upStep2KurulumBaslik">Seçilen Kurulum</h3>
-              <div id="upStep2KurulumBody" class="up-step2-summary-body"></div>
-            </aside>
 
             <div id="upEnjHesapOzet" class="up-enj-hesap-ozet" style="display:none;">
               <div class="up-enj-hesap-satir"><span>Makine / Taraf</span><strong id="upEnjOzetMakine">—</strong></div>

@@ -123,6 +123,56 @@ def test_no_font_below_12px(css):
     assert not tiny, f'step2 font-size below 12px: {tiny}'
 
 
+def _step2_layout_block(css: str) -> str:
+    marker = '/* ===== 3-KOLON STEP2 LAYOUT ===== */'
+    return css.split(marker)[1].split('.up-step2-col {')[0]
+
+
+def test_right_column_min_width(css):
+    """RIGHT_COLUMN_MIN_WIDTH=PASS"""
+    assert 'minmax(380px, 430px)' in _step2_layout_block(css)
+
+
+def test_speed_fields_readable(css):
+    """SPEED_FIELDS_READABLE=PASS"""
+    assert '.up-step2-col-right .up-enj-manual-ref' in css
+    assert 'grid-template-columns: 1fr' in css.split('.up-step2-col-right .up-enj-manual-ref')[1][:120]
+
+
+def test_warning_text_not_vertical(css):
+    """WARNING_TEXT_NOT_VERTICAL=PASS"""
+    block = css.split('.up-step2-col-right .up-enj-ref-hint')[1][:220]
+    assert 'white-space: normal' in block
+    assert 'width: 100%' in block
+
+
+def test_summary_first_viewport(html):
+    """SUMMARY_FIRST_VIEWPORT=PASS"""
+    right = html.split('class="up-step2-col up-step2-col-right"')[1].split('</div><!-- /.up-step2-col-right -->')[0]
+    summary_pos = right.index('upStep2KurulumOzet')
+    vardiya_pos = right.index('upStep2SecVardiya')
+    assert summary_pos < vardiya_pos
+
+
+def test_machine_grid_compact(css):
+    """MACHINE_GRID_COMPACT=PASS"""
+    assert '.up-step2-col-left .up-enj-makine-card' in css
+    assert 'padding: 6px 8px 4px' in css
+
+
+def test_modal_wider_viewport(css):
+    """MODAL_USES_VIEWPORT_MINUS_GUTTER=PASS"""
+    block = css.split('.up-modal-create-root .up-modal-panel.up-modal-create')[1][:180]
+    assert 'calc(100vw - 32px)' in block
+
+
+def test_balanced_three_column_grid(css):
+    """BALANCED_THREE_COLUMN=PASS"""
+    layout = _step2_layout_block(css)
+    assert 'minmax(310px, 340px)' in layout
+    assert 'minmax(430px, 520px)' in layout
+
+
 def test_quantity_passthrough_route():
     """QUANTITY endpoint passthrough exists"""
     routes = (_REPO / 'app/modules/planlama/uretim_plan_routes.py').read_text(encoding='utf-8')
