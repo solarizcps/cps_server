@@ -1580,7 +1580,7 @@
         enjHesapGizle();
         if ($('upEnjMakineCards')) $('upEnjMakineCards').innerHTML = '';
         enjRenderIstasyonPlaceholder();
-        if ($('upEnjKalip')) { $('upEnjKalip').value = ''; $('upEnjKalip').disabled = true; }
+        _enjKalipListeTemizle();   /* sipariş bağlamı değişince eski model kalıplarını temizle */
         if ($('upEnjKalipManuelKod')) $('upEnjKalipManuelKod').value = '';
         if ($('upEnjKalipManuelKbc')) $('upEnjKalipManuelKbc').value = '';
         if ($('upEnjKalipAdedi')) $('upEnjKalipAdedi').value = '';
@@ -3024,13 +3024,11 @@
             kodCount[key] = (kodCount[key] || 0) + 1;
         });
         var kodIndex = {};
-        var sipAsorti = state.seciliCreateData && state.seciliCreateData.asorti;
         state.enj.kaliplar.forEach(function (k) {
             var o = document.createElement('option');
             o.value = k.id;
             var label = k.kalip_kod || ('ID ' + k.id);
-            if (sipAsorti) label += ' · Sipariş asortisi ' + sipAsorti;
-            else if (k.model_kod) label += ' · ' + k.model_kod;
+            if (k.model_kod) label += ' · ' + k.model_kod;
             var key = k.kalip_kod || '';
             if (kodCount[key] > 1) {
                 kodIndex[key] = (kodIndex[key] || 0) + 1;
@@ -3043,15 +3041,51 @@
         });
     }
 
+    function _enjKalipListeTemizle() {
+        /* Sipariş değiştiğinde önceki kalıp listesini ve seçimi sıfırla */
+        state.enj.kaliplar = [];
+        state.enj.kalipId = null;
+        state.enj.kalipKod = null;
+        state.enj.kalipBasiCift = null;
+        var sel = $('upEnjKalip');
+        if (sel) { sel.innerHTML = '<option value="">— Kalıp Seçin —</option>'; sel.disabled = true; }
+    }
+
     function enjYukleKaliplar() {
-        if (state.enj.kaliplar.length) { enjBuildKalipSelect(); return; }
-        fetch('/planlama/uretim-plan/api/enj/kaliplar', { credentials: 'include' })
+        var o = state.seciliCreateData;
+        if (!o || !o.mamul_skod) return;  // canonical sipariş bağlamı olmadan çalıştırma
+
+        var sel = $('upEnjKalip');
+        // Her sipariş için taze çekme — stale önleme (kaliplar cache'ini sıfırla)
+        state.enj.kaliplar = [];
+        if (sel) { sel.disabled = true; sel.innerHTML = '<option value="">Kalıplar yükleniyor…</option>'; }
+
+        var params = new URLSearchParams({
+            sip_no:     o.sip_no,
+            sip_harinx: o.sip_harinx || o.sip_harinx_id || 0,
+            mamul_skod: o.mamul_skod,
+            rkod:       o.rkod || 0,
+        });
+        fetch('/planlama/uretim-plan/api/enj/kaliplar?' + params.toString(), { credentials: 'include' })
             .then(function (r) { return r.json(); })
             .then(function (d) {
-                if (d.ok) {
-                    state.enj.kaliplar = d.kaliplar || [];
-                    enjBuildKalipSelect();
+                if (sel) sel.disabled = false;
+                if (!d.ok) {
+                    if (sel) sel.innerHTML = '<option value="">— ' + (d.mesaj || 'Hata') + ' —</option>';
+                    return;
                 }
+                state.enj.kaliplar = d.kaliplar || [];
+                enjBuildKalipSelect();
+                if (!state.enj.kaliplar.length && d.mesaj) {
+                    // Boş sonuç — güvenli mesaj, selector disabled
+                    if (sel) {
+                        sel.innerHTML = '<option value="">— ' + d.mesaj + ' —</option>';
+                        sel.disabled = true;
+                    }
+                }
+            })
+            .catch(function () {
+                if (sel) sel.innerHTML = '<option value="">— Kalıplar yüklenemedi —</option>';
             });
     }
 

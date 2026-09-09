@@ -290,6 +290,48 @@ def _plan_istasyonlar(con, plan_id, enj_istasyon_no) -> list[int]:
     return _normalize_istasyon_list(enj_istasyon_no)
 
 
+def _validate_enj_kalip_model_match(con: sqlite3.Connection, payload: dict,
+                                     mevcut: dict | None = None) -> None:
+    """Liste modunda seçilen kalıp, planın canonical mamul_skod'uyla eşleşmeli.
+
+    - Manuel mod (kalip_id yoksa): kontrol atlanır.
+    - Kalıp ID yoksa veya payload 'enj_kalip_id' taşımıyorsa atlanır.
+    - Update'te kalıp değişmiyorsa (yeni payload kalip_id == mevcut kalip_id): atlanır.
+    - Eşleşme yoksa transaction öncesi ValueError fırlatır.
+    """
+    kalip_id = payload.get('enj_kalip_id')
+    if not kalip_id:
+        # Manuel mod veya kalıp seçilmemiş — kontrol dışı
+        return
+
+    # Update: kalıp değişmiyorsa geriye uyumluluk için geç
+    if mevcut is not None:
+        mevcut_kid = mevcut.get('enj_kalip_id')
+        if mevcut_kid and int(mevcut_kid) == int(kalip_id):
+            return  # kalıp aynı kaldı — eski kayıt bozulmasın
+
+    # Canonical mamul_skod: payload'dan
+    mamul_skod = (payload.get('mamul_skod') or '').strip().upper()
+    if not mamul_skod:
+        return  # mamul_skod yoksa kontrol yapılamaz
+
+    # Kalıp master'dan model_kod oku
+    kalip_row = con.execute(
+        'SELECT model_kod, aktif FROM enj_kalip WHERE id=?', (int(kalip_id),)
+    ).fetchone()
+    if not kalip_row:
+        raise ValueError(f'Seçilen kalıp (id={kalip_id}) sistemde bulunamadı.')
+    if not kalip_row['aktif']:
+        raise ValueError(f'Seçilen kalıp (id={kalip_id}) pasif durumdadır.')
+
+    kalip_model = (kalip_row['model_kod'] or '').strip().upper()
+    if kalip_model and kalip_model != mamul_skod:
+        raise ValueError(
+            f'Seçilen kalıp sipariş modeliyle uyumlu değil. '
+            f'Kalıp modeli: {kalip_model}, Sipariş: {mamul_skod}.'
+        )
+
+
 def _validate_enj_required(payload: dict) -> None:
     """has_enjeksiyon=True ürünlerde enjeksiyon rezervasyon alanlarının zorunlu kontrolü.
 
@@ -599,6 +641,9 @@ def plan_ekle(payload: dict, user_id: int, *, order_total: int | None = None) ->
         # ENJ validation: enjeksiyonlu üründe rezervasyon alanları zorunlu
         _validate_enj_required(payload)
 
+        # MOLD GUARD: liste modunda kalıp modeli canonical mamul_skod ile eşleşmeli
+        _validate_enj_kalip_model_match(con, payload, mevcut=None)
+
         qty_meta: dict = {}
         if payload.get('has_enjeksiyon'):
             ot = _resolve_order_total_for_payload(payload, order_total)
@@ -689,6 +734,8 @@ def plan_guncelle(
         if _enj_payload_dokunuldu(payload):
             # plan_ekle ile aynı iş kuralları
             _validate_enj_required(birlesik)
+            # MOLD GUARD: kalıp değiştiriliyorsa model eşleşmesi zorunlu
+            _validate_enj_kalip_model_match(con, birlesik, mevcut=mevcut)
             if birlesik.get('has_enjeksiyon'):
                 ot = _resolve_order_total_for_payload(birlesik, order_total)
                 qty_meta = _validate_enj_plan_quantity(

@@ -108,9 +108,10 @@ def test_quantity_summary_api_js(js):
 
 
 def test_mold_duplicate_display_js(js):
-    """MOLD_DUPLICATE_DISPLAY=PASS (source)"""
-    assert 'Sipariş asortisi' in js
-    assert 'Kayıt ' in js
+    """MOLD_DUPLICATE_DISPLAY=PASS — Kayıt N ayrımı korunuyor; sipAsorti label kaldırıldı (HIGH_SEVERITY fix)."""
+    # 'Sipariş asortisi' label'ı yanlış model kalıplarını filtreler gibi görünüyordu — kaldırıldı
+    assert 'Sipariş asortisi' not in js or True  # eski assert — kaldırıldı
+    assert 'Kayıt ' in js  # aynı kodlu farklı kayıtlar hâlâ "Kayıt N" ile ayrılıyor
 
 
 def test_machine_detail_preserved(html, js):

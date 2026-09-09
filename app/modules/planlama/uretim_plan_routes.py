@@ -412,17 +412,61 @@ def api_enj_slot_durum():
 @uretim_plan_bp.route('/api/enj/kaliplar', methods=['GET'])
 @yetki_gerekli('planlama', 'can_view')
 def api_enj_kaliplar():
-    """Aktif kalıp master listesi — kalıp select için."""
+    """Aktif kalıp master listesi — sipariş canonical modeline göre filtreli.
+
+    Zorunlu parametreler: sip_no, sip_harinx, mamul_skod, rkod
+    Yalnız canonical mamul_skod ile eşleşen aktif kalıplar döner.
+    Eşleşme yoksa kaliplar=[], güvenli mesaj — asla tüm kalıplara fallback yok.
+    """
+    sip_no    = request.args.get('sip_no',    type=int)
+    sip_har   = request.args.get('sip_harinx', type=int)
+    mamul_raw = (request.args.get('mamul_skod') or '').strip()
+    rkod      = request.args.get('rkod', type=int, default=0)
+
+    # 1. Zorunlu parametre kontrolü
+    if not sip_no or sip_har is None or not mamul_raw:
+        return jsonify({
+            'ok': False,
+            'mesaj': 'sip_no, sip_harinx ve mamul_skod zorunludur',
+        }), 400
+
+    # 2. Canonical doğrulama — temp SQLite'dan sipariş satırını oku
     con = get_conn()
     try:
+        plan_row = con.execute(
+            'SELECT mamul_skod FROM uretim_model_plan '
+            'WHERE sip_no=? AND sip_harinx=? AND mamul_skod=? AND aktif=1 LIMIT 1',
+            (sip_no, sip_har, mamul_raw),
+        ).fetchone()
+        # Kayıtlı plan yoksa yeni sipariş olabilir — mamul_skod parametresini güvenli kabul et
+        # (duplicate kontrolü zaten plan_ekle'de yapılıyor)
+        canonical_skod = mamul_raw  # istemci gönderimi; plan varsa eşleşmesi lazım
+
+        if plan_row and plan_row['mamul_skod'].strip().upper() != mamul_raw.strip().upper():
+            return jsonify({
+                'ok': False,
+                'mesaj': 'Gönderilen mamul_skod kayıtlı planla uyuşmuyor.',
+            }), 409
+
+        # 3. Normalize: TRIM + UPPER karşılaştırma
+        norm_skod = canonical_skod.strip().upper()
+
         rows = con.execute("""
             SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad,
                    kalip_basi_cift, kapasite_cift
             FROM enj_kalip
             WHERE aktif = 1
+              AND TRIM(UPPER(model_kod)) = ?
             ORDER BY kalip_kod
-        """).fetchall()
-        return jsonify({'ok': True, 'kaliplar': [dict(r) for r in rows]})
+        """, (norm_skod,)).fetchall()
+
+        kaliplar = [dict(r) for r in rows]
+        mesaj = None if kaliplar else (
+            'Bu model için tanımlı liste kalıbı bulunamadı. '
+            'Manuel Kalıp seçeneğini kullanabilirsiniz.'
+        )
+        return jsonify({'ok': True, 'kaliplar': kaliplar, 'mesaj': mesaj})
+
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
     finally:
