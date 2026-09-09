@@ -109,6 +109,10 @@ def verify_backup(source: str, backup: str) -> dict[str, Any]:
 
 _STARTUP_GRACE_SEC = 0.25
 _LOG_TAIL_LINES = 20
+_HEALTH_PATH = '/giris'
+_HEALTH_TOTAL_TIMEOUT_SEC = 60.0
+_HEALTH_POLL_INTERVAL_SEC = 2.0
+_HEALTH_REQUEST_TIMEOUT_SEC = 5.0
 
 
 def _build_server_env(
@@ -272,20 +276,149 @@ def start_process(
         return {'ok': False, 'pid': '', 'error': str(exc)}
 
 
-def health_check(
-    url: str = 'http://127.0.0.1:8080/',
-    *,
-    _fake_health: Callable | None = None,
-) -> dict[str, Any]:
-    """HTTP health check. Returns {'ok': bool, 'status': int}."""
-    if _fake_health is not None:
-        return _fake_health(url)
+def health_url(port: int = 8080, host: str = '127.0.0.1', path: str = _HEALTH_PATH) -> str:
+    rel = path if path.startswith('/') else f'/{path}'
+    return f'http://{host}:{port}{rel}'
+
+
+def _process_alive(pid: str) -> bool:
+    if not pid or not str(pid).isdigit():
+        return False
+    if sys.platform == 'win32':
+        try:
+            proc = subprocess.run(
+                ['tasklist', '/FI', f'PID eq {pid}', '/FO', 'CSV', '/NH'],
+                capture_output=True, text=True, check=True,
+            )
+            return pid in proc.stdout
+        except Exception:
+            return False
     try:
-        import urllib.request
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            return {'ok': resp.status < 400, 'status': resp.status}
+        os.kill(int(pid), 0)
+        return True
+    except OSError:
+        return False
+
+
+def _port_listening_pids(port: int) -> list[str]:
+    pids: list[str] = []
+    try:
+        proc = subprocess.run(
+            ['netstat', '-ano'],
+            capture_output=True, text=True,
+        )
+        for line in proc.stdout.splitlines():
+            if f':{port}' in line and 'LISTENING' in line:
+                parts = line.split()
+                if parts:
+                    pids.append(parts[-1])
+    except Exception:
+        return []
+    return list(dict.fromkeys(pids))
+
+
+def _http_probe_no_redirect(url: str, timeout: float) -> dict[str, Any]:
+    import urllib.error
+    import urllib.request
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
+    opener = urllib.request.build_opener(_NoRedirect)
+    req = urllib.request.Request(url, method='GET')
+    try:
+        with opener.open(req, timeout=timeout) as resp:
+            status = resp.status
+            ok = status == 200
+            return {
+                'ok': ok,
+                'status': status,
+                'error': '' if ok else f'HTTP {status}',
+            }
+    except urllib.error.HTTPError as exc:
+        return {'ok': False, 'status': exc.code, 'error': f'HTTP {exc.code}'}
     except Exception as exc:
         return {'ok': False, 'status': 0, 'error': str(exc)}
+
+
+def health_check(
+    url: str | None = None,
+    *,
+    port: int = 8080,
+    expected_pid: str | None = None,
+    stdout_log: str = '',
+    stderr_log: str = '',
+    _fake_health: Callable | None = None,
+    _total_timeout_sec: float = _HEALTH_TOTAL_TIMEOUT_SEC,
+    _poll_interval_sec: float = _HEALTH_POLL_INTERVAL_SEC,
+) -> dict[str, Any]:
+    """
+    Readiness probe: only HTTP 200 on /giris is PASS (no redirect follow).
+    Retries transient connection errors for up to 60s by default.
+    """
+    probe_url = url or health_url(port)
+    if _fake_health is not None:
+        return _fake_health(probe_url)
+
+    deadline = time.monotonic() + _total_timeout_sec
+    attempts = 0
+    last: dict[str, Any] = {
+        'ok': False,
+        'status': 0,
+        'error': 'health timeout',
+        'url': probe_url,
+        'attempts': 0,
+    }
+
+    while time.monotonic() < deadline:
+        attempts += 1
+
+        if expected_pid and not _process_alive(expected_pid):
+            tail = _tail_server_logs(stdout_log, stderr_log)
+            err = f'process {expected_pid} exited before health passed'
+            if tail:
+                err = f'{err}\n{tail}'
+            return {
+                'ok': False,
+                'status': 0,
+                'error': err,
+                'url': probe_url,
+                'attempts': attempts,
+            }
+
+        if expected_pid:
+            owners = _port_listening_pids(port)
+            if owners and expected_pid not in owners:
+                return {
+                    'ok': False,
+                    'status': 0,
+                    'error': (
+                        f'port {port} owned by {owners}, expected pid {expected_pid}'
+                    ),
+                    'url': probe_url,
+                    'attempts': attempts,
+                }
+
+        result = _http_probe_no_redirect(probe_url, _HEALTH_REQUEST_TIMEOUT_SEC)
+        last = {
+            **result,
+            'url': probe_url,
+            'attempts': attempts,
+        }
+        if result.get('ok'):
+            return last
+
+        status = int(result.get('status') or 0)
+        if status in (302, 404, 500, 502, 503):
+            return last
+
+        time.sleep(_poll_interval_sec)
+
+    last['attempts'] = attempts
+    if not last.get('error'):
+        last['error'] = f'health timeout after {_total_timeout_sec}s'
+    return last
 
 
 def restore_db(backup: str, target: str) -> bool:
@@ -551,7 +684,15 @@ def run_deploy(
         return report
 
     # ── HEALTH CHECK ─────────────────────────────────────────────────────────
-    health = health_check(_fake_health=_fake_health)
+    health = health_check(
+        port=cps_port,
+        expected_pid=report['NEW_PID'],
+        stdout_log=report.get('SERVER_STDOUT_LOG', ''),
+        stderr_log=report.get('SERVER_STDERR_LOG', ''),
+        _fake_health=_fake_health,
+    )
+    report['HEALTH_URL'] = health.get('url', health_url(cps_port))
+    report['HEALTH_ATTEMPTS'] = health.get('attempts', 0)
     report['HEALTH_AFTER'] = 'PASS' if health.get('ok') else 'FAIL'
     if not health.get('ok'):
         # rollback
@@ -562,7 +703,13 @@ def run_deploy(
         rollback_start = start_process(
             repo=repo, db=db, port=cps_port, _fake_start=_fake_start,
         )
-        rollback_health = health_check(_fake_health=_fake_health)
+        rollback_health = health_check(
+            port=cps_port,
+            expected_pid=rollback_start.get('pid', ''),
+            stdout_log=rollback_start.get('stdout_log', ''),
+            stderr_log=rollback_start.get('stderr_log', ''),
+            _fake_health=_fake_health,
+        )
         report['HEALTH_ROLLBACK'] = 'PASS' if rollback_health.get('ok') else 'FAIL'
         report['ROLLBACK_APPLIED'] = 'YES'
         report['error'] = 'health check failed after deploy'
@@ -579,7 +726,7 @@ def print_deploy_report(report: dict[str, Any]) -> None:
         'ACTIVE_PID', 'BACKUP_PATH', 'BACKUP_INTEGRITY',
         'MIGRATION_PLAN', 'MIGRATION_RESULT',
         'PARITY_BEFORE', 'PARITY_AFTER',
-        'NEW_PID', 'HEALTH_AFTER', 'HEALTH_ROLLBACK',
+        'NEW_PID', 'HEALTH_URL', 'HEALTH_ATTEMPTS', 'HEALTH_AFTER', 'HEALTH_ROLLBACK',
         'BACKUP_WOULD_CREATE', 'ROLLBACK_PLAN', 'DEPLOY_ALLOWED',
     ]
     for k in keys:
