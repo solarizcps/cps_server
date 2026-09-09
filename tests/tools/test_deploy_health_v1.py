@@ -88,8 +88,8 @@ class TestHealthRetryAndGuards:
         with mock.patch.object(
             dar, '_http_probe_no_redirect',
             return_value={'ok': False, 'status': 0, 'error': 'connection refused'},
-        ), mock.patch.object(dar, '_process_alive', return_value=True), mock.patch.object(
-            dar, 'time.sleep', side_effect=lambda _s: None,
+        ), mock.patch.object(dar, '_process_alive', return_value=True), mock.patch(
+            'time.sleep', side_effect=lambda _s: None,
         ) as sleep_mock:
             r = dar.health_check(
                 _total_timeout_sec=0.05,
