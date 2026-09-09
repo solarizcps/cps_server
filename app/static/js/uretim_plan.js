@@ -1652,9 +1652,21 @@
             ((state.enj.motorResult && state.enj.motorResult.tahmini_bitis) || state.enj.bitis || '');
     }
 
+    function enjSideDurum(side) {
+        /* A veya B tarafı için kısa durum objesi — kart footer'da kullanılır */
+        if (!side) side = {};
+        var phys = side.physical || {};
+        var plan = side.planned || {};
+        var total = phys.total_count || plan.total_count || 8;
+        var occupied = phys.occupied_count || 0;
+        if (occupied >= total) return { cls: 'dolu',  lbl: 'DOLU' };
+        if (plan.planned_count > 0 && !plan.plan_tarih_secilmedi) return { cls: 'planli', lbl: 'PLANLI' };
+        return { cls: 'bos', lbl: 'BOŞ' };
+    }
+
     function enjSideCardBlock(side, slotKey) {
-        /* Kompakt format: başlık · ilk uygun · doluluk · durum rozeti
-           Ayrıntılar Detay popup'ında korunuyor. */
+        /* A/B hücresi: başlık · ilk uygun · doluluk
+           Durum (uzun metin) kartın tam-genişlik alt satırına taşındı. */
         if (!side) side = {};
         var phys = side.physical || {};
         var plan = side.planned || {};
@@ -1662,20 +1674,11 @@
         var occupied = phys.occupied_count || 0;
         var ilk = side.first_available_gosterim || '—';
         var sideClass = slotKey === 'A' ? 'side-a' : 'side-b';
-        /* Durum: fiziksel doluluk veya plan durumu */
-        var durumCls, durumLbl;
-        if (occupied >= total) {
-            durumCls = 'dolu'; durumLbl = 'DOLU';
-        } else if (plan.planned_count > 0 && !plan.plan_tarih_secilmedi) {
-            durumCls = 'planli'; durumLbl = 'PLANLI';
-        } else {
-            durumCls = 'bos'; durumLbl = 'BOŞ / PLANLANABİLİR';
-        }
         return '<div class="up-enj-card-side ' + sideClass + '">' +
             '<div class="up-enj-card-side-title">' + (slotKey === 'A' ? 'A TARAFI' : 'B TARAFI') + '</div>' +
-            '<div class="up-enj-card-side-row"><span class="up-enj-card-ilk-uygun-lbl">İlk uygun</span><strong>' + esc(ilk) + '</strong></div>' +
-            '<div class="up-enj-card-side-row"><span>' + occupied + '/' + total + ' dolu</span>' +
-            '<span class="up-enj-card-durum ' + durumCls + '">' + durumLbl + '</span></div>' +
+            '<div class="up-enj-card-side-row"><span class="up-enj-card-ilk-uygun-lbl">İlk uygun</span>' +
+            '<strong class="up-enj-card-ilk-val">' + esc(ilk) + '</strong></div>' +
+            '<div class="up-enj-card-side-row">' + occupied + '/' + total + ' dolu</div>' +
             '</div>';
     }
 
@@ -2623,6 +2626,21 @@
             var oz = state.enj.slotOzetMap[mid] || {};
             var sideA = oz.A || {};
             var sideB = oz.B || {};
+            /* Tam genişlik durum satırı — A ve B'yi karşılaştır */
+            var dA = enjSideDurum(sideA);
+            var dB = enjSideDurum(sideB);
+            var footerCls, footerLbl;
+            if (dA.cls === dB.cls) {
+                /* İkisi aynı: kısa → uzun açıklama */
+                footerCls = dA.cls;
+                footerLbl = dA.cls === 'bos' ? 'BOŞ / PLANLANABİLİR'
+                          : dA.cls === 'planli' ? 'PLANLI'
+                          : 'DOLU';
+            } else {
+                /* Farklı: "A: BOŞ · B: PLANLI" */
+                footerCls = 'karisik';
+                footerLbl = 'A: ' + dA.lbl + ' · B: ' + dB.lbl;
+            }
             var wrap = document.createElement('div');
             wrap.className = 'up-enj-makine-card-wrap' + (state.enj.makineId === mid ? ' selected' : '');
             var card = document.createElement('button');
@@ -2638,18 +2656,26 @@
             card.addEventListener('click', function () {
                 enjRequestMakineChange(m, machines);
             });
+            /* Tam genişlik alt satır: durum + Detay yan yana */
+            var footer = document.createElement('div');
+            footer.className = 'up-enj-card-footer';
+            var durumSpan = document.createElement('span');
+            durumSpan.className = 'up-enj-card-durum ' + footerCls;
+            durumSpan.textContent = footerLbl;
             var detBtn = document.createElement('button');
             detBtn.type = 'button';
             detBtn.className = 'up-enj-makine-detay-btn';
-            detBtn.textContent = 'Detay';
+            detBtn.textContent = 'Detay ›';
             detBtn.setAttribute('aria-label', kod + ' makine detayını aç');
             detBtn.addEventListener('click', function (ev) {
                 ev.preventDefault();
                 ev.stopPropagation();
                 enjOpenMakineDetay(mid, kod, detBtn);
             });
+            footer.appendChild(durumSpan);
+            footer.appendChild(detBtn);
             wrap.appendChild(card);
-            wrap.appendChild(detBtn);
+            wrap.appendChild(footer);
             el.appendChild(wrap);
         });
     }

@@ -278,15 +278,14 @@ def test_card_side_title_font_min_12(css):
 
 
 def test_cache_versions_equal(html):
-    """CACHE_VERSIONS=PASS — CSS v21, JS v20 (CSS-only değişim turu)"""
+    """CACHE_VERSIONS=PASS — CSS v22, JS v22 (hem CSS hem JS değişti)"""
     import re
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
-    assert css_v, f"CSS version bulunamadı"
-    assert js_v,  f"JS version bulunamadı"
-    # Her ikisi de sayısal ve geçerli
-    assert int(css_v.group(1)) >= 20, f"CSS version çok eski: v{css_v.group(1)}"
-    assert int(js_v.group(1))  >= 20, f"JS version çok eski: v{js_v.group(1)}"
+    assert css_v, "CSS version bulunamadı"
+    assert js_v,  "JS version bulunamadı"
+    assert css_v.group(1) == '22', f"CSS version beklenen 22, gerçek {css_v.group(1)}"
+    assert js_v.group(1)  == '22', f"JS version beklenen 22, gerçek {js_v.group(1)}"
 
 
 def test_accordion_html_structure(html):
@@ -379,14 +378,14 @@ def test_istasyon_before_kalip_in_html(html):
 
 
 def test_cache_v19_equal(html):
-    """CACHE_VERSIONS=PASS — CSS v21, JS v20 (JS değişmedi)"""
+    """CACHE_VERSIONS=PASS — CSS v22, JS v22 (her ikisi de değişti)"""
     import re
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     assert css_v, "CSS version bulunamadı"
     assert js_v,  "JS version bulunamadı"
-    assert css_v.group(1) == '21', f"CSS version bekleneni 21, bulundu {css_v.group(1)}"
-    assert js_v.group(1)  == '20', f"JS version bekleneni 20, bulundu {js_v.group(1)}"
+    assert css_v.group(1) == '22', f"CSS version bekleneni 22, bulundu {css_v.group(1)}"
+    assert js_v.group(1)  == '22', f"JS version bekleneni 22, bulundu {js_v.group(1)}"
 
 
 def test_durum_strip_css(css):
@@ -523,20 +522,60 @@ def test_durum_min_font_12(css):
 
 
 def test_card_side_row_css(css):
-    """CARD_SIDE_ROW=PASS — yeni kompakt kart stili; durum metni kesilmiyor"""
+    """CARD_SIDE_ROW=PASS — kart footer satırı var; durum metni kesme yok; word-break yok"""
     assert '.up-enj-card-side-row' in css
     assert '.up-enj-card-durum' in css
-    # .up-enj-card-durum bloğunda ellipsis/hidden yok
+    assert '.up-enj-card-footer' in css, ".up-enj-card-footer stili eksik"
+    # .up-enj-card-durum bloğunda break-word / anywhere yok
     idx = css.index('.up-enj-card-durum {')
-    block = css[idx:idx+300]
+    block = css[idx:idx+400]
     import re as _re
-    assert 'text-overflow' not in block, "ellipsis kullanılıyor — kaldırılmalı"
-    assert not _re.search(r'overflow\s*:\s*hidden', block), "overflow:hidden — durum metni kesiliyor"
-    assert 'white-space: normal' in block, "white-space:normal olmalı"
+    assert 'word-break' not in block, "word-break — harf ortası bölme riski"
+    assert 'overflow-wrap' not in block, "overflow-wrap:anywhere — yasak"
+    assert not _re.search(r'overflow\s*:\s*hidden', block), "overflow:hidden durum metnini kesiyor"
+    assert 'text-overflow' not in block, "ellipsis kullanılamaz"
 
 
 def test_machine_card_compact_js(js):
-    """MACHINE_CARD_COMPACT=PASS — uzun metin chain yok, side-row var"""
+    """MACHINE_CARD_COMPACT=PASS — side-row var; eski uzun format yok"""
     assert 'up-enj-card-side-row' in js
-    # Eski uzun format anahtar string yok
     assert 'En erken uygun:' not in js
+
+
+def test_card_footer_full_width_in_js(js):
+    """CARD_FOOTER=PASS — up-enj-card-footer tam genişlik satır JS'de var"""
+    assert 'up-enj-card-footer' in js, "up-enj-card-footer JS'de tanımlanmamış"
+    assert 'up-enj-card-durum' in js
+
+
+def test_side_cells_no_long_status_in_js(js):
+    """SIDE_STATUS=PASS — A/B hücrelerinde 'BOŞ / PLANLANABİLİR' ifadesi yok"""
+    # enjSideCardBlock fonksiyonu uzun ifadeyi hücreye koymamalı
+    idx = js.index('function enjSideCardBlock')
+    block = js[idx:idx+800]
+    assert 'BOŞ / PLANLANABİLİR' not in block, \
+        "enjSideCardBlock içinde uzun durum metni bulundu — kart footer'a taşınmalı"
+
+
+def test_mixed_side_status_in_js(js):
+    """MIXED_STATUS=PASS — A ve B farklıysa 'A: BOŞ · B: PLANLI' formatı var"""
+    assert "A: ' + dA.lbl + ' · B: " in js or "A: BOŞ · B:" in js or \
+           ("karisik" in js and "dA.lbl" in js), \
+        "Karışık A/B durum gösterimi JS'de eksik"
+
+
+def test_bottom_safe_space_css(css):
+    """BOTTOM_SAFE=PASS — .up-step2-layout .up-step2-col padding-bottom: 72px var"""
+    assert 'padding-bottom: 72px' in css, "Alt güvenli boşluk eksik (72px bekleniyor)"
+
+
+def test_enjside_durum_helper_in_js(js):
+    """SIDE_DURUM_HELPER=PASS — enjSideDurum yardımcı fonksiyon mevcut"""
+    assert 'function enjSideDurum' in js, "enjSideDurum yardımcı fonksiyonu eksik"
+
+
+def test_detail_in_card_footer_js(js):
+    """DETAIL_FOOTER=PASS — Detay butonu card-footer içinde (wrap dışına taşındı)"""
+    idx = js.index('up-enj-card-footer')
+    block = js[idx:idx+400]
+    assert 'up-enj-makine-detay-btn' in block, "Detay butonu card-footer içinde değil"

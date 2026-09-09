@@ -1288,32 +1288,53 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 .up-enj-card-side-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: baseline;
   gap: 4px;
   font-size: 12px;
   line-height: 1.3;
-  flex-wrap: wrap;
-  overflow: visible;     /* kesilme yok */
+  min-width: 0;
 }
 .up-enj-card-ilk-uygun-lbl {
   font-size: 12px;
   color: #64748b;
-  white-space: nowrap;   /* kısa etiket — nowrap OK */
+  white-space: nowrap;
   flex-shrink: 0;
 }
-.up-enj-card-durum {
-  font-size: 12px;          /* min 12px — ellipsis/hidden yok */
-  font-weight: 700;
-  padding: 1px 4px;
-  border-radius: 4px;
-  white-space: normal;      /* doğal wrap — kesme yok */
-  word-break: break-word;
-  max-width: 100%;
+.up-enj-card-ilk-val {
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: right;
 }
-.up-enj-card-durum.bos { color: #15803d; background: #f0fdf4; }
-.up-enj-card-durum.planli { color: #1d4ed8; background: #eff6ff; }
-.up-enj-card-durum.dolu { color: #b91c1c; background: #fef2f2; }
+/* Kart tam-genişlik alt satır (durum + Detay) */
+.up-enj-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 4px 6px;
+  border-top: 1px solid #f1f5f9;
+  background: #f8fafc;
+  border-radius: 0 0 7px 7px;
+  min-width: 0;
+}
+.up-enj-card-durum {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;      /* kelimeler arası boşluktan kırabilir ama harf ortasından kırmaz */
+  overflow: visible;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+.up-enj-card-durum.bos    { color: #15803d; background: #dcfce7; }
+.up-enj-card-durum.planli { color: #1d4ed8; background: #dbeafe; }
+.up-enj-card-durum.dolu   { color: #b91c1c; background: #fee2e2; }
+.up-enj-card-durum.karisik{ color: #92400e; background: #fef3c7; }
 /* A: İstasyon placeholder kutuları */
 .up-enj-ist-placeholder { opacity: 0.45; }
 /* F: Footer "Seçilen Kurulum" label + sep */
@@ -1398,6 +1419,10 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
   overflow: visible;
   padding: 10px 12px 16px;
 }
+/* Alt güvenli boşluk — footer scroll sonunda içeriği örtmesin (tüm kolonlar) */
+.up-step2-layout .up-step2-col {
+  padding-bottom: 72px; /* footer ~52px + 20px buffer */
+}
 .up-step2-col-left {
   border-right: 1px solid #e2e8f0;
   background: #fafafa;
@@ -1476,10 +1501,16 @@ input.up-readonly { background: #f1f5f9; color: #475569; cursor: not-allowed; }
 .up-step2-col-left .up-enj-card-metric {
   margin-top: 0;
 }
-.up-step2-col-left .up-enj-makine-detay-btn {
-  margin: 0 6px 4px;
-  padding: 2px 6px;
+/* Detay butonu artık .up-enj-card-footer içinde */
+.up-enj-card-footer .up-enj-makine-detay-btn {
+  margin: 0;
+  padding: 1px 6px;
   font-size: 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  background: #eff6ff;
 }
 .up-step2-col-left .up-enj-card-slots {
   gap: 1px;
