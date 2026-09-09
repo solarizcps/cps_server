@@ -50,6 +50,68 @@ def parse_cift_quantity(value, *, field_label: str = 'Miktar') -> int:
     return int(d)
 
 
+class CanonicalResolveError(ValueError):
+    """Canonical sipariş satırı çözümlenemedi — fail-closed."""
+
+
+def resolve_canonical_mamul_skod(sip_no, sip_harinx, mamul_skod_client, rkod=0) -> str:
+    """Korgun'dan canonical mamul_skod'u çöz; istemci değeriyle karşılaştır.
+
+    Args:
+        sip_no, sip_harinx, rkod: canonical sipariş anahtarı.
+        mamul_skod_client: istemcinin beyan ettiği değer (yalnız karşılaştırma için).
+
+    Returns:
+        Korgun'daki gerçek SKOD (mamul_skod).
+
+    Raises:
+        CanonicalResolveError: Korgun erişilemez, satır bulunamaz,
+                               veya istemci değeri canonical ile uyuşmuyor.
+    """
+    from modules.common import korgun as kk
+
+    try:
+        con = kk._baglan()
+    except Exception as exc:
+        raise CanonicalResolveError(
+            f'Korgun bağlantısı kurulamadı — kalıp listesi alınamıyor: {exc}'
+        ) from exc
+
+    try:
+        cur = con.cursor()
+        cur.execute(
+            'SELECT TOP 1 sh.SKOD FROM Siparis_Har sh '
+            'WHERE sh.SipNo = %s AND sh.SipHarinx = %s',
+            (int(sip_no), int(sip_harinx)),
+        )
+        row = cur.fetchone()
+    except Exception as exc:
+        raise CanonicalResolveError(
+            f'Korgun sorgusu başarısız: {exc}'
+        ) from exc
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+
+    if not row or not row[0]:
+        raise CanonicalResolveError(
+            f'Sipariş satırı bulunamadı: sip_no={sip_no}, sip_harinx={sip_harinx}'
+        )
+
+    canonical = str(row[0]).strip().upper()
+    client    = str(mamul_skod_client or '').strip().upper()
+
+    if client and client != canonical:
+        raise CanonicalResolveError(
+            f'İstemci mamul_skod ({mamul_skod_client!r}) Korgun canonical değeriyle '
+            f'uyuşmuyor ({row[0]!r}). Olası manipülasyon — istek reddedildi.'
+        )
+
+    return row[0].strip()   # orijinal case ile döndür
+
+
 def resolve_order_line_quantity(
     sip_no,
     sip_harinx,
@@ -95,8 +157,18 @@ def resolve_line_quantity_summary(
     sip_harinx: int,
     mamul_skod: str,
     rkod: int = 0,
+    *,
+    view_only: bool = False,
 ) -> dict:
-    """Sipariş kalemi miktar özeti — read-only, Remaining Quantity V1 alanları."""
+    """Sipariş kalemi miktar özeti — read-only, Remaining Quantity V1 alanları.
+
+    view_only=True (GET görüntüleme):
+        Çözülemeyen legacy planlar varsa hata fırlatmaz; quantity_calculable=False
+        ile partial sonuç döner. Create/update doğrulaması bu modda ÇAĞRILMAZ.
+
+    view_only=False (varsayılan, create/update guard):
+        Önceki FAIL-CLOSED davranışı — unresolved varsa OrderLineQuantityError.
+    """
     from db import get_conn
     from modules.planlama.uretim_plan_repo import _sum_already_planned
 
@@ -109,22 +181,49 @@ def resolve_line_quantity_summary(
         )
     finally:
         con.close()
+
     if unresolved:
-        ids = ', '.join(f'#{i}' for i in unresolved[:5])
-        raise OrderLineQuantityError(
-            'Bu sipariş kaleminde miktarı çözümlenemeyen legacy plan(lar) var '
-            f'({ids}). Kalan miktar güvenli hesaplanamıyor.'
-        )
+        if not view_only:
+            # Create/update: FAIL-CLOSED — mevcut davranış korunur
+            ids = ', '.join(f'#{i}' for i in unresolved[:5])
+            raise OrderLineQuantityError(
+                'Bu sipariş kaleminde miktarı çözümlenemeyen legacy plan(lar) var '
+                f'({ids}). Kalan miktar güvenli hesaplanamıyor.'
+            )
+        # Görüntüleme modunda: partial sonuç, quantity_calculable=False
+        warning_ids = ', '.join(f'#{i}' for i in unresolved[:5])
+        return {
+            'order_total_quantity': order_total,
+            'already_planned_quantity': already,
+            'remaining_quantity': None,
+            'remaining_after_save': None,
+            'siparis_toplam_miktar': order_total,
+            'planlanmis_miktar': already,
+            'kalan_miktar': None,
+            'birim': info.get('birim') or 'CIFT',
+            'source': info.get('source'),
+            'quantity_calculable': False,
+            'unresolved_plan_ids': unresolved,
+            'warning': (
+                f'Aktif eski plan {warning_ids} miktarı bilinmediği için '
+                'kesin kalan miktar hesaplanamıyor.'
+            ),
+        }
+
     remaining = order_total - already
     return {
         'order_total_quantity': order_total,
         'already_planned_quantity': already,
         'remaining_quantity': remaining,
+        'remaining_after_save': None,
         'siparis_toplam_miktar': order_total,
         'planlanmis_miktar': already,
         'kalan_miktar': remaining,
         'birim': info.get('birim') or 'CIFT',
         'source': info.get('source'),
+        'quantity_calculable': True,
+        'unresolved_plan_ids': [],
+        'warning': None,
     }
 
 

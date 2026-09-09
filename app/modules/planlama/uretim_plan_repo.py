@@ -290,6 +290,131 @@ def _plan_istasyonlar(con, plan_id, enj_istasyon_no) -> list[int]:
     return _normalize_istasyon_list(enj_istasyon_no)
 
 
+def _resolve_canonical_skod_for_guard(payload: dict, mevcut: dict | None) -> str | None:
+    """Save guard için canonical mamul_skod'u Korgun'dan çöz.
+
+    Yeni plan  → payload sip_no+sip_harinx+rkod kullanılır.
+    Mevcut plan → DB kaydındaki sip_no+sip_harinx+rkod kullanılır
+                  (istemci payload'ı sipariş anahtarını değiştiremez).
+
+    Korgun erişilemezse ValueError fırlatır (fail-closed).
+    """
+    from modules.planlama.uretim_plan_service import (
+        resolve_canonical_mamul_skod, CanonicalResolveError,
+    )
+
+    if mevcut is not None:
+        # Update: canonical anahtarı DB'den — istemci değiştiremez
+        sip_no  = mevcut.get('sip_no')
+        sip_har = mevcut.get('sip_harinx')
+        rkod    = mevcut.get('rkod', 0)
+        client_skod = mevcut.get('mamul_skod', '')   # DB değeri = doğru
+        # Update'te sipariş kimliği değiştirilemez
+        if (payload.get('sip_no') and int(payload['sip_no']) != int(sip_no or 0)) or \
+           (payload.get('mamul_skod') and
+            payload['mamul_skod'].strip().upper() != (client_skod or '').strip().upper()):
+            raise ValueError(
+                'Plan güncellemede sipariş veya model değiştirilemez. '
+                'Yeni plan oluşturun.'
+            )
+    else:
+        # Yeni plan
+        sip_no  = payload.get('sip_no')
+        sip_har = payload.get('sip_harinx')
+        rkod    = payload.get('rkod', 0)
+        client_skod = payload.get('mamul_skod', '')
+
+    if not sip_no or sip_har is None:
+        return None  # zorunlu anahtar yoksa zaten başka validation yakalar
+
+    try:
+        return resolve_canonical_mamul_skod(sip_no, sip_har, client_skod, rkod)
+    except CanonicalResolveError as exc:
+        raise ValueError(str(exc)) from exc
+
+
+def _validate_enj_kalip_model_match(con: sqlite3.Connection, payload: dict,
+                                     mevcut: dict | None = None) -> None:
+    """Kalıp-model eşleşmesini Korgun canonical kaynağıyla doğrula.
+
+    Mod ayrımı:
+      - kalip_mode='manuel' ve kalip_id YOK  → manuel akış, liste guard atlanır.
+      - kalip_mode='liste' (veya belirtilmemiş) ve kalip_id YOK → BLOCKED
+        (liste modunda kalıp seçimi zorunlu).
+      - kalip_mode='manuel' ve kalip_id VAR → BLOCKED (mod çelişkisi).
+      - kalip_mode='liste' ve kalip_id VAR → canonical model eşleşmesi zorunlu.
+
+    Update'te kalıp değişmiyorsa geriye uyumluluk için atlanır.
+    Canonical Korgun erişilemezse fail-closed.
+    """
+    kalip_mode = (payload.get('kalip_mode') or 'liste').lower().strip()
+    kalip_id   = payload.get('enj_kalip_id')
+
+    # has_enjeksiyon False ise kalıp validasyonu geçersiz
+    if not payload.get('has_enjeksiyon'):
+        return
+
+    if kalip_mode == 'manuel':
+        # Manuel mod: kalip_id olmamalı
+        if kalip_id:
+            raise ValueError(
+                'Manuel kalıp modunda liste kalıp ID\'si (enj_kalip_id) gönderilemez. '
+                'Liste guard bypass girişimi reddedildi.'
+            )
+        # Manuel kalıp kodu zorunlu
+        kalip_kod_manuel = (payload.get('enj_kalip_kod') or '').strip()
+        if not kalip_kod_manuel:
+            raise ValueError('Manuel kalıp modunda enj_kalip_kod boş olamaz.')
+        return  # Manuel mod doğrulaması geçti
+
+    # Liste modu (varsayılan)
+    if not kalip_id:
+        raise ValueError(
+            'Liste kalıp modunda enj_kalip_id zorunludur. '
+            'Manuel kalıp için kalip_mode=manuel kullanın.'
+        )
+
+    # Update: sipariş/model değişikliği koruması — kalıp skip'inden ÖNCE
+    if mevcut is not None:
+        db_skod    = (mevcut.get('mamul_skod') or '').strip().upper()
+        pay_skod   = (payload.get('mamul_skod') or '').strip().upper()
+        if pay_skod and db_skod and pay_skod != db_skod:
+            raise ValueError(
+                'Plan güncellemede sipariş modeli değiştirilemez. '
+                'Yeni plan oluşturun.'
+            )
+
+    # Update: kalıp değişmiyorsa geriye uyumluluk (model kontrolü geçtikten sonra)
+    if mevcut is not None:
+        mevcut_kid = mevcut.get('enj_kalip_id')
+        if mevcut_kid and int(mevcut_kid) == int(kalip_id):
+            return  # kalıp aynı kaldı — eski kayıt bozulmasın
+
+    # Canonical mamul_skod: Korgun'dan çöz (istemci beyanına güvenmiyoruz)
+    canonical_skod = _resolve_canonical_skod_for_guard(payload, mevcut)
+    if not canonical_skod:
+        # Canonical çözülemedi ama sip_no da yoksa — diğer validation yakalar
+        return
+
+    # Kalıp master'dan model_kod oku
+    kalip_row = con.execute(
+        'SELECT model_kod, aktif FROM enj_kalip WHERE id=?', (int(kalip_id),)
+    ).fetchone()
+    if not kalip_row:
+        raise ValueError(f'Seçilen kalıp (id={kalip_id}) sistemde bulunamadı.')
+    if not kalip_row['aktif']:
+        raise ValueError(f'Seçilen kalıp (id={kalip_id}) pasif durumdadır.')
+
+    kalip_model = (kalip_row['model_kod'] or '').strip().upper()
+    canon_upper = canonical_skod.strip().upper()
+
+    if kalip_model and kalip_model != canon_upper:
+        raise ValueError(
+            f'Seçilen kalıp sipariş modeliyle uyumlu değil. '
+            f'Kalıp modeli: {kalip_model}, Sipariş (Korgun canonical): {canonical_skod}.'
+        )
+
+
 def _validate_enj_required(payload: dict) -> None:
     """has_enjeksiyon=True ürünlerde enjeksiyon rezervasyon alanlarının zorunlu kontrolü.
 
@@ -599,6 +724,9 @@ def plan_ekle(payload: dict, user_id: int, *, order_total: int | None = None) ->
         # ENJ validation: enjeksiyonlu üründe rezervasyon alanları zorunlu
         _validate_enj_required(payload)
 
+        # MOLD GUARD: liste modunda kalıp modeli canonical mamul_skod ile eşleşmeli
+        _validate_enj_kalip_model_match(con, payload, mevcut=None)
+
         qty_meta: dict = {}
         if payload.get('has_enjeksiyon'):
             ot = _resolve_order_total_for_payload(payload, order_total)
@@ -689,6 +817,8 @@ def plan_guncelle(
         if _enj_payload_dokunuldu(payload):
             # plan_ekle ile aynı iş kuralları
             _validate_enj_required(birlesik)
+            # MOLD GUARD: kalıp değiştiriliyorsa model eşleşmesi zorunlu
+            _validate_enj_kalip_model_match(con, birlesik, mevcut=mevcut)
             if birlesik.get('has_enjeksiyon'):
                 ot = _resolve_order_total_for_payload(birlesik, order_total)
                 qty_meta = _validate_enj_plan_quantity(
