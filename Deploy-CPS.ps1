@@ -56,11 +56,12 @@ if ($Execute) {
 }
 
 # --- build python args ---
-$py = (Get-Command python -ErrorAction SilentlyContinue)?.Source
-if (-not $py) {
+$pyCmd = Get-Command python -ErrorAction SilentlyContinue
+if (-not $pyCmd) {
     Write-Error 'BLOCKED: python not found in PATH'
     exit 1
 }
+$py = $pyCmd.Source
 
 $script = Join-Path $PSScriptRoot 'tools\deploy_and_rollback.py'
 if (-not (Test-Path $script)) {
