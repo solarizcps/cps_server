@@ -107,6 +107,117 @@ def verify_backup(source: str, backup: str) -> dict[str, Any]:
 
 # ── process helpers ───────────────────────────────────────────────────────────
 
+_STARTUP_GRACE_SEC = 0.25
+_LOG_TAIL_LINES = 20
+
+
+def _build_server_env(
+    *,
+    db_path: str | None = None,
+    port: int = 8080,
+    extra: dict[str, str] | None = None,
+) -> dict[str, str]:
+    env = os.environ.copy()
+    env['FLASK_DEBUG'] = '0'
+    env['CPS_PORT'] = str(port)
+    if db_path:
+        env['CPS_MOCK_DB_PATH'] = db_path
+    if extra:
+        env.update(extra)
+    return env
+
+
+def _server_log_paths(repo: str) -> tuple[str, str]:
+    log_dir = Path(repo) / 'logs' / 'deploy'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    return (
+        str(log_dir / f'cps_server_{ts}.stdout.log'),
+        str(log_dir / f'cps_server_{ts}.stderr.log'),
+    )
+
+
+def _tail_log_file(path: str, max_lines: int = _LOG_TAIL_LINES) -> str:
+    try:
+        with open(path, encoding='utf-8', errors='replace') as fh:
+            lines = fh.readlines()
+        if not lines:
+            return ''
+        return ''.join(lines[-max_lines:]).strip()
+    except OSError:
+        return ''
+
+
+def _tail_server_logs(stdout_log: str, stderr_log: str) -> str:
+    parts: list[str] = []
+    out_tail = _tail_log_file(stdout_log)
+    err_tail = _tail_log_file(stderr_log)
+    if out_tail:
+        parts.append(f'stdout:\n{out_tail}')
+    if err_tail:
+        parts.append(f'stderr:\n{err_tail}')
+    return '\n'.join(parts)
+
+
+def _popen_detached_server(
+    cmd: list[str],
+    *,
+    cwd: str,
+    env: dict[str, str],
+    stdout_log: str,
+    stderr_log: str,
+) -> subprocess.Popen:
+    """Launch CPS server detached from parent terminal (stdout/stderr → log files)."""
+    stdout_f = open(stdout_log, 'w', encoding='utf-8', buffering=1)
+    stderr_f = open(stderr_log, 'w', encoding='utf-8', buffering=1)
+    popen_kwargs: dict[str, Any] = {
+        'cwd': cwd,
+        'env': env,
+        'stdin': subprocess.DEVNULL,
+        'stdout': stdout_f,
+        'stderr': stderr_f,
+        'close_fds': True,
+    }
+    if sys.platform == 'win32':
+        popen_kwargs['creationflags'] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        )
+    else:
+        popen_kwargs['start_new_session'] = True
+    try:
+        proc = subprocess.Popen(cmd, **popen_kwargs)
+    finally:
+        stdout_f.close()
+        stderr_f.close()
+    return proc
+
+
+def _wait_for_immediate_exit(
+    proc: subprocess.Popen,
+    *,
+    stdout_log: str,
+    stderr_log: str,
+    grace_sec: float,
+) -> dict[str, Any] | None:
+    deadline = time.monotonic() + grace_sec
+    while time.monotonic() < deadline:
+        code = proc.poll()
+        if code is not None:
+            log_tail = _tail_server_logs(stdout_log, stderr_log)
+            detail = f'process exited early (code={code})'
+            if log_tail:
+                detail = f'{detail}\n{log_tail}'
+            return {
+                'ok': False,
+                'pid': '',
+                'error': detail,
+                'stdout_log': stdout_log,
+                'stderr_log': stderr_log,
+            }
+        time.sleep(0.05)
+    return None
+
+
 def stop_process(pid: str, *, _fake_stop: Callable | None = None) -> bool:
     """Stop a process by PID. Returns True on success."""
     if _fake_stop is not None:
@@ -122,25 +233,41 @@ def stop_process(pid: str, *, _fake_stop: Callable | None = None) -> bool:
 def start_process(
     *,
     repo: str,
+    db: str | None = None,
+    port: int = 8080,
     env: dict[str, str] | None = None,
     _fake_start: Callable | None = None,
+    _startup_grace_sec: float = _STARTUP_GRACE_SEC,
 ) -> dict[str, Any]:
-    """Start CPS server. Returns {'pid': ..., 'ok': bool}."""
+    """Start CPS server detached from deploy terminal. Returns pid + log paths."""
     if _fake_start is not None:
-        return _fake_start(repo=repo, env=env)
+        return _fake_start(repo=repo, env=env, db=db, port=port)
     app_dir = str(Path(repo) / 'app')
     py = sys.executable
-    # Actual start: runs in background via subprocess
+    stdout_log, stderr_log = _server_log_paths(repo)
+    run_env = _build_server_env(db_path=db, port=port, extra=env)
     try:
-        proc = subprocess.Popen(
+        proc = _popen_detached_server(
             [py, 'app.py'],
             cwd=app_dir,
-            env={**os.environ, **(env or {})},
+            env=run_env,
+            stdout_log=stdout_log,
+            stderr_log=stderr_log,
         )
-        time.sleep(2)
-        if proc.poll() is not None:
-            return {'ok': False, 'pid': '', 'error': 'process exited immediately'}
-        return {'ok': True, 'pid': str(proc.pid)}
+        early = _wait_for_immediate_exit(
+            proc,
+            stdout_log=stdout_log,
+            stderr_log=stderr_log,
+            grace_sec=_startup_grace_sec,
+        )
+        if early is not None:
+            return early
+        return {
+            'ok': True,
+            'pid': str(proc.pid),
+            'stdout_log': stdout_log,
+            'stderr_log': stderr_log,
+        }
     except Exception as exc:
         return {'ok': False, 'pid': '', 'error': str(exc)}
 
@@ -408,8 +535,12 @@ def run_deploy(
         stop_process(active_pid, _fake_stop=_fake_stop)
 
     # ── START NEW PROCESS ────────────────────────────────────────────────────
-    start_result = start_process(repo=repo, _fake_start=_fake_start)
+    start_result = start_process(
+        repo=repo, db=db, port=cps_port, _fake_start=_fake_start,
+    )
     report['NEW_PID'] = start_result.get('pid', '')
+    report['SERVER_STDOUT_LOG'] = start_result.get('stdout_log', '')
+    report['SERVER_STDERR_LOG'] = start_result.get('stderr_log', '')
     if not start_result.get('ok'):
         report['error'] = f'process start failed: {start_result.get("error")}'
         # rollback
@@ -428,7 +559,9 @@ def run_deploy(
         restore_db(backup_path, db)
         if target_commit != old_head:
             git_reset_hard(repo, old_head)
-        rollback_start = start_process(repo=repo, _fake_start=_fake_start)
+        rollback_start = start_process(
+            repo=repo, db=db, port=cps_port, _fake_start=_fake_start,
+        )
         rollback_health = health_check(_fake_health=_fake_health)
         report['HEALTH_ROLLBACK'] = 'PASS' if rollback_health.get('ok') else 'FAIL'
         report['ROLLBACK_APPLIED'] = 'YES'

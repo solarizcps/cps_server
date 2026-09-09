@@ -105,11 +105,11 @@ def _make_old_server_db() -> tuple[str, str]:
     return tmpdir, db
 
 
-def _fake_start_ok(repo, env=None):
+def _fake_start_ok(repo, env=None, db=None, port=None, **kwargs):
     return {'ok': True, 'pid': '99999'}
 
 
-def _fake_start_fail(repo, env=None):
+def _fake_start_fail(repo, env=None, db=None, port=None, **kwargs):
     return {'ok': False, 'pid': '', 'error': 'fake start failure'}
 
 
