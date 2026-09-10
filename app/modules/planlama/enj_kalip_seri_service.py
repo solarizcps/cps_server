@@ -5,6 +5,13 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from modules.planlama.enj_schema_compat import (
+    SeriesSchemaIncompleteError,
+    SeriesSchemaUnavailableError,
+    series_schema_state,
+    uye_join_kalip_select_sql,
+)
+
 UYE_ROLLERI = frozenset({'GOVDE', 'ATKI', 'DIGER'})
 
 
@@ -32,13 +39,26 @@ def _kalip_public_row(row: sqlite3.Row) -> dict:
     return d
 
 
+def _ensure_series_schema_complete(con: sqlite3.Connection) -> None:
+    state = series_schema_state(con)
+    if state == 'absent':
+        raise SeriesSchemaUnavailableError()
+    if state == 'incomplete':
+        raise SeriesSchemaIncompleteError()
+
+
+def _ensure_series_schema_for_detail(con: sqlite3.Connection) -> None:
+    _ensure_series_schema_complete(con)
+
+
 def list_seri(
     con: sqlite3.Connection,
     *,
     model_kod: str | None = None,
     aktif_only: bool = True,
 ) -> list[dict]:
-    q = f"""
+    _ensure_series_schema_complete(con)
+    q = """
         SELECT s.*,
                (SELECT COUNT(*) FROM enj_kalip_seri_uye u
                  WHERE u.seri_id = s.id AND u.aktif = 1) AS uye_sayisi
@@ -56,16 +76,16 @@ def list_seri(
 
 
 def get_seri_detail(con: sqlite3.Connection, seri_id: int, *, aktif_uyeler_only: bool = False) -> dict | None:
+    _ensure_series_schema_for_detail(con)
     seri = _row_dict(con.execute(
         'SELECT * FROM enj_kalip_seri WHERE id = ?', (int(seri_id),),
     ).fetchone())
     if not seri:
         return None
-    uye_q = """
+    kalip_cols = uye_join_kalip_select_sql(con)
+    uye_q = f"""
         SELECT u.*,
-               k.kalip_kod, k.kalip_tipi, k.model_kod, k.model_ad, k.asorti,
-               k.kalip_basi_cift, k.aktif_goz_sayisi, k.kapasite_cift,
-               k.kapasite_onayli, k.varsayilan_bagli_kalip, k.aktif AS kalip_aktif
+               {kalip_cols}
         FROM enj_kalip_seri_uye u
         JOIN enj_kalip k ON k.id = u.kalip_id
         WHERE u.seri_id = ?
@@ -85,6 +105,7 @@ def create_seri(
     *,
     user_id: int | None = None,
 ) -> dict:
+    _ensure_series_schema_complete(con)
     seri_kod = (payload.get('seri_kod') or '').strip()
     model_kod = (payload.get('model_kod') or '').strip()
     if not seri_kod:
@@ -125,6 +146,7 @@ def update_seri(
     *,
     user_id: int | None = None,
 ) -> dict:
+    _ensure_series_schema_complete(con)
     seri = _row_dict(con.execute(
         'SELECT * FROM enj_kalip_seri WHERE id = ?', (int(seri_id),),
     ).fetchone())
@@ -206,6 +228,20 @@ def _validate_kalip_for_seri(con: sqlite3.Connection, seri: dict, kalip_id: int)
     return kalip
 
 
+def _fetch_uye_row(con: sqlite3.Connection, uye_id: int) -> sqlite3.Row:
+    kalip_cols = uye_join_kalip_select_sql(con)
+    return con.execute(
+        f"""
+        SELECT u.*,
+               {kalip_cols}
+        FROM enj_kalip_seri_uye u
+        JOIN enj_kalip k ON k.id = u.kalip_id
+        WHERE u.id = ?
+        """,
+        (uye_id,),
+    ).fetchone()
+
+
 def add_uye(
     con: sqlite3.Connection,
     seri_id: int,
@@ -213,6 +249,7 @@ def add_uye(
     *,
     user_id: int | None = None,
 ) -> dict:
+    _ensure_series_schema_complete(con)
     seri = _row_dict(con.execute(
         'SELECT * FROM enj_kalip_seri WHERE id = ?', (int(seri_id),),
     ).fetchone())
@@ -263,18 +300,7 @@ def add_uye(
         (seri_id, int(kalip_id), uye_rolu, beden_numara, sira_no, vfa, user_id, user_id),
     )
     uye_id = cur.lastrowid
-    row = con.execute(
-        """
-        SELECT u.*,
-               k.kalip_kod, k.kalip_tipi, k.model_kod, k.model_ad, k.asorti,
-               k.kalip_basi_cift, k.aktif_goz_sayisi, k.kapasite_cift,
-               k.kapasite_onayli, k.varsayilan_bagli_kalip, k.aktif AS kalip_aktif
-        FROM enj_kalip_seri_uye u
-        JOIN enj_kalip k ON k.id = u.kalip_id
-        WHERE u.id = ?
-        """,
-        (uye_id,),
-    ).fetchone()
+    row = _fetch_uye_row(con, int(uye_id))
     return _kalip_public_row(row)
 
 
@@ -285,6 +311,7 @@ def update_uye(
     *,
     user_id: int | None = None,
 ) -> dict:
+    _ensure_series_schema_complete(con)
     uye = _row_dict(con.execute(
         'SELECT * FROM enj_kalip_seri_uye WHERE id = ?', (int(uye_id),),
     ).fetchone())
@@ -331,18 +358,7 @@ def update_uye(
         f'UPDATE enj_kalip_seri_uye SET {", ".join(set_parts)} WHERE id = ?',
         params,
     )
-    row = con.execute(
-        """
-        SELECT u.*,
-               k.kalip_kod, k.kalip_tipi, k.model_kod, k.model_ad, k.asorti,
-               k.kalip_basi_cift, k.aktif_goz_sayisi, k.kapasite_cift,
-               k.kapasite_onayli, k.varsayilan_bagli_kalip, k.aktif AS kalip_aktif
-        FROM enj_kalip_seri_uye u
-        JOIN enj_kalip k ON k.id = u.kalip_id
-        WHERE u.id = ?
-        """,
-        (uye_id,),
-    ).fetchone()
+    row = _fetch_uye_row(con, int(uye_id))
     return _kalip_public_row(row)
 
 
@@ -351,6 +367,11 @@ def read_series_for_model(con: sqlite3.Connection, model_kod: str) -> list[dict]
     norm = _norm_model(model_kod)
     if not norm:
         return []
+    state = series_schema_state(con)
+    if state == 'absent':
+        return []
+    if state == 'incomplete':
+        raise SeriesSchemaIncompleteError()
     seriler = list_seri(con, model_kod=norm, aktif_only=True)
     out: list[dict] = []
     for s in seriler:
@@ -384,3 +405,16 @@ def read_series_for_model(con: sqlite3.Connection, model_kod: str) -> list[dict]
             'uyeler': uyeler,
         })
     return out
+
+
+def read_series_for_model_with_meta(con: sqlite3.Connection, model_kod: str) -> dict:
+    """Planlama seri listesi — şema meta bilgisi ile."""
+    state = series_schema_state(con)
+    if state == 'absent':
+        return {'seriler': [], 'schema_available': False}
+    if state == 'incomplete':
+        raise SeriesSchemaIncompleteError()
+    return {
+        'seriler': read_series_for_model(con, model_kod),
+        'schema_available': True,
+    }

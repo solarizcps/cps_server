@@ -897,6 +897,15 @@ def _ky_db_path():
     return Config.MOCK_DB_PATH
 
 
+def _ky_schema_field_unavailable_response(field: str):
+    return _jsonify_ky({
+        'ok': False,
+        'hata': 'Bu alan mevcut Kalıp Master şemasında henüz etkin değil.',
+        'kod': 'SCHEMA_FIELD_UNAVAILABLE',
+        'alan': field,
+    }), 409
+
+
 def _ky_tam_sayi(body, alan, *, zorunlu=False, minimum=None, maksimum=None):
     ham = body.get(alan)
     if ham is None or ham == '':
@@ -975,17 +984,11 @@ def ky_kalip_yonetimi_sayfa():
 def ky_api_kaliplar():
     """Tum kaliplar listesi (master data)."""
     try:
+        from modules.planlama.enj_schema_compat import ky_kaliplar_select_sql
+
         con = _sqlite3_ky.connect(_ky_db_path())
         cur = con.cursor()
-        cur.execute("""
-            SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
-                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
-                   kapasite_cift, kalip_durumu, aciklama,
-                   cift_agirlik_gr, pisme_suresi_sn,
-                   aktif_goz_sayisi, kapasite_onayli
-            FROM enj_kalip
-            ORDER BY aktif DESC, kalip_kod, model_kod, asorti
-        """)
+        cur.execute(ky_kaliplar_select_sql(con))
         rows = cur.fetchall()
         con.close()
         
@@ -1038,8 +1041,18 @@ def ky_api_kalip_patch(kalip_id):
         if not guncel:
             return _jsonify_ky({'ok': False, 'hata': 'guncellenecek alan yok'}), 400
         istenen_alanlar = list(guncel.keys())
-        
-        # Validasyon
+
+        from modules.planlama.enj_schema_compat import reject_unavailable_kalip_patch_fields
+
+        con = _sqlite3_ky.connect(_ky_db_path())
+        cur = con.cursor()
+        blocked = reject_unavailable_kalip_patch_fields(con, guncel)
+        if blocked:
+            con.close()
+            con = None
+            return _ky_schema_field_unavailable_response(blocked)
+
+        # Validasyon — write öncesi
         try:
             if 'kalip_basi_cift' in guncel:
                 guncel['kalip_basi_cift'] = _ky_tam_sayi(
@@ -1058,13 +1071,15 @@ def ky_api_kalip_patch(kalip_id):
             if 'kapasite_onayli' in guncel:
                 guncel['kapasite_onayli'] = 0 if guncel['kapasite_onayli'] in (0, '0', False) else 1
         except ValueError as exc:
+            con.close()
+            con = None
             return _jsonify_ky({'ok': False, 'hata': str(exc)}), 400
 
         if 'kalip_tipi' in guncel and guncel['kalip_tipi'] not in ('GOVDE', 'ATKI'):
+            con.close()
+            con = None
             return _jsonify_ky({'ok': False, 'hata': 'kalip_tipi GOVDE veya ATKI olmali'}), 400
-        
-        con = _sqlite3_ky.connect(_ky_db_path())
-        cur = con.cursor()
+
         cur.execute('SELECT id, kalip_kod, aktif, kalip_durumu FROM enj_kalip WHERE id = ?', (kalip_id,))
         eski = cur.fetchone()
         if not eski:

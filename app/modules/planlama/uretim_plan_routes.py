@@ -483,7 +483,8 @@ def api_enj_kalip_serileri_read():
     from modules.planlama.uretim_plan_service import (
         resolve_canonical_mamul_skod, CanonicalResolveError,
     )
-    from modules.planlama.enj_kalip_seri_service import read_series_for_model
+    from modules.planlama.enj_kalip_seri_service import read_series_for_model_with_meta
+    from modules.planlama.enj_schema_compat import SeriesSchemaIncompleteError
 
     sip_no = request.args.get('sip_no', type=int)
     sip_har = request.args.get('sip_harinx', type=int)
@@ -507,12 +508,19 @@ def api_enj_kalip_serileri_read():
 
     con = get_conn()
     try:
-        seriler = read_series_for_model(con, model_kod)
+        payload = read_series_for_model_with_meta(con, model_kod)
         return jsonify({
             'ok': True,
             'canonical_model': model_kod,
-            'seriler': seriler,
+            'seriler': payload['seriler'],
+            'schema_available': payload['schema_available'],
         })
+    except SeriesSchemaIncompleteError:
+        return jsonify({
+            'ok': False,
+            'mesaj': 'Kalıp seri şeması eksik — migration tamamlanmamış.',
+            'kod': 'SERIES_SCHEMA_INCOMPLETE',
+        }), 409
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
     finally:
@@ -524,6 +532,10 @@ def api_enj_kalip_serileri_read():
 def api_enj_kalip_seri_read(seri_id):
     """Read-only seri detay — yalnız aktif seri/üyeler."""
     from modules.planlama.enj_kalip_seri_service import get_seri_detail
+    from modules.planlama.enj_schema_compat import (
+        SeriesSchemaIncompleteError,
+        SeriesSchemaUnavailableError,
+    )
 
     con = get_conn()
     try:
@@ -557,6 +569,18 @@ def api_enj_kalip_seri_read(seri_id):
             },
             'uyeler': uyeler,
         })
+    except SeriesSchemaUnavailableError:
+        return jsonify({
+            'ok': False,
+            'mesaj': 'Kalıp seri şeması mevcut değil.',
+            'kod': 'SERIES_SCHEMA_UNAVAILABLE',
+        }), 404
+    except SeriesSchemaIncompleteError:
+        return jsonify({
+            'ok': False,
+            'mesaj': 'Kalıp seri şeması eksik — migration tamamlanmamış.',
+            'kod': 'SERIES_SCHEMA_INCOMPLETE',
+        }), 409
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
     finally:

@@ -66,15 +66,15 @@ def test_ky_api_kaliplar_reads_temp_db(tmp_path, monkeypatch):
     """)
     con.close()
 
-    monkeypatch.setenv('CPS_MOCK_DB_PATH', str(db))
+    db_str = str(db)
+    monkeypatch.setenv('CPS_MOCK_DB_PATH', db_str)
     sys.path.insert(0, str(_REPO / 'app'))
-    import importlib
-    import config as cfg
-    importlib.reload(cfg)
+    import config
+    monkeypatch.setattr(config.Config, 'MOCK_DB_PATH', db_str, raising=False)
     from modules.yonetim import routes as yroutes
-    importlib.reload(yroutes)
 
-    con = sqlite3.connect(yroutes._ky_db_path())
+    assert yroutes._ky_db_path() == db_str
+    con = sqlite3.connect(db_str)
     count = con.execute('SELECT COUNT(*) FROM enj_kalip').fetchone()[0]
     con.close()
     assert count == 1
