@@ -54,6 +54,8 @@
             slotOzetMap: {},
             baseFirstAvailableMap: {},
             slotOzetSeq: 0,
+            istasyonAvailabilitySeq: 0,
+            ilkUygunMap: {},
             makineDetayCache: {},
             makineDetayLoadingKey: null,
             makineDetayTriggerBtn: null,
@@ -712,6 +714,7 @@
         enjUpdateKurulumOzet();
     }
 
+    // Faz 2B'de fiziksel kalıp envanteri / istasyon-kalıp dağılımı ile ayrıştırılacak.
     function enjSyncKalipAdediFromStations() {
         var n = (state.enj.istasyonlar || []).length;
         state.enj.kalipAdedi = n > 0 ? n : null;
@@ -725,15 +728,42 @@
         enjUpdateToplamGozHint();
     }
 
+    function enjHasBaslangic() {
+        var e = state.enj;
+        if (e.baslangic) return true;
+        var inp = $('upEnjBas');
+        return !!(inp && inp.value);
+    }
+
+    function enjAvailabilityCapture(seq) {
+        return {
+            seq: seq,
+            sipNo: state.seciliCreateData && state.seciliCreateData.sip_no,
+            makineId: state.enj.makineId,
+            slot: state.enj.slot,
+            baslangic: state.enj.baslangic,
+        };
+    }
+
+    function enjAvailabilityStillValid(capture) {
+        var e = state.enj;
+        return capture.seq === e.istasyonAvailabilitySeq &&
+            capture.sipNo === (state.seciliCreateData && state.seciliCreateData.sip_no) &&
+            capture.makineId === e.makineId &&
+            capture.slot === e.slot &&
+            capture.baslangic === e.baslangic;
+    }
+
     function enjUpdateStep2SectionStates() {
         var e = state.enj;
+        var hasBas = enjHasBaslangic();
         var basEl = $('upEnjBas');
         if (basEl) basEl.disabled = !(e.makineId && e.slot);
         var sections = {
             upStep2SecSlot: !!e.makineId,
             upStep2SecTarih: !!(e.makineId && e.slot),
-            upStep2SecKalip: !!(e.makineId && e.slot && e.baslangic),
-            upStep2SecIstasyon: !!(e.makineId && e.slot && e.baslangic && enjKalipSecili()),
+            upStep2SecIstasyon: !!(e.makineId && e.slot && hasBas),
+            upStep2SecKalip: !!(e.makineId && e.slot && hasBas),
             upStep2SecMiktar: !!(e.makineId && e.istasyonlar.length && enjKalipSecili()),
             upStep2SecVardiya: !!(e.makineId && e.planCift > 0),
             upStep2SecHs: !!(e.makineId && e.planCift > 0),
@@ -1614,6 +1644,7 @@
         e.slotOzetMap = {};
         e.baseFirstAvailableMap = {};
         e.slotOzetSeq = 0;
+        e.istasyonAvailabilitySeq = 0;
         e.makineDetayCache = {};
         e.quantitySummary = null;
         e.istasyonPlanDurum = {};
@@ -2053,13 +2084,15 @@
             '</div>';
     }
 
-    function enjFetchIstasyonPlanDurum(cb) {
+    function enjFetchIstasyonPlanDurum(cb, captureSeq) {
         var e = state.enj;
         if (!e.makineId || !e.slot || !e.baslangic) {
             e.istasyonPlanDurum = {};
             if (cb) cb();
             return;
         }
+        var seq = captureSeq != null ? captureSeq : ++e.istasyonAvailabilitySeq;
+        var capture = enjAvailabilityCapture(seq);
         fetch('/planlama/uretim-plan/api/enj/istasyon-plan-durum', {
             method: 'POST',
             credentials: 'include',
@@ -2072,15 +2105,37 @@
             }),
         }).then(function (r) { return r.json(); })
           .then(function (d) {
+              if (!enjAvailabilityStillValid(capture)) return;
               e.istasyonPlanDurum = {};
               if (d.ok && d.istasyonlar) {
                   d.istasyonlar.forEach(function (row) {
                       e.istasyonPlanDurum[row.istasyon_no] = row;
                   });
               }
-              if (cb) cb();
+              if (cb) cb(capture);
           })
-          .catch(function () { if (cb) cb(); });
+          .catch(function () { if (cb && enjAvailabilityStillValid(capture)) cb(capture); });
+    }
+
+    function enjValidateSelectedStationsAtDate(cb, pruneReason) {
+        var e = state.enj;
+        if (!e.makineId || !e.slot || !e.baslangic) {
+            if (cb) cb(false);
+            return;
+        }
+        var seq = ++e.istasyonAvailabilitySeq;
+        enjFetchIstasyonPlanDurum(function () {
+            var m = (e.gridData || []).find(function (x) {
+                return (x.makine_id || x.id) === e.makineId;
+            });
+            if (m) {
+                enjPruneInvalidStations(m, pruneReason || 'validate');
+                enjRenderIstasyonGrid(m);
+            }
+            enjSyncKalipAdediFromStations();
+            enjUpdateStep2Ui();
+            if (cb) cb(true);
+        }, seq);
     }
 
     function enjYukleSlotOzet(cb) {
@@ -2107,7 +2162,22 @@
             .catch(function () { if (cb) cb(); });
     }
 
-    function enjPruneInvalidStations(m) {
+    function enjIstasyonDisabledAtDate(n, m) {
+        var e = state.enj;
+        var slot = e.slot;
+        var planDurum = e.istasyonPlanDurum || {};
+        var grid = (m && m.grid) || [];
+        var row = grid[n - 1] || {};
+        var cell = slot ? (row[slot] || {}) : null;
+        var snapDurum = slot ? enjCellDurum(cell) : 'BOS';
+        var pd = planDurum[n];
+        var durum = snapDurum;
+        if (pd && pd.durum === 'PLANLI') durum = 'PLANLI';
+        return !slot || durum === 'PLANLI' || durum === 'DOLU' ||
+            durum === 'SETUP' || durum === 'ARIZA';
+    }
+
+    function enjPruneInvalidStations(m, pruneReason) {
         if (!m || !state.enj.istasyonlar.length) return false;
         var planDurum = state.enj.istasyonPlanDurum || {};
         var slot = state.enj.slot;
@@ -2137,8 +2207,14 @@
                     gridEl.parentNode.insertBefore(warn, gridEl.nextSibling);
                 }
             }
-            warn.textContent = 'Tarih değişti: İST' + removed.join(', İST') +
-                ' artık uygun değil — seçim kaldırıldı.';
+            var istLbl = 'İST' + removed.join(', İST');
+            if (pruneReason === 'date') {
+                warn.textContent = 'Tarih değişti: ' + istLbl +
+                    ' artık uygun değil — seçim kaldırıldı.';
+            } else {
+                warn.textContent = 'Seçilen tarihte ' + istLbl +
+                    ' uygun değil — seçim kaldırıldı.';
+            }
             warn.style.display = '';
             return true;
         }
@@ -2647,14 +2723,10 @@
         if ($('upEnjBas')) $('upEnjBas').value = enjApiDtToLocal(iu.ilk_uygun);
         if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = '';
         enjHesapGizle();
-        enjFetchIstasyonPlanDurum(function () {
-            var m = (e.gridData || []).find(function (x) {
-                return (x.makine_id || x.id) === e.makineId;
-            });
-            if (m) enjRenderIstasyonGrid(m);
+        enjValidateSelectedStationsAtDate(function () {
             enjYukleSlotOzet(function () { enjRenderMakineCards(e.gridData || []); });
             enjUpdateHesapBtn();
-        });
+        }, 'date');
     }
 
     function enjFetchIlkUygun(forPreview) {
@@ -2663,9 +2735,6 @@
         var kalipAdedi = parseInt($('upEnjKalipAdedi') && $('upEnjKalipAdedi').value, 10) || 0;
         var seciliIst = forPreview ? [1] : e.istasyonlar.slice();
         if (!forPreview) {
-            if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
-            if ($('upEnjBas') && !e.baslangicManuel) $('upEnjBas').value = '';
-            e.ilkUygunMap = {};
             if (kalipAdedi < 1 || seciliIst.length === 0) {
                 enjUpdateHesapBtn();
                 return;
@@ -2709,6 +2778,7 @@
 
     function enjClearMakineDependencies() {
         var e = state.enj;
+        e.istasyonAvailabilitySeq++;
         e.slot = null;
         e.istasyonlar = [];
         e.baslangicManuel = false;
@@ -2931,17 +3001,20 @@
                     var n = parseInt(ev.target.value, 10);
                     var arr = state.enj.istasyonlar;
                     if (ev.target.checked) {
+                        if (enjIstasyonDisabledAtDate(n, m)) {
+                            ev.target.checked = false;
+                            return;
+                        }
                         if (arr.indexOf(n) < 0) arr.push(n);
                     } else {
                         state.enj.istasyonlar = arr.filter(function (x) { return x !== n; });
                     }
                     state.enj.istasyonlar.sort(function (a, b) { return a - b; });
-                    state.enj.baslangicManuel = false;
                     enjHesapGizle();
-                    enjRenderIstasyonGrid(m);
                     enjSyncKalipAdediFromStations();
-                    enjFetchIlkUygun(false);
-                    enjUpdateHesapBtn();
+                    enjValidateSelectedStationsAtDate(function () {
+                        enjUpdateHesapBtn();
+                    }, 'validate');
                 });
             }
             el.appendChild(lbl);
@@ -2950,6 +3023,7 @@
     }
 
     function enjSelectSlot(slot) {
+        state.enj.istasyonAvailabilitySeq++;
         state.enj.slot = slot;
         state.enj.istasyonlar = [];
         state.enj.baslangicManuel = false;
@@ -3296,18 +3370,11 @@
                                 if (w) w.style.display = 'none';
                             }
                         }
-                        enjFetchIstasyonPlanDurum(function () {
-                            var m = (state.enj.gridData || []).find(function (x) {
-                                return (x.makine_id || x.id) === state.enj.makineId;
+                        enjValidateSelectedStationsAtDate(function () {
+                            enjYukleSlotOzet(function () {
+                                enjRenderMakineCards(state.enj.gridData || []);
                             });
-                            if (m) {
-                                enjPruneInvalidStations(m);
-                                enjRenderIstasyonGrid(m);
-                            }
-                        });
-                        enjYukleSlotOzet(function () {
-                            enjRenderMakineCards(state.enj.gridData || []);
-                        });
+                        }, 'date');
                     } else if (id === 'upEnjKalipAdedi' || id === 'upEnjCalismaModu') {
                         state.enj.baslangicManuel = false;
                         if (id === 'upEnjCalismaModu') {
@@ -3358,18 +3425,11 @@
                         state.enj.baslangicManuel = true;
                         if ($('upEnjBasOneri')) $('upEnjBasOneri').style.display = 'none';
                         enjSyncInputsFromDom();
-                        enjFetchIstasyonPlanDurum(function () {
-                            var m = (state.enj.gridData || []).find(function (x) {
-                                return (x.makine_id || x.id) === state.enj.makineId;
+                        enjValidateSelectedStationsAtDate(function () {
+                            enjYukleSlotOzet(function () {
+                                enjRenderMakineCards(state.enj.gridData || []);
                             });
-                            if (m) {
-                                enjPruneInvalidStations(m);
-                                enjRenderIstasyonGrid(m);
-                            }
-                        });
-                        enjYukleSlotOzet(function () {
-                            enjRenderMakineCards(state.enj.gridData || []);
-                        });
+                        }, 'date');
                     }
                     if (id === 'upEnjKalipAdedi' || id === 'upEnjGozPerKalip') enjUpdateToplamGozHint();
                     enjHesapGizle();

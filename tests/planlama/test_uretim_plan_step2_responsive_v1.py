@@ -726,12 +726,12 @@ def test_responsive_no_horizontal_overflow(css):
 
 
 def test_v28_cache_version(html):
-    """V31_CACHE=PASS — cache version v31"""
+    """V32_CACHE=PASS — cache version v32"""
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     assert css_v and js_v, "version bulunamadı"
-    assert css_v.group(1) == '31', f"CSS version beklenen 31, gerçek {css_v.group(1)}"
-    assert js_v.group(1) == '31', f"JS version beklenen 31, gerçek {js_v.group(1)}"
+    assert css_v.group(1) == '32', f"CSS version beklenen 32, gerçek {css_v.group(1)}"
+    assert js_v.group(1) == '32', f"JS version beklenen 32, gerçek {js_v.group(1)}"
 
 
 def test_selected_product_card_in_left_col(html):
