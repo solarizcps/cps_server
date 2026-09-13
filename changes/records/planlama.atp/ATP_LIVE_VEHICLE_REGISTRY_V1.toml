@@ -1,0 +1,57 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.7.1"
+phase_code = "ATP_LIVE_VEHICLE_REGISTRY_V1"
+title = "Canlı Takip aktif araç registry + plaka dedupe (BPY iptal)"
+status = "ONAYLANDI"
+date = "2026-09-13"
+summary = "Filom raw mükerrer device kayıtları normalize plaka ile birleştirilir; IPTAL/PASIF registry kayıtları Canlı Takip read-model'den çıkarılır. Geçmiş GPS/plan verisi korunur."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "REGISTRY_DEDUPE=13/13 PASS | ATP_PLANLAMA=305/305 PASS | FILOM_REDIRECT=inherited 7/20 (base match)"
+db_write = false
+server_restart = false
+push_status = "PUSHED"
+deployment_status = "PATCH_LOCKED_NOT_YET_DEPLOYED"
+worktree_fingerprint = "02e65ec_registry_v1"
+verification_date = "2026-09-13"
+verification_evidence = "8080 API raw=4 visible=2; BPY=0; MOR049+GFK183 korundu; base vs candidate filom failure list identical"
+current_work = "Registry patch locked; yarın production HEAD + 21b8a21 + P0 cherry-pick entegrasyonu bekliyor"
+evidence_summary = "Adem görsel onayı; inherited redirect failure base ile aynı"
+changes = [
+  "arac_live_vehicle_dedupe.py: normalize plaka bazlı fiziksel araç birleştirme.",
+  "arac_live_vehicle_registry.py: AKTIF/IPTAL/PASIF Canlı Takip filtresi.",
+  "atp_live_vehicle_registry.json: 34BPY282 IPTAL registry kaydı.",
+  "turkcell_filom_adapter.py: get_live_vehicles dedupe + registry entegrasyonu.",
+  "test_atp_live_vehicle_dedupe_v1.py: 13 unit test.",
+]
+changed_files = [
+  "app/config/atp_live_vehicle_registry.json",
+  "app/modules/planlama/arac_live_vehicle_registry.py",
+  "app/modules/planlama/arac_live_vehicle_dedupe.py",
+  "app/modules/planlama/arac_operasyonu/services/turkcell_filom_adapter.py",
+  "tests/planlama/test_atp_live_vehicle_dedupe_v1.py",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = []
+locked_rules = [
+  "Canonical DB'ye yazma yapılmaz.",
+  "Production deploy bu commit ile yapılmaz.",
+  "Filom redirect fix (21b8a21) bu patch kapsamı dışındadır.",
+  "Geçmiş GPS/plan kayıtları silinmez.",
+]
+tests = [
+  "Registry/dedupe unit 13/13",
+  "ATP planlama 305/305",
+  "Filom redirect inherited failure (base match)",
+]
+known_issues = [
+  "02e65ec tabanında Filom redirect unit testleri 13/20 fail (inherited, 21b8a21 ile çözülecek).",
+]
+next_steps = [
+  "Production HEAD + 21b8a21 entegrasyon branch.",
+  "P0 4200705 cherry-pick.",
+  "Bu registry commit cherry-pick.",
+  "Birleşik regresyon sonrası deploy.",
+]
