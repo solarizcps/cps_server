@@ -4,7 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=71">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=73">
 {% endblock %}
 
 {% block content %}
@@ -384,18 +384,21 @@
         <select id="atpHistSofor"><option value="">Tümü</option></select>
         <button type="button" class="btn btn-gold btn-sm" id="atpBtnHistFiltrele" style="margin-left:auto">Filtrele</button>
       </div>
+      <div id="atpHistHint" class="hist-hint" style="display:none"></div>
+      <div class="hist-tbl-wrap">
       <table class="hist-tbl">
         <thead>
           <tr>
             <th>Tarih</th><th>Araç</th><th>Şoför</th>
-            <th>Toplam İş</th><th>Tamamlandı</th>
-            <th>KM</th><th>Durum</th><th>İşlem</th>
+            <th>Toplam</th><th>Tamamlandı</th><th>Gidildi/Bekliyor</th>
+            <th>Gidilmedi</th><th>Plan Dışı</th><th>Gerçekleşme</th><th>Durum</th><th>İşlem</th>
           </tr>
         </thead>
         <tbody id="atpHistBody">
-          <tr><td colspan="8" class="hist-empty">Geçmiş plan verisi yükleniyor…</td></tr>
+          <tr><td colspan="11" class="hist-empty">Geçmiş plan verisi yükleniyor…</td></tr>
         </tbody>
       </table>
+      </div>
     </div>
   </div>
 
@@ -590,6 +593,22 @@
     <div class="modal-footer atp-exp-footer">
       <button type="button" class="btn btn-outline" id="atpGoogleApplyCancel">İptal</button>
       <button type="button" class="btn btn-green" id="atpGoogleApplyConfirm">Onayla ve B Sırasını Uygula</button>
+    </div>
+  </div>
+</div>
+
+{# ── Geçmiş Plan Detay Modal ── #}
+<div id="atpHistDetailBackdrop" class="modal-bg" aria-hidden="true">
+  <div class="modal atp-hist-detail-modal" role="dialog" aria-modal="true" id="atpHistDetailModal" aria-hidden="true">
+    <div class="modal-hdr">
+      <h3 id="atpHistDetailTitle">Geçmiş Plan Detayı</h3>
+      <button type="button" class="modal-close" id="atpHistDetailClose" aria-label="Kapat">✕</button>
+    </div>
+    <div class="modal-body" id="atpHistDetailBody">
+      <p style="color:var(--gray);font-size:12px">Yükleniyor…</p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" id="atpHistDetailDismiss">Kapat</button>
     </div>
   </div>
 </div>
@@ -1017,6 +1036,6 @@
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=11"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=88"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=92"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}
