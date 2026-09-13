@@ -1,0 +1,48 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.7.0"
+phase_code = "ATP_PAST_PLANS_REAL_HISTORY_V1"
+title = "Geçmiş Planlar — gerçek plan listesi, ziyaret kanıtı ve timeline bütünlüğü."
+status = "TEST"
+date = "2026-09-13"
+summary = "Candidate branch patch; Adem görsel onayı alındı. Production deploy yok; read-only canonical DB."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "History 37/37 PASS; ATP regression base fail list unchanged"
+db_write = false
+server_restart = false
+push_status = "PENDING"
+deployment_status = "NOT_DEPLOYED"
+worktree_fingerprint = "cps_candidate_atp_past_plans_v1"
+verification_date = "2026-09-13"
+verification_evidence = "Plan ID=7 counts reconcile; C Otomotiv unverified visit; Şahin visited_pending"
+current_work = "Geçmiş Planlar read-model — candidate patch lock"
+evidence_summary = "8080 visual approval by Adem; BASE_HEAD=02e65ec; no new regression"
+changes = [
+  "Geçmiş plan listesi ve detay API read-only eklendi.",
+  "Ziyaret kanıtına göre sınıflandırma ve timeline bütünlüğü.",
+  "Geçmiş Planlar tablo/modal UI güncellendi.",
+]
+changed_files = [
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/static/js/planlama_arac_takip.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "app/static/css/planlama_arac_takip.css",
+  "tests/planlama/test_atp_past_plans_history_v1.py",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = []
+locked_rules = [
+  "Geçmiş planlar read-only kalır; canonical DB yazılmaz.",
+  "Ziyaret sınıflandırması planlanan saat ile geofence kanıtını ayırır.",
+  "Production deploy bu patch ile yapılmaz.",
+]
+tests = [
+  "tests/planlama/test_atp_past_plans_history_v1.py (37)",
+]
+known_issues = []
+next_steps = [
+  "Production tabanında 21b8a21 + P0 + registry ile temiz entegrasyon.",
+]

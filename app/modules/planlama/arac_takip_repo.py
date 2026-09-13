@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from db import get_conn, tablo_var_mi
@@ -1977,3 +1977,836 @@ def _reorder_plan_items_bulk_conn(
         (now, session_user_id, plan['id']),
     )
     return int(plan['id'])
+
+
+# ─── Geçmiş Planlar (read-only) ─────────────────────────────────────────────
+
+HISTORY_COMPUTED_STATUS_LABELS = {
+    'TAMAMLANDI': 'Tamamlandı',
+    'KISMI_TAMAMLANDI': 'Kısmi Tamamlandı',
+    'GIDILMEDI': 'Gidilmedi',
+    'BASLADI': 'Başladı',
+    'IPTAL': 'İptal',
+    'BOS_PLAN': 'Boş Plan',
+}
+
+HISTORY_ITEM_CATEGORY_LABELS = {
+    'IPTAL': 'Plan dışı/İptal',
+    'TAMAMLANDI': 'Tamamlandı',
+    'ZIYARET_SONUC_BEKLIYOR': 'Gidildi / Sonuç bekliyor',
+    'BASLADI': 'Başladı',
+    'BASLADI_ZIYARET_DOGRULANAMADI': 'Başladı · Ziyaret doğrulanamadı',
+    'GIDILMEDI': 'Gidilmedi',
+}
+
+VISIT_STATE_LABELS = {
+    'OUTSIDE': 'Dışarıda',
+    'INSIDE': 'İçeride',
+    'DEPARTED_PENDING': 'Ayrılış bekleniyor',
+    'DEPARTED': 'Ayrıldı',
+}
+
+
+def _history_status_counts_sql() -> str:
+    parts = []
+    for key in PLAN_ITEM_STATUS_KEYS:
+        parts.append(f"SUM(CASE WHEN pi.durum='{key}' THEN 1 ELSE 0 END) AS cnt_{key}")
+    return ', '.join(parts)
+
+
+def _planned_arrival_timestamps(
+    plan_date: str | None,
+    planlanan_saat: str | None,
+    istenen_varis_saati: str | None,
+) -> list[str]:
+    if not plan_date:
+        return []
+    out: list[str] = []
+    for raw in (planlanan_saat, istenen_varis_saati):
+        if not raw:
+            continue
+        ts = str(raw).strip()
+        if not ts:
+            continue
+        if ' ' in ts:
+            out.append(ts)
+            continue
+        if ts.count(':') == 1:
+            out.append(f'{plan_date} {ts}:00')
+        else:
+            out.append(f'{plan_date} {ts}')
+    return out
+
+
+def _arrived_at_is_planned_only(
+    arrived_at: str | None,
+    *,
+    plan_date: str | None,
+    planlanan_saat: str | None,
+    istenen_varis_saati: str | None,
+    has_konuma_varildi: bool,
+) -> bool:
+    if not arrived_at or has_konuma_varildi:
+        return False
+    return arrived_at in _planned_arrival_timestamps(plan_date, planlanan_saat, istenen_varis_saati)
+
+
+def _load_olay_evidence_for_plan_items(
+    con: sqlite3.Connection,
+    plan_item_ids: list[int],
+) -> dict[int, dict[str, Any]]:
+    if not plan_item_ids or not tablo_var_mi('arac_plan_olay'):
+        return {}
+    placeholders = ','.join('?' * len(plan_item_ids))
+    rows = con.execute(
+        f"""
+        SELECT plan_is_id, olay_turu, metadata_json
+        FROM arac_plan_olay
+        WHERE plan_is_id IN ({placeholders})
+        """,
+        plan_item_ids,
+    ).fetchall()
+    out: dict[int, dict[str, Any]] = {}
+    for r in rows:
+        pid = int(r['plan_is_id'])
+        ev = out.setdefault(pid, {'has_konuma_varildi': False, 'departure_meta': None})
+        tur = r['olay_turu']
+        if tur == 'KONUMA_VARILDI':
+            ev['has_konuma_varildi'] = True
+        elif tur == 'KONUMDAN_AYRILDI':
+            try:
+                import json
+                ev['departure_meta'] = json.loads(r['metadata_json'] or '{}')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                ev['departure_meta'] = {}
+    return out
+
+
+def _evaluate_visit_evidence(
+    visit: dict | None,
+    *,
+    plan_date: str | None = None,
+    planlanan_saat: str | None = None,
+    istenen_varis_saati: str | None = None,
+    olay_evidence: dict | None = None,
+) -> dict[str, Any]:
+    """Güvenilir varış/ayrılış kanıtı — plan saati ve olay metadata dâhil."""
+    ev = olay_evidence or {}
+    has_konuma_varildi = bool(ev.get('has_konuma_varildi'))
+    arrived_at = (visit or {}).get('arrived_at')
+    departed_at = (visit or {}).get('departed_at')
+    dwell_seconds = (visit or {}).get('dwell_seconds')
+
+    reliable_arrival = False
+    arrival_reason = 'yok'
+    if arrived_at:
+        if _arrived_at_is_planned_only(
+            arrived_at,
+            plan_date=plan_date,
+            planlanan_saat=planlanan_saat,
+            istenen_varis_saati=istenen_varis_saati,
+            has_konuma_varildi=has_konuma_varildi,
+        ):
+            arrival_reason = 'planlanan_saat_eslesmesi_konuma_varildi_yok'
+        elif has_konuma_varildi:
+            reliable_arrival = True
+            arrival_reason = 'konuma_varildi'
+        else:
+            reliable_arrival = True
+            arrival_reason = 'arrived_at_geofence'
+
+    reliable_departure = False
+    departure_reason = 'yok'
+    if departed_at:
+        tl = _validate_visit_timeline(arrived_at, departed_at, dwell_seconds)
+        if not tl['timeline_valid']:
+            departure_reason = tl['timeline_issue'] or 'timeline_invalid'
+        else:
+            dep_meta = ev.get('departure_meta') or {}
+            dist = dep_meta.get('distance_m')
+            exit_r = dep_meta.get('exit_radius_m', 250)
+            if dist is not None:
+                try:
+                    if float(dist) > float(exit_r):
+                        departure_reason = f'distance_m={dist}>exit_radius_m={exit_r}'
+                    else:
+                        reliable_departure = True
+                        departure_reason = 'konumdan_ayrildi'
+                except (TypeError, ValueError):
+                    reliable_departure = True
+                    departure_reason = 'departed_at_timeline_ok'
+            else:
+                reliable_departure = True
+                departure_reason = 'departed_at_timeline_ok'
+
+    return {
+        'reliable_arrival': reliable_arrival,
+        'reliable_departure': reliable_departure,
+        'reliable_visit': reliable_arrival or reliable_departure,
+        'arrival_reason': arrival_reason,
+        'departure_reason': departure_reason,
+    }
+
+
+def _classify_history_item(
+    task_status: str,
+    visit: dict | None,
+    *,
+    plan_date: str | None = None,
+    planlanan_saat: str | None = None,
+    istenen_varis_saati: str | None = None,
+    olay_evidence: dict | None = None,
+) -> dict[str, str]:
+    st = (task_status or 'PLANLANDI').upper()
+    if st == 'IPTAL':
+        return {
+            'category': 'IPTAL',
+            'label': HISTORY_ITEM_CATEGORY_LABELS['IPTAL'],
+            'category_reason': 'durum=IPTAL',
+        }
+    if st == 'TAMAMLANDI':
+        return {
+            'category': 'TAMAMLANDI',
+            'label': HISTORY_ITEM_CATEGORY_LABELS['TAMAMLANDI'],
+            'category_reason': 'durum=TAMAMLANDI',
+        }
+
+    evidence = _evaluate_visit_evidence(
+        visit,
+        plan_date=plan_date,
+        planlanan_saat=planlanan_saat,
+        istenen_varis_saati=istenen_varis_saati,
+        olay_evidence=olay_evidence,
+    )
+    if evidence['reliable_visit']:
+        if evidence['reliable_arrival']:
+            reason = f"arrival={evidence['arrival_reason']}"
+        else:
+            reason = f"departure={evidence['departure_reason']}"
+        return {
+            'category': 'ZIYARET_SONUC_BEKLIYOR',
+            'label': HISTORY_ITEM_CATEGORY_LABELS['ZIYARET_SONUC_BEKLIYOR'],
+            'category_reason': reason,
+        }
+    if st == 'BASLADI':
+        has_visit_row = bool(visit and (visit.get('arrived_at') or visit.get('departed_at')))
+        if has_visit_row:
+            return {
+                'category': 'BASLADI_ZIYARET_DOGRULANAMADI',
+                'label': HISTORY_ITEM_CATEGORY_LABELS['BASLADI_ZIYARET_DOGRULANAMADI'],
+                'category_reason': 'durum=BASLADI,visit_kaniti_gecersiz',
+            }
+        return {
+            'category': 'BASLADI',
+            'label': HISTORY_ITEM_CATEGORY_LABELS['BASLADI'],
+            'category_reason': 'durum=BASLADI,visit_yok',
+        }
+    return {
+        'category': 'GIDILMEDI',
+        'label': HISTORY_ITEM_CATEGORY_LABELS['GIDILMEDI'],
+        'category_reason': f'durum={st},visit_yok',
+    }
+
+
+def _aggregate_visit_truth_counts(classifications: list[dict[str, str]]) -> dict[str, int | float]:
+    total = len(classifications)
+    cancelled = sum(1 for c in classifications if c['category'] == 'IPTAL')
+    completed = sum(1 for c in classifications if c['category'] == 'TAMAMLANDI')
+    visited_pending = sum(1 for c in classifications if c['category'] == 'ZIYARET_SONUC_BEKLIYOR')
+    started_plain = sum(1 for c in classifications if c['category'] == 'BASLADI')
+    started_unverified = sum(1 for c in classifications if c['category'] == 'BASLADI_ZIYARET_DOGRULANAMADI')
+    started_without = started_plain + started_unverified
+    not_visited = sum(1 for c in classifications if c['category'] == 'GIDILMEDI')
+    active = total - cancelled
+    ratio = round(100.0 * completed / active, 1) if active > 0 else 0.0
+    return {
+        'total_jobs': total,
+        'cancelled': cancelled,
+        'completed': completed,
+        'visited_pending': visited_pending,
+        'started_without_visit': started_without,
+        'started_unverified_visit': started_unverified,
+        'started_plain': started_plain,
+        'not_visited': not_visited,
+        'active_jobs': active,
+        'completion_ratio': ratio,
+        'started': started_without,
+    }
+
+
+def _plan_is_has_istenen_varis_saati(con: sqlite3.Connection) -> bool:
+    cols = {r[1] for r in con.execute('PRAGMA table_info(arac_gunluk_plan_is)').fetchall()}
+    return 'istenen_varis_saati' in cols
+
+
+def _classify_plan_items_for_history(
+    con: sqlite3.Connection,
+    plan_id: int,
+    plan_date: str | None,
+) -> list[dict[str, str]]:
+    has_istenen = _plan_is_has_istenen_varis_saati(con)
+    cols = 'id, durum, planlanan_saat' + (', istenen_varis_saati' if has_istenen else '')
+    rows = con.execute(
+        f'SELECT {cols} FROM arac_gunluk_plan_is WHERE plan_id=?',
+        (int(plan_id),),
+    ).fetchall()
+    if not rows:
+        return []
+    item_ids = [int(r['id']) for r in rows]
+    visits = _load_visits_for_plan_items(con, item_ids)
+    olay_map = _load_olay_evidence_for_plan_items(con, item_ids)
+    out: list[dict[str, str]] = []
+    for r in rows:
+        rd = dict(r)
+        out.append(_classify_history_item(
+            rd['durum'],
+            visits.get(int(rd['id'])),
+            plan_date=plan_date,
+            planlanan_saat=rd.get('planlanan_saat'),
+            istenen_varis_saati=rd.get('istenen_varis_saati') if has_istenen else None,
+            olay_evidence=olay_map.get(int(rd['id'])),
+        ))
+    return out
+
+
+def _history_visit_truth_counts_for_plan(con: sqlite3.Connection, plan_id: int) -> dict[str, int | float]:
+    plan_date = con.execute(
+        'SELECT plan_tarihi FROM arac_gunluk_plan WHERE id=?',
+        (int(plan_id),),
+    ).fetchone()
+    plan_date_s = plan_date[0] if plan_date else None
+    return _aggregate_visit_truth_counts(_classify_plan_items_for_history(con, plan_id, plan_date_s))
+
+
+def _compute_history_plan_status(counts: dict[str, int | float]) -> tuple[str, str]:
+    total = int(counts.get('total_jobs') or 0)
+    cancelled = int(counts.get('cancelled') or 0)
+    active = int(counts.get('active_jobs') or 0)
+    completed = int(counts.get('completed') or 0)
+    visited_pending = int(counts.get('visited_pending') or 0)
+    started_without = int(counts.get('started_without_visit') or counts.get('started') or 0)
+    not_visited = int(counts.get('not_visited') or 0)
+
+    if total == 0:
+        code = 'BOS_PLAN'
+    elif active == 0 and cancelled > 0:
+        code = 'IPTAL'
+    elif active > 0 and completed == active:
+        code = 'TAMAMLANDI'
+    elif completed > 0 or visited_pending > 0 or started_without > 0:
+        code = 'KISMI_TAMAMLANDI'
+    elif not_visited > 0:
+        code = 'GIDILMEDI'
+    else:
+        code = 'GIDILMEDI'
+    return code, HISTORY_COMPUTED_STATUS_LABELS.get(code, code)
+
+
+def _history_summary_line(counts: dict[str, int | float]) -> str:
+    active = int(counts.get('active_jobs') or 0)
+    completed = int(counts.get('completed') or 0)
+    visited_pending = int(counts.get('visited_pending') or 0)
+    started_without = int(counts.get('started_without_visit') or counts.get('started') or 0)
+    not_visited = int(counts.get('not_visited') or 0)
+    cancelled = int(counts.get('cancelled') or 0)
+    parts: list[str] = []
+    if active > 0:
+        parts.append(f'{completed}/{active} tamamlandı')
+    started_unverified = int(counts.get('started_unverified_visit') or 0)
+    started_plain = int(counts.get('started_plain') or 0)
+    if visited_pending:
+        parts.append(f'{visited_pending} gidildi/sonuç bekliyor')
+    if started_unverified:
+        parts.append(f'{started_unverified} başladı/ziyaret doğrulanamadı')
+    if not_visited:
+        parts.append(f'{not_visited} gidilmedi')
+    if started_plain:
+        parts.append(f'{started_plain} başladı')
+    if cancelled:
+        parts.append(f'{cancelled} plan dışı')
+    return ' · '.join(parts)
+
+
+HISTORY_MAX_DWELL_SECONDS = 86400  # 24 saat — makul bekleme üst sınırı
+
+
+def _format_dwell_label(seconds: int | None) -> str | None:
+    if seconds is None:
+        return None
+    try:
+        sec = int(seconds)
+    except (TypeError, ValueError):
+        return None
+    if sec <= 0:
+        return None
+    mins, rem = divmod(sec, 60)
+    if mins >= 60:
+        hrs, mins = divmod(mins, 60)
+        return f'{hrs}s {mins}dk'
+    return f'{mins}dk {rem}sn'
+
+
+def _parse_history_timestamp(raw: str | None):
+    from modules.planlama.arac_gps_poll_service import parse_gps_timestamp
+
+    if not raw:
+        return None
+    return parse_gps_timestamp(str(raw))
+
+
+def _validate_visit_timeline(
+    arrived_at: str | None,
+    departed_at: str | None,
+    dwell_seconds: int | None,
+) -> dict[str, Any]:
+    """Ziyaret zaman bütünlüğü — geçersiz kayıtları sessizce düzeltmez."""
+    has_arr = bool(arrived_at)
+    has_dep = bool(departed_at)
+    issue: str | None = None
+    valid = True
+
+    if has_arr and has_dep:
+        arr_dt = _parse_history_timestamp(arrived_at)
+        dep_dt = _parse_history_timestamp(departed_at)
+        if arr_dt and dep_dt:
+            if dep_dt < arr_dt:
+                valid = False
+                issue = 'departure_before_arrival'
+        elif str(departed_at) < str(arrived_at):
+            valid = False
+            issue = 'departure_before_arrival'
+
+    if dwell_seconds is not None:
+        try:
+            ds = int(dwell_seconds)
+            if ds < 0:
+                valid = False
+                issue = issue or 'negative_dwell'
+            elif ds > HISTORY_MAX_DWELL_SECONDS:
+                valid = False
+                issue = issue or 'dwell_exceeds_limit'
+        except (TypeError, ValueError):
+            pass
+
+    if has_dep and not has_arr:
+        issue = issue or 'missing_arrival'
+
+    return {'timeline_valid': valid, 'timeline_issue': issue}
+
+
+def _build_history_visit_timeline(visit: dict | None) -> dict[str, Any]:
+    """Geçmiş plan detay DTO — güvenli zaman gösterimi."""
+    empty = {
+        'timeline_valid': True,
+        'timeline_issue': None,
+        'timeline_warning': None,
+        'timeline_tooltip': None,
+        'arrived_at_display': None,
+        'departed_at_display': None,
+        'dwell_label': None,
+        'visit_times_line': None,
+    }
+    if not visit:
+        return empty
+
+    arrived = visit.get('arrived_at')
+    departed = visit.get('departed_at')
+    dwell_raw = visit.get('dwell_seconds')
+    tl = _validate_visit_timeline(arrived, departed, dwell_raw)
+
+    arr_display = str(arrived) if arrived else None
+    dep_display: str | None = None
+    dwell_label: str | None = None
+    warning: str | None = None
+    tooltip: str | None = None
+    parts: list[str] = []
+
+    if arrived:
+        parts.append(f'Varış: {arrived}')
+
+    if tl['timeline_valid']:
+        if departed:
+            dep_display = str(departed)
+            parts.append(f'Ayrılış: {departed}')
+        if dwell_raw is not None:
+            dwell_label = _format_dwell_label(dwell_raw)
+            if dwell_label:
+                parts.append(f'Bekleme: {dwell_label}')
+    elif arrived and departed:
+        warning = 'Zaman kaydı tutarsız'
+        tooltip = 'Ayrılış zamanı varıştan önce'
+        parts.append('Ayrılış: doğrulanamadı')
+    elif tl['timeline_issue'] == 'negative_dwell' and arrived:
+        warning = 'Zaman kaydı tutarsız'
+        tooltip = 'Bekleme süresi geçersiz'
+        if departed:
+            parts.append('Ayrılış: doğrulanamadı')
+
+    if tl['timeline_issue'] == 'missing_arrival' and departed and not arrived:
+        warning = 'Eksik varış kaydı'
+        dep_display = str(departed)
+        parts = [f'Ayrılış: {departed}']
+
+    return {
+        'timeline_valid': tl['timeline_valid'],
+        'timeline_issue': tl['timeline_issue'],
+        'timeline_warning': warning,
+        'timeline_tooltip': tooltip,
+        'arrived_at_display': arr_display,
+        'departed_at_display': dep_display,
+        'dwell_label': dwell_label,
+        'visit_times_line': ' · '.join(parts) if parts else None,
+    }
+
+
+def _history_visit_bounds(con: sqlite3.Connection, plan_id: int) -> tuple[str | None, str | None]:
+    from modules.planlama.arac_geofence_repo import geofence_tables_ready
+
+    if not geofence_tables_ready():
+        return None, None
+    row = con.execute(
+        """
+        SELECT MIN(z.arrived_at) AS first_arrived, MAX(COALESCE(z.departed_at, z.arrived_at)) AS last_event
+        FROM arac_plan_is_ziyaret_durum z
+        JOIN arac_gunluk_plan_is pi ON pi.id = z.plan_is_id
+        WHERE pi.plan_id=? AND z.arrived_at IS NOT NULL
+        """,
+        (int(plan_id),),
+    ).fetchone()
+    if not row:
+        return None, None
+    return row['first_arrived'], row['last_event']
+
+
+def _history_route_km(con: sqlite3.Connection, plan_row: dict) -> float | None:
+    """Güvenilir plan günü GPS km — odometer farkı varsa döndür."""
+    if not tablo_var_mi('arac_gps_snapshot'):
+        return None
+    ext_id = plan_row.get('arac_external_id')
+    plan_date = plan_row.get('plan_tarihi') or plan_row.get('date')
+    if not ext_id or not plan_date:
+        return None
+    rows = con.execute(
+        """
+        SELECT odometer_km FROM arac_gps_snapshot
+        WHERE arac_provider=? AND arac_external_id=?
+          AND date(gps_timestamp)=?
+          AND odometer_km IS NOT NULL
+        ORDER BY gps_timestamp
+        """,
+        (PLAN_PROVIDER_FILOM, str(ext_id), plan_date),
+    ).fetchall()
+    if len(rows) < 2:
+        return None
+    try:
+        vals = [float(r[0]) for r in rows if r[0] is not None]
+    except (TypeError, ValueError):
+        return None
+    if len(vals) < 2:
+        return None
+    delta = max(vals) - min(vals)
+    return round(delta, 1) if delta >= 0 else None
+
+
+def _history_plan_row_to_summary(con: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    d = dict(row)
+    plan_id = int(d['plan_id'])
+    counts = _history_visit_truth_counts_for_plan(con, plan_id)
+    status, status_label = _compute_history_plan_status(counts)
+    first_visit, last_visit = _history_visit_bounds(con, plan_id)
+    route_km = _history_route_km(con, d)
+    return {
+        'plan_id': plan_id,
+        'date': d['date'],
+        'vehicle': d.get('vehicle') or '—',
+        'driver': d.get('driver') or '—',
+        'vehicle_external_id': d.get('arac_external_id'),
+        'sofor_id': d.get('sofor_id'),
+        'plan_durum': d.get('plan_durum') or 'AKTIF',
+        'total_jobs': counts['total_jobs'],
+        'active_jobs': counts['active_jobs'],
+        'completed': counts['completed'],
+        'visited_pending': counts['visited_pending'],
+        'started_without_visit': counts['started_without_visit'],
+        'not_visited': counts['not_visited'],
+        'started': counts['started'],
+        'cancelled': counts['cancelled'],
+        'completion_ratio': counts['completion_ratio'],
+        'summary_line': _history_summary_line(counts),
+        'status': status,
+        'status_label': status_label,
+        'first_visit_at': first_visit,
+        'last_visit_at': last_visit,
+        'total_km': route_km,
+    }
+
+
+def list_history_plans(
+    *,
+    baslangic: str | None = None,
+    bitis: str | None = None,
+    vehicle_id: str | None = None,
+    sofor_id: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+    today: str | None = None,
+) -> dict[str, Any]:
+    """Read-only geçmiş plan listesi — plan_tarihi < bugün."""
+    if not tables_ready():
+        return {'ok': True, 'rows': [], 'count': 0, 'total_count': 0, 'page': page, 'page_size': page_size}
+
+    today_s = today or date.today().isoformat()
+    page = max(1, int(page or 1))
+    page_size = max(1, min(200, int(page_size or 50)))
+    offset = (page - 1) * page_size
+
+    con = get_conn()
+    con.row_factory = sqlite3.Row
+    try:
+        clauses = ['p.arac_provider=?', 'p.plan_tarihi < ?']
+        params: list[Any] = [PLAN_PROVIDER_FILOM, today_s]
+        if baslangic:
+            clauses.append('p.plan_tarihi >= ?')
+            params.append(baslangic)
+        if bitis:
+            clauses.append('p.plan_tarihi <= ?')
+            params.append(bitis)
+        if vehicle_id:
+            clauses.append('p.arac_external_id=?')
+            params.append(str(vehicle_id))
+        if sofor_id:
+            clauses.append('p.sofor_id=?')
+            params.append(str(sofor_id))
+
+        where = ' AND '.join(clauses)
+        status_sql = _history_status_counts_sql()
+
+        total_count = con.execute(
+            f'SELECT COUNT(DISTINCT p.id) FROM arac_gunluk_plan p WHERE {where}',
+            params,
+        ).fetchone()[0]
+
+        rows = con.execute(
+            f"""
+            SELECT
+                p.id AS plan_id,
+                p.plan_tarihi AS date,
+                p.arac_external_id,
+                p.arac_plaka_snapshot AS vehicle,
+                p.sofor_adi_snapshot AS driver,
+                p.sofor_id,
+                p.durum AS plan_durum,
+                {status_sql}
+            FROM arac_gunluk_plan p
+            LEFT JOIN arac_gunluk_plan_is pi ON pi.plan_id = p.id
+            WHERE {where}
+            GROUP BY p.id
+            ORDER BY p.plan_tarihi DESC, p.arac_plaka_snapshot, p.arac_external_id, p.id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (*params, page_size, offset),
+        ).fetchall()
+
+        out = [_history_plan_row_to_summary(con, row) for row in rows]
+        return {
+            'ok': True,
+            'rows': out,
+            'count': len(out),
+            'total_count': int(total_count or 0),
+            'page': page,
+            'page_size': page_size,
+            'today': today_s,
+        }
+    finally:
+        con.close()
+
+
+def _load_visits_for_plan_items(con: sqlite3.Connection, plan_item_ids: list[int]) -> dict[int, dict]:
+    from modules.planlama.arac_geofence_repo import geofence_tables_ready
+
+    if not plan_item_ids or not geofence_tables_ready():
+        return {}
+    placeholders = ','.join('?' * len(plan_item_ids))
+    rows = con.execute(
+        f"""
+        SELECT plan_is_id, state, arrived_at, departed_at, dwell_seconds, result_status
+        FROM arac_plan_is_ziyaret_durum
+        WHERE plan_is_id IN ({placeholders})
+        """,
+        plan_item_ids,
+    ).fetchall()
+    return {int(r['plan_is_id']): dict(r) for r in rows}
+
+
+def _history_item_visit_fields(
+    task: dict,
+    visit: dict | None,
+    *,
+    plan_date: str | None = None,
+    planlanan_saat: str | None = None,
+    istenen_varis_saati: str | None = None,
+    olay_evidence: dict | None = None,
+) -> dict[str, Any]:
+    st = (task.get('status') or 'PLANLANDI').upper()
+    cls = _classify_history_item(
+        st,
+        visit,
+        plan_date=plan_date,
+        planlanan_saat=planlanan_saat,
+        istenen_varis_saati=istenen_varis_saati,
+        olay_evidence=olay_evidence,
+    )
+    visit_state = (visit or {}).get('state') or 'OUTSIDE'
+
+    if cls['category'] == 'BASLADI_ZIYARET_DOGRULANAMADI':
+        timeline = {
+            'timeline_valid': False,
+            'timeline_issue': 'visit_unverified',
+            'timeline_warning': None,
+            'timeline_tooltip': None,
+            'arrived_at_display': None,
+            'departed_at_display': None,
+            'dwell_label': None,
+            'visit_times_line': cls['label'],
+        }
+    else:
+        timeline = _build_history_visit_timeline(visit)
+
+    safe_departed = timeline['departed_at_display']
+    safe_dwell = (
+        (visit or {}).get('dwell_seconds')
+        if timeline['dwell_label'] is not None
+        else None
+    )
+    visit_times_line = cls['label']
+    if cls['category'] != 'BASLADI_ZIYARET_DOGRULANAMADI' and timeline.get('visit_times_line'):
+        visit_times_line = f"{cls['label']} · {timeline['visit_times_line']}"
+
+    return {
+        'order_no': task.get('order_no'),
+        'display_order_no': task.get('display_order_no'),
+        'plan_item_id': task.get('plan_item_id'),
+        'company_name': task.get('company_name'),
+        'job_title': task.get('job_title'),
+        'address_text': task.get('address_text'),
+        'priority': task.get('priority'),
+        'priority_label': task.get('priority_label'),
+        'task_status': st,
+        'task_status_label': task.get('status_label') or PLAN_ITEM_STATUS.get(st, st),
+        'visit_state': visit_state,
+        'visit_state_label': VISIT_STATE_LABELS.get(visit_state, visit_state),
+        'visit_result': (visit or {}).get('result_status'),
+        'arrived_at': timeline['arrived_at_display'],
+        'departed_at': safe_departed,
+        'dwell_seconds': safe_dwell,
+        'dwell_label': timeline['dwell_label'],
+        'timeline_valid': timeline['timeline_valid'],
+        'timeline_issue': timeline['timeline_issue'],
+        'timeline_warning': timeline['timeline_warning'],
+        'timeline_tooltip': timeline['timeline_tooltip'],
+        'visit_times_line': visit_times_line,
+        'category': cls['category'],
+        'category_label': cls['label'],
+        'category_reason': cls['category_reason'],
+        'not_visited_label': cls['label'],
+    }
+
+
+def get_history_plan_detail(plan_id: int) -> dict[str, Any]:
+    """Tek geçmiş plan — tüm iş kalemleri + ziyaret read-model."""
+    if not tables_ready():
+        return {'ok': False, 'error': 'Tablolar hazır değil'}
+
+    con = get_conn()
+    con.row_factory = sqlite3.Row
+    try:
+        plan = con.execute(
+            'SELECT * FROM arac_gunluk_plan WHERE id=?',
+            (int(plan_id),),
+        ).fetchone()
+        if not plan:
+            return {'ok': False, 'error': 'Plan bulunamadı'}
+
+        plan_items = con.execute(
+            'SELECT * FROM arac_gunluk_plan_is WHERE plan_id=? ORDER BY sira',
+            (int(plan_id),),
+        ).fetchall()
+        talep_ids = sorted({int(r['is_talebi_id']) for r in plan_items})
+        taleps = _load_taleps_by_ids(con, talep_ids)
+        yer_ids = sorted({
+            int(t['kayitli_yer_id'])
+            for t in taleps.values()
+            if t['kayitli_yer_id']
+        })
+        masters = _load_masters_by_ids(con, yer_ids)
+        tasks = _assemble_tasks_for_plan_items(plan_items, taleps, masters)
+        _assign_display_order(tasks)
+
+        plan_d = dict(plan)
+        plan_date_s = plan_d.get('plan_tarihi')
+        item_meta = {
+            int(r['id']): {
+                'planlanan_saat': r['planlanan_saat'],
+                'istenen_varis_saati': (
+                    r['istenen_varis_saati']
+                    if 'istenen_varis_saati' in r.keys()
+                    else None
+                ),
+            }
+            for r in plan_items
+        }
+        item_ids = [int(t['plan_item_id']) for t in tasks if t.get('plan_item_id')]
+        visits = _load_visits_for_plan_items(con, item_ids)
+        olay_map = _load_olay_evidence_for_plan_items(con, item_ids)
+        classifications = _classify_plan_items_for_history(con, int(plan_id), plan_date_s)
+        counts = _aggregate_visit_truth_counts(classifications)
+        status, status_label = _compute_history_plan_status(counts)
+
+        items_out = []
+        for t in tasks:
+            pid = int(t['plan_item_id']) if t.get('plan_item_id') else None
+            meta = item_meta.get(pid or 0, {})
+            items_out.append(_history_item_visit_fields(
+                t,
+                visits.get(pid) if pid else None,
+                plan_date=plan_date_s,
+                planlanan_saat=meta.get('planlanan_saat'),
+                istenen_varis_saati=meta.get('istenen_varis_saati'),
+                olay_evidence=olay_map.get(pid) if pid else None,
+            ))
+        first_visit, last_visit = _history_visit_bounds(con, int(plan_id))
+        route_km = _history_route_km(con, {
+            'arac_external_id': plan_d.get('arac_external_id'),
+            'plan_tarihi': plan_d.get('plan_tarihi'),
+        })
+
+        return {
+            'ok': True,
+            'plan': {
+                'plan_id': int(plan_id),
+                'date': plan_d.get('plan_tarihi'),
+                'vehicle': plan_d.get('arac_plaka_snapshot') or '—',
+                'driver': plan_d.get('sofor_adi_snapshot') or '—',
+                'vehicle_external_id': plan_d.get('arac_external_id'),
+                'sofor_id': plan_d.get('sofor_id'),
+                'plan_durum': plan_d.get('durum') or 'AKTIF',
+                'total_jobs': counts['total_jobs'],
+                'active_jobs': counts['active_jobs'],
+                'completed': counts['completed'],
+                'visited_pending': counts['visited_pending'],
+                'started_without_visit': counts['started_without_visit'],
+                'not_visited': counts['not_visited'],
+                'started': counts['started'],
+                'cancelled': counts['cancelled'],
+                'completion_ratio': counts['completion_ratio'],
+                'summary_line': _history_summary_line(counts),
+                'status': status,
+                'status_label': status_label,
+                'first_visit_at': first_visit,
+                'last_visit_at': last_visit,
+                'total_km': route_km,
+            },
+            'items': items_out,
+        }
+    finally:
+        con.close()

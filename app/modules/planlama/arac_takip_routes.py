@@ -146,6 +146,44 @@ def arac_takip_api_day_plan_summary():
     })
 
 
+@arac_takip_bp.route('/api/history-plans', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_history_plans():
+    from modules.planlama.arac_takip_repo import list_history_plans
+
+    page_raw = request.args.get('page') or 1
+    size_raw = request.args.get('page_size') or request.args.get('limit') or 50
+    try:
+        page = max(1, int(page_raw))
+        page_size = max(1, min(200, int(size_raw)))
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'error': 'Geçersiz sayfalama parametresi'}), 400
+
+    dto = list_history_plans(
+        baslangic=request.args.get('baslangic') or request.args.get('from'),
+        bitis=request.args.get('bitis') or request.args.get('to'),
+        vehicle_id=request.args.get('vehicle_id') or request.args.get('arac'),
+        sofor_id=request.args.get('sofor_id') or request.args.get('sofor') or request.args.get('driver_id'),
+        page=page,
+        page_size=page_size,
+    )
+    return jsonify(dto)
+
+
+@arac_takip_bp.route('/api/history-plan-detail', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_history_plan_detail():
+    from modules.planlama.arac_takip_repo import get_history_plan_detail
+
+    plan_id = request.args.get('plan_id', type=int)
+    if not plan_id:
+        return jsonify({'ok': False, 'error': 'plan_id zorunlu'}), 400
+    dto = get_history_plan_detail(plan_id)
+    if not dto.get('ok'):
+        return jsonify(dto), 404
+    return jsonify(dto)
+
+
 @arac_takip_bp.route('/api/reorder', methods=['POST'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_reorder():
