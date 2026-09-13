@@ -2541,12 +2541,110 @@ def _history_plan_row_to_summary(con: sqlite3.Connection, row: sqlite3.Row) -> d
     }
 
 
+def _normalize_plate(plate: str) -> str:
+    """Plakayı karşılaştırma anahtarına dönüştür: büyük harf + yalnız alfanümerik."""
+    import re
+    return re.sub(r'[^A-Z0-9]', '', (plate or '').upper())
+
+
+def list_history_filter_options(
+    *,
+    baslangic: str | None = None,
+    bitis: str | None = None,
+    today: str | None = None,
+) -> dict[str, Any]:
+    """Geçmiş planlardan araç ve şoför filtre seçenekleri — read-only.
+
+    Araç tekilleştirme: aynı plakaya ait birden fazla external_id varsa
+    kazanan deterministik seçilir (en yeni plan_tarihi → en yüksek plan_id).
+    Şoför tekilleştirme: isim trim/casefold bazlı — genel kullanıcı tablosuna bakılmaz.
+    """
+    if not tables_ready():
+        return {'ok': True, 'vehicles': [], 'drivers': []}
+
+    today_s = today or date.today().isoformat()
+    con = get_conn()
+    con.row_factory = sqlite3.Row
+    try:
+        clauses = ['p.arac_provider=?', 'p.plan_tarihi < ?']
+        params: list[Any] = [PLAN_PROVIDER_FILOM, today_s]
+        if baslangic:
+            clauses.append('p.plan_tarihi >= ?')
+            params.append(baslangic)
+        if bitis:
+            clauses.append('p.plan_tarihi <= ?')
+            params.append(bitis)
+        where = ' AND '.join(clauses)
+
+        # Araç: tüm (ext_id, plaka, plan_tarihi, plan_id) kombinasyonları — sonra Python'da dedupe
+        veh_rows = con.execute(
+            f"""
+            SELECT arac_external_id, arac_plaka_snapshot, plan_tarihi, id AS plan_id
+            FROM arac_gunluk_plan p
+            WHERE {where}
+              AND arac_external_id IS NOT NULL
+              AND arac_external_id != ''
+            ORDER BY plan_tarihi DESC, id DESC
+            """,
+            params,
+        ).fetchall()
+
+        # Normalize plaka → en yeni/yüksek external_id seç (kazananı sadece plaka ile göster)
+        seen_plate_keys: dict[str, dict] = {}   # normalize_key → best_row
+        for r in veh_rows:
+            plate = r['arac_plaka_snapshot'] or r['arac_external_id']
+            key = _normalize_plate(plate)
+            if not key:
+                continue
+            if key not in seen_plate_keys:
+                seen_plate_keys[key] = {
+                    'vehicle_id': r['arac_external_id'],
+                    'plate': plate,
+                    'plate_key': key,
+                }
+            # İlk satır zaten en yeni plan_tarihi + en yüksek plan_id (ORDER BY DESC)
+
+        # Plaka sırası ile döndür
+        vehicles = sorted(seen_plate_keys.values(), key=lambda x: x['plate'])
+
+        # Şoför: sofor_adi_snapshot trim/casefold dedupe; genel kullanıcı tablosuna bakılmaz
+        drv_rows = con.execute(
+            f"""
+            SELECT sofor_id, sofor_adi_snapshot
+            FROM arac_gunluk_plan p
+            WHERE {where}
+              AND (sofor_id IS NOT NULL OR (sofor_adi_snapshot IS NOT NULL AND sofor_adi_snapshot != ''))
+            ORDER BY sofor_adi_snapshot
+            """,
+            params,
+        ).fetchall()
+
+        seen_driver_keys: set[str] = set()
+        drivers = []
+        for r in drv_rows:
+            name = (r['sofor_adi_snapshot'] or '').strip()
+            if not name:
+                continue
+            name_key = name.casefold()
+            if name_key in seen_driver_keys:
+                continue
+            seen_driver_keys.add(name_key)
+            # sofor_id: bu isim için ilk (en düşük/en eski) id'yi koru
+            drivers.append({'sofor_id': r['sofor_id'], 'name': name, 'name_key': name_key})
+
+        return {'ok': True, 'vehicles': vehicles, 'drivers': drivers}
+    finally:
+        con.close()
+
+
 def list_history_plans(
     *,
     baslangic: str | None = None,
     bitis: str | None = None,
     vehicle_id: str | None = None,
+    plate: str | None = None,          # plaka bazlı filtre (vehicle_id yerine veya ek olarak)
     sofor_id: str | None = None,
+    sofor_name: str | None = None,     # isim bazlı şoför filtresi (sofor_id yerine)
     page: int = 1,
     page_size: int = 50,
     today: str | None = None,
@@ -2572,11 +2670,24 @@ def list_history_plans(
             clauses.append('p.plan_tarihi <= ?')
             params.append(bitis)
         if vehicle_id:
+            # vehicle_id: external_id ile doğrudan eşleştir
             clauses.append('p.arac_external_id=?')
             params.append(str(vehicle_id))
-        if sofor_id:
+        elif plate:
+            # plate: normalize karşılaştırma (SQLite upper + REPLACE ile boşluk/tire kaldır)
+            # Basit yaklaşım: UPPER(REPLACE(REPLACE(arac_plaka_snapshot,' ',''),'-','')) = ?
+            clauses.append(
+                "UPPER(REPLACE(REPLACE(COALESCE(p.arac_plaka_snapshot,''),' ',''),'-','')) = ?"
+            )
+            import re as _re
+            params.append(_re.sub(r'[^A-Z0-9]', '', plate.upper()))
+        if sofor_id and not sofor_name:
             clauses.append('p.sofor_id=?')
             params.append(str(sofor_id))
+        elif sofor_name:
+            # İsim bazlı filtre: casefold eşleşmesi için LOWER(TRIM(...))
+            clauses.append("LOWER(TRIM(COALESCE(p.sofor_adi_snapshot,''))) = ?")
+            params.append(sofor_name.strip().casefold())
 
         where = ' AND '.join(clauses)
         status_sql = _history_status_counts_sql()
@@ -2689,6 +2800,7 @@ def _history_item_visit_fields(
         'company_name': task.get('company_name'),
         'job_title': task.get('job_title'),
         'address_text': task.get('address_text'),
+        'location_url': task.get('location_url') or '',
         'priority': task.get('priority'),
         'priority_label': task.get('priority_label'),
         'task_status': st,

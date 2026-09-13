@@ -163,9 +163,23 @@ def arac_takip_api_history_plans():
         baslangic=request.args.get('baslangic') or request.args.get('from'),
         bitis=request.args.get('bitis') or request.args.get('to'),
         vehicle_id=request.args.get('vehicle_id') or request.args.get('arac'),
+        plate=request.args.get('plate'),
         sofor_id=request.args.get('sofor_id') or request.args.get('sofor') or request.args.get('driver_id'),
+        sofor_name=request.args.get('sofor_name'),
         page=page,
         page_size=page_size,
+    )
+    return jsonify(dto)
+
+
+@arac_takip_bp.route('/api/history-filter-options', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_history_filter_options():
+    from modules.planlama.arac_takip_repo import list_history_filter_options
+
+    dto = list_history_filter_options(
+        baslangic=request.args.get('baslangic'),
+        bitis=request.args.get('bitis'),
     )
     return jsonify(dto)
 

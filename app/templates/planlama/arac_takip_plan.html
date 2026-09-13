@@ -4,7 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=73">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=76">
 {% endblock %}
 
 {% block content %}
@@ -372,17 +372,70 @@
      GEÇMİŞ PLANLAR PANEL
   ══════════════════════════════════════════════════════ #}
   <div id="atpPanelGecmis" class="atp-panel{% if active_tab == 'gecmis' %} active{% endif %}">
+    {# Hidden legacy inputs — JS still reads these for API params #}
+    <input type="hidden" id="atpHistBaslangic" value="">
+    <input type="hidden" id="atpHistBitis" value="">
+    <input type="hidden" id="atpHistArac" value="">
+    <input type="hidden" id="atpHistSofor" value="">
+
     <div class="history-wrap">
-      <div class="history-filter">
-        <label>Başlangıç:</label>
-        <input type="date" id="atpHistBaslangic" value="">
-        <label>Bitiş:</label>
-        <input type="date" id="atpHistBitis" value="">
-        <label>Araç:</label>
-        <select id="atpHistArac"><option value="">Tümü</option></select>
-        <label>Şoför:</label>
-        <select id="atpHistSofor"><option value="">Tümü</option></select>
-        <button type="button" class="btn btn-gold btn-sm" id="atpBtnHistFiltrele" style="margin-left:auto">Filtrele</button>
+      <div class="history-filter-bar" id="atpHistFilterBar">
+
+        {# 1 — Tarih Aralığı #}
+        <div class="hfb-date-range" id="atpHistDateRangeWrap" aria-expanded="false">
+          <span class="hfb-date-icon">&#128197;</span>
+          <span class="hfb-date-label" id="atpHistDateLabel">—</span>
+          <div class="hfb-date-panel" id="atpHistDatePanel" hidden style="display:none">
+            <label class="hfb-dp-lbl">Başlangıç</label>
+            <input type="date" id="atpHistDPStart" class="hfb-dp-input">
+            <label class="hfb-dp-lbl">Bitiş</label>
+            <input type="date" id="atpHistDPEnd" class="hfb-dp-input">
+            <button type="button" class="btn btn-xs btn-gold" id="atpHistDPApply">Uygula</button>
+          </div>
+        </div>
+
+        {# 2 — Araç dropdown #}
+        <div class="hfb-dropdown" id="atpHistAracDDWrap" data-hfb-dd="arac">
+          <div class="hfb-dd-trigger" id="atpHistAracTrigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false">
+            <span class="hfb-dd-icon">&#128663;</span>
+            <span class="hfb-dd-value" id="atpHistAracLabel">Tüm Araçlar</span>
+            <span class="hfb-dd-caret">&#8964;</span>
+          </div>
+          <div class="hfb-dd-panel" id="atpHistAracPanel" hidden style="display:none" role="listbox">
+            <div class="hfb-dd-search-wrap">
+              <input type="text" class="hfb-dd-search" id="atpHistAracSearch" placeholder="Araç ara…" autocomplete="off">
+            </div>
+            <ul class="hfb-dd-list" id="atpHistAracList"></ul>
+          </div>
+        </div>
+
+        {# 3 — Şoför dropdown #}
+        <div class="hfb-dropdown" id="atpHistSoforDDWrap" data-hfb-dd="sofor">
+          <div class="hfb-dd-trigger" id="atpHistSoforTrigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false">
+            <span class="hfb-dd-icon">&#128100;</span>
+            <span class="hfb-dd-value" id="atpHistSoforLabel">Tüm Şoförler</span>
+            <span class="hfb-dd-caret">&#8964;</span>
+          </div>
+          <div class="hfb-dd-panel" id="atpHistSoforPanel" hidden style="display:none" role="listbox">
+            <div class="hfb-dd-search-wrap">
+              <input type="text" class="hfb-dd-search" id="atpHistSoforSearch" placeholder="Şoför ara…" autocomplete="off">
+            </div>
+            <ul class="hfb-dd-list" id="atpHistSoforList"></ul>
+          </div>
+        </div>
+
+        {# 4 — Filtrele #}
+        <button type="button" class="btn btn-gold btn-sm hfb-btn-filtrele" id="atpHistFilterBtn">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="vertical-align:-1px;margin-right:4px"><path d="M3 5h14M6 10h8M9 15h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Filtrele
+        </button>
+
+        {# 5 — Temizle #}
+        <button type="button" class="btn btn-outline btn-sm hfb-btn-temizle" id="atpHistClearBtn">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" style="vertical-align:-1px;margin-right:3px"><path d="M4 4l12 12M16 4L4 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Temizle
+        </button>
+
       </div>
       <div id="atpHistHint" class="hist-hint" style="display:none"></div>
       <div class="hist-tbl-wrap">
@@ -599,15 +652,21 @@
 
 {# ── Geçmiş Plan Detay Modal ── #}
 <div id="atpHistDetailBackdrop" class="modal-bg" aria-hidden="true">
-  <div class="modal atp-hist-detail-modal" role="dialog" aria-modal="true" id="atpHistDetailModal" aria-hidden="true">
-    <div class="modal-hdr">
-      <h3 id="atpHistDetailTitle">Geçmiş Plan Detayı</h3>
-      <button type="button" class="modal-close" id="atpHistDetailClose" aria-label="Kapat">✕</button>
+  <div class="modal atp-hist-detail-modal" role="dialog" aria-modal="true" id="atpHistDetailModal" aria-labelledby="atpHistDetailTitle" aria-hidden="true" tabindex="-1">
+    <div class="modal-hdr hdm-hdr">
+      <div class="hdm-title-block">
+        <div class="hdm-title-row">
+          <h3 id="atpHistDetailTitle" class="hdm-plate">Geçmiş Plan Detayı</h3>
+          <span id="atpHistDetailDatePill" class="hdm-date-pill" hidden></span>
+        </div>
+        <div id="atpHistDetailMeta" class="hdm-meta"></div>
+      </div>
+      <button type="button" class="modal-close hdm-x" id="atpHistDetailClose" aria-label="Kapat">✕</button>
     </div>
-    <div class="modal-body" id="atpHistDetailBody">
-      <p style="color:var(--gray);font-size:12px">Yükleniyor…</p>
+    <div class="modal-body hdm-body" id="atpHistDetailBody">
+      <p class="hdm-loading">Yükleniyor…</p>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer hdm-footer">
       <button type="button" class="btn btn-outline" id="atpHistDetailDismiss">Kapat</button>
     </div>
   </div>
@@ -1036,6 +1095,6 @@
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=11"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=92"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=98"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}
