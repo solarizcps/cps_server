@@ -46,6 +46,7 @@ EVENT_AMBIGUOUS = 'AMBIGUOUS_STOP'
 EVENT_OUT_OF_SEQUENCE = 'NOT'
 EVENT_AUTO_COMPLETE = 'AUTO_TAMAMLANDI'
 OUT_OF_SEQUENCE_KIND = 'OUT_OF_SEQUENCE_GEOFENCE'
+OUT_OF_SEQUENCE_VISIT_ALERT_KIND = 'OUT_OF_SEQUENCE_VISIT_ALERT'
 APPROACHING_KIND = 'APPROACHING'
 AUTO_COMPLETE_KIND = 'AUTO_COMPLETE_GPS'
 
@@ -176,6 +177,8 @@ def _auto_complete_task_conn(
     visit: dict,
     gps_row: dict,
     updated_at: str,
+    is_out_of_sequence: bool = False,
+    expected_item_id: int | None = None,
 ) -> None:
     """P0: DEPARTED_PENDING → TAMAMLANDI. Idempotent."""
     import sqlite3 as _sq
@@ -209,7 +212,72 @@ def _auto_complete_task_conn(
             'dwell_seconds': visit.get('dwell_seconds'),
             'gps_snapshot_id': gps_row.get('id'),
             'plan_item_id': item.get('id'),
+            'actual_item_id': item.get('plan_item_id') or item.get('id'),
+            'expected_item_id': expected_item_id,
+            'out_of_sequence': is_out_of_sequence,
             'p0_trigger': 'confirmed_enter_confirmed_exit',
+        },
+        olay_zamani=gps_row.get('gps_timestamp'),
+        created_at=updated_at,
+    )
+
+
+def _stop_label(item: dict | None) -> str:
+    if not item:
+        return '—'
+    return (
+        item.get('company_name')
+        or item.get('job_title')
+        or f"Durak #{item.get('order_no') or item.get('display_order_no') or '?'}"
+    )
+
+
+def _emit_out_of_sequence_visit_alert_conn(
+    con,
+    *,
+    plan_id: int,
+    plan_is_id: int,
+    vehicle_id: str,
+    item: dict,
+    expected_item: dict | None,
+    gps_row: dict,
+    updated_at: str,
+) -> None:
+    """R13: doğrulanmış sıra dışı geofence tamamlaması için kullanıcı uyarısı."""
+    if geofence_metadata_event_exists_conn(
+        con, plan_is_id, EVENT_OUT_OF_SEQUENCE, OUT_OF_SEQUENCE_VISIT_ALERT_KIND,
+    ):
+        return
+    expected_name = _stop_label(expected_item)
+    actual_name = _stop_label(item)
+    plate = item.get('arac_plaka_snapshot') or item.get('plate') or vehicle_id
+    expected_item_id = None
+    if expected_item:
+        expected_item_id = expected_item.get('plan_item_id') or expected_item.get('id')
+    actual_item_id = item.get('plan_item_id') or item.get('id')
+    message = (
+        f"Araç planlanan {expected_name} durağı yerine {actual_name} durağına ulaştı. "
+        f"{actual_name} tamamlandı; {expected_name} sıradaki açık durak olarak korundu."
+    )
+    insert_geofence_event_conn(
+        con,
+        plan_id=plan_id,
+        plan_is_id=plan_is_id,
+        arac_external_id=vehicle_id,
+        olay_turu=EVENT_OUT_OF_SEQUENCE,
+        mesaj=message,
+        metadata={
+            'geofence_kind': OUT_OF_SEQUENCE_VISIT_ALERT_KIND,
+            'plate': plate,
+            'expected_stop': expected_name,
+            'actual_stop': actual_name,
+            'expected_item_id': expected_item_id,
+            'actual_item_id': actual_item_id,
+            'vehicle_id': vehicle_id,
+            'plan_id': plan_id,
+            'result': 'TAMAMLANDI',
+            'gps_snapshot_id': gps_row.get('id'),
+            'olay_zamani': gps_row.get('gps_timestamp'),
         },
         olay_zamani=gps_row.get('gps_timestamp'),
         created_at=updated_at,
@@ -353,6 +421,7 @@ def _process_single_item_conn(
     plan_id: int,
     vehicle_id: str,
     is_out_of_sequence: bool,
+    expected_item: dict | None = None,
     con,
     updated_at: str,
 ) -> dict:
@@ -483,8 +552,24 @@ def _process_single_item_conn(
             },
             gps_row=gps_row,
             updated_at=updated_at,
+            is_out_of_sequence=is_out_of_sequence,
+            expected_item_id=(
+                (expected_item.get('plan_item_id') or expected_item.get('id'))
+                if expected_item else None
+            ),
         )
         auto_completed = True
+        if is_out_of_sequence:
+            _emit_out_of_sequence_visit_alert_conn(
+                con,
+                plan_id=plan_id,
+                plan_is_id=plan_is_id,
+                vehicle_id=vehicle_id,
+                item=item,
+                expected_item=expected_item,
+                gps_row=gps_row,
+                updated_at=updated_at,
+            )
 
     saved = get_visit_state_conn(con, plan_is_id)
     return {
@@ -572,7 +657,7 @@ def process_gps_snapshot_for_geofence(
             result = _process_single_item_conn(
                 gps_row=gps_row, item=target, plan_id=plan_id,
                 vehicle_id=vehicle_id, is_out_of_sequence=is_oos,
-                con=con, updated_at=updated_at,
+                expected_item=expected, con=con, updated_at=updated_at,
             )
             return {'ok': True, 'plan_id': plan_id, 'processed': 1, 'results': [result]}
 
@@ -590,7 +675,7 @@ def process_gps_snapshot_for_geofence(
             result = _process_single_item_conn(
                 gps_row=gps_row, item=target, plan_id=plan_id,
                 vehicle_id=vehicle_id, is_out_of_sequence=is_oos,
-                con=con, updated_at=updated_at,
+                expected_item=expected, con=con, updated_at=updated_at,
             )
             return {'ok': True, 'plan_id': plan_id, 'processed': 1, 'results': [result]}
 
@@ -613,7 +698,7 @@ def process_gps_snapshot_for_geofence(
                     result = _process_single_item_conn(
                         gps_row=gps_row, item=item, plan_id=plan_id,
                         vehicle_id=vehicle_id, is_out_of_sequence=is_oos,
-                        con=con, updated_at=updated_at,
+                        expected_item=expected, con=con, updated_at=updated_at,
                     )
                     results.append(result)
                 elif item_id == expected_id:
@@ -623,7 +708,7 @@ def process_gps_snapshot_for_geofence(
                         result = _process_single_item_conn(
                             gps_row=gps_row, item=item, plan_id=plan_id,
                             vehicle_id=vehicle_id, is_out_of_sequence=False,
-                            con=con, updated_at=updated_at,
+                            expected_item=expected, con=con, updated_at=updated_at,
                         )
                         results.append(result)
                 else:

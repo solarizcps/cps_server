@@ -1335,6 +1335,29 @@
     var icon = sev === 'warning' ? '⚠️' : (sev === 'danger' ? '🔴' : '📍');
     var btnCls = sev === 'danger' ? 'btn-red-outline' : (sev === 'warning' ? 'btn-orange' : 'btn-outline');
     var btnLabel = sev === 'danger' ? 'İncele' : (sev === 'warning' ? 'Planı Değiştir' : 'Görüntüle');
+    if (a.type === 'OUT_OF_SEQUENCE_VISIT') {
+      icon = '⚠️';
+      btnCls = 'btn-orange';
+      btnLabel = 'Görüldü';
+      var meta = [];
+      if (a.plate) meta.push('Plaka: ' + fmtVal(a.plate));
+      if (a.expected_stop) meta.push('Beklenen: ' + fmtVal(a.expected_stop));
+      if (a.actual_stop) meta.push('Gerçek: ' + fmtVal(a.actual_stop));
+      if (a.olay_zamani) meta.push('Zaman: ' + fmtVal(a.olay_zamani));
+      if (a.result) meta.push('Sonuç: ' + fmtVal(a.result));
+      var desc = fmtVal(a.message);
+      if (meta.length) desc = desc + (desc ? ' · ' : '') + meta.join(' · ');
+      return '<div class="alert-row" data-alert-type="OUT_OF_SEQUENCE_VISIT"' +
+        (a.event_id ? ' data-event-id="' + a.event_id + '"' : '') + '>' +
+        '<div class="alert-icon">' + icon + '</div>' +
+        '<div class="alert-body">' +
+        '<div class="alert-firm">' + fmtVal(a.title || 'Sıra dışı ziyaret') + '</div>' +
+        '<div class="alert-desc">' + desc + '</div>' +
+        '</div>' +
+        '<button type="button" class="btn ' + btnCls + ' btn-xs atp-alert-ack-btn"' +
+        (a.event_id ? ' data-event-id="' + a.event_id + '"' : '') + '>' + btnLabel + '</button>' +
+        '</div>';
+    }
     return '<div class="alert-row">' +
       '<div class="alert-icon">' + icon + '</div>' +
       '<div class="alert-body">' +
@@ -1345,21 +1368,81 @@
       '</div>';
   }
 
+  function acknowledgeOutOfSequenceAlert(eventId, rowEl) {
+    if (!eventId) return;
+    fetch('/planlama/arac-takip/api/alerts/acknowledge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ event_id: parseInt(eventId, 10) }),
+    }).then(function (r) { return r.json(); }).then(function (res) {
+      if (res && res.ok && rowEl && rowEl.parentNode) {
+        rowEl.parentNode.removeChild(rowEl);
+        var body = qs('atpAlertsBody');
+        if (body && !body.querySelector('.alert-row')) {
+          body.innerHTML = '<p style="padding:12px 14px;font-size:12px;color:var(--gray)">' +
+            'Dikkat gerektiren durum yok.</p>';
+        }
+      }
+    }).catch(function () { /* sessiz */ });
+  }
+
+  function sortAlertsForDisplay(alerts) {
+    var priority = {
+      OUT_OF_SEQUENCE_VISIT: 0,
+      AMBIGUOUS_STOP: 1,
+      ROUTE_DEVIATION: 2,
+      VISIT_RESULT_PENDING: 3,
+      GPS_STALE: 4,
+      PLANNED_TIME_PASSED: 5,
+      NO_ROUTE: 8,
+      MISSING_LOCATION: 9,
+      UNASSIGNED_VEHICLE: 9
+    };
+    var sevRank = { danger: 0, warning: 1, info: 2 };
+    return (alerts || []).slice().sort(function (a, b) {
+      var pa = priority[a.type] != null ? priority[a.type] : 50;
+      var pb = priority[b.type] != null ? priority[b.type] : 50;
+      if (pa !== pb) return pa - pb;
+      var sa = sevRank[a.severity] != null ? sevRank[a.severity] : 9;
+      var sb = sevRank[b.severity] != null ? sevRank[b.severity] : 9;
+      return sa - sb;
+    });
+  }
+
+  function filterAlertsForVehicle(alerts) {
+    var vid = urlParams.get('vehicle_id') || _activeVehicleExtId;
+    if (!vid) return alerts;
+    return (alerts || []).filter(function (a) {
+      if (!a.vehicle_id) return true;
+      return String(a.vehicle_id) === String(vid);
+    });
+  }
+
+  function prepareAlertsForDisplay(alerts) {
+    return sortAlertsForDisplay(filterAlertsForVehicle(alerts));
+  }
+
   function renderAlerts(alerts, emptyMsg) {
     var body = qs('atpAlertsBody');
     if (!body) return;
+    alerts = prepareAlertsForDisplay(alerts);
     if (!alerts || !alerts.length) {
       body.innerHTML = '<p style="padding:12px 14px;font-size:12px;color:var(--gray)">' +
         (emptyMsg || 'Dikkat gerektiren durum yok.') + '</p>';
       return;
     }
     var INIT_SHOW = 3;
-    var visible = alerts.slice(0, INIT_SHOW);
-    var hidden  = alerts.slice(INIT_SHOW);
-    var total   = alerts.length;
+    var oos = alerts.filter(function (a) { return a.type === 'OUT_OF_SEQUENCE_VISIT'; });
+    var rest = alerts.filter(function (a) { return a.type !== 'OUT_OF_SEQUENCE_VISIT'; });
+    var ordered = oos.concat(rest);
+    var visible = ordered.slice(0, INIT_SHOW);
+    var hidden  = ordered.slice(INIT_SHOW);
+    var total   = ordered.length;
 
     var listHtml = '<div class="alert-list" id="atpAlertListInner">' +
       visible.map(makeAlertRow).join('') + '</div>';
+    alerts = ordered;
 
     if (hidden.length > 0) {
       listHtml += '<div class="atp-alerts-toggle" style="padding:6px 14px;border-top:1px solid var(--gray-200)">' +
@@ -1368,6 +1451,15 @@
     }
 
     body.innerHTML = listHtml;
+
+    body.querySelectorAll('.atp-alert-ack-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        var eid = btn.getAttribute('data-event-id');
+        var row = btn.closest('.alert-row');
+        acknowledgeOutOfSequenceAlert(eid, row);
+      });
+    });
 
     var toggleBtn = body.querySelector('.atp-alerts-toggle-btn');
     if (toggleBtn) {
@@ -1737,6 +1829,8 @@
     var signal = _opsAbort ? _opsAbort.signal : undefined;
 
     var opsUrl = '/planlama/arac-takip/api/today-operations?date=' + encodeURIComponent(planDate);
+    var opsVid = urlParams.get('vehicle_id') || _activeVehicleExtId;
+    if (opsVid) opsUrl += '&vehicle_id=' + encodeURIComponent(opsVid);
     var filomUrl = '/planlama/arac-takip/api/araclar';
 
     var opsPromise = _fetchWithTimeout(opsUrl, signal, OPS_TIMEOUT_MS);
@@ -1764,6 +1858,16 @@
   window.selectAtpVehicle = openPlanRouteForVehicle;
 
   /* ─── Vehicle select (hidden, feeds route + modal) ─── */
+  function planVehicleOption(vehicleId, label, driver, provider, planId) {
+    return {
+      value: vehicleId || '',
+      label: label || vehicleId || '',
+      driver: driver || '',
+      provider: provider || PLAN_PROVIDER_FILOM,
+      plan_id: planId != null ? planId : null,
+    };
+  }
+
   function hydrateVehicleSelect(filomVehicles, opsVehicles) {
     var sel = qs('atpSelVehicle');
     var reqSel = qs('atpReqArac');

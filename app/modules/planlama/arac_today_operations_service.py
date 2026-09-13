@@ -175,11 +175,53 @@ def _gps_stale(gps_row: dict | None, now: datetime | None = None) -> bool:
     return (now - gps_dt) > STALE_AGE
 
 
+_ALERT_TYPE_PRIORITY = {
+    'OUT_OF_SEQUENCE_VISIT': 0,
+    'AMBIGUOUS_STOP': 1,
+    'ROUTE_DEVIATION': 2,
+    'VISIT_RESULT_PENDING': 3,
+    'GPS_STALE': 4,
+    'PLANNED_TIME_PASSED': 5,
+    'NO_ROUTE': 8,
+    'MISSING_LOCATION': 9,
+    'UNASSIGNED_VEHICLE': 9,
+}
+_ALERT_SEVERITY_RANK = {'danger': 0, 'warning': 1, 'info': 2}
+
+
+def _sort_alerts_for_display(alerts: list[dict]) -> list[dict]:
+    """R13: sıra dışı ziyaret uyarısı her zaman üstte görünsün."""
+
+    def _key(a: dict) -> tuple:
+        t = a.get('type') or ''
+        return (
+            _ALERT_TYPE_PRIORITY.get(t, 50),
+            _ALERT_SEVERITY_RANK.get(a.get('severity') or 'info', 9),
+        )
+
+    return sorted(alerts, key=_key)
+
+
+def _filter_alerts_for_vehicle(alerts: list[dict], vehicle_id: str | None) -> list[dict]:
+    if not vehicle_id:
+        return alerts
+    vid = str(vehicle_id)
+    out: list[dict] = []
+    for alert in alerts:
+        av = alert.get('vehicle_id')
+        if av is not None and str(av) != vid:
+            continue
+        out.append(alert)
+    return out
+
+
 def _build_alerts(
     plan_date: str,
     vehicles: list[dict],
     items: list[dict],
     filom_by_id: dict[str, dict],
+    *,
+    vehicle_id: str | None = None,
 ) -> list[dict]:
     alerts: list[dict] = []
     now = datetime.now()
@@ -230,6 +272,7 @@ def _build_alerts(
                 'severity': 'info',
                 'message': f"{item.get('company_name')} — konumu eksik",
                 'plan_item_id': item.get('plan_item_id'),
+                'vehicle_id': item.get('arac_external_id'),
             })
         if not item.get('arac_external_id'):
             alerts.append({
@@ -237,6 +280,7 @@ def _build_alerts(
                 'severity': 'info',
                 'message': f"{item.get('company_name')} — araç atanmamış",
                 'plan_item_id': item.get('plan_item_id'),
+                'vehicle_id': item.get('arac_external_id'),
             })
         pt = item.get('planned_time')
         if pt and item.get('status') in ('PLANLANDI', 'BASLADI'):
@@ -254,6 +298,7 @@ def _build_alerts(
 
     # Ambiguous stop events today
     if geofence_tables_ready():
+        from modules.planlama.arac_geofence_repo import list_out_of_sequence_visit_alerts_for_date
         from modules.planlama.arac_takip_repo import get_conn
         con = get_conn()
         try:
@@ -276,13 +321,41 @@ def _build_alerts(
         finally:
             con.close()
 
-    return alerts
+        for oos in list_out_of_sequence_visit_alerts_for_date(plan_date):
+            plate = oos.get('plate') or oos.get('vehicle_id') or '—'
+            expected = oos.get('expected_stop') or '—'
+            actual = oos.get('actual_stop') or '—'
+            when = oos.get('olay_zamani') or ''
+            result = oos.get('result') or 'TAMAMLANDI'
+            alerts.append({
+                'type': 'OUT_OF_SEQUENCE_VISIT',
+                'severity': 'warning',
+                'title': 'Sıra dışı ziyaret',
+                'message': oos.get('message') or (
+                    f"{plate}: planlanan {expected} yerine {actual} ziyaret edildi."
+                ),
+                'plate': plate,
+                'expected_stop': expected,
+                'actual_stop': actual,
+                'expected_item_id': oos.get('expected_item_id'),
+                'actual_item_id': oos.get('actual_item_id'),
+                'olay_zamani': when,
+                'result': result,
+                'vehicle_id': oos.get('vehicle_id'),
+                'plan_id': oos.get('plan_id'),
+                'plan_item_id': oos.get('plan_item_id'),
+                'event_id': oos.get('event_id'),
+                'action': 'acknowledge',
+            })
+
+    return _sort_alerts_for_display(_filter_alerts_for_vehicle(alerts, vehicle_id))
 
 
 def get_today_vehicle_operations(
     plan_date: str,
     *,
     filom_payload: dict | None = None,
+    vehicle_id: str | None = None,
 ) -> dict:
     """Unified read model for Mehmet V1–V2 daily screen."""
     now = datetime.now()
@@ -477,7 +550,9 @@ def get_today_vehicle_operations(
             v['gps_stale_label'] = None
 
     problem_count = sum(
-        1 for a in _build_alerts(plan_date, vehicles_out, active_items_out, filom_by_id)
+        1 for a in _build_alerts(
+            plan_date, vehicles_out, active_items_out, filom_by_id, vehicle_id=vehicle_id,
+        )
         if a.get('severity') in ('warning', 'danger')
     )
 
@@ -509,7 +584,9 @@ def get_today_vehicle_operations(
                 'source': 'sqlite',
             })
 
-    alerts = _build_alerts(plan_date, vehicles_out, active_items_out, filom_by_id)
+    alerts = _build_alerts(
+        plan_date, vehicles_out, active_items_out, filom_by_id, vehicle_id=vehicle_id,
+    )
     normal_message = 'Bugünkü plan normal ilerliyor' if not alerts else None
 
     return {

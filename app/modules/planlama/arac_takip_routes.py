@@ -617,8 +617,25 @@ def arac_takip_api_route_apply():
 def arac_takip_api_today_operations():
     from modules.planlama.arac_today_operations_service import get_today_vehicle_operations
     plan_date = _parse_date(request.args.get('date'))
-    dto = get_today_vehicle_operations(plan_date.isoformat())
+    vehicle_id = (request.args.get('vehicle_id') or '').strip() or None
+    dto = get_today_vehicle_operations(plan_date.isoformat(), vehicle_id=vehicle_id)
     return jsonify(dto)
+
+
+@arac_takip_bp.route('/api/alerts/acknowledge', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def arac_takip_api_alert_acknowledge():
+    """R13: sıra dışı ziyaret uyarısını görüldü olarak işaretle."""
+    from modules.planlama.arac_geofence_repo import acknowledge_geofence_event
+    payload = request.get_json(silent=True) or {}
+    event_id = payload.get('event_id') or request.args.get('event_id', type=int)
+    if not event_id:
+        return jsonify({'ok': False, 'error': 'event_id gerekli'}), 400
+    user = getattr(getattr(g, 'current_user', None), 'username', None) or 'user'
+    ok = acknowledge_geofence_event(int(event_id), acknowledged_by=user)
+    if not ok:
+        return jsonify({'ok': False, 'error': 'Kayıt bulunamadı'}), 404
+    return jsonify({'ok': True, 'event_id': int(event_id)})
 
 
 @arac_takip_bp.route('/api/plan-changes', methods=['GET'])

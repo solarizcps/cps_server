@@ -197,6 +197,84 @@ def insert_geofence_event_conn(
     return int(cur.lastrowid)
 
 
+OUT_OF_SEQUENCE_VISIT_ALERT_KIND = 'OUT_OF_SEQUENCE_VISIT_ALERT'
+
+
+def acknowledge_geofence_event(event_id: int, *, acknowledged_by: str | None = None) -> bool:
+    """R13: kullanıcı uyarısını görüldü olarak işaretle."""
+    from datetime import datetime
+    con = get_conn()
+    con.row_factory = sqlite3.Row
+    try:
+        row = con.execute(
+            'SELECT id, metadata_json FROM arac_plan_olay WHERE id=?',
+            (int(event_id),),
+        ).fetchone()
+        if not row:
+            return False
+        try:
+            meta = json.loads(row['metadata_json'] or '{}')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            meta = {}
+        if meta.get('acknowledged_at'):
+            return True
+        meta['acknowledged_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        if acknowledged_by:
+            meta['acknowledged_by'] = acknowledged_by
+        con.execute(
+            'UPDATE arac_plan_olay SET metadata_json=? WHERE id=?',
+            (json.dumps(meta, ensure_ascii=False), int(event_id)),
+        )
+        con.commit()
+        return True
+    finally:
+        con.close()
+
+
+def list_out_of_sequence_visit_alerts_for_date(plan_date: str) -> list[dict]:
+    """R13: doğrulanmış sıra dışı ziyaret uyarıları (görülmemiş)."""
+    if not geofence_tables_ready():
+        return []
+    con = get_conn()
+    con.row_factory = sqlite3.Row
+    try:
+        rows = con.execute(
+            """
+            SELECT * FROM arac_plan_olay
+            WHERE olay_turu='NOT' AND date(olay_zamani)=?
+            ORDER BY created_at DESC LIMIT 50
+            """,
+            (plan_date,),
+        ).fetchall()
+        out: list[dict] = []
+        for row in rows:
+            try:
+                meta = json.loads(row['metadata_json'] or '{}')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                meta = {}
+            if meta.get('geofence_kind') != OUT_OF_SEQUENCE_VISIT_ALERT_KIND:
+                continue
+            if meta.get('acknowledged_at'):
+                continue
+            out.append({
+                'event_id': int(row['id']),
+                'plan_id': row['plan_id'],
+                'plan_item_id': row['plan_is_id'],
+                'vehicle_id': row['arac_external_id'],
+                'plate': meta.get('plate'),
+                'expected_stop': meta.get('expected_stop'),
+                'actual_stop': meta.get('actual_stop'),
+                'expected_item_id': meta.get('expected_item_id'),
+                'actual_item_id': meta.get('actual_item_id'),
+                'result': meta.get('result') or 'TAMAMLANDI',
+                'olay_zamani': row['olay_zamani'],
+                'message': row['mesaj'],
+            })
+        return out
+    finally:
+        con.close()
+
+
 @contextmanager
 def geofence_write_transaction() -> Iterator[sqlite3.Connection]:
     """Single connection with BEGIN IMMEDIATE — caller commits or rollbacks."""
