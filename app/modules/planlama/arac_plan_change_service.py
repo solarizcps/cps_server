@@ -45,6 +45,14 @@ class PlanChangeForbidden(PermissionError):
     pass
 
 
+class PlanChangeConflict(Exception):
+    """Business state blocks cancel — HTTP 409."""
+
+    def __init__(self, message: str, code: str = 'CANCEL_NOT_ALLOWED') -> None:
+        super().__init__(message)
+        self.code = code
+
+
 def change_tables_ready() -> bool:
     return tables_ready() and tablo_var_mi('arac_plan_is_degisim')
 

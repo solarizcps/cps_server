@@ -1,0 +1,67 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.7.0"
+phase_code = "ATP_GPS_ROUTE_STATUS_P0"
+title = "GPS ziyaret onayıyla planlı durak ilerlemesi (P0)"
+status = "ONAYLANDI"
+date = "2026-09-13"
+summary = "Araç GPS koordinatları ile onaylanan saha ziyaretleri otomatik tamamlanır; sıra dışı durdurmalar da dahil. Geofence state machine tüm açık plan öğelerine bakacak şekilde genişletildi."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "P0_MATRIX=10/10 PASS | ATP_REGRESSION=292/292 PASS | FILOM_WORKER=58/58 PASS"
+db_write = false
+server_restart = false
+push_status = "PUSHED"
+deployment_status = "PATCH_LOCKED_NOT_YET_DEPLOYED"
+worktree_fingerprint = "02e65ec_p0_v1"
+verification_date = "2026-09-13"
+verification_evidence = "Real replay 34 MOR 049 plan 7: 3/12 → 6/12; şahin+violet etiket sıra dışı tamamlandı; duplicate=0"
+current_work = "P0 patch kilitlendi; production cherry-pick için hazır (21b8a21 ile birleştirilmeli)"
+evidence_summary = "ATP_P0_R2/R3/R4 kapıları geçildi; ekran kanıtları _tempdb/screenshots_r3/ altında."
+changes = [
+  "arac_geofence_service.py: tüm açık plan öğelerini izle (yalnız next_expected değil).",
+  "arac_geofence_service.py: _select_target_item deterministik seçim (öncelik+mesafe).",
+  "arac_geofence_service.py: _auto_complete_task_conn GPS ile otomatik tamamlama.",
+  "arac_geofence_service.py: _process_single_item_conn idempotent state machine.",
+  "arac_geofence_repo.py: event_exists_conn API uyumluluğu (_conn suffix).",
+  "arac_plan_change_service.py: complete() idempotent — zaten TAMAMLANDI ise atla.",
+  "arac_takip_repo.py: _pick_next_task() kalan açık öğelerden hesaplar.",
+  "migrations/189: arac_plan_olay.olay_turu CHECK + AUTO_TAMAMLANDI.",
+  "_test_faz_arac_gps_p3.py: P0 sonrası doğru beklentilerle güncellendi.",
+]
+changed_files = [
+  "app/modules/planlama/arac_geofence_service.py",
+  "app/modules/planlama/arac_geofence_repo.py",
+  "app/modules/planlama/arac_plan_change_service.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/migrations/189_arac_plan_olay_auto_tamamlandi.py",
+  "_test_faz_arac_gps_p3.py",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = []
+locked_rules = [
+  "Canonical DB'ye yazma yapılmaz.",
+  "Production migration uygulanmaz.",
+  "Server/worker restart yapılmaz.",
+  "Commit/push production deploy anlamına gelmez.",
+  "21b8a21 Filom redirect fix ayrı commit olarak korunur.",
+]
+tests = [
+  "P0 matrix 10/10",
+  "ATP regression 292/292",
+  "FILOM worker GPS P1=16/16 P2=22/22 P3=20/20",
+]
+known_issues = [
+  "21b8a21 (Filom redirect fix) bu patch'e dahil değil; production cherry-pick öncesi birleştirilmeli.",
+  "Candidate worktree .env eksik — Canlı Takip 0 araç sorunu P0 kaynaklı değil.",
+]
+next_steps = [
+  "Production HEAD doğrula.",
+  "21b8a21 Filom redirect fix korunduğunu kontrol et.",
+  "Bu P0 commit'ini production tabanına cherry-pick et.",
+  "Birleşik sürümü izole TEMP DB'de test et (292/292 + 10/10 + 58/58).",
+  "DB yedeği al.",
+  "Migration 189 uygula.",
+  "Production deploy.",
+]
