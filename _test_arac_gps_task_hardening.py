@@ -263,13 +263,17 @@ def get_task_state() -> str:
 def read_worker_log_tail() -> str:
     candidates = (
         os.path.join(ROOT, 'logs', 'arac_gps_worker.out.log'),
+        os.path.join(ROOT, 'logs', 'arac_gps_worker.err.log'),
         r'C:\Solariz_CPS_SERVER\logs\arac_gps_worker.out.log',
+        r'C:\Solariz_CPS_SERVER\logs\arac_gps_worker.err.log',
     )
-    log_path = next((p for p in candidates if os.path.isfile(p)), candidates[0])
-    if not os.path.isfile(log_path):
-        return ''
-    with open(log_path, encoding='utf-8', errors='replace') as fh:
-        return fh.read()[-8000:]
+    chunks: list[str] = []
+    for log_path in candidates:
+        if not os.path.isfile(log_path):
+            continue
+        with open(log_path, encoding='utf-8', errors='replace') as fh:
+            chunks.append(fh.read()[-8000:])
+    return '\n'.join(chunks)
 
 
 def acl_has_system(path: str) -> bool:
@@ -513,9 +517,11 @@ def main() -> int:
     ) else bad('plan_is_unchanged', str(after))
 
     log_tail = read_worker_log_tail()
+    poll_ok = bool(log_tail and 'poll ok=True' in log_tail)
+    vehicles_four = bool(log_tail and re.search(r'vehicles=4\b', log_tail))
     if len(worker_before) == 1:
-        ok('worker_log_poll_ok') if log_tail and 'poll ok=True' in log_tail else bad('worker_log_poll_ok', 'missing poll ok=True')
-        ok('worker_log_vehicles_four') if log_tail and 'vehicles=4' in log_tail else bad('worker_log_vehicles_four', 'missing vehicles=4')
+        ok('worker_log_poll_ok') if poll_ok else bad('worker_log_poll_ok', 'missing poll ok=True')
+        ok('worker_log_vehicles_four') if vehicles_four else bad('worker_log_vehicles_four', 'missing vehicles=4')
     elif log_tail and ('poll ok=True' in log_tail or 'vehicles=' in log_tail):
         ok('worker_log_poll_ok') if 'poll ok=True' in log_tail else bad('worker_log_poll_ok')
         ok('worker_log_vehicles_four') if 'vehicles=4' in log_tail else bad('worker_log_vehicles_four')
