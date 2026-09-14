@@ -198,6 +198,7 @@ def main() -> int:
             RouteApplyValidationError,
             apply_route_order_and_snapshot,
         )
+        from modules.planlama.arac_route_constraints import RouteApplyConflictError
         from modules.planlama.arac_gps_snapshot_repo import _save_plan_rota_snapshot_conn
 
         base = db_state(db_path, plan_id)
@@ -206,7 +207,7 @@ def main() -> int:
         try:
             apply_atomic([item_ids[0]])
             bad('01-validation-no-change', 'should raise')
-        except RouteApplyValidationError:
+        except (RouteApplyValidationError, RouteApplyConflictError):
             after = db_state(db_path, plan_id)
             if after == base:
                 ok('01-validation-no-change')
@@ -331,7 +332,7 @@ def main() -> int:
         try:
             apply_atomic(stale_ids)
             bad('11-stale-item-set', 'should raise')
-        except RouteApplyValidationError:
+        except (RouteApplyValidationError, RouteApplyConflictError):
             ok('11-stale-item-set')
 
         # HTTP contract success

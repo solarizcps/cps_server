@@ -139,8 +139,8 @@ with patch('modules.auth.kullanici_yetkileri', return_value=YK), \
        str({k: found.get(k) for k in ('sofor', 'is_turu_label', 'urun_ozet')} if found else {}))
 
     html = c.get('/planlama/arac-takip/').get_data(as_text=True)
-    ok('REQV2-UI cards', 'Şoför / Kim götürecek?' in html and 'İş Türü / Taşınacak' in html)
-    ok('REQV2-UI ek not', 'Ek Not' in html and 'atpReqEkNot' in html)
+    ok('REQV2-UI cards', 'atpReqPlanaSofor' in html and 'atpReqIsTuru' in html)
+    ok('REQV2-UI ek not', 'İş Detayı / Açıklama' in html and 'atpReqNot' in html)
 
 passed = sum(1 for _, p, _ in results if p)
 failed = sum(1 for _, p, _ in results if not p)

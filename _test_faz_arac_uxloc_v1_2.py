@@ -57,8 +57,8 @@ with patch('modules.auth.kullanici_yetkileri', return_value=YK), \
         html = r.get_data(as_text=True)
 
         ok('UXLOC-01 no right drawer', 'atpDrawer' not in html and 'atp-drawer' not in html)
-        ok('UXLOC-02 centered modal markup', 'atpRequestModal' in html and 'atp-modal-backdrop' in html)
-        ok('UXLOC-03 current user readonly', 'atpReqTalepEden' in html and 'readonly' in html and 'Alpay Test' in html)
+        ok('UXLOC-02 centered modal markup', 'atpRequestModal' in html and 'atpModalBackdrop' in html)
+        ok('UXLOC-03 plan modal required fields', 'atpReqArac' in html and 'atpReqOncelik' in html and 'ACIL' in html)
 
         sr = c.get('/planlama/arac-takip/api/locations/search?q=AVEL')
         srj = sr.get_json()
@@ -118,8 +118,8 @@ with patch('modules.auth.kullanici_yetkileri', return_value=YK), \
         ok('UXLOC-15 filom map assets preserved', 'planlama_arac_takip_map.js' in html
            and 'vendor/leaflet' in html and 'atpLeafletMap' in html)
 
-        ok('UXLOC-02b modal script', 'planlama_arac_takip_request.js' in html)
-        ok('UXLOC-04b location card UI', 'atpLocCard' in html and 'atpLocSearch' in html)
+        ok('UXLOC-02b modal script', 'planlama_arac_takip.js' in html)
+        ok('UXLOC-04b location card UI', 'atpReqFirma' in html and 'atpFirmaDropdown' in html)
 
         sug2 = c.get('/planlama/arac-takip/api/locations/suggestions').get_json()
         recent_ids = [x['id'] for x in sug2.get('recent', [])]

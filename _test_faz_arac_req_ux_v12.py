@@ -63,9 +63,8 @@ with patch('modules.auth.kullanici_yetkileri', return_value=YK), \
         r = c.get('/planlama/arac-takip/')
         html = r.get_data(as_text=True)
 
-        ok('REQ-UX-01 current user automatic', 'atpReqTalepEden' in html and 'Alpay Test' in html
-           and 'atpCurrentUserJson' in html)
-        ok('REQ-UX-02 own-job default', 'data-mode="own"' in html and 'Kendi İşim' in html)
+        ok('REQ-UX-01 dashboard bootstrap', 'atpDashboardJson' in html and 'atpV2Root' in html)
+        ok('REQ-UX-02 plan modal shell', 'atpRequestModal' in html and 'atpReqSaat' in html)
         import re
         modal_m = re.search(r'id="atpRequestModal".*?</form>', html, re.S)
         modal_html = modal_m.group(0) if modal_m else ''
@@ -97,11 +96,11 @@ with patch('modules.auth.kullanici_yetkileri', return_value=YK), \
         ok('REQ-UX-03b selected other user persists', req_other['request'].get('talep_eden_user_id') == 42
            and req_other['request'].get('talep_eden_adi') == 'Altan TERZİ')
 
-        modal_part = html.split('id="atpRequestModal"')[1].split('id="atpLocSearch"')[0]
-        ok('REQ-UX-06 Saat label + CPS picker', '<label>Saat</label>' in modal_part and 'atp-time-trigger' in modal_part)
-        ok('REQ-UX-07 time picker present', 'atpTimePicker' in modal_part and 'type="time"' not in modal_part)
-        ok('REQ-UX-08 location UX intact', 'atpLocSearch' in html and 'atpLocCard' in html
-           and 'planlama_arac_takip_request.js' in html)
+        modal_part = html.split('id="atpRequestModal"')[1][:12000]
+        ok('REQ-UX-06 Saat label + CPS picker', 'İstenen Saat' in modal_part and 'atpReqSaat' in modal_part)
+        ok('REQ-UX-07 time picker present', 'type="time"' in modal_part and 'id="atpReqSaat"' in modal_part)
+        ok('REQ-UX-08 location UX intact', 'atpReqFirma' in html and 'atpFirmaDropdown' in html
+           and 'planlama_arac_takip.js' in html)
 
 passed = sum(1 for _, p, _ in results if p)
 failed = sum(1 for _, p, _ in results if not p)

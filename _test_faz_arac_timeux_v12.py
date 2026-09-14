@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""TIMEUX-01..08 — CPS saat seçici (native time input yok)."""
+"""TIMEUX-01..08 — Plana İş Ekle saat alanı (V2 native time input)."""
 import io
 import os
 import sys
@@ -37,7 +37,7 @@ def client():
 
 
 print('=' * 72)
-print('TIMEUX — CPS saat seçici')
+print('TIMEUX — Plana İş Ekle saat alanı')
 print('=' * 72)
 
 with patch('modules.auth.kullanici_yetkileri', return_value=YK), \
@@ -53,14 +53,15 @@ with patch('modules.auth.kullanici_yetkileri', return_value=YK), \
         c = client()
         r = c.get('/planlama/arac-takip/')
         html = r.get_data(as_text=True)
-        modal = html.split('id="atpRequestModal"')[1].split('id="atpLocSearch"')[0]
+        import re
+        modal_m = re.search(r'id="atpRequestModal".*?</form>', html, re.S)
+        modal = modal_m.group(0) if modal_m else ''
 
-        ok('TIMEUX-01 modal opens markup', 'atpRequestModal' in html and 'atpTimePicker' in html)
-        ok('TIMEUX-02 date+time aligned markup', 'atp-field-date' in modal and 'atp-field-time' in modal
-           and 'atp-time-trigger' in modal)
-        ok('TIMEUX-03 no native time input', 'type="time"' not in modal)
-        ok('TIMEUX-04 CPS dropdown markup', 'atpTimeDropdown' in modal and 'atpTimeSlots' in modal
-           and 'Özel saat' in modal)
+        ok('TIMEUX-01 modal opens markup', 'atpRequestModal' in html and 'atpReqSaat' in modal)
+        ok('TIMEUX-02 date+time aligned markup', 'atpReqTarih' in modal and 'atpReqSaat' in modal
+           and 'form-2col' in modal)
+        ok('TIMEUX-03 native time input present', 'type="time"' in modal and 'id="atpReqSaat"' in modal)
+        ok('TIMEUX-04 optional saat hint', 'İstenen Saat' in modal and 'opsiyonel' in modal)
 
         req_slot = c.post('/planlama/arac-takip/api/request', json={
             'tarih': '2026-08-21', 'istenen_saat': '09:30', 'is': 'Saatli',
@@ -87,8 +88,8 @@ with patch('modules.auth.kullanici_yetkileri', return_value=YK), \
         ok('TIMEUX-07 empty time allowed', req_empty.get('ok')
            and req_empty['request'].get('istenen_saat') in ('', None))
 
-        ok('TIMEUX-08 other V1.2 fields intact', 'atpLocSearch' in html and 'atp-req-mode-btn' in html
-           and 'atpReqTalepEden' in html and 'planlama_arac_takip_request.js' in html)
+        ok('TIMEUX-08 V2 plan modal fields intact', 'atpReqFirma' in html and 'atpReqPlanaSofor' in html
+           and 'atpReqOncelik' in html and 'planlama_arac_takip.js' in html)
 
 passed = sum(1 for _, p, _ in results if p)
 failed = sum(1 for _, p, _ in results if not p)

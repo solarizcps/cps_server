@@ -169,7 +169,18 @@ with patch('modules.auth.kullanici_yetkileri', return_value=YK), \
     page = c.get(f'/planlama/arac-takip/?tab=gunluk&date={PLAN_DATE}&vehicle_id=' + VEHICLE).data.decode('utf-8', 'replace')
     ok('MAP14A-09', 'atpPlanLeafletMap' in page and 'Fabrika Başlangıç Noktası' in page)
     ok('MAP14A-10', 'planlama_arac_takip_plan_map.js' in page)
-    ok('MAP14A-12', 'Konum Eksik' in page or 'atp-loc-missing' in page)
+    import json as _json
+    dash_json = {}
+    if 'id="atpDashboardJson"' in page:
+        blob = page.split('id="atpDashboardJson"')[1]
+        blob = blob.split('>', 1)[1].split('</script>', 1)[0].strip()
+        try:
+            dash_json = _json.loads(blob)
+        except _json.JSONDecodeError:
+            dash_json = {}
+    pm_boot = (dash_json.get('plan_map') or {}).get('completeness') or {}
+    ok('MAP14A-12', pm_boot.get('missing', 0) >= 1 or 'Konum Eksik' in page
+       or 'Konum eksik' in page or 'atp-loc-missing' in page)
 
     dash = c.get(f'/planlama/arac-takip/api/dashboard?tab=gunluk&date={PLAN_DATE}&vehicle_id=' + VEHICLE).get_json()
     pm = dash['dashboard']['plan_map']

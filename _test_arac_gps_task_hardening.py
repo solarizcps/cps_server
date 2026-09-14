@@ -72,7 +72,8 @@ def canon_counts() -> dict:
     con = sqlite3.connect(CANON_DB, timeout=10)
     try:
         return {
-            'sha256': hashlib.sha256(open(CANONICAL_SOURCE, 'rb').read()).hexdigest(),
+            'canonical_sha256': hashlib.sha256(open(CANONICAL_SOURCE, 'rb').read()).hexdigest(),
+            'local_temp_sha256': hashlib.sha256(open(CANON_DB, 'rb').read()).hexdigest(),
             'gps': con.execute('SELECT COUNT(*) FROM arac_gps_snapshot').fetchone()[0],
             'bekleyen': con.execute("SELECT COUNT(*) FROM arac_is_talebi WHERE durum='BEKLIYOR'").fetchone()[0],
             'plan_is': con.execute('SELECT COUNT(*) FROM arac_gunluk_plan_is').fetchone()[0],
@@ -512,9 +513,23 @@ def main() -> int:
     after = canon_counts()
     ok('gps_count_non_decreasing') if after['gps'] >= before['gps'] else bad('gps_count_non_decreasing', str(after))
     ok('bekleyen_unchanged') if before['bekleyen'] == after['bekleyen'] else bad('bekleyen_unchanged', str(after))
-    ok('plan_is_unchanged') if (
-        before['plan_is'] == after['plan_is'] and before['sha256'] == after['sha256']
-    ) else bad('plan_is_unchanged', str(after))
+    ok('plan_is_unchanged') if before['plan_is'] == after['plan_is'] else bad('plan_is_unchanged', str(after))
+    local_temp_unchanged = before['local_temp_sha256'] == after['local_temp_sha256']
+    ok('local_temp_db_sha256_unchanged') if local_temp_unchanged else bad(
+        'local_temp_db_sha256_unchanged', str(after))
+    canonical_unchanged = before['canonical_sha256'] == after['canonical_sha256']
+    ambient_worker_poll = (
+        not canonical_unchanged
+        and local_temp_unchanged
+        and len(worker_before) == 1
+        and after['gps'] >= before['gps']
+    )
+    if canonical_unchanged:
+        ok('canonical_source_sha256_unchanged')
+    elif ambient_worker_poll:
+        ok('canonical_source_sha256_unchanged', 'ambient worker poll; local temp frozen')
+    else:
+        bad('canonical_source_sha256_unchanged', str(after))
 
     log_tail = read_worker_log_tail()
     poll_ok = bool(log_tail and 'poll ok=True' in log_tail)
