@@ -1,6 +1,6 @@
 schema_version = 1
 module = "planlama.atp"
-version = "v1.7.0"
+version = "v1.7.2"
 phase_code = "ATP_GPS_ROUTE_STATUS_P0"
 title = "GPS ziyaret onayıyla planlı durak ilerlemesi (P0)"
 status = "ONAYLANDI"

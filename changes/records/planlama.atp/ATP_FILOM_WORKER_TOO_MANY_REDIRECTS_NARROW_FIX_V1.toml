@@ -1,6 +1,6 @@
 schema_version = 1
 module = "planlama.atp"
-version = "v1.7.0"
+version = "v1.7.4"
 phase_code = "ATP_FILOM_WORKER_TOO_MANY_REDIRECTS_NARROW_FIX_V1"
 title = "Filom worker register TooManyRedirects dar fix"
 status = "ONAYLANDI"

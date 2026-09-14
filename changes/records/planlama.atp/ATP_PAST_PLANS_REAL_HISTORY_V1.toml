@@ -1,6 +1,6 @@
 schema_version = 1
 module = "planlama.atp"
-version = "v1.7.0"
+version = "v1.7.3"
 phase_code = "ATP_PAST_PLANS_REAL_HISTORY_V1"
 title = "Geçmiş Planlar — gerçek plan listesi, ziyaret kanıtı ve timeline bütünlüğü."
 status = "TEST"
