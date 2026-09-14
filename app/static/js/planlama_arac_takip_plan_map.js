@@ -60,8 +60,12 @@
   }
 
   function stopPopupHtml(stop) {
+    var acilHtml = (stop.priority || '').toString().toUpperCase() === 'ACIL'
+      ? '<div><span class="badge badge-red atp-acil-badge">ACİL</span></div>'
+      : '';
     return '<div class="atp-popup atp-plan-popup">' +
       '<strong>' + esc(stop.order_no) + ' · ' + esc(stop.company_name) + '</strong>' +
+      acilHtml +
       '<div>İş: ' + esc(stop.job_title || '—') + '</div>' +
       '<div>Saat: ' + esc(stop.planned_time || '—') + '</div>' +
       '<div>Adres: ' + esc(stop.address_text || '—') + '</div>' +

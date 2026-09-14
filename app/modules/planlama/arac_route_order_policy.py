@@ -161,6 +161,38 @@ def compute_first_safe_insert_index(tasks: list[dict]) -> int:
     return last_locked_index + 1
 
 
+def normalize_priority(value: Any) -> str:
+    """Normalize talep priority; blank → NORMAL."""
+    if value is None:
+        return 'NORMAL'
+    text = str(value).strip().upper()
+    return text or 'NORMAL'
+
+
+def _priority_raw(task: dict) -> Any:
+    for key in ('priority', 'oncelik'):
+        val = task.get(key)
+        if val not in (None, ''):
+            return val
+    return 'NORMAL'
+
+
+def compute_acil_insert_index(tasks: list[dict]) -> int:
+    """
+    0-based insert index for a new ACIL plan item.
+
+    1. After last locked/inactive-prefix task (compute_first_safe_insert_index).
+    2. After the last existing ACIL at/after base (FIFO = current sira order).
+    3. If no ACIL in open tail, at base (front of remaining open queue).
+    """
+    base = compute_first_safe_insert_index(tasks)
+    last_acil_index = base - 1
+    for index in range(base, len(tasks)):
+        if normalize_priority(_priority_raw(tasks[index])) == 'ACIL':
+            last_acil_index = index
+    return last_acil_index + 1
+
+
 def build_order_with_inserted_task(
     tasks: list[dict],
     new_task: dict,
@@ -178,7 +210,11 @@ def build_order_with_inserted_task(
     if new_tid in seen:
         raise RouteOrderPolicyError(f'Duplicate task ID: {new_tid}')
 
-    index = compute_first_safe_insert_index(tasks) if insert_index is None else insert_index
+    if insert_index is None:
+        pri = normalize_priority(_priority_raw(new_task))
+        index = compute_acil_insert_index(tasks) if pri == 'ACIL' else compute_first_safe_insert_index(tasks)
+    else:
+        index = insert_index
     if index < 0 or index > len(tasks):
         raise RouteOrderPolicyError(f'Insert index out of range: {index}')
 

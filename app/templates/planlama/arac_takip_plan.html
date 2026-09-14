@@ -328,7 +328,7 @@
             </div>
             <div class="map-card-body">
               <div class="map-wrap">
-                <div id="atpMiniMap"></div>
+                <div id="atpMiniMap" class="atp-plan-leaflet"></div>
               </div>
             </div>
           </div>
@@ -339,7 +339,11 @@
       {# ── SEÇİLİ PLAN side panel (hidden — for vehicle select) ── #}
       <div id="atpSidePlanWrap" style="display:none">
         <select id="atpSelVehicle" title="Araç">
+          {% if dashboard.selected_vehicle_id %}
+          <option value="{{ dashboard.selected_vehicle_id }}" selected>{{ dashboard.selected_plate or dashboard.selected_vehicle_id }}</option>
+          {% else %}
           <option value="">— Araç seç —</option>
+          {% endif %}
         </select>
       </div>
 

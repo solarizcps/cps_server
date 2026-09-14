@@ -1554,7 +1554,13 @@ def _load_plan_items_for_order_policy_conn(
 ) -> list[dict]:
     """Load existing plan items in canonical sira order for U1 route policy."""
     rows = con.execute(
-        'SELECT id, durum FROM arac_gunluk_plan_is WHERE plan_id=? ORDER BY sira',
+        """
+        SELECT pi.id, pi.sira, pi.durum, pi.created_at, t.oncelik
+        FROM arac_gunluk_plan_is pi
+        JOIN arac_is_talebi t ON t.id = pi.is_talebi_id
+        WHERE pi.plan_id=?
+        ORDER BY pi.sira, pi.id
+        """,
         (int(plan_id),),
     ).fetchall()
     tasks: list[dict] = []
@@ -1562,6 +1568,8 @@ def _load_plan_items_for_order_policy_conn(
         task: dict = {
             'plan_item_id': int(row['id']),
             'status': row['durum'],
+            'priority': row['oncelik'] or 'NORMAL',
+            'created_at': row['created_at'],
         }
         visit = _get_visit_state_conn(con, int(row['id']))
         if visit:
@@ -1675,9 +1683,9 @@ def resolve_plan_insert_sira_conn(
         return int(explicit_sira)
     priority = (oncelik or 'NORMAL').strip().upper()
     if priority == 'ACIL':
-        from modules.planlama.arac_route_order_policy import compute_first_safe_insert_index
+        from modules.planlama.arac_route_order_policy import compute_acil_insert_index
         tasks = _load_plan_items_for_order_policy_conn(con, plan_id)
-        return compute_first_safe_insert_index(tasks) + 1
+        return compute_acil_insert_index(tasks) + 1
     max_sira = con.execute(
         'SELECT COALESCE(MAX(sira), 0) AS ms FROM arac_gunluk_plan_is WHERE plan_id=?',
         (int(plan_id),),

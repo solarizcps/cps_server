@@ -64,6 +64,41 @@
   function fmtVal(v) { return (v == null || v === '') ? '—' : String(v); }
   function qs(id) { return document.getElementById(id); }
 
+  function isAcilPriority(it) {
+    if (!it) return false;
+    var p = (it.priority || it.oncelik || '').toString().trim().toUpperCase();
+    return p === 'ACIL';
+  }
+
+  function acilBadgeHtml(extraCls) {
+    var cls = 'badge badge-red atp-acil-badge' + (extraCls ? ' ' + extraCls : '');
+    return '<span class="' + cls + '">ACİL</span>';
+  }
+
+  function priorityAcilBadgeHtml(it) {
+    return isAcilPriority(it) ? acilBadgeHtml('') : '';
+  }
+
+  /** Ziyaret kolonu — ACİL pill + ziyaret metni (firma satırından bağımsız). */
+  function visitCellHtml(it) {
+    var visitLabel = fmtVal(buildVisitLabel(it));
+    var visCls = visitRowClass(it.visit_state);
+    if (!isAcilPriority(it)) {
+      return '<span class="' + visCls + '">' + visitLabel + '</span>';
+    }
+    return '<span class="atp-visit-cell-wrap">' +
+      acilBadgeHtml('atp-acil-badge-visit') +
+      '<span class="' + visCls + ' atp-visit-cell-text">' + visitLabel + '</span></span>';
+  }
+
+  function historyPriorityCellHtml(it) {
+    if (isAcilPriority(it)) return acilBadgeHtml('');
+    var pri = (it.priority || '').toString().trim().toUpperCase();
+    var lbl = (it.priority_label || '').trim();
+    if (pri === 'NORMAL' || lbl === 'Normal') return '—';
+    return escapeHtml(lbl || '—');
+  }
+
   function toast(msg) {
     var el = qs('atpToast');
     if (!el) return;
@@ -1108,7 +1143,6 @@
     var visCls = visitRowClass(it.visit_state);
     var badgeCls = planBadgeCls(it.status, it.visit_state);
     var statusLabel = fmtVal(it.status_label);
-    var visitLabel = fmtVal(buildVisitLabel(it));
     var isLate = !!it.is_late;
     var itemId = it.id ? String(it.id) : '';
     var vidAttr = it.arac_external_id != null ? String(it.arac_external_id) : '';
@@ -1119,14 +1153,16 @@
       ? '<span class="job-eta' + (isLate ? ' late' : '') + '">' + fmtVal(eta) + '</span>'
       : '<span class="job-eta-empty" title="ETA hesaplanmadı">—</span>';
 
+    var acilBadge = priorityAcilBadgeHtml(it);
     return '<tr data-plan-item="' + (it.plan_item_id || '') + '" data-item-id="' + itemId + '" data-vid="' + vidAttr + '">' +
       '<td class="job-eta-cell">' + etaHtml + '</td>' +
       '<td><div class="job-firm"><span class="dot ' + dotCls + '"></span>' +
         fmtVal(it.job_title) + (it.company_name ? ' / ' + it.company_name : '') +
+        (acilBadge ? ' ' + acilBadge : '') +
         '</div>' + _addressSubHtml(it) + '</td>' +
       '<td class="job-driver-cell">' + fmtVal(it.driver || '—') + '</td>' +
       '<td><span class="badge ' + badgeCls + '">' + statusLabel + '</span></td>' +
-      '<td><span class="' + visCls + '">' + visitLabel + '</span></td>' +
+      '<td class="job-visit-cell">' + visitCellHtml(it) + '</td>' +
       '<td><div class="atp-job-menu-wrap">' +
         '<button type="button" class="btn btn-outline btn-sm atp-job-menu-btn" ' +
           'data-vid="' + (it.arac_external_id || '') + '" ' +
@@ -1636,9 +1672,7 @@
         : '';
       var itemId = t.id ? String(t.id) : '';
       var talepId = t.is_talebi_id != null ? String(t.is_talebi_id) : '';
-      var priHtml = (t.priority && t.priority !== 'NORMAL')
-        ? '<span class="badge badge-orange" style="margin-right:4px;font-size:10px">' + fmtVal(t.priority_label || t.priority) + '</span>'
-        : '';
+      var priHtml = isAcilPriority(t) ? acilBadgeHtml('atp-acil-badge-stop') : '';
       return '<div class="' + cls + '" data-item-id="' + itemId + '" data-is-talebi-id="' + talepId + '">' +
         '<span class="' + numCls + '">' + seq + '</span>' +
         '<span class="stop-name">' + fmtVal(t.company_name || t.job_title) + '</span>' +
@@ -1965,7 +1999,8 @@
         longitude: t.longitude,
         has_coordinates: !!t.has_coordinates,
         location_source_label: t.location_source_label,
-        status: t.status
+        status: t.status,
+        priority: t.priority
       };
     });
     var ready = stops.filter(function (s) { return s.has_coordinates; }).length;
@@ -4134,7 +4169,7 @@
             '<td><div class="hdm-firma">' + escapeHtml(it.company_name || '—') + '</div>' +
               '<div class="hdm-is">' + escapeHtml(it.job_title || '') + '</div></td>' +
             '<td>' + _hdmAddressCell(it) + '</td>' +
-            '<td class="hdm-pri">' + escapeHtml(it.priority_label || '—') + '</td>' +
+            '<td class="hdm-pri">' + historyPriorityCellHtml(it) + '</td>' +
             '<td><span class="hdm-result-pill ' + pill.cls + '">' + escapeHtml(pill.label) + '</span></td>' +
             '<td>' + _hdmVisitCell(it, p.date) + '</td></tr>';
         }).join('');
@@ -4236,11 +4271,18 @@
   /* ─── WhatsApp ─── */
   var btnWa = qs('atpBtnWhatsapp');
   if (btnWa) btnWa.addEventListener('click', function () {
-    fetch('/planlama/arac-takip/api/whatsapp?date=' + encodeURIComponent(planDate), { credentials: 'same-origin' })
+    var vid = _activeVehicleExtId || '';
+    if (!vid) {
+      toast('Araç seçili değil.');
+      return;
+    }
+    fetch('/planlama/arac-takip/api/whatsapp?date=' + encodeURIComponent(planDate) +
+      '&vehicle_id=' + encodeURIComponent(vid), { credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        if (j.url) window.open(j.url, '_blank');
-        else toast(j.message || 'WhatsApp bağlantısı oluşturulamadı.');
+        var url = j.whatsapp_url || j.url;
+        if (url) window.open(url, '_blank');
+        else toast(j.error || j.message || 'WhatsApp bağlantısı oluşturulamadı.');
       }).catch(function () { toast('WhatsApp bağlantısı oluşturulamadı.'); });
   });
 

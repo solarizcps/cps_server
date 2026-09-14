@@ -105,7 +105,12 @@
   }
 
   function populateSummary(d) {
-    qs('atpPcSummaryJob').textContent = fmtVal(d.job_title) + (d.company_name ? ' / ' + d.company_name : '');
+    var jobEl = qs('atpPcSummaryJob');
+    if (jobEl) {
+      var jobTxt = fmtVal(d.job_title) + (d.company_name ? ' / ' + d.company_name : '');
+      var pri = (d.priority || d.oncelik || '').toString().trim().toUpperCase();
+      jobEl.innerHTML = jobTxt + (pri === 'ACIL' ? ' <span class="badge badge-red atp-acil-badge">ACİL</span>' : '');
+    }
     qs('atpPcSummaryDate').textContent = fmtVal(d.plan_tarihi);
     qs('atpPcSummaryVehicle').textContent = fmtVal(d.arac_plaka_snapshot) + ' · ' + fmtVal(d.sofor_adi_snapshot);
     qs('atpPcSummaryStatus').textContent = fmtVal(d.status_label || d.status);

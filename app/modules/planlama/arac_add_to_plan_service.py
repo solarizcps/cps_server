@@ -34,6 +34,7 @@ from modules.planlama.arac_takip_repo import (
     _uret_talep_no,
     get_conn,
     idempotency_ready,
+    resolve_plan_insert_sira_conn,
     tables_ready,
     ux_v2_columns_ready,
 )
@@ -368,10 +369,12 @@ def _add_plan_item_conn(
     planlanan_saat: str | None,
     sira: int | None,
     now: str,
-) -> int:
+    *,
+    oncelik: str | None = None,
+) -> tuple[int, dict]:
     """
-    Plan kalemi ekle — sıra çakışmasını güvenli çöz.
-    Returns plan_is_id.
+    Plan kalemi ekle — ACIL safe insert + sıra çakışmasını güvenli çöz.
+    Returns (plan_is_id, route_invalidation_meta).
     """
     existing = con.execute(
         'SELECT id FROM arac_gunluk_plan_is WHERE is_talebi_id=?', (talep_id,),
@@ -379,11 +382,11 @@ def _add_plan_item_conn(
     if existing:
         raise ValueError('Talep zaten plana alınmış')
 
-    max_sira = con.execute(
-        'SELECT COALESCE(MAX(sira),0) ms FROM arac_gunluk_plan_is WHERE plan_id=?',
-        (plan_id,),
-    ).fetchone()['ms']
-    new_sira = int(sira) if sira else int(max_sira) + 1
+    if oncelik is None:
+        row = con.execute('SELECT oncelik FROM arac_is_talebi WHERE id=?', (talep_id,)).fetchone()
+        oncelik = row['oncelik'] if row else 'NORMAL'
+
+    new_sira = resolve_plan_insert_sira_conn(con, plan_id, oncelik, sira)
 
     conflict = con.execute(
         'SELECT id FROM arac_gunluk_plan_is WHERE plan_id=? AND sira=?',
@@ -407,7 +410,12 @@ def _add_plan_item_conn(
         """,
         (plan_id, talep_id, new_sira, planlanan_saat, now, session_user_id),
     )
-    return int(cur.lastrowid)
+    plan_is_id = int(cur.lastrowid)
+    from modules.planlama.arac_plan_rota_snapshot_service import (
+        invalidate_plan_route_state_after_acil_insert_conn,
+    )
+    route_meta = invalidate_plan_route_state_after_acil_insert_conn(con, plan_id, oncelik)
+    return plan_is_id, route_meta
 
 
 # ---------------------------------------------------------------------------
@@ -560,8 +568,10 @@ def add_job_to_plan_atomic(session_user_id: int, payload: dict) -> dict:
         )
 
         # Step 4: plan item ekle
-        plan_is_id = _add_plan_item_conn(
+        oncelik = (enriched.get('oncelik') or 'NORMAL').strip().upper()
+        plan_is_id, route_meta = _add_plan_item_conn(
             con, session_user_id, plan_id, talep_id, planlanan_saat, sira, now,
+            oncelik=oncelik,
         )
 
         _save_idempotent_result(con, submit_token, talep_id, plan_id, plan_is_id, now)
@@ -578,6 +588,8 @@ def add_job_to_plan_atomic(session_user_id: int, payload: dict) -> dict:
             'talep_id': talep_id,
             'talep': _talep_dto(talep_row),
             'master_action': master_action,
+            'route_rebuild_required': bool(route_meta.get('rebuild_required')),
+            'route_snapshots_deactivated': int(route_meta.get('snapshots_deactivated') or 0),
         }
     except Exception:
         con.rollback()
