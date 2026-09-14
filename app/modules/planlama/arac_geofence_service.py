@@ -190,6 +190,8 @@ def _auto_complete_task_conn(
     current = row['durum'] if hasattr(row, '__getitem__') else row[0]
     if current == 'TAMAMLANDI':
         return  # idempotent
+    if current not in ACTIVE_ITEM_STATUSES:
+        return  # IPTAL/inactive — never auto-complete
     con.execute(
         'UPDATE arac_gunluk_plan_is SET durum=? WHERE id=?',
         ('TAMAMLANDI', plan_is_id),

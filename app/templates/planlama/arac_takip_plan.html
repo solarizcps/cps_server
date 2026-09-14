@@ -991,18 +991,6 @@
     <label for="atpPcAction">Aksiyon</label>
     <select id="atpPcAction"></select>
   </div>
-  <div id="atpPcPanelTransfer" style="display:none">
-    <div class="form-2col">
-      <div class="form-ctrl">
-        <label for="atpPcTargetVehicle">Hedef Araç</label>
-        <select id="atpPcTargetVehicle"></select>
-      </div>
-      <div class="form-ctrl">
-        <label for="atpPcTargetDriver">Şoför</label>
-        <input type="text" id="atpPcTargetDriver" placeholder="Şoför adı">
-      </div>
-    </div>
-  </div>
   <div id="atpPcPanelDefer" style="display:none">
     <div class="form-2col">
       <div class="form-ctrl">
@@ -1031,6 +1019,9 @@
   </div>
   <div id="atpPcPanelReorder" style="display:none">
     <p id="atpPcReorderInfo" class="atp-pc-info">Saatler rota hesaplamasıyla atanır.</p>
+  </div>
+  <div id="atpPcCancelNote" class="atp-pc-info-banner" style="display:none">
+    Bu iş aktif plandan kaldırılacak; geçmiş kaydı korunacaktır. Silme yapılmaz.
   </div>
   <div id="atpPcReasonWrap" class="form-ctrl" style="display:none">
     <label for="atpPcReason">Neden</label>
@@ -1126,7 +1117,7 @@
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=16"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=11"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=98"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=9"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=99"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}

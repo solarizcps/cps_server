@@ -99,12 +99,33 @@
     return escapeHtml(lbl || '—');
   }
 
-  function toast(msg) {
+  var _toastHideTimer = null;
+  var _toastClearTimer = null;
+
+  function toast(msg, opts) {
+    opts = opts || {};
     var el = qs('atpToast');
     if (!el) return;
+    if (_toastHideTimer) { clearTimeout(_toastHideTimer); _toastHideTimer = null; }
+    if (_toastClearTimer) { clearTimeout(_toastClearTimer); _toastClearTimer = null; }
+    if (!msg) {
+      el.textContent = '';
+      el.className = 'atp-toast';
+      return;
+    }
+    var kind = opts.type === 'error' ? ' atp-toast-error'
+      : (opts.type === 'success' ? ' atp-toast-success' : '');
+    el.className = 'atp-toast' + kind;
     el.textContent = msg;
     el.classList.add('show');
-    setTimeout(function () { el.classList.remove('show'); }, 3200);
+    var duration = typeof opts.duration === 'number' ? opts.duration : 4000;
+    _toastHideTimer = setTimeout(function () {
+      el.classList.remove('show');
+      _toastClearTimer = setTimeout(function () {
+        el.textContent = '';
+        el.className = 'atp-toast';
+      }, 280);
+    }, duration);
   }
   window.toast = toast;
 
@@ -1007,6 +1028,7 @@
     if (st === 'TAMAMLANDI') return items;
     if (st === 'PLANLANDI') {
       items += '<button type="button" class="atp-job-menu-item" data-act="change">Planı Değiştir</button>';
+      items += '<button type="button" class="atp-job-menu-item atp-job-menu-danger" data-act="cancel-job">İşi İptal Et</button>';
     } else if (st === 'BASLADI' || visit === 'ARRIVED' || visit === 'DEPARTED_PENDING') {
       items += '<button type="button" class="atp-job-menu-item" data-act="change">Planı Değiştir</button>';
     }
@@ -1080,6 +1102,10 @@
     } else if (act === 'change') {
       if (window.AtpPlanChange && window.AtpPlanChange.openChange) {
         window.AtpPlanChange.openChange(planId);
+      }
+    } else if (act === 'cancel-job') {
+      if (window.AtpPlanChange && window.AtpPlanChange.openChange) {
+        window.AtpPlanChange.openChange(planId, { presetAction: 'cancel' });
       }
     } else if (act === 'complete') {
       if (window.AtpPlanChange && window.AtpPlanChange.quickComplete) {
@@ -4061,9 +4087,32 @@
     }
     return html || '<span class="hdm-visit-empty">—</span>';
   }
+  function _hdmAuditDateTime(ts) {
+    if (!ts) return '';
+    var s = String(ts).replace('T', ' ');
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return String(ts);
+    var dd = String(d.getDate()).padStart(2, '0');
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var yy = d.getFullYear();
+    var hh = String(d.getHours()).padStart(2, '0');
+    var mi = String(d.getMinutes()).padStart(2, '0');
+    return dd + '.' + mm + '.' + yy + ' ' + hh + ':' + mi;
+  }
+
   function _hdmVisitCell(it, planDate) {
     var cat = it.category || '';
-    if (cat === 'GIDILMEDI' || cat === 'IPTAL') return '<span class="hdm-visit-empty">—</span>';
+    if (cat === 'IPTAL') {
+      var auditParts = [];
+      if (it.cancel_reason) auditParts.push('Neden: ' + escapeHtml(it.cancel_reason));
+      if (it.cancel_by_name) auditParts.push(escapeHtml(it.cancel_by_name));
+      if (it.cancel_at) auditParts.push(escapeHtml(_hdmAuditDateTime(it.cancel_at)));
+      if (auditParts.length) {
+        return '<div class="hdm-visit-audit">' + auditParts.join(' · ') + '</div>';
+      }
+      return '<span class="hdm-visit-empty">—</span>';
+    }
+    if (cat === 'GIDILMEDI') return '<span class="hdm-visit-empty">—</span>';
     if (cat === 'BASLADI_ZIYARET_DOGRULANAMADI') {
       return '<div class="hdm-visit-unverified">Ziyaret doğrulanamadı</div>';
     }

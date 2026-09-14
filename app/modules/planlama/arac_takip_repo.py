@@ -1667,6 +1667,55 @@ def reorder_plan_items_by_plan_id_conn(
     )
 
 
+def compact_active_plan_sira_conn(
+    con: sqlite3.Connection,
+    plan_id: int,
+    *,
+    user_id: int | None = None,
+) -> int:
+    """
+    Renumber active plan items to contiguous 1..n sira; inactive items trail after.
+
+    UNIQUE(plan_id, sira) safe via temporary negative sira values.
+    Returns count of active items renumbered.
+    """
+    rows = con.execute(
+        """
+        SELECT id, sira, durum
+        FROM arac_gunluk_plan_is
+        WHERE plan_id=?
+        ORDER BY sira, id
+        """,
+        (int(plan_id),),
+    ).fetchall()
+    if not rows:
+        return 0
+    active = [r for r in rows if (r['durum'] or '').upper() not in INACTIVE_PLAN_STATUSES]
+    inactive = [r for r in rows if (r['durum'] or '').upper() in INACTIVE_PLAN_STATUSES]
+    for row in active + inactive:
+        con.execute(
+            'UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?',
+            (-int(row['id']), int(row['id'])),
+        )
+    for i, row in enumerate(active, start=1):
+        con.execute(
+            'UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?',
+            (i, int(row['id'])),
+        )
+    base = len(active)
+    for j, row in enumerate(inactive, start=1):
+        con.execute(
+            'UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?',
+            (base + j, int(row['id'])),
+        )
+    if user_id is not None:
+        con.execute(
+            'UPDATE arac_gunluk_plan SET updated_at=?, updated_by=? WHERE id=?',
+            (_now_iso(), int(user_id), int(plan_id)),
+        )
+    return len(active)
+
+
 def resolve_plan_insert_sira_conn(
     con: sqlite3.Connection,
     plan_id: int,
@@ -2832,6 +2881,51 @@ def _history_item_visit_fields(
     }
 
 
+def _history_user_display_name(con: sqlite3.Connection, user_id: int | None) -> str | None:
+    if not user_id:
+        return None
+    if not tablo_var_mi('sistem_kullanici'):
+        return str(user_id)
+    row = con.execute(
+        'SELECT AdSoyad, KullaniciAdi FROM sistem_kullanici WHERE Id=?',
+        (int(user_id),),
+    ).fetchone()
+    if not row:
+        return None
+    return (row['AdSoyad'] or row['KullaniciAdi'] or '').strip() or None
+
+
+def _load_cancel_audits_for_items(
+    con: sqlite3.Connection,
+    plan_item_ids: list[int],
+) -> dict[int, dict[str, Any]]:
+    if not plan_item_ids or not tablo_var_mi('arac_plan_is_degisim'):
+        return {}
+    placeholders = ','.join('?' * len(plan_item_ids))
+    rows = con.execute(
+        f"""
+        SELECT plan_is_id, reason, created_at, created_by, action
+        FROM arac_plan_is_degisim
+        WHERE plan_is_id IN ({placeholders})
+          AND action IN ('cancel', 'delete')
+        ORDER BY plan_is_id, created_at DESC, id DESC
+        """,
+        plan_item_ids,
+    ).fetchall()
+    out: dict[int, dict[str, Any]] = {}
+    for r in rows:
+        pid = int(r['plan_is_id'])
+        if pid in out:
+            continue
+        out[pid] = {
+            'cancel_reason': r['reason'],
+            'cancel_at': r['created_at'],
+            'cancel_by': r['created_by'],
+            'cancel_by_name': _history_user_display_name(con, r['created_by']),
+        }
+    return out
+
+
 def get_history_plan_detail(plan_id: int) -> dict[str, Any]:
     """Tek geçmiş plan — tüm iş kalemleri + ziyaret read-model."""
     if not tables_ready():
@@ -2894,6 +2988,13 @@ def get_history_plan_detail(plan_id: int) -> dict[str, Any]:
                 istenen_varis_saati=meta.get('istenen_varis_saati'),
                 olay_evidence=olay_map.get(pid) if pid else None,
             ))
+        cancel_audits = _load_cancel_audits_for_items(con, item_ids)
+        for item in items_out:
+            pid = item.get('plan_item_id')
+            if pid and item.get('category') == 'IPTAL':
+                aud = cancel_audits.get(int(pid))
+                if aud:
+                    item.update(aud)
         first_visit, last_visit = _history_visit_bounds(con, int(plan_id))
         route_km = _history_route_km(con, {
             'arac_external_id': plan_d.get('arac_external_id'),

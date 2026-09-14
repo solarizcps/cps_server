@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -13,12 +14,16 @@ from modules.planlama.arac_add_to_plan_service import (
     _add_plan_item_conn,
     _get_or_create_daily_plan_conn,
 )
+from modules.planlama.arac_plan_rota_snapshot_service import (
+    invalidate_plan_route_state_after_manual_reorder_conn,
+)
 from modules.planlama.arac_takip_repo import (
     INACTIVE_PLAN_STATUSES,
     PLAN_ITEM_STATUS,
     _plan_task_dto,
     _row_dict,
     _uret_talep_no,
+    compact_active_plan_sira_conn,
     tables_ready,
 )
 
@@ -35,6 +40,31 @@ VALID_ACTIONS = frozenset({
 })
 
 VISIT_ACTIVE = frozenset({'ARRIVED', 'DEPARTED_PENDING'})
+_TRANSFER_DEFERRED_MSG = 'Başka araca aktarma özelliği şu anda kullanıma kapalıdır'
+_EXCLUSIVE_RACE_ACTIONS = frozenset({'cancel'})
+
+_item_change_guard = threading.Lock()
+_item_change_locks: dict[int, threading.Lock] = {}
+
+
+def _plan_item_row_snapshot(con: sqlite3.Connection, plan_is_id: int) -> tuple[int, str, int]:
+    row = con.execute(
+        'SELECT plan_id, durum, sira FROM arac_gunluk_plan_is WHERE id=?',
+        (int(plan_is_id),),
+    ).fetchone()
+    if not row:
+        raise PlanChangeError('Plan kalemi bulunamadı')
+    return int(row['plan_id']), str(row['durum'] or '').upper(), int(row['sira'])
+
+
+def _plan_is_change_lock(plan_is_id: int) -> threading.Lock:
+    pid = int(plan_is_id)
+    with _item_change_guard:
+        lk = _item_change_locks.get(pid)
+        if lk is None:
+            lk = threading.Lock()
+            _item_change_locks[pid] = lk
+        return lk
 
 
 class PlanChangeError(ValueError):
@@ -126,7 +156,7 @@ def _allowed_actions(ctx: dict) -> dict[str, bool | str]:
 
     return {
         'bind_location': (not inactive and not has_visit and not has_coords),
-        'transfer_vehicle': (st == 'PLANLANDI' and not has_visit and not inactive),
+        'transfer_vehicle': False,
         'defer_next_day': (st in ('PLANLANDI', 'BASLADI') and not inactive),
         'cancel': (st in ('PLANLANDI', 'BASLADI') and not inactive),
         'complete': (not inactive and (visit == 'DEPARTED_PENDING' or st == 'BASLADI')),
@@ -266,6 +296,23 @@ def _write_audit(
     )
 
 
+def _finalize_plan_change_conn(
+    con: sqlite3.Connection,
+    *,
+    plan_ids: list[int],
+    user_id: int,
+) -> None:
+    """Compact active sıra and invalidate stale route snapshots after plan mutations."""
+    seen: set[int] = set()
+    for pid in plan_ids:
+        ip = int(pid)
+        if ip in seen:
+            continue
+        seen.add(ip)
+        compact_active_plan_sira_conn(con, ip, user_id=user_id)
+        invalidate_plan_route_state_after_manual_reorder_conn(con, ip)
+
+
 def _clone_talep_conn(con: sqlite3.Connection, talep_row: sqlite3.Row, user_id: int, now: str) -> int:
     talep_no = _uret_talep_no(con)
     cur = con.execute(
@@ -317,22 +364,43 @@ def apply_plan_job_change(plan_is_id: int, user_id: int, payload: dict) -> dict:
             'ok': True,
             'message': 'Saatler rota hesaplamasıyla atanır. Sıra değişikliği rota panelinden uygulanır.',
         }
+    if action == 'transfer_vehicle':
+        raise PlanChangeError(_TRANSFER_DEFERRED_MSG)
 
     reason = (payload.get('reason') or '').strip()
     client_submit_id = (payload.get('client_submit_id') or '').strip() or None
+    pre_lock_snap: tuple[int, str, int] | None = None
+    if action in _EXCLUSIVE_RACE_ACTIONS:
+        snap_con = get_conn()
+        try:
+            pre_lock_snap = _plan_item_row_snapshot(snap_con, int(plan_is_id))
+        finally:
+            snap_con.close()
+    with _plan_is_change_lock(int(plan_is_id)):
+        return _apply_plan_job_change_locked(
+            int(plan_is_id), int(user_id), payload, action, reason, client_submit_id,
+            mapped_from_delete=mapped_from_delete,
+            pre_lock_snap=pre_lock_snap,
+        )
+
+
+def _apply_plan_job_change_locked(
+    plan_is_id: int,
+    user_id: int,
+    payload: dict,
+    action: str,
+    reason: str,
+    client_submit_id: str | None,
+    *,
+    mapped_from_delete: bool,
+    pre_lock_snap: tuple[int, str, int] | None = None,
+) -> dict:
     con = get_conn()
     con.row_factory = sqlite3.Row
     try:
         dup = _check_idempotent(con, client_submit_id)
         if dup:
             return dup
-
-        ctx = _fetch_context(con, int(plan_is_id))
-        allowed = ctx['allowed_actions']
-        if not allowed.get(action):
-            if mapped_from_delete:
-                raise PlanChangeError('Bu iş silinemez; iptal olarak kapatabilirsiniz.')
-            raise PlanChangeForbidden(f'Bu işlem şu an izinli değil: {action}')
 
         if action in ('cancel', 'defer_next_day') and not reason:
             raise PlanChangeError('Neden alanı zorunlu')
@@ -344,6 +412,33 @@ def apply_plan_job_change(plan_is_id: int, user_id: int, payload: dict) -> dict:
         new_plan_is_id = None
 
         con.execute('BEGIN IMMEDIATE')
+
+        if (
+            pre_lock_snap is not None
+            and action in _EXCLUSIVE_RACE_ACTIONS
+            and _plan_item_row_snapshot(con, int(plan_is_id)) != pre_lock_snap
+        ):
+            raise PlanChangeConflict(
+                'İş başka bir işlem tarafından güncellendi.',
+                'STATE_CONFLICT',
+            )
+
+        ctx = _fetch_context(con, int(plan_is_id))
+        allowed = ctx['allowed_actions']
+        if not allowed.get(action):
+            if mapped_from_delete:
+                raise PlanChangeError('Bu iş silinemez; iptal olarak kapatabilirsiniz.')
+            raise PlanChangeForbidden(f'Bu işlem şu an izinli değil: {action}')
+
+        if action == 'cancel' and (ctx.get('status') or '').upper() == 'IPTAL':
+            con.rollback()
+            return {
+                'ok': True,
+                'duplicate': True,
+                'action': 'cancel',
+                'plan_is_id': int(plan_is_id),
+                'message': 'İş zaten plan dışında.',
+            }
 
         if action == 'bind_location':
             loc_id = payload.get('location_id') or payload.get('kayitli_yer_id')
@@ -391,28 +486,6 @@ def apply_plan_job_change(plan_is_id: int, user_id: int, payload: dict) -> dict:
                 raise PlanChangeError('location_id veya latitude/longitude gerekli')
             new_durum = ctx['status']
 
-        elif action == 'transfer_vehicle':
-            target_vid = str(payload.get('target_vehicle_external_id') or '').strip()
-            if not target_vid:
-                raise PlanChangeError('target_vehicle_external_id gerekli')
-            if target_vid == str(ctx['arac_external_id']):
-                raise PlanChangeError('İş zaten bu araçta')
-            plate = (payload.get('target_plate') or payload.get('arac_plaka') or target_vid).strip()
-            sofor = (payload.get('sofor_adi') or payload.get('driver') or '').strip() or None
-            target_plan_id = _get_or_create_daily_plan_conn(
-                con, user_id, ctx['plan_tarihi'], target_vid, plate, None, sofor, now,
-            )
-            max_sira = con.execute(
-                'SELECT COALESCE(MAX(sira),0) ms FROM arac_gunluk_plan_is WHERE plan_id=?',
-                (target_plan_id,),
-            ).fetchone()['ms']
-            con.execute(
-                'UPDATE arac_gunluk_plan_is SET plan_id=?, sira=? WHERE id=?',
-                (target_plan_id, int(max_sira) + 1, int(plan_is_id)),
-            )
-            new_durum = ctx['status']
-            result_extra['new_arac_external_id'] = target_vid
-
         elif action == 'defer_next_day':
             target_date = (payload.get('target_date') or _tomorrow_iso(ctx['plan_tarihi']))[:10]
             old_status = 'GIDILEMEDI' if payload.get('mark_gidilemedi') else 'ERTELENDI'
@@ -442,12 +515,26 @@ def apply_plan_job_change(plan_is_id: int, user_id: int, payload: dict) -> dict:
             })
 
         elif action == 'cancel':
-            con.execute(
-                'UPDATE arac_gunluk_plan_is SET durum=? WHERE id=?',
-                ('IPTAL', int(plan_is_id)),
+            st = (ctx.get('status') or 'PLANLANDI').upper()
+            cancelled = con.execute(
+                """
+                UPDATE arac_gunluk_plan_is SET durum='IPTAL'
+                WHERE id=? AND plan_id=? AND durum=?
+                """,
+                (int(plan_is_id), int(ctx['plan_id']), st),
+            )
+            if int(cancelled.rowcount or 0) != 1:
+                raise PlanChangeConflict(
+                    'İş başka bir işlem tarafından güncellendi.',
+                    'STATE_CONFLICT',
+                )
+            _finalize_plan_change_conn(
+                con, plan_ids=[int(ctx['plan_id'])], user_id=user_id,
             )
             new_durum = 'IPTAL'
-            result_extra['message'] = 'İş plan dışına alındı.'
+            result_extra['message'] = (
+                'İş aktif plandan kaldırıldı; geçmiş kaydı korundu.'
+            )
 
         elif action == 'complete':
             con.execute(

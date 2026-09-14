@@ -1761,14 +1761,23 @@ body.atp-plan-map-modal-open { overflow:hidden; }
   .atp-hist-detail-modal .hist-detail-tbl { table-layout:auto; }
 }
 
-/* ??? Toast ??? */
-#atpV2Root .atp-toast {
+/* ??? Toast (global — #atpToast lives outside #atpV2Root) ??? */
+#atpV2Root .atp-toast,
+.atp-toast {
   position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(30px);
-  background:#111827;color:#fff;border-radius:8px;padding:10px 20px;
+  background:#111827;color:#fff;border-radius:8px;padding:10px 16px 10px 20px;
   font-size:12.5px;z-index:2000;opacity:0;pointer-events:none;
-  transition:opacity .25s,transform .25s;white-space:nowrap;
+  transition:opacity .25s,transform .25s;
+  max-width:min(92vw,520px);white-space:normal;text-align:center;line-height:1.4;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);
 }
-#atpV2Root .atp-toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
+#atpV2Root .atp-toast.show,
+.atp-toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
+#atpV2Root .atp-toast.atp-toast-success,
+.atp-toast.atp-toast-success { background:#059669;color:#fff; }
+#atpV2Root .atp-toast.atp-toast-error,
+.atp-toast.atp-toast-error { background:#dc2626;color:#fff; }
+.hdm-visit-audit { font-size:11px;color:#667085;line-height:1.45;max-width:220px; }
 
 /* ??? Modals (global ? rendered outside #atpV2Root for z-index) ??? */
 #atpV2Root .modal-bg,
