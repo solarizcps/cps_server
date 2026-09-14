@@ -41,6 +41,9 @@ VISIT_LABELS = {
 }
 
 APPROACHING_M = 500.0
+STOP_OVERSTAY_THRESHOLD_SECONDS = 600
+STOP_OVERSTAY_MOVING_SPEED_KMH = 5.0
+STOP_OVERSTAY_ALERT_TYPE = 'STOP_OVERSTAY'
 
 
 def _fmt_hhmm(ts: str | None) -> str | None:
@@ -58,6 +61,16 @@ def _gps_age_seconds(gps_row: dict | None, now: datetime | None = None) -> int |
         return None
     now = now or datetime.now()
     return max(0, int((now - gps_dt).total_seconds()))
+
+
+def _gps_reference_now(vehicle_row: dict | None, fallback: datetime) -> datetime:
+    """R05: in-stop dwell display uses freshest GPS timestamp, not wall clock."""
+    if not vehicle_row:
+        return fallback
+    lg = vehicle_row.get('latest_gps') or {}
+    ts = lg.get('gps_timestamp') or vehicle_row.get('gps_timestamp') or vehicle_row.get('gps_last_seen_at')
+    dt = parse_gps_timestamp(str(ts or ''))
+    return dt if dt else fallback
 
 
 def _dwell_minutes(
@@ -184,10 +197,11 @@ def _gps_stale(gps_row: dict | None, now: datetime | None = None) -> bool:
 _ALERT_TYPE_PRIORITY = {
     'OUT_OF_SEQUENCE_VISIT': 0,
     'AMBIGUOUS_STOP': 1,
-    'ROUTE_DEVIATION': 2,
-    'VISIT_RESULT_PENDING': 3,
-    'GPS_STALE': 4,
-    'PLANNED_TIME_PASSED': 5,
+    'STOP_OVERSTAY': 2,
+    'ROUTE_DEVIATION': 3,
+    'VISIT_RESULT_PENDING': 4,
+    'GPS_STALE': 5,
+    'PLANNED_TIME_PASSED': 6,
     'NO_ROUTE': 8,
     'MISSING_LOCATION': 9,
     'UNASSIGNED_VEHICLE': 9,
@@ -206,6 +220,160 @@ def _sort_alerts_for_display(alerts: list[dict]) -> list[dict]:
         )
 
     return sorted(alerts, key=_key)
+
+
+def _vehicle_gps_by_id(vehicles: list[dict]) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for v in vehicles:
+        vid = str(v.get('arac_external_id') or '')
+        if not vid:
+            continue
+        gps = v.get('latest_gps')
+        if isinstance(gps, dict) and gps.get('gps_timestamp'):
+            out[vid] = gps
+            continue
+        ts = v.get('gps_timestamp') or v.get('gps_last_seen_at')
+        if ts:
+            out[vid] = {
+                'gps_timestamp': ts,
+                'latitude': v.get('latitude'),
+                'longitude': v.get('longitude'),
+                'speed_kmh': v.get('speed_kmh'),
+                'activity_status': v.get('activity_status'),
+                'is_stale': v.get('gps_is_stale') or v.get('gps_stale'),
+            }
+    return out
+
+
+def _gps_has_valid_coords(gps_row: dict | None) -> bool:
+    if not gps_row:
+        return False
+    lat, lon = gps_row.get('latitude'), gps_row.get('longitude')
+    if lat is None or lon is None:
+        return False
+    try:
+        float(lat)
+        float(lon)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _vehicle_is_moving(gps_row: dict | None) -> bool:
+    if not gps_row:
+        return False
+    act = str(gps_row.get('activity_status') or '').upper()
+    if act in ('HAREKETLI', 'MOVING'):
+        return True
+    try:
+        spd = float(gps_row.get('speed_kmh') or 0)
+    except (TypeError, ValueError):
+        spd = 0.0
+    return spd > STOP_OVERSTAY_MOVING_SPEED_KMH
+
+
+def _stop_overstay_elapsed_seconds(
+    arrived_at: str | None,
+    gps_timestamp: str | None,
+) -> int | None:
+    if not arrived_at or not gps_timestamp:
+        return None
+    start_dt = parse_gps_timestamp(arrived_at)
+    end_dt = parse_gps_timestamp(gps_timestamp)
+    if not start_dt or not end_dt:
+        return None
+    if end_dt < start_dt:
+        return None
+    return max(0, int((end_dt - start_dt).total_seconds()))
+
+
+def _stop_overstay_alert_id(vehicle_id: str, plan_item_id: int | str, arrived_at: str) -> str:
+    return f'STOP_OVERSTAY:{vehicle_id}:{plan_item_id}:{arrived_at}'
+
+
+def _build_stop_overstay_alert(
+    *,
+    item: dict,
+    vehicle: dict | None,
+    elapsed_seconds: int,
+    gps_timestamp: str,
+) -> dict:
+    plate = (
+        (vehicle or {}).get('plate')
+        or item.get('plate')
+        or item.get('arac_plaka_snapshot')
+        or '—'
+    )
+    company = item.get('company_name') or item.get('job_title') or '—'
+    minutes = max(1, elapsed_seconds // 60)
+    plan_item_id = item.get('plan_item_id')
+    vid = str(item.get('arac_external_id') or '')
+    arrived_at = item.get('arrived_at') or ''
+    return {
+        'type': STOP_OVERSTAY_ALERT_TYPE,
+        'severity': 'warning',
+        'title': 'Durakta bekleme',
+        'message': f'{plate} — {company} durağında {minutes} dakikadır bekliyor.',
+        'vehicle_id': vid,
+        'plan_id': (vehicle or {}).get('plan_id') or item.get('plan_id'),
+        'plan_item_id': plan_item_id,
+        'alert_id': _stop_overstay_alert_id(vid, plan_item_id, arrived_at),
+        'overstay_seconds': elapsed_seconds,
+        'geofence_entry_at': arrived_at,
+        'gps_timestamp': gps_timestamp,
+        'action': 'inspect',
+    }
+
+
+def _collect_stop_overstay_alerts(
+    vehicles: list[dict],
+    items: list[dict],
+    *,
+    now: datetime | None = None,
+) -> list[dict]:
+    """R05: geofence ARRIVED + fresh GPS timestamp elapsed >= 600s."""
+    now = now or datetime.now()
+    gps_by_vehicle = _vehicle_gps_by_id(vehicles)
+    vehicle_by_id = {str(v.get('arac_external_id') or ''): v for v in vehicles if v.get('arac_external_id')}
+    alerts: list[dict] = []
+    seen_ids: set[str] = set()
+
+    for item in items:
+        if not _is_active_plan_item(item):
+            continue
+        item_status = (item.get('status') or '').upper()
+        if item_status == 'TAMAMLANDI':
+            continue
+        if item.get('visit_state') != 'ARRIVED':
+            continue
+        arrived_at = item.get('arrived_at')
+        if not arrived_at:
+            continue
+        vid = str(item.get('arac_external_id') or '')
+        gps_row = gps_by_vehicle.get(vid)
+        if not gps_row or _gps_stale(gps_row, now):
+            continue
+        if not _gps_has_valid_coords(gps_row):
+            continue
+        if _vehicle_is_moving(gps_row):
+            continue
+        gps_ts = str(gps_row.get('gps_timestamp') or '')
+        elapsed = _stop_overstay_elapsed_seconds(arrived_at, gps_ts)
+        if elapsed is None or elapsed < STOP_OVERSTAY_THRESHOLD_SECONDS:
+            continue
+        alert = _build_stop_overstay_alert(
+            item=item,
+            vehicle=vehicle_by_id.get(vid),
+            elapsed_seconds=elapsed,
+            gps_timestamp=gps_ts,
+        )
+        aid = alert.get('alert_id')
+        if aid and aid in seen_ids:
+            continue
+        if aid:
+            seen_ids.add(aid)
+        alerts.append(alert)
+    return alerts
 
 
 def _filter_alerts_for_vehicle(alerts: list[dict], vehicle_id: str | None) -> list[dict]:
@@ -354,6 +522,8 @@ def _build_alerts(
                 'action': 'acknowledge',
             })
 
+    alerts.extend(_collect_stop_overstay_alerts(vehicles, items, now=now))
+
     return _sort_alerts_for_display(_filter_alerts_for_vehicle(alerts, vehicle_id))
 
 
@@ -450,6 +620,7 @@ def get_today_vehicle_operations(
         vehicle_row = {
             'plan_id': plan_id,
             'arac_external_id': vid,
+            'latest_gps': gps_row if isinstance(gps_row, dict) else None,
             'plate': plan_v.get('arac_plaka_snapshot'),
             'driver': plan_v.get('sofor_adi_snapshot'),
             'driver_name': plan_v.get('sofor_adi_snapshot'),
@@ -485,6 +656,8 @@ def get_today_vehicle_operations(
                 'selected': False,
             })
 
+    vehicle_by_id = {str(v.get('arac_external_id') or ''): v for v in vehicles_out if v.get('arac_external_id')}
+
     items_out: list[dict] = []
     for item in aggregate.get('items') or []:
         plan_is_id = item.get('plan_item_id')
@@ -492,9 +665,11 @@ def get_today_vehicle_operations(
         visit_state = (visit or {}).get('state') or 'OUTSIDE'
         arrived_at = (visit or {}).get('arrived_at')
         departed_at = (visit or {}).get('departed_at')
+        item_vid = str(item.get('arac_external_id') or '')
+        ref_now = _gps_reference_now(vehicle_by_id.get(item_vid), now)
         dwell_min = _dwell_minutes(
             arrived_at, departed_at,
-            now=now,
+            now=ref_now,
             stored_seconds=(visit or {}).get('dwell_seconds'),
         )
         items_out.append({
@@ -517,7 +692,7 @@ def get_today_vehicle_operations(
             'status': item.get('status'),
             'status_label': item.get('status_label'),
             'visit_state': visit_state,
-            'visit_label': _build_visit_label(visit, item=item, now=now),
+            'visit_label': _build_visit_label(visit, item=item, now=ref_now),
             'arrived_at': arrived_at,
             'departed_at': departed_at,
             'dwell_minutes': dwell_min,

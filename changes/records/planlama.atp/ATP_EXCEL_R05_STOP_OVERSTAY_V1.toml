@@ -1,0 +1,60 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.12.0"
+phase_code = "ATP_EXCEL_R05_STOP_OVERSTAY_V1"
+title = "Durakta 10 dakika bekleme uyarısı (R05 STOP_OVERSTAY)"
+status = "ONAYLANDI"
+date = "2026-09-14"
+summary = "Geofence ARRIVED + GPS timestamp >=600s iken tek STOP_OVERSTAY uyarısı; stale/hareket/koordinatsız GPS koruması; geofence çıkış/TAMAMLANDI/IPTAL kapanışı."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "candidate/atp-excel-r05-stop-overstay-v1@bb75949"
+verification_date = "2026-09-14"
+verification_evidence = "Adem UI onay; 599=0 / 600=1 STOP_OVERSTAY; API/UI match; polling dedupe; exit close; headed runtime PNG."
+test_result = "R05 22/22 PASS; planlama full PASS; GPS master 328/328; unified PASS; release validator PASS"
+db_write = false
+server_restart = false
+push_status = "PENDING"
+deployment_status = "NOT_DEPLOYED"
+root_cause = "Geofence ARRIVED varken today-operations alerts STOP_OVERSTAY kuralı yoktu."
+evidence_summary = "8080 TEMP preview; today-operations API; Günlük Plan Dikkat Gerekenler render."
+
+changes = [
+  "STOP_OVERSTAY alert builder: GPS timestamp - arrived_at >= 600s (inclusive).",
+  "Alert kimliği STOP_OVERSTAY:{vehicle_id}:{plan_item_id}:{arrived_at}.",
+  "Stale GPS, koordinatsız ve hareketli araç guard'ları.",
+  "TAMAMLANDI/IPTAL/geofence OUTSIDE durumunda uyarı üretilmez.",
+  "visit_label dwell gösterimi GPS referans zamanı ile hizalanır.",
+  "Frontend yalnız mevcut alerts[] render; ikinci süre hesabı yok.",
+]
+
+changed_files = [
+  "app/modules/planlama/arac_today_operations_service.py",
+  "app/static/js/planlama_arac_takip.js",
+  "tests/planlama/test_atp_stop_overstay_r05_v1.py",
+  "changes/records/planlama.atp/ATP_EXCEL_R05_STOP_OVERSTAY_V1.toml",
+  "changes/fragments/planlama.atp.ATP_EXCEL_R05_STOP_OVERSTAY_V1.release",
+]
+
+locked_rules = [
+  "Eşik 600 saniye inclusive; GPS timestamp tek zaman kaynağı.",
+  "Frontend ikinci dwell/overstay hesabı eklemez.",
+  "Polling duplicate alert üretmez.",
+  "Canonical/production DB bu fazda yazılmaz.",
+]
+
+tests = [
+  "test_atp_stop_overstay_r05_v1",
+  "tests/planlama full suite",
+  "_run_arac_gps_master_regression",
+  "_run_atp_unified_suite_v1",
+  "validate_release_history",
+]
+
+known_issues = []
+
+next_steps = [
+  "Production deploy ayrı faz; Adem talimatı beklenir.",
+]
+
+related_commits = []
