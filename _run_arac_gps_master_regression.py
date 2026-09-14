@@ -278,10 +278,115 @@ def temp_e2e_gps(temp_db: Path) -> dict:
     return {'passed': passed, 'total': len(results), 'ok': passed == len(results), 'results': results}
 
 
+def _run_guard_subprocess(code: str, *, env: dict | None = None) -> tuple[int, str]:
+    """Invoke arac_gps_canonical_guard in isolated subprocess (parity with hardening suite)."""
+    env2 = os.environ.copy()
+    env2['PYTHONPATH'] = str(_APP)
+    for key in ('CPS_MOCK_DB_PATH', 'CPS_ARAC_GPS_CANONICAL_WRITE'):
+        env2.pop(key, None)
+    if env:
+        for key, val in env.items():
+            if val is None:
+                env2.pop(key, None)
+            else:
+                env2[key] = val
+    proc = subprocess.run(
+        [sys.executable, '-c', code],
+        cwd=str(_APP),
+        env=env2,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+    )
+    return proc.returncode, (proc.stdout or '') + (proc.stderr or '')
+
+
+def _verify_canonical_guard_behavior() -> dict[str, bool]:
+    """
+    Behavior contract for arac_gps_canonical_guard (replaces legacy static grep).
+
+    Legacy runner expected worker source to contain private `_assert_temp_db` text.
+    Worker now delegates to assert_gps_db_write_allowed(); verify runtime gates instead.
+    """
+    if not CANONICAL.is_file() or CANONICAL.stat().st_size <= 0:
+        return {
+            'behavior_canonical_no_env_rejected': False,
+            'behavior_canonical_wrong_env_rejected': False,
+            'behavior_canonical_yes_allowed': False,
+            'behavior_temp_allowed': False,
+            'worker_entry_rejects_without_yes': False,
+        }
+
+    guard_call = (
+        'from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed\n'
+        'assert_gps_db_write_allowed()\n'
+    )
+    rc_no_env, _ = _run_guard_subprocess(
+        guard_call,
+        env={'CPS_ARAC_GPS_CANONICAL_WRITE': None, 'CPS_MOCK_DB_PATH': None},
+    )
+    rc_wrong_env, _ = _run_guard_subprocess(
+        guard_call,
+        env={'CPS_ARAC_GPS_CANONICAL_WRITE': 'NO', 'CPS_MOCK_DB_PATH': None},
+    )
+    rc_yes, _ = _run_guard_subprocess(
+        guard_call,
+        env={'CPS_ARAC_GPS_CANONICAL_WRITE': 'YES', 'CPS_MOCK_DB_PATH': None},
+    )
+
+    temp_path = _APP / f'_gps_guard_behavior_{os.getpid()}.db'
+    temp_ok = False
+    try:
+        shutil.copy2(CANONICAL, temp_path)
+        rc_temp, out_temp = _run_guard_subprocess(
+            'from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed\n'
+            'p = assert_gps_db_write_allowed()\n'
+            'print("TEMP_OK:" + p)\n',
+            env={'CPS_MOCK_DB_PATH': str(temp_path.resolve()), 'CPS_ARAC_GPS_CANONICAL_WRITE': None},
+        )
+        temp_ok = rc_temp == 0 and 'TEMP_OK:' in out_temp
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    worker_env = os.environ.copy()
+    worker_env['PYTHONPATH'] = str(_APP)
+    worker_env.pop('CPS_MOCK_DB_PATH', None)
+    worker_env.pop('CPS_ARAC_GPS_CANONICAL_WRITE', None)
+    worker_rc = subprocess.run(
+        [sys.executable, str(_APP / 'tools' / 'arac_gps_poll_worker.py'), '--once'],
+        cwd=str(_APP),
+        env=worker_env,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+    ).returncode
+
+    return {
+        'behavior_canonical_no_env_rejected': rc_no_env == 2,
+        'behavior_canonical_wrong_env_rejected': rc_wrong_env == 2,
+        'behavior_canonical_yes_allowed': rc_yes == 0,
+        'behavior_temp_allowed': temp_ok,
+        'worker_entry_rejects_without_yes': worker_rc == 2,
+    }
+
+
 def verify_worker_security() -> dict:
     src = (_APP / 'tools' / 'arac_gps_poll_worker.py').read_text(encoding='utf-8')
+    behavior = _verify_canonical_guard_behavior()
     checks = {
-        'rejects_canonical': '_assert_temp_db' in src and 'canonical DB write forbidden' in src,
+        'rejects_canonical': (
+            behavior['behavior_canonical_no_env_rejected']
+            and behavior['behavior_canonical_wrong_env_rejected']
+            and behavior['worker_entry_rejects_without_yes']
+        ),
+        'canonical_yes_gate_opens': behavior['behavior_canonical_yes_allowed'],
+        'explicit_temp_db_allowed': behavior['behavior_temp_allowed'],
+        'uses_shared_canonical_guard': (
+            '_assert_db_write' in src
+            and 'assert_gps_db_write_allowed' in src
+        ),
         'single_instance_lock': '_SingleInstanceLock' in src and 'another worker instance' in src,
         'default_60s': "DEFAULT_INTERVAL_SEC = int(os.environ.get('ARAC_GPS_POLL_INTERVAL_SEC', '60'))" in src,
         'api_backoff': 'BACKOFF_BASE_SEC' in src and 'backoff * 2' in src,
@@ -289,6 +394,7 @@ def verify_worker_security() -> dict:
         'once_flag': "'--once' in sys.argv" in src,
         'no_token_log': 'FILOM_PASSWORD' not in src and 'api_key' not in src.lower(),
     }
+    checks.update(behavior)
     return checks
 
 
