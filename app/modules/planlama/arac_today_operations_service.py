@@ -7,6 +7,12 @@ from datetime import datetime, timedelta
 
 from modules.planlama.arac_geofence_repo import geofence_tables_ready, get_visit_state
 from modules.planlama.arac_gps_poll_service import STALE_AGE, parse_gps_timestamp
+from modules.planlama.arac_gps_source_selector import (
+    SOURCE_FILOM,
+    SOURCE_SQLITE,
+    apply_gps_bundle_to_vehicle,
+    select_freshest_gps_source,
+)
 from modules.planlama.arac_gps_snapshot_repo import (
     get_latest_gps_snapshot,
     gps_tables_ready,
@@ -404,14 +410,11 @@ def get_today_vehicle_operations(
         plan_id = plan_v.get('plan_id')
         filom = filom_by_id.get(vid)
         gps_db = get_latest_gps_snapshot(vid) if _gps_ready else None
-        gps_row = gps_db or (filom and {
-            'latitude': filom.get('latitude'),
-            'longitude': filom.get('longitude'),
-            'gps_timestamp': filom.get('last_seen_at'),
-            'is_stale': filom.get('is_stale_data'),
-            'speed_kmh': filom.get('speed_kmh'),
-        })
-        stale = _gps_stale(gps_row if isinstance(gps_row, dict) else None, now)
+        selection = select_freshest_gps_source(filom, gps_db, now=now)
+        gps_row = selection.get('gps_row')
+        gps_bundle = selection.get('bundle') or {}
+        gps_source = selection.get('source')
+        stale = bool(gps_bundle.get('gps_is_stale'))
         if stale:
             stale_count += 1
 
@@ -428,18 +431,23 @@ def get_today_vehicle_operations(
                 deviation_started_at = dev.get('deviation_started_at')
 
         physical = '—'
-        if gps_db and not stale:
-            # Prefer sqlite GPS activity_status (direct from DB, most up-to-date)
+        if gps_source == SOURCE_SQLITE and gps_db and not stale:
             db_act = gps_db.get('activity_status') if isinstance(gps_db, dict) else None
             physical = db_act or '—'
-        elif filom:
-            physical = filom.get('activity_label') or filom.get('status_label') or filom.get('activity_status') or '—'
+        elif gps_source == SOURCE_FILOM and filom:
+            physical = (
+                filom.get('activity_label')
+                or filom.get('status_label')
+                or filom.get('activity_status_label')
+                or filom.get('activity_status')
+                or '—'
+            )
         elif gps_row and not stale:
             spd = (gps_row.get('speed_kmh') if isinstance(gps_row, dict) else None) or 0
             physical = 'Hareket halinde' if spd and float(spd) > 5 else 'Duruyor'
 
         gps_age = _gps_age_seconds(gps_row if isinstance(gps_row, dict) else None, now)
-        vehicles_out.append({
+        vehicle_row = {
             'plan_id': plan_id,
             'arac_external_id': vid,
             'plate': plan_v.get('arac_plaka_snapshot'),
@@ -456,21 +464,16 @@ def get_today_vehicle_operations(
             'next_display_order_no': plan_v.get('next_display_order_no'),
             'next_time': plan_v.get('next_time'),
             'physical_status': physical,
-            'physical_source': 'filom' if filom else ('sqlite' if gps_db else None),
+            'physical_source': gps_source,
             'route_state': route_state,
             'route_status_label': _route_status_label(route_state, deviation_m),
             'current_deviation_m': deviation_m,
             'deviation_m': deviation_m,
             'max_deviation_m': max_deviation_m,
             'deviation_started_at': deviation_started_at,
-            'latest_gps': gps_row if isinstance(gps_row, dict) else None,
-            'gps_stale': stale,
-            'gps_is_stale': stale,
-            'gps_timestamp': (gps_row or {}).get('gps_timestamp') if isinstance(gps_row, dict) else None,
-            'gps_last_seen_at': (gps_row or {}).get('gps_timestamp') if isinstance(gps_row, dict) else None,
             'gps_age_seconds': gps_age,
-            'gps_source': 'sqlite' if gps_db else ('filom' if filom else None),
-        })
+        }
+        vehicles_out.append(apply_gps_bundle_to_vehicle(vehicle_row, selection))
 
         if gps_row and isinstance(gps_row, dict) and gps_row.get('latitude') is not None:
             map_vehicles.append({
