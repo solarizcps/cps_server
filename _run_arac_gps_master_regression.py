@@ -99,6 +99,92 @@ def run_migrations(temp_db: Path) -> None:
         mod.run(str(temp_db))
 
 
+def bootstrap_vehui_fixture(target_db: Path, *, source_canonical: Path | None = None) -> Path:
+    """Isolated TEMP DB for VEHUI read-only suite (no canonical writes)."""
+    src = source_canonical or CANONICAL
+    if not src.is_file():
+        raise FileNotFoundError(f'Canonical source missing: {src}')
+    target_db.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, target_db)
+    run_migrations(target_db)
+    spec = importlib.util.spec_from_file_location(
+        '180_arac_plan_ziyaret_durum.py', _APP / 'migrations' / '180_arac_plan_ziyaret_durum.py',
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.run(str(target_db))
+
+    plan_date = '2026-09-14'
+    vehicle = '45077045'
+    plaka = '34 MOR 049'
+    user_id = 1
+    now = '2026-09-14 10:00:00'
+    con = sqlite3.connect(str(target_db))
+    try:
+        con.execute(
+            "DELETE FROM arac_gunluk_plan_is WHERE plan_id IN "
+            "(SELECT id FROM arac_gunluk_plan WHERE arac_external_id=? AND plan_tarihi=?)",
+            (vehicle, plan_date),
+        )
+        con.execute(
+            "DELETE FROM arac_gunluk_plan WHERE arac_external_id=? AND plan_tarihi=?",
+            (vehicle, plan_date),
+        )
+        if not con.execute('SELECT 1 FROM arac_operasyon_ayar LIMIT 1').fetchone():
+            con.execute(
+                """
+                INSERT INTO arac_operasyon_ayar (
+                    base_name, base_latitude, base_longitude, base_address, aktif,
+                    created_at, updated_at, updated_by
+                ) VALUES (?,?,?,?,1,datetime('now'),datetime('now'),1)
+                """,
+                ('Fabrika', 41.0, 29.0, 'Istanbul'),
+            )
+        loc_id = con.execute(
+            """
+            INSERT INTO arac_kayitli_yer (
+                firma_adi, adres, latitude, longitude, aktif, kullanim_sayisi, created_at, created_by
+            ) VALUES (?,?,?,?,1,0,?,?)
+            """,
+            ('VEHUI Test Firma', 'Istanbul', 41.01, 29.01, now, user_id),
+        ).lastrowid
+        talep_id = con.execute(
+            """
+            INSERT INTO arac_is_talebi (
+                talep_no, talep_eden_user_id, talep_eden_adi_snapshot, talep_tarihi,
+                kayitli_yer_id, firma_adi, adres, latitude, longitude, yapilacak_is,
+                oncelik, durum, save_to_master, created_at, created_by, updated_at, updated_by
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)
+            """,
+            (
+                'VEHUI-12-BOOT', user_id, 'Admin', plan_date, loc_id, 'VEHUI Test Firma',
+                'Istanbul', 41.01, 29.01, 'WhatsApp test stop', 'NORMAL', 'BEKLIYOR',
+                now, user_id, now, user_id,
+            ),
+        ).lastrowid
+        plan_id = con.execute(
+            """
+            INSERT INTO arac_gunluk_plan (
+                plan_tarihi, arac_provider, arac_external_id, arac_plaka_snapshot,
+                sofor_adi_snapshot, durum, created_at, created_by, updated_at, updated_by
+            ) VALUES (?,?,?,?,'Test Sofor','AKTIF',?,?,?,?)
+            """,
+            (plan_date, 'TURKCELL_FILOM', vehicle, plaka, now, user_id, now, user_id),
+        ).lastrowid
+        con.execute(
+            """
+            INSERT INTO arac_gunluk_plan_is (
+                plan_id, is_talebi_id, sira, durum, created_at, created_by
+            ) VALUES (?,?,1,'PLANLANDI',?,?)
+            """,
+            (plan_id, talep_id, now, user_id),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return target_db
+
+
 def parse_suite_output(stdout: str) -> tuple[int, int, int]:
     passed = failed = total = 0
     for line in stdout.splitlines():
@@ -465,11 +551,23 @@ def main() -> int:
             print(f'STOP: {name} failed')
             return 1
 
-    # Read-only suites
+    # Read-only suites (VEHUI uses isolated TEMP fixture — no canonical dependency)
+    vehui_db = _ROOT / '_tempdb' / f'gps_master_vehui_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db'
+    try:
+        bootstrap_vehui_fixture(vehui_db, source_canonical=CANONICAL)
+        assert_not_canonical(str(vehui_db))
+        print(f'VEHUI_TEMP_DB={vehui_db}')
+    except Exception as exc:
+        print(f'STOP: VEHUI bootstrap failed: {exc}')
+        return 1
+
     for name, script in READONLY_SUITES:
         print('=' * 72)
         print(f'READONLY SUITE: {name}')
-        r = run_subprocess_suite(name, script)
+        suite_env = os.environ.copy()
+        if script == '_test_faz_arac_takip_v1_1.py':
+            suite_env['CPS_MOCK_DB_PATH'] = str(vehui_db.resolve())
+        r = run_subprocess_suite(name, script, suite_env)
         all_results.append(r)
         if not r['ok']:
             print(f'STOP: {name} failed')
@@ -542,6 +640,7 @@ def main() -> int:
 
     try:
         temp_db.unlink(missing_ok=True)
+        vehui_db.unlink(missing_ok=True)
     except Exception:
         pass
     return 0 if all_ok else 1
