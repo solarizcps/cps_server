@@ -4,7 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=76">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=77">
 {% endblock %}
 
 {% block content %}
@@ -254,8 +254,11 @@
               </div>
               {# Right: route map + metrics #}
               <div>
-                <div class="map-wrap" style="height:200px;margin-bottom:12px">
-                  <div id="atp-plan-map-container" style="position:relative;height:100%;background:#dde9f4;border-radius:4px;border:var(--border)">
+                <div class="map-wrap atp-plan-map-wrap">
+                  <div class="atp-plan-map-toolbar">
+                    <button type="button" class="btn btn-outline btn-xs" id="atpBtnPlanMapExpand">Haritayı Büyüt</button>
+                  </div>
+                  <div id="atp-plan-map-container" class="atp-plan-map-container-inner">
                     <div id="atpPlanMapEmpty" style="display:none;position:absolute;inset:0;z-index:2">
                       <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:12px 16px;box-sizing:border-box">
                         <div class="atp-plan-empty-title" style="font-size:12.5px;font-weight:700;color:#111827;margin-bottom:4px"></div>
@@ -269,7 +272,9 @@
                     <span><span class="dot dot-green"></span>Önerilen</span>
                   </div>
                 </div>
+                <div id="atpPlanMapRouteFallback" class="atp-plan-map-fallback" style="display:none"></div>
                 <div id="atpPlanMapCompleteness" style="font-size:10.5px;color:var(--gray);text-align:center;margin-bottom:8px"></div>
+                <div id="atpPlanMapMissingList" class="atp-plan-map-missing" style="display:none"></div>
                 {# Hidden elements for route.js compatibility #}
                 <div style="display:none">
                   <span id="atpRouteCurrentOrder"></span>
@@ -1091,10 +1096,33 @@
   </div>
 </div>
 
+{# ── Plan map in-page modal (R12) — portaled to body via JS, no navigation ── #}
+<div id="atpPlanMapFullscreenModal" class="atp-plan-map-modal-root" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="atpPlanMapModalTitle">
+  <div class="atp-plan-map-modal-backdrop" data-atp-no-dismiss="1"></div>
+  <div id="atpPlanMapModalDialog" class="atp-plan-map-modal-dialog">
+    <div class="atp-plan-map-modal-hdr">
+      <span id="atpPlanMapModalTitle">Günlük Plan Haritası</span>
+      <button type="button" class="atp-plan-map-modal-x" id="atpPlanMapFullscreenClose" aria-label="Kapat">✕</button>
+    </div>
+    <div class="atp-plan-map-modal-body">
+      <aside class="atp-plan-map-modal-stops" id="atpPlanMapModalStops" aria-label="Sıralı duraklar">
+        <div class="atp-plan-map-modal-stops-title">Sıralı Duraklar</div>
+        <div id="atpPlanMapModalStopsList" class="atp-plan-map-modal-stops-list"></div>
+      </aside>
+      <div class="atp-plan-map-modal-map-col">
+        <div id="atpPlanMapFullscreenLeaflet" class="atp-plan-map-modal-map-host"></div>
+      </div>
+    </div>
+    <div class="atp-plan-map-modal-footer">
+      <button type="button" class="btn btn-outline btn-sm" id="atpPlanMapFullscreenDone">Kapat</button>
+    </div>
+  </div>
+</div>
+
 {# ── Scripts ── #}
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_map.js') }}?v=6"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=12"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=14"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=16"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=11"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>

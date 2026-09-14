@@ -432,17 +432,133 @@
 #atpV2Root .factory-label { font-size:12px;font-weight:700;color:var(--gold-h); }
 
 /* ??? Plan rota map (sa? s?tun) ? y?kseklik kontrol? ??? */
-#atpV2Root #atp-plan-map-container {
-  position:relative;height:200px !important;max-height:200px !important;
+#atpV2Root .atp-plan-map-wrap {
+  position:relative;margin-bottom:12px;
+}
+#atpV2Root .atp-plan-map-toolbar {
+  display:flex;justify-content:flex-end;margin-bottom:6px;
+}
+#atpV2Root #atp-plan-map-container,
+#atpV2Root .atp-plan-map-container-inner {
+  position:relative;height:380px;min-height:300px;max-height:none;
   overflow:hidden;background:#dde9f4;border-radius:4px;border:var(--border);flex-shrink:0;
+  width:100%;
 }
 #atpV2Root #atpPlanLeafletMap,
 #atpV2Root #atpPlanLeafletMap.leaflet-container {
-  width:100% !important;height:100% !important;max-height:200px !important;
+  width:100% !important;height:100% !important;min-height:300px;
   border-radius:4px;
 }
 #atpV2Root .plan-rota-detail .map-wrap {
-  position:relative;height:200px;margin-bottom:4px;overflow:visible;
+  position:relative;margin-bottom:4px;overflow:visible;
+}
+#atpV2Root .atp-plan-map-fallback {
+  font-size:11.5px;color:#9a3412;background:#fff7ed;border:1px solid #fdba74;
+  border-radius:6px;padding:8px 10px;margin-bottom:8px;text-align:center;
+}
+#atpV2Root .atp-plan-map-missing {
+  font-size:11.5px;color:#667085;background:#f9fafb;border:1px solid #e5e7eb;
+  border-radius:6px;padding:8px 10px;margin-bottom:8px;
+}
+#atpV2Root .atp-plan-map-missing strong { color:#111827; }
+.atp-driver-map-host { height:380px;min-height:300px;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;background:#dde9f4; }
+.atp-driver-leaflet { width:100%;height:100%;min-height:300px; }
+/* Plan map in-page modal — unique IDs (not .modal / Bootstrap) */
+#atpPlanMapFullscreenModal.atp-plan-map-modal-root {
+  display:none;position:fixed;inset:0;z-index:10050;box-sizing:border-box;
+}
+#atpPlanMapFullscreenModal.atp-plan-map-modal-root.is-open { display:block; }
+#atpPlanMapFullscreenModal .atp-plan-map-modal-backdrop {
+  position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:0;
+}
+#atpPlanMapModalDialog.atp-plan-map-modal-dialog {
+  position:fixed;z-index:1;box-sizing:border-box;
+  top:6vh;left:50%;transform:translateX(-50%);
+  width:min(88vw,1700px) !important;max-width:none !important;
+  height:88vh !important;min-height:420px;
+  margin:0 !important;
+  background:#fff;border-radius:10px;
+  display:flex;flex-direction:column;
+  box-shadow:0 20px 50px rgba(0,0,0,.28);
+  overflow:hidden;
+}
+#atpPlanMapModalDialog .atp-plan-map-modal-hdr {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;border-bottom:1px solid #e5e7eb;font-weight:700;
+  flex:0 0 auto;
+}
+#atpPlanMapModalDialog .atp-plan-map-modal-x {
+  border:none;background:transparent;font-size:18px;cursor:pointer;padding:4px 8px;
+}
+#atpPlanMapModalDialog .atp-plan-map-modal-body {
+  flex:1 1 auto;min-height:0;overflow:hidden;
+  display:grid;grid-template-columns:minmax(220px,34%) minmax(0,66%);
+  gap:10px;padding:8px;box-sizing:border-box;
+}
+#atpPlanMapModalDialog .atp-plan-map-modal-stops {
+  min-width:0;min-height:0;overflow:auto;
+  background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;
+}
+#atpPlanMapModalDialog .atp-plan-map-modal-stops-title {
+  font-size:12.5px;font-weight:700;color:#111827;margin-bottom:6px;
+}
+#atpPlanMapModalDialog .atp-plan-map-modal-stops-list .stop-list { margin:0; }
+#atpPlanMapModalDialog .atp-plan-map-modal-stops-list .factory-row { font-size:11.5px; }
+#atpPlanMapModalDialog .atp-plan-map-modal-stops-list .stop-item { font-size:12px; }
+#atpPlanMapModalDialog .atp-plan-map-modal-map-col {
+  min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;
+}
+#atpPlanMapModalDialog .atp-plan-map-modal-map-host,
+#atpPlanMapModalDialog #atpPlanMapFullscreenLeaflet {
+  flex:1 1 auto;min-height:0;width:100%;height:100%;
+  overflow:hidden;border-radius:8px;border:1px solid #e5e7eb;background:#dde9f4;
+}
+#atpPlanMapModalDialog #atpPlanLeafletMap,
+#atpPlanMapModalDialog #atpPlanLeafletMap.leaflet-container {
+  width:100% !important;height:100% !important;min-height:240px !important;
+}
+#atpPlanMapModalDialog .atp-plan-map-modal-footer {
+  flex:0 0 auto;padding:8px 14px;border-top:1px solid #e5e7eb;
+  display:flex;justify-content:flex-end;background:#fff;
+}
+body.atp-plan-map-modal-open { overflow:hidden; }
+
+/* Driver standalone fullscreen (separate page) */
+.atp-map-fullscreen-modal {
+  display:none;position:fixed;inset:0;z-index:10050;
+}
+.atp-map-fullscreen-modal.is-open { display:block; }
+.atp-map-fullscreen-backdrop {
+  position:absolute;inset:0;background:rgba(15,23,42,.45);
+}
+.atp-map-fullscreen-panel {
+  position:absolute;inset:12px;background:#fff;border-radius:10px;
+  display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.25);
+  max-width:1400px;margin:0 auto;left:0;right:0;
+}
+.atp-map-fullscreen-hdr {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;border-bottom:1px solid #e5e7eb;font-weight:700;
+}
+.atp-map-fullscreen-close {
+  border:none;background:transparent;font-size:18px;cursor:pointer;padding:4px 8px;
+}
+.atp-map-fullscreen-body { flex:1;min-height:0;padding:8px; }
+.atp-map-fullscreen-body .atp-driver-leaflet { height:100%;min-height:280px;border-radius:6px; }
+.atp-map-fullscreen-footer {
+  padding:8px 14px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;
+}
+@media (max-width:768px) {
+  #atpV2Root #atp-plan-map-container,
+  #atpV2Root .atp-plan-map-container-inner { height:300px;min-height:300px; }
+  .atp-driver-map-host { height:300px; }
+  #atpPlanMapModalDialog.atp-plan-map-modal-dialog {
+    width:96vw !important;height:92vh !important;top:4vh;
+  }
+  #atpPlanMapModalDialog .atp-plan-map-modal-body {
+    grid-template-columns:1fr;
+    grid-template-rows:minmax(120px,34%) minmax(0,1fr);
+  }
 }
 /* fl icon i?in font-size */
 #atpV2Root .fl { font-size:13px; }

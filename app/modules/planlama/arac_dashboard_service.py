@@ -28,19 +28,29 @@ def _date_label(d: date) -> str:
 def _build_plan_map_dto(tasks: List[dict], base_row: dict | None) -> dict:
     from modules.planlama.arac_location_resolver import resolve_base_location
 
+    from modules.planlama.arac_route_constraints import INACTIVE_PLAN_STATUSES
+
     base = resolve_base_location(base_row)
     stops = []
-    for t in sorted(tasks, key=lambda x: x.get('order_no') or 0):
+    active_tasks = [
+        t for t in tasks
+        if (t.get('status') or 'PLANLANDI').upper() not in INACTIVE_PLAN_STATUSES
+    ]
+    for t in sorted(active_tasks, key=lambda x: x.get('order_no') or 0):
         stops.append({
             'id': t.get('id'),
             'plan_item_id': t.get('plan_item_id'),
             'is_talebi_id': t.get('is_talebi_id'),
             'order_no': t.get('order_no'),
+            'display_order_no': t.get('display_order_no'),
             'company_name': t.get('company_name'),
             'job_title': t.get('job_title'),
             'planned_time': t.get('planned_time'),
             'address_text': t.get('address_text'),
+            'priority': t.get('priority'),
             'priority_label': t.get('priority_label'),
+            'status': t.get('status'),
+            'status_label': t.get('status_label'),
             'latitude': t.get('latitude'),
             'longitude': t.get('longitude'),
             'location_status': t.get('location_status'),

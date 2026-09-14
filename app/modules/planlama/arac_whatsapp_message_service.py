@@ -347,6 +347,11 @@ def build_whatsapp_plan_message_v2(context: dict[str, Any]) -> str:
         f"🕐 Çıkış: {context.get('departure_time') or _DASH}",
         '',
     ]
+    driver_map_url = context.get('driver_map_url') or ''
+    if driver_map_url:
+        lines.append('🗺️ *Tüm durakları tek haritada gör:*')
+        lines.append(driver_map_url)
+        lines.append('')
     lines.extend(build_base_section(context.get('base') or {}, heading='Başlangıç'))
 
     for stop in context.get('stops') or []:
@@ -354,7 +359,6 @@ def build_whatsapp_plan_message_v2(context: dict[str, Any]) -> str:
         company = (stop.get('company_name') or '—').strip()
         job = (stop.get('job_title') or stop.get('yapilacak_is') or '—').strip()
         eta = resolve_stop_eta(stop)
-        loc = resolve_stop_location_link(stop)
         acil_tag = ' · ACİL' if _stop_is_acil(stop) else ''
         lines.append(f'*{label_no}. {company}{acil_tag}*')
         lines.append(f'İş: {job}')
@@ -362,9 +366,12 @@ def build_whatsapp_plan_message_v2(context: dict[str, Any]) -> str:
         if stop.get('phone'):
             lines.append(f'Telefon: {stop["phone"]}')
         addr = (stop.get('address_text') or stop.get('adres') or '').strip()
-        if addr and addr not in (loc, _MISSING_LOCATION):
+        if addr:
             lines.append(f'Adres: {addr}')
-        lines.append(f'📍 {loc}')
+        if stop.get('has_coordinates'):
+            lines.append('📍 Konum: haritada görüntüle')
+        else:
+            lines.append(f'📍 {_MISSING_LOCATION}')
         lines.append('')
 
     base = context.get('base') or {}
@@ -376,8 +383,10 @@ def build_whatsapp_plan_message_v2(context: dict[str, Any]) -> str:
         lines.append(_MISSING_BASE)
     ret = context.get('estimated_return_time')
     lines.append(f'Tahmini dönüş: {ret if ret else _DASH}')
-    if base.get('configured'):
-        lines.append(f'📍 {resolve_base_maps_link(base)}')
+    if base.get('configured') and base.get('has_coordinates'):
+        lines.append('📍 Dönüş: fabrika (haritada görüntüle)')
+    elif base.get('configured'):
+        lines.append(f'📍 {_MISSING_BASE}')
     return '\n'.join(lines).strip()
 
 
@@ -414,6 +423,13 @@ def load_whatsapp_plan_context(plan_date: str, vehicle_id: str) -> dict[str, Any
     except ValueError:
         date_label = plan_date
 
+    driver_map_url = ''
+    try:
+        from modules.planlama.arac_driver_map_service import build_driver_map_page_url
+        driver_map_url = build_driver_map_page_url(plan_date, str(vehicle_id), plan_id, external=True)
+    except Exception:
+        driver_map_url = ''
+
     return {
         'plan_id': plan_id,
         'plan_date': plan_date,
@@ -425,6 +441,7 @@ def load_whatsapp_plan_context(plan_date: str, vehicle_id: str) -> dict[str, Any
         'departure_time': plan_row.get('cikis_saati') or None,
         'base': base,
         'stops': stops,
+        'driver_map_url': driver_map_url,
         'estimated_return_time': return_info.get('estimated_return_time'),
         'return_source': return_info.get('return_source', RETURN_SOURCE_NONE),
         'return_scope_valid': bool(return_info.get('return_scope_valid')),
@@ -487,6 +504,7 @@ def build_whatsapp_api_response(
     return {
         'ok': True,
         'whatsapp_url': whatsapp_url,
+        'driver_map_url': context.get('driver_map_url') or '',
         'vehicle_external_id': str(context.get('vehicle_external_id') or vehicle_id),
         'plan_id': context.get('plan_id'),
         'stop_count': len(stops),

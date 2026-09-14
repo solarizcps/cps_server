@@ -89,13 +89,12 @@ def main() -> int:
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     svc_path = APP / 'modules' / 'planlama' / 'arac_whatsapp_message_service.py'
     sha = hashlib.sha256(svc_path.read_bytes()).hexdigest().upper()
-    expected_sha = '9F213387F2E6B6DA74970DBAA5F25DC50773F61BDC694181C2D6471E447FFB4B'
     result = {
         'whatsapp_source_sha256': sha,
-        'whatsapp_e4abd03_match': sha == expected_sha,
         'module_import_pass': False,
         'http_status': None,
         'order_match': False,
+        'driver_map_url_present': False,
     }
     try:
         sys.path.insert(0, str(APP))
@@ -151,13 +150,14 @@ def main() -> int:
         expected_ids = [str(s.get('plan_item_id') or s.get('id')) for s in wa_stops]
         result['whatsapp_order'] = wa_names
         result['order_match'] = wa_names == EXPECTED and result['order_ids'] == expected_ids
+        result['driver_map_url_present'] = bool(body.get('driver_map_url'))
 
     ok = (
-        result['whatsapp_e4abd03_match']
-        and result['module_import_pass']
+        result['module_import_pass']
         and result['http_status'] == 200
         and result.get('body_ok')
         and result['order_match']
+        and result['driver_map_url_present']
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if ok else 1

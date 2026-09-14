@@ -213,6 +213,15 @@ def build_plan_route_dto(
     }
 
     if prov is None:
+        fallback_ids = [str(t['id']) for t in active_tasks]
+        empty_route['current']['full_task_ids'] = fallback_ids
+        empty_route['current']['task_ids'] = fallback_ids
+        empty_route['suggested']['full_task_ids'] = fallback_ids
+        empty_route['suggested']['task_ids'] = fallback_ids
+        empty_route['route_fallback'] = True
+        empty_route['route_fallback_message'] = (
+            'Güzergâh çizgisi oluşturulamadı; duraklar plan sırasıyla gösteriliyor.'
+        )
         return empty_route
 
     if not meta['base_ready']:

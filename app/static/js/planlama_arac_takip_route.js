@@ -478,6 +478,16 @@
 
     }
 
+    if (global.AtpPlanMap && global.AtpPlanMap.showRouteFallback) {
+      var fbMsg = '';
+      if (ra.route_fallback || ra.status === 'UNCONFIGURED' || ra.status === 'UNAVAILABLE') {
+        fbMsg = ra.route_fallback_message || ra.message || 'Güzergâh çizgisi oluşturulamadı; duraklar plan sırasıyla gösteriliyor.';
+      } else if (!(cur.geometry && cur.geometry.length) && (cur.full_task_ids && cur.full_task_ids.length)) {
+        fbMsg = 'Güzergâh çizgisi oluşturulamadı; duraklar plan sırasıyla gösteriliyor.';
+      }
+      global.AtpPlanMap.showRouteFallback(fbMsg);
+    }
+
     var legsEl = el('atpRouteLegs');
 
     if (legsEl) {

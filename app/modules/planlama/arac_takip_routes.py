@@ -280,6 +280,76 @@ def arac_takip_api_whatsapp():
     return jsonify(body)
 
 
+@arac_takip_bp.route('/sofor-haritasi', methods=['GET'])
+def arac_takip_sofor_haritasi():
+    """R04 — token-signed driver map (no CPS session)."""
+    date_raw = (request.args.get('date') or '').strip()
+    vehicle_id = (request.args.get('vehicle_id') or request.args.get('arac_external_id') or '').strip()
+    token = (request.args.get('t') or request.args.get('token') or '').strip()
+    try:
+        plan_id = int(request.args.get('plan_id') or 0)
+    except (TypeError, ValueError):
+        plan_id = 0
+    if not date_raw or not vehicle_id or not plan_id or not token:
+        return render_template(
+            'planlama/arac_takip_driver_map.html',
+            error='Geçersiz bağlantı.',
+            driver_map=None,
+        ), 400
+    from modules.planlama.arac_driver_map_token import verify_driver_map_token
+    from modules.planlama.arac_driver_map_service import build_driver_map_dto
+
+    if not verify_driver_map_token(date_raw[:10], vehicle_id, plan_id, token):
+        return render_template(
+            'planlama/arac_takip_driver_map.html',
+            error='Bağlantı doğrulanamadı.',
+            driver_map=None,
+        ), 403
+    dto = build_driver_map_dto(date_raw[:10], vehicle_id)
+    if not dto or int(dto.get('plan_id') or 0) != plan_id:
+        return render_template(
+            'planlama/arac_takip_driver_map.html',
+            error='Plan bulunamadı.',
+            driver_map=None,
+        ), 404
+    return render_template(
+        'planlama/arac_takip_driver_map.html',
+        error=None,
+        driver_map=dto,
+    )
+
+
+@arac_takip_bp.route('/api/driver-map', methods=['GET'])
+def arac_takip_api_driver_map():
+    """JSON driver map DTO — token or authenticated planner session."""
+    date_raw = (request.args.get('date') or '').strip()
+    vehicle_id = (request.args.get('vehicle_id') or '').strip()
+    token = (request.args.get('t') or request.args.get('token') or '').strip()
+    try:
+        plan_id = int(request.args.get('plan_id') or 0)
+    except (TypeError, ValueError):
+        plan_id = 0
+    if not date_raw or not vehicle_id:
+        return jsonify({'ok': False, 'error': 'date ve vehicle_id zorunlu'}), 400
+
+    from modules.planlama.arac_driver_map_token import verify_driver_map_token
+    from modules.planlama.arac_driver_map_service import build_driver_map_dto
+
+    authed = bool(session.get('kullanici')) and yetki_var('planlama', 'can_view')
+    if token and plan_id:
+        if not verify_driver_map_token(date_raw[:10], vehicle_id, plan_id, token):
+            return jsonify({'ok': False, 'error': 'invalid token'}), 403
+    elif not authed:
+        return jsonify({'ok': False, 'error': 'auth required'}), 401
+
+    dto = build_driver_map_dto(date_raw[:10], vehicle_id)
+    if not dto:
+        return jsonify({'ok': False, 'error': 'plan not found'}), 404
+    if plan_id and int(dto.get('plan_id') or 0) != plan_id:
+        return jsonify({'ok': False, 'error': 'plan mismatch'}), 404
+    return jsonify({'ok': True, 'driver_map': dto})
+
+
 @arac_takip_bp.route('/api/locations/search', methods=['GET'])
 @yetki_gerekli('planlama', 'can_view')
 def arac_takip_api_locations_search():

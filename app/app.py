@@ -93,7 +93,8 @@ def oturum_kontrol():
     acik = (yol.startswith('/static')
             or yol.startswith('/giris')
             or yol.startswith('/personel-giris')
-            or yol == '/favicon.ico')
+            or yol == '/favicon.ico'
+            or yol.startswith('/planlama/arac-takip/sofor-haritasi'))
 
     if g.user and not acik and not sistem_session_gecerli_mi(g.user):
         session.clear()
