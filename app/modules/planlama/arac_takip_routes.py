@@ -537,6 +537,31 @@ def arac_takip_api_route_plan():
     base = resolve_base_location(base_row)
     route_dto = build_plan_route_dto(base, tasks)
 
+    from modules.planlama.arac_traffic_route_proposal_service import compute_traffic_route_proposal
+
+    plan_row_pre = get_active_plan_row(plan_date_str, vehicle_id) if vehicle_id else None
+    traffic_proposal = compute_traffic_route_proposal(
+        base=base,
+        tasks=tasks,
+        plan_date=plan_date_str,
+        vehicle_id=str(vehicle_id or ''),
+        plan_id=int(plan_row_pre['id']) if plan_row_pre else None,
+        departure_hhmm=(plan_row_pre or {}).get('cikis_saati'),
+    )
+    route_dto['traffic_proposal'] = traffic_proposal
+    if traffic_proposal.get('suggested_task_ids'):
+        sug_ids = traffic_proposal['suggested_task_ids']
+        route_dto.setdefault('suggested', {})
+        route_dto['suggested']['full_task_ids'] = sug_ids
+        route_dto['suggested']['apply_task_ids'] = sug_ids
+        route_dto['suggested']['apply_enabled'] = bool(traffic_proposal.get('apply_enabled'))
+        route_dto['suggested']['apply_disabled_reason'] = traffic_proposal.get('fallback_reason')
+        route_dto['suggested_preview_only'] = not bool(traffic_proposal.get('changed'))
+
+    from modules.planlama.arac_traffic_route_proposal_service import sync_route_dto_metrics_from_traffic_proposal
+
+    route_dto = sync_route_dto_metrics_from_traffic_proposal(route_dto, traffic_proposal)
+
     active = active_tasks_sorted(tasks)
     id_to_task = {str(t['id']): t for t in active}
     routable_current = [
@@ -649,9 +674,15 @@ def arac_takip_api_route_apply():
                     profile_only=profile_only,
                 )
             else:
+                proposal_hash = (body.get('proposal_hash') or '').strip() or None
+                proposal_expires = (body.get('proposal_expires_at') or '').strip() or None
+                client_submit_id = (body.get('client_submit_id') or '').strip() or None
                 result = apply_route_order_and_snapshot(
                     uid, plan_date_str, str(vehicle_id or ''), task_ids, user_id=uid,
                     departure_time=departure_time,
+                    proposal_hash=proposal_hash,
+                    proposal_expires_at=proposal_expires,
+                    client_submit_id=client_submit_id,
                 )
         except RouteApplyConflictError as exc:
             return jsonify(exc.to_dict()), 409

@@ -431,9 +431,27 @@
 }
 #atpV2Root .factory-label { font-size:12px;font-weight:700;color:var(--gold-h); }
 
-/* ??? Plan rota map (sa? s?tun) ? y?kseklik kontrol? ??? */
+/* ??? Plan rota panel — map + info + action bar (normal flow, no overlap) ??? */
+#atpV2Root .atp-route-panel-col {
+  display:flex;flex-direction:column;min-width:0;gap:0;width:100%;
+}
+#atpV2Root .atp-route-map-section {
+  flex:0 0 auto;min-width:0;width:100%;
+}
+#atpV2Root .atp-route-info-section {
+  flex:0 0 auto;min-width:0;width:100%;
+}
+#atpV2Root .atp-route-action-bar.route-btns {
+  flex:0 0 auto;position:static;z-index:auto;
+  margin-top:12px;padding-top:10px;border-top:1px solid #e5e7eb;
+}
 #atpV2Root .atp-plan-map-wrap {
-  position:relative;margin-bottom:12px;
+  position:relative;margin-bottom:8px;
+  height:auto !important;min-height:0;max-height:none;
+  overflow:hidden;flex-shrink:0;
+}
+#atpV2Root .plan-rota-detail .atp-plan-map-wrap {
+  overflow:hidden;
 }
 #atpV2Root .atp-plan-map-toolbar {
   display:flex;justify-content:flex-end;margin-bottom:6px;
@@ -442,15 +460,18 @@
 #atpV2Root .atp-plan-map-container-inner {
   position:relative;height:380px;min-height:300px;max-height:none;
   overflow:hidden;background:#dde9f4;border-radius:4px;border:var(--border);flex-shrink:0;
-  width:100%;
+  width:100%;box-sizing:border-box;
 }
 #atpV2Root #atpPlanLeafletMap,
 #atpV2Root #atpPlanLeafletMap.leaflet-container {
   width:100% !important;height:100% !important;min-height:300px;
-  border-radius:4px;
+  border-radius:4px;position:relative !important;z-index:1;
 }
-#atpV2Root .plan-rota-detail .map-wrap {
-  position:relative;margin-bottom:4px;overflow:visible;
+#atpV2Root .plan-rota-detail .map-wrap.atp-plan-map-wrap {
+  position:relative;margin-bottom:4px;overflow:hidden;
+}
+#atpV2Root .atp-plan-map-wrap .map-badge-row {
+  position:static;transform:none;margin-top:6px;margin-bottom:0;
 }
 #atpV2Root .atp-plan-map-fallback {
   font-size:11.5px;color:#9a3412;background:#fff7ed;border:1px solid #fdba74;
@@ -551,6 +572,9 @@ body.atp-plan-map-modal-open { overflow:hidden; }
 @media (max-width:768px) {
   #atpV2Root #atp-plan-map-container,
   #atpV2Root .atp-plan-map-container-inner { height:300px;min-height:300px; }
+  #atpV2Root .route-metrics { grid-template-columns:repeat(2,1fr); }
+  #atpV2Root .atp-route-action-bar.route-btns { flex-direction:column; }
+  #atpV2Root .atp-route-action-bar.route-btns .btn { flex:1 1 auto;width:100%; }
   .atp-driver-map-host { height:300px; }
   #atpPlanMapModalDialog.atp-plan-map-modal-dialog {
     width:96vw !important;height:92vh !important;top:4vh;
@@ -576,8 +600,15 @@ body.atp-plan-map-modal-open { overflow:hidden; }
 #atpV2Root .rm-val { font-size:16px;font-weight:800;color:#111827;line-height:1.3; }
 #atpV2Root .rm.hl .rm-val { color:var(--green-h); }
 #atpV2Root .rm-sub { font-size:9.5px;color:var(--gray); }
-#atpV2Root .route-btns { display:flex;gap:8px;margin-top:8px; }
-#atpV2Root .route-btns .btn { flex:1;justify-content:center; }
+#atpV2Root .route-btns {
+  display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:stretch;
+}
+#atpV2Root .route-btns .btn {
+  flex:1 1 140px;min-height:34px;justify-content:center;white-space:normal;text-align:center;
+}
+#atpV2Root .atp-traffic-proposal-panel {
+  overflow:visible;word-break:break-word;
+}
 /* already-optimal preview button ? outline-info style */
 #atpV2Root .route-btns #atpBtnPreviewSuggestedRoute:not(:disabled) {
   border-color:#1d4ed8;color:#1d4ed8;

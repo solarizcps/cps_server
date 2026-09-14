@@ -287,7 +287,8 @@ def build_plan_route_dto(
     if len(constraints.get('eligible_task_ids') or []) >= 2 and len(eligible_routable) >= 2:
         try:
             matrix = prov.matrix(points)
-            suggested_full_order, warnings = build_constrained_full_order(
+            from modules.planlama.arac_route_constraints import build_r07_constrained_full_order
+            suggested_full_order, warnings = build_r07_constrained_full_order(
                 active_tasks,
                 constraints,
                 routable,

@@ -252,8 +252,9 @@
               {# keep atpTimelineList in DOM for compat but always hidden — ETAs shown in jobs table #}
               <div id="atpTimelineList" class="atp-timeline-list" style="display:none"></div>
               </div>
-              {# Right: route map + metrics #}
-              <div>
+              {# Right: route map + metrics + action bar (normal document flow) #}
+              <div class="atp-route-panel-col">
+                <div class="atp-route-map-section">
                 <div class="map-wrap atp-plan-map-wrap">
                   <div class="atp-plan-map-toolbar">
                     <button type="button" class="btn btn-outline btn-xs" id="atpBtnPlanMapExpand">Haritayı Büyüt</button>
@@ -275,6 +276,8 @@
                 <div id="atpPlanMapRouteFallback" class="atp-plan-map-fallback" style="display:none"></div>
                 <div id="atpPlanMapCompleteness" style="font-size:10.5px;color:var(--gray);text-align:center;margin-bottom:8px"></div>
                 <div id="atpPlanMapMissingList" class="atp-plan-map-missing" style="display:none"></div>
+                </div>{# /atp-route-map-section #}
+                <div class="atp-route-info-section">
                 {# Hidden elements for route.js compatibility #}
                 <div style="display:none">
                   <span id="atpRouteCurrentOrder"></span>
@@ -305,14 +308,26 @@
                     <div class="rm-sub" id="atpRouteFuelTry">—</div>
                   </div>
                 </div>
+                <div id="atpTrafficProposalPanel" class="atp-traffic-proposal-panel" style="display:none;margin:8px 0;padding:10px 12px;border:1px solid var(--gray-200);border-radius:6px;background:#f8fafc">
+                  <div style="font-weight:600;font-size:13px;margin-bottom:6px">Canlı Trafiğe Göre Önerilen Rota</div>
+                  <div id="atpTrafficSourceLabel" style="font-size:11.5px;color:var(--gray);margin-bottom:4px"></div>
+                  <div id="atpTrafficTimingLabel" style="font-size:11px;color:var(--gray);margin-bottom:4px"></div>
+                  <div id="atpTrafficCompareLabel" style="font-size:11.5px;margin-bottom:4px"></div>
+                  <div id="atpTrafficDelayLabel" style="font-size:11px;color:var(--gray);margin-bottom:4px"></div>
+                  <div id="atpTrafficOrderCompare" style="font-size:11px;margin-bottom:4px"></div>
+                  <div id="atpTrafficMissingLabel" style="font-size:11px;color:#b45309;display:none"></div>
+                  <div id="atpTrafficFallbackLabel" style="font-size:11px;color:#b45309;display:none"></div>
+                  <div id="atpTrafficProposalMessage" style="font-size:11.5px;color:#1e40af;margin-top:4px;display:none"></div>
+                </div>
                 <p id="atpRouteStatusMsg" class="route-status-msg" style="display:none"></p>
                 <div id="atpRouteConstraintBanner" class="route-constraint-banner" style="display:none"></div>
-                <div class="route-btns">
+                </div>{# /atp-route-info-section #}
+                <div class="atp-route-action-bar route-btns">
                   <button type="button" class="btn btn-outline btn-sm" id="atpBtnPreviewSuggestedRoute" disabled>Önerilen Rotayı Göster</button>
                   <button type="button" class="btn btn-blue btn-sm" id="atpBtnRouteExplainer" disabled title="Rota kararını ve sıralamayı açıklar">🗺 Rota Kararını İncele</button>
                   <button type="button" class="btn btn-green btn-sm" id="atpBtnApplySuggestedOrder" disabled>✔ Önerilen Sırayı Uygula</button>
                 </div>
-              </div>
+              </div>{# /atp-route-panel-col #}
             </div>
           </details>
 
@@ -700,7 +715,8 @@
 {# ── Route Apply Confirm Modal ── #}
 <div id="atpRouteApplyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1100;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:10px;width:480px;max-width:96vw;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:24px" id="atpRouteApplyInner">
-    <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:16px">Önerilen Sırayı Uygula</div>
+    <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:8px">Önerilen Sırayı Uygula</div>
+    <div style="font-size:11.5px;color:#374151;margin-bottom:12px">Plan sırası önerilen rotaya göre değiştirilecek. ACİL işler önce, başlamış ve tamamlanmış işler sabit kalacaktır.</div>
     <div style="font-size:12px;color:#374151;margin-bottom:8px">Araç: <strong id="atpRouteApplyVehicle">—</strong></div>
     <div style="font-size:12px;color:#374151;margin-bottom:8px">Tarih: <strong id="atpRouteApplyDate">—</strong></div>
     <div style="font-size:12px;color:#374151;margin-bottom:8px">Mevcut km: <strong id="atpRouteApplyCurrentKm">—</strong></div>
