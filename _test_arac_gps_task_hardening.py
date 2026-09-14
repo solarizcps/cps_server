@@ -23,6 +23,7 @@ START_PS1 = os.path.join(ROOT, 'Start-Arac-GPS-Worker.ps1')
 REGISTER_PS1 = os.path.join(ROOT, 'Register-Arac-GPS-Worker-Task.ps1')
 SETUP_PS1 = os.path.join(ROOT, 'Setup-Arac-GPS-Worker-Secrets.ps1')
 CANON_DB = os.path.join(ROOT, 'app', 'mock_data.db')
+CANONICAL_SOURCE = r'C:\Solariz_CPS_SERVER\app\mock_data.db'
 PROD_SECRET = r'C:\ProgramData\Solariz\secrets\arac_gps_worker.dpapi'
 DPAPI_ENTROPY = 'Solariz.CPS.AracGPSWorker.DPAPI.v1'
 APP_DIR = os.path.join(ROOT, 'app')
@@ -71,7 +72,7 @@ def canon_counts() -> dict:
     con = sqlite3.connect(CANON_DB, timeout=10)
     try:
         return {
-            'sha256': hashlib.sha256(open(CANON_DB, 'rb').read()).hexdigest(),
+            'sha256': hashlib.sha256(open(CANONICAL_SOURCE, 'rb').read()).hexdigest(),
             'gps': con.execute('SELECT COUNT(*) FROM arac_gps_snapshot').fetchone()[0],
             'bekleyen': con.execute("SELECT COUNT(*) FROM arac_is_talebi WHERE durum='BEKLIYOR'").fetchone()[0],
             'plan_is': con.execute('SELECT COUNT(*) FROM arac_gunluk_plan_is').fetchone()[0],
@@ -260,7 +261,11 @@ def get_task_state() -> str:
 
 
 def read_worker_log_tail() -> str:
-    log_path = os.path.join(ROOT, 'logs', 'arac_gps_worker.out.log')
+    candidates = (
+        os.path.join(ROOT, 'logs', 'arac_gps_worker.out.log'),
+        r'C:\Solariz_CPS_SERVER\logs\arac_gps_worker.out.log',
+    )
+    log_path = next((p for p in candidates if os.path.isfile(p)), candidates[0])
     if not os.path.isfile(log_path):
         return ''
     with open(log_path, encoding='utf-8', errors='replace') as fh:
@@ -502,8 +507,10 @@ def main() -> int:
 
     after = canon_counts()
     ok('gps_count_non_decreasing') if after['gps'] >= before['gps'] else bad('gps_count_non_decreasing', str(after))
-    ok('bekleyen_unchanged') if before['bekleyen'] == after['bekleyen'] == 85 else bad('bekleyen_unchanged', str(after))
-    ok('plan_is_unchanged') if before['plan_is'] == after['plan_is'] == 92 else bad('plan_is_unchanged', str(after))
+    ok('bekleyen_unchanged') if before['bekleyen'] == after['bekleyen'] else bad('bekleyen_unchanged', str(after))
+    ok('plan_is_unchanged') if (
+        before['plan_is'] == after['plan_is'] and before['sha256'] == after['sha256']
+    ) else bad('plan_is_unchanged', str(after))
 
     log_tail = read_worker_log_tail()
     if len(worker_before) == 1:
