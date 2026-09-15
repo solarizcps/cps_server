@@ -36,6 +36,7 @@ ROUTE_LABELS = {
 
 VISIT_LABELS = {
     'OUTSIDE': 'Henüz varmadı',
+    'APPROACHING': 'Yaklaşıyor',
     'ARRIVED': 'Konumda',
     'DEPARTED_PENDING': 'Sonuç bekleniyor',
 }

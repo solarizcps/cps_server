@@ -247,6 +247,12 @@ def test_t16_stale_backdated_gps_not_wall_clock():
     assert _only_overstay(_alerts_for(items, vehicles)) == []
 
 
+def test_approaching_visit_label_maps_yaklasiyor():
+    ops = _ops()
+    label = ops._build_visit_label({'state': 'APPROACHING'})
+    assert label == 'Yaklaşıyor'
+
+
 def test_t18_visit_label_uses_gps_reference_not_wall_clock():
     """Fixture tarihleri gelecekteyken Konumda X dk GPS timestamp ile hesaplanır."""
     from datetime import datetime

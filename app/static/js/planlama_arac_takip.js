@@ -1002,6 +1002,7 @@
     var raw = it.visit_label || '';
     var state = it.visit_state || '';
     var status = (it.status || '').toUpperCase();
+    if (state === 'APPROACHING' || raw === 'APPROACHING') return 'Yaklaşıyor';
     if (raw && raw !== 'DEPARTED' && raw !== 'ARRIVED' && raw !== 'OUTSIDE') return raw;
     var arr = fmtTime(it.arrived_at);
     var dep = fmtTime(it.departed_at);
