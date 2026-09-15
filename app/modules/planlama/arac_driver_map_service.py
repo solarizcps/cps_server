@@ -173,14 +173,18 @@ def build_driver_map_page_url(plan_date: str, vehicle_id: str, plan_id: int, *, 
     try:
         from flask import has_request_context, request, url_for
         if has_request_context():
-            return url_for(
-                'arac_takip_bp.arac_takip_sofor_haritasi',
-                date=plan_date[:10],
-                vehicle_id=str(vehicle_id),
-                plan_id=int(plan_id),
-                t=token,
-                _external=True,
-            )
+            try:
+                return url_for(
+                    'arac_takip_bp.arac_takip_sofor_haritasi',
+                    date=plan_date[:10],
+                    vehicle_id=str(vehicle_id),
+                    plan_id=int(plan_id),
+                    t=token,
+                    _external=True,
+                )
+            except Exception:
+                # Endpoint çözümlenemedi: sürücüye giden link localhost'a düşmesin.
+                return f'{request.host_url.rstrip("/")}{rel}'
         from flask import current_app
         with current_app.app_context():
             with current_app.test_request_context(base_url='http://127.0.0.1:8080'):

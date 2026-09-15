@@ -2,7 +2,6 @@
 """ATP Geofence A2 — APPROACHING, order block, EXIT 300m, atomic transaction."""
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import io
 import os
@@ -23,10 +22,6 @@ CANONICAL_PATH = Path(os.environ.get(
     'CPS_CANONICAL_DB_SOURCE',
     r'C:\Solariz_CPS_SERVER\app\mock_data.db',
 )).resolve()
-CANONICAL_SHA = (
-    hashlib.sha256(CANONICAL_PATH.read_bytes()).hexdigest()
-    if CANONICAL_PATH.is_file() else ''
-)
 for _p in (str(_APP), str(_PLANLAMA_TESTS)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -36,6 +31,13 @@ from tools.atp_test_db_guard import install_atp_test_db_guard  # noqa: E402
 
 os.environ.setdefault('CPS_CANONICAL_DB_SOURCE', str(CANONICAL_PATH))
 install_atp_test_db_guard(str(CANONICAL_PATH))
+
+from atp_canonical_forensic import assert_canonical_atp_unchanged, canonical_logical_snapshot  # noqa: E402
+
+# Canonical'da tam dosya hash'i canlı GPS worker yazımıyla değişir; ATP tablo bütünlüğü kıyaslanır.
+CANONICAL_BEFORE = (
+    canonical_logical_snapshot(str(CANONICAL_PATH)) if CANONICAL_PATH.is_file() else None
+)
 
 FIXED_NOW = datetime(2026, 12, 20, 12, 0, 0)
 PASS = FAIL = 0
@@ -722,17 +724,19 @@ def coords(_a2_shared_ctx):
 
 def test_canonical_unchanged() -> None:
     print('CANONICAL_GUARD')
-    if not CANONICAL_SHA:
+    if CANONICAL_BEFORE is None:
         ok('canonical_skip')
         return
-    if CANONICAL_PATH.is_file():
-        h = hashlib.sha256(CANONICAL_PATH.read_bytes()).hexdigest()
-        if h == CANONICAL_SHA:
-            ok('canonical_unchanged')
-        else:
-            bad('canonical_unchanged', 'hash mismatch')
-    else:
+    if not CANONICAL_PATH.is_file():
         ok('canonical_absent_ok')
+        return
+    try:
+        root_cause = assert_canonical_atp_unchanged(str(CANONICAL_PATH), CANONICAL_BEFORE)
+    except AssertionError as exc:
+        bad('canonical_atp_unchanged', str(exc))
+        return
+    # NONE veya BACKGROUND_GPS_WORKER kabul edilir; ATP tabloları değişmemiştir.
+    ok(f'canonical_atp_unchanged[{root_cause}]')
 
 
 def main() -> int:

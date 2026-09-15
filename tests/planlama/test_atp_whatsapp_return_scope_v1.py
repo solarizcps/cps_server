@@ -275,7 +275,7 @@ class TestReturnScopeMatrix:
             ctx = load_whatsapp_plan_context(PLAN_DATE, VEHICLE)
         assert ctx['return_source'] == RETURN_SOURCE_NONE
         msg = ctx and build_whatsapp_payload(PLAN_DATE, VEHICLE)['message']
-        assert 'Tahmini dönüş: —' in msg
+        assert '*Tahmini dönüş:* —' in msg
 
     def test_t5_midnight_next_day_format(self):
         display = format_return_time_display(

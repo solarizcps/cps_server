@@ -41,7 +41,11 @@ def _bootstrap_db(db_path: str, *, with_visit: bool = False) -> None:
         '178_arac_is_talebi_ux_v2_fields.py',
     ]
     if with_visit:
+        # 179 arac_plan_olay tablosunu kurar; 180 geofence, 191 AUTO_TAMAMLANDI
+        # olay tiplerini CHECK'e ekler (production şema zinciri).
+        migs.append('179_arac_gps_snapshot_p1.py')
         migs.append('180_arac_plan_ziyaret_durum.py')
+        migs.append('191_arac_plan_olay_auto_tamamlandi.py')
     for mig in migs:
         _run_migration(db_path, mig)
 
