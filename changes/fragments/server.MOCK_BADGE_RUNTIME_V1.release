@@ -1,0 +1,1 @@
+Üst menü MOCK rozeti yalnız temp DB veya test guard varken görünür; production canonical ortamında ortam pill'i hiç gösterilmez, db.py bağlantı mantığı aynı kalır.

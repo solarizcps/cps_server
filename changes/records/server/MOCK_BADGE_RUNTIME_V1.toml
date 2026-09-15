@@ -1,0 +1,47 @@
+schema_version = 1
+module = "server"
+version = "v1.0.1"
+phase_code = "MOCK_BADGE_RUNTIME_V1"
+title = "MOCK rozeti yalnız temp/test ortamında göster"
+summary = "base.html MOCK rozeti DB_MODE='mock' sabit değerine bağlıydı; üretim canonical ortamında yanıltıcı görünüyordu. Rozet yalnız CPS_MOCK_DB_PATH veya CPS_TEST_DB_GUARD=1 iken gösterilir; aksi halde üst menüde ortam pill'i yoktur (PROD/LIVE eklenmez)."
+status = "TEST"
+date = "2026-09-15"
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "hotfix/mock-badge-runtime-v1"
+verification_date = "2026-09-15"
+verification_evidence = "pytest tests/test_mock_badge_runtime_v1.py 12 passed; validate_release_history.py PASS; izole preview 5059 üst menüde pill yok."
+test_result = "pytest tests/test_mock_badge_runtime_v1.py 12 passed"
+db_write = false
+server_restart = false
+push_status = "LOCAL_ONLY"
+deployment_status = "LOCAL_ONLY"
+locked_rules = [
+  "app/db.py DB_MODE, get_conn ve Config.MOCK_DB_PATH bağlantı davranışı değiştirilmez.",
+  "MOCK rozeti yalnız SHOW_MOCK_BADGE template context ile gösterilir.",
+  "CPS_MOCK_DB_PATH tanımlı veya CPS_TEST_DB_GUARD=1 ise rozet görünür.",
+  "Canonical production ortamında SHOW_MOCK_BADGE false iken hiçbir ortam pill'i render edilmez.",
+]
+changes = [
+  "runtime_mock_badge.compute_show_mock_badge: env tabanlı UI bayrağı.",
+  "app.py inject_globals: SHOW_MOCK_BADGE eklendi.",
+  "base.html: MOCK pill yalnız SHOW_MOCK_BADGE true iken; false iken pill yok.",
+]
+changed_files = [
+  "app/runtime_mock_badge.py",
+  "app/app.py",
+  "app/templates/base.html",
+  "tests/test_mock_badge_runtime_v1.py",
+]
+tests = [
+  "test_mock_badge_runtime_v1.py::test_production_canonical_env_hides_mock_badge",
+  "test_mock_badge_runtime_v1.py::test_cps_mock_db_path_shows_mock_badge",
+  "test_mock_badge_runtime_v1.py::test_cps_test_db_guard_shows_mock_badge",
+  "test_mock_badge_runtime_v1.py::test_guard_passive_values_hide_mock_badge",
+  "test_mock_badge_runtime_v1.py::test_canonical_html_has_no_environment_pills",
+  "test_mock_badge_runtime_v1.py::test_temp_html_shows_mock_pill",
+]
+known_issues = []
+next_steps = [
+  "Onay sonrası hotfix dalını production deploy paketine dahil et.",
+]
