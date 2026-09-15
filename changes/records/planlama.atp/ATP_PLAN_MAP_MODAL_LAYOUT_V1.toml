@@ -1,0 +1,38 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.14.1"
+phase_code = "ATP_PLAN_MAP_MODAL_LAYOUT_V1"
+title = "Buyutulmus harita modal — durak listesi yerlesim (#atpPlanMapModalDialog)"
+status = "ONAYLANDI"
+date = "2026-09-15"
+summary = "Portal disi modalda durak listesi ve grid kolonlari #atpV2Root ile ayni gorunur; Leaflet map-col icinde kalir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "integration/atp-plan-map-modal-layout-v1"
+verification_date = "2026-09-15"
+verification_evidence = "pytest test_atp_plan_map_modal_narrow_layout_v1.py; browser modal 3 stops flex layout on MOR plan."
+test_result = "pytest test_atp_plan_map_modal_narrow_layout_v1.py passed"
+db_write = false
+server_restart = false
+push_status = "LOCAL_ONLY"
+deployment_status = "LOCAL_ONLY"
+locked_rules = [
+  "Buyutulmus harita modal CSS yalnizca #atpPlanMapModalDialog kapsaminda; #atpV2Root global kurallari degistirilmez.",
+  "WhatsApp, rota hesabi ve JS popup degisiklikleri bu fazda commitlenmez.",
+]
+changes = [
+  "#atpPlanMapModalDialog icinde palette + stop-list/badge parity.",
+  "Stops grid-column:1 min-width:220px; map-col grid-column:2.",
+  "Leaflet max-width:100% ve z-index map-col icinde.",
+]
+changed_files = [
+  "app/static/css/planlama_arac_takip.css",
+  "tests/planlama/test_atp_plan_map_modal_narrow_layout_v1.py",
+]
+tests = [
+  "test_atp_plan_map_modal_narrow_layout_v1.py",
+]
+known_issues = []
+next_steps = [
+  "WhatsApp popup ve arac karti dar fix ayri commit.",
+]
