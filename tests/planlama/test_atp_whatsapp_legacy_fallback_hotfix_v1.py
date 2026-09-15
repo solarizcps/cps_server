@@ -146,7 +146,7 @@ class TestLegacyFallbackRemovalSource:
     def test_t4_no_vehicle_message_and_no_fetch_before_popup(self, js_src):
         assert "toast('WhatsApp için önce bir araç planı seçin.')" in js_src
         idx = js_src.find("toast('WhatsApp için önce bir araç planı seçin.')")
-        popup_idx = js_src.find("window.open('about:blank'", idx)
+        popup_idx = js_src.find("window.open('about:blank', WA_POPUP_NAME)", idx)
         fetch_idx = js_src.find('fetch(waUrl', idx)
         assert popup_idx == -1 or fetch_idx == -1 or popup_idx < fetch_idx
 
@@ -162,7 +162,7 @@ class TestLegacyFallbackRemovalSource:
         assert 'closeWhatsappPopup(popup)' in js_src
 
     def test_t8_success_uses_location_replace(self, js_src):
-        assert 'popup.location.replace(j.whatsapp_url)' in js_src
+        assert 'navigateWhatsappPopup(popup, j.whatsapp_url)' in js_src
 
     def test_t15_single_encode_in_api_url(self, client, env):
         con = sqlite3.connect(env['db'])
@@ -177,7 +177,7 @@ class TestLegacyFallbackRemovalSource:
         assert url.count('%25') == 0
         decoded = _decode_wa_message(url)
         assert 'GÜNLÜK ARAÇ PROGRAMI' in decoded
-        assert 'şahin taban' in decoded.lower()
+        assert '\u015fahin taban' in decoded.lower()
 
 
 class TestLegacyFallbackApiParity:

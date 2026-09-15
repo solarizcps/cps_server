@@ -108,7 +108,7 @@ def test_driver_map_dto_contract(temp_db):
     assert dto['item_id_order'] == [s['plan_item_id'] for s in dto['stops']]
 
 
-def test_whatsapp_includes_driver_map_url_not_raw_stop_urls(temp_db):
+def test_whatsapp_excludes_driver_map_link_in_message(temp_db):
     from modules.planlama.arac_takip_repo import create_is_talebi, assign_to_plan, ensure_seed_locations
     from modules.planlama.arac_whatsapp_message_service import build_whatsapp_payload
 
@@ -123,15 +123,18 @@ def test_whatsapp_includes_driver_map_url_not_raw_stop_urls(temp_db):
 
     app = flask.Flask(__name__)
     app.config['TESTING'] = True
-    with app.app_context():
+    _test_base = 'http://192.168.1.50:8080'
+    with app.test_request_context('/', base_url=_test_base):
         payload = build_whatsapp_payload(d, vid)
     assert payload and payload.get('ok')
     ctx = payload['context']
     assert ctx.get('driver_map_url')
     assert '/sofor-haritasi' in ctx['driver_map_url']
     msg = payload['message']
-    assert 'maps?q=' not in msg or 'haritada görüntüle' in msg.lower() or 'tek haritada' in msg.lower()
-    assert ctx['driver_map_url'] in msg
+    assert '/sofor-haritasi' not in msg
+    assert 'tek haritada' not in msg.lower()
+    assert ctx['driver_map_url'] not in msg
+    assert 'maps?q=' in msg
 
 
 def test_route_unconfigured_full_task_ids_fallback(temp_db):
@@ -234,9 +237,12 @@ def test_whatsapp_api_driver_map_url_field(temp_db):
 
     import flask
     app = flask.Flask(__name__)
-    with app.app_context():
+    _test_base = 'http://192.168.1.50:8080'
+    with app.test_request_context('/', base_url=_test_base):
         r = build_whatsapp_api_response(d, vid)
     assert r.get('ok')
     assert r.get('driver_map_url')
     assert '/sofor-haritasi' in r.get('driver_map_url', '')
+    assert '127.0.0.1' not in r.get('driver_map_url', '')
+    assert 'localhost' not in r.get('driver_map_url', '')
     assert r.get('order_ids')

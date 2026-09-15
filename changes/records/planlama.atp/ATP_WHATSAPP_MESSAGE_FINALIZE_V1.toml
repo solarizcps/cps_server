@@ -1,0 +1,44 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1"
+phase_code = "ATP_WHATSAPP_MESSAGE_FINALIZE_V1"
+title = "WhatsApp plan mesaji duzeni — ACIL sira, Tahmini varis, sofor-haritasi linki yok"
+status = "ONAYLANDI"
+date = "2026-09-15"
+summary = "WhatsApp V2 mesaj sablonu: duraklar once, ACIL basa, Turkce basliklar, Tahmini varis; CPS/sofor-haritasi metinden cikarildi."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "integration/atp-whatsapp-message-finalize-v1"
+verification_date = "2026-09-15"
+verification_evidence = "pytest narrow WhatsApp 39 passed (encoding, builder, legacy, driver_map exclude link)."
+test_result = "pytest narrow WhatsApp 39 passed"
+db_write = false
+server_restart = false
+push_status = "LOCAL_ONLY"
+deployment_status = "LOCAL_ONLY"
+locked_rules = [
+  "WhatsApp mesaj govdesinde CPS/sofor-haritasi linki eklenmez.",
+  "Durak ETA hesabi degistirilmeden yalnizca Tahmini varis etiketi kullanilir.",
+]
+changes = [
+  "Mesaj sirasi: duraklar, sonra Baslangic/Donus/Tahmini donus.",
+  "ACIL duraklar mesajda 1. sirada; firma satirinda ACIL —.",
+  "ETA etiketi Tahmini varis; sofor-haritasi/CPS linki mesajda yok.",
+]
+changed_files = [
+  "app/modules/planlama/arac_whatsapp_message_service.py",
+  "tests/planlama/test_atp_whatsapp_message_builder_v1.py",
+  "tests/planlama/test_atp_whatsapp_encoding_baseurl_v1.py",
+  "tests/planlama/test_atp_whatsapp_legacy_fallback_hotfix_v1.py",
+  "tests/planlama/test_atp_driver_map_r04_r12_v1.py",
+]
+tests = [
+  "test_atp_whatsapp_encoding_baseurl_v1.py",
+  "test_atp_whatsapp_message_builder_v1.py",
+  "test_atp_whatsapp_legacy_fallback_hotfix_v1.py",
+  "test_atp_driver_map_r04_r12_v1.py::test_whatsapp_excludes_driver_map_link_in_message",
+]
+known_issues = []
+next_steps = [
+  "Harita/CSS/JS popup degisiklikleri ayri faz.",
+]

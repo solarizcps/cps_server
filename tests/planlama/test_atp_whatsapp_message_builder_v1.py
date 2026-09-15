@@ -22,7 +22,7 @@ sys.path.insert(0, str(APP))
 sys.path.insert(0, str(APP.parent / 'tests' / 'planlama'))
 
 from atp_canonical_forensic import assert_canonical_atp_unchanged, canonical_logical_snapshot
-from atp_plan2_fixture import CIKIS, PLAN_DATE, PLAKA, SOFOR, VEHICLE, insert_factory_base, seed_plan2_fixture
+from atp_plan2_fixture import CIKIS, PLAN_DATE, PLAKA, SOFOR, STOP_LAT, VEHICLE, insert_factory_base, seed_plan2_fixture
 from tools.nexgen_tmp_db import assert_resolved_db_is_tmp
 
 from modules.planlama.arac_whatsapp_message_service import (
@@ -32,6 +32,7 @@ from modules.planlama.arac_whatsapp_message_service import (
     format_coordinate,
     load_whatsapp_plan_context,
     maps_link_from_coordinates,
+    order_stops_for_whatsapp_message,
     resolve_stop_eta,
     resolve_stop_location_link,
     sort_stops_for_whatsapp,
@@ -176,6 +177,30 @@ class TestWhatsAppPureHelpers:
         ordered = sort_stops_for_whatsapp(tasks)
         assert [t['id'] for t in ordered] == ['a', 'b']
 
+    def test_acil_stops_listed_first_preserving_plan_order(self):
+        stops = [
+            {'id': 'n1', 'company_name': 'Normal 1', 'oncelik': 'NORMAL', 'display_order_no': 1},
+            {'id': 'a1', 'company_name': 'Acil 1', 'oncelik': 'ACIL', 'display_order_no': 2},
+            {'id': 'n2', 'company_name': 'Normal 2', 'oncelik': 'NORMAL', 'display_order_no': 3},
+        ]
+        ordered = order_stops_for_whatsapp_message(stops)
+        assert [s['id'] for s in ordered] == ['a1', 'n1', 'n2']
+        ctx = {
+            'date_label': '15 Eylül 2026 Salı',
+            'plate': '34 TEST',
+            'driver_name': 'Mehmet',
+            'departure_time': '08:30',
+            'stops': ordered,
+            'base': {'configured': True, 'base_name': 'Fabrika'},
+            'estimated_return_time': '12:30',
+        }
+        msg = build_whatsapp_plan_message_v2(ctx)
+        assert '*1. ACİL — Acil 1*' in msg
+        assert '*2. Normal 1*' in msg
+        assert msg.index('Acil 1') < msg.index('Normal 1') < msg.index('Normal 2')
+        assert '*Başlangıç:* Fabrika' in msg
+        assert '*Tahmini dönüş:* 12:30' in msg
+
     def test_turkish_and_url_encode_parity(self):
         msg = 'GÜNLÜK ARAÇ PROGRAMI\nŞahin Taban — İş: mal alınacak'
         url = whatsapp_web_url(msg)
@@ -293,4 +318,7 @@ class TestWhatsAppMessageBuilderIntegration:
             payload = build_whatsapp_payload(PLAN_DATE, VEHICLE)
         assert payload and payload['ok']
         assert payload['whatsapp_url'].startswith('https://wa.me/?text=')
-        assert format_coordinate(FACTORY_LAT) in urllib.parse.unquote(payload['whatsapp_url'])
+        decoded = urllib.parse.unquote(payload['whatsapp_url'])
+        assert format_coordinate(STOP_LAT) in decoded
+        assert FACTORY_NAME in decoded
+        assert '*Başlangıç:*' in decoded and '*Tahmini dönüş:*' in decoded
