@@ -20,6 +20,7 @@ locked_rules = [
   "WhatsApp popup ve rota/harita JS hunks bu fazda commitlenmez.",
   "Yalnız #atpV2Root .vcard cursor ve kart delegasyonu.",
 ]
+locked_rules_approval = true
 changes = [
   "initVehicleCardSelection delegated click/keydown.",
   "vcard role=button tabindex aria-label; vid before selected class.",
@@ -33,6 +34,7 @@ changed_files = [
 ]
 tests = [
   "test_atp_vehicle_card_selection_v1.py",
+  "test_atp_narrow_fix_whatsapp_vehicle_v1.py",
 ]
 known_issues = []
 next_steps = [

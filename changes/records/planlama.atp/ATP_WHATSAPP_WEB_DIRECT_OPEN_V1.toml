@@ -20,6 +20,7 @@ locked_rules = [
   "WhatsApp açılışı yalnız web.whatsapp.com/send?text=; wa.me/api.whatsapp popup staging yok.",
   "Araç kartı, harita ve rota JS hunks bu fazda commitlenmez.",
 ]
+locked_rules_approval = true
 changes = [
   "buildWhatsappWebSendUrl + bindWhatsappButton _waInFlight tek bind.",
   "planlama_arac_takip.js cache v=101.",
@@ -36,6 +37,7 @@ tests = [
   "test_atp_whatsapp_web_direct_open_v1.py",
   "test_atp_whatsapp_js_regression_v1.py",
   "test_atp_whatsapp_legacy_fallback_hotfix_v1.py::TestLegacyFallbackRemovalSource",
+  "test_atp_narrow_fix_whatsapp_vehicle_v1.py",
 ]
 known_issues = []
 next_steps = []

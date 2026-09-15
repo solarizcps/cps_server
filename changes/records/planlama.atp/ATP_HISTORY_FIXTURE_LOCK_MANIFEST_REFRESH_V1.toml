@@ -1,0 +1,44 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.14.8"
+phase_code = "ATP_HISTORY_FIXTURE_LOCK_MANIFEST_REFRESH_V1"
+title = "Geçmiş planlar fixture şema hizalaması + ATP stabilization manifest yenilemesi"
+summary = "Geçmiş planlar sentetik fixture'ı arac_plan_olay şema zincirini (179/180/191) kurar; ATP stabilization manifest kapsamı doğrulandıktan sonra onaylı ATP durumuna göre yenilendi (155 → 163 dosya)."
+status = "TEST"
+date = "2026-09-15"
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "integration/solariz-cps-final-20260914-v1"
+verification_date = "2026-09-15"
+verification_evidence = "Manifest uyuşmazlıklarının tamamı onaylı ATP commitleri (bdec724, bd3c002, 1d5022b, 2a405c3, 0f3ea17, 8e108be, e991bac) ve mevcut rota fazı çalışma kopyası ile eşleşti; Finans/Üretim/Genel Plan yolu manifeste girmedi. validate_atp_stabilization_lock ATP_FILES_CHECKED=163 PASS."
+test_result = "pytest tests/planlama 968 passed, 4 skipped, 0 failed; hedefli 122 passed; ATP_STABILIZATION_LOCK=PASS; release validator PASS"
+db_write = false
+server_restart = false
+push_status = "LOCAL_ONLY"
+deployment_status = "LOCAL_ONLY"
+locked_rules = [
+  "Sentetik geçmiş planlar fixture'ı üretim migration dosyalarını çalıştırır; şema DDL'i test içinde kopyalanmaz.",
+  "Manifest yenilemesi yalnız tools/build_atp_lock_manifest.py ile yapılır; lock_baseline_commit 21b8a21 sabit kalır.",
+  "Manifeste yalnız ATP kapsamı girer; Finans/Üretim/Genel Plan dosyası eklenmez.",
+]
+changes = [
+  "test_atp_past_plans_history_v1: with_visit fixture'ı 179_arac_gps_snapshot_p1 + 191_arac_plan_olay_auto_tamamlandi migrationlarını da çalıştırır (arac_plan_olay tablosu ve güncel olay_turu CHECK listesi).",
+  "docs/atp-lock manifest ve inventory, onaylı ATP commitleri + mevcut rota fazı durumuna göre yenilendi; 8 yeni ATP dosyası beyan edildi, silinen kayıt yok.",
+  "Touchpoint hash'leri değişmedi (4 touchpoint aynı).",
+  "test_atp_narrow_fix_whatsapp_vehicle_v1.py, kaynağı olan onaylı fazların (v1.14.3 araç kartı, v1.14.4 WhatsApp Web) test listelerine beyan edildi.",
+]
+changed_files = [
+  "tests/planlama/test_atp_past_plans_history_v1.py",
+  "docs/atp-lock/atp_stabilization_manifest.sha256",
+  "docs/atp-lock/atp_inventory.json",
+]
+tests = [
+  "test_atp_past_plans_history_v1.py",
+  "test_migration_190_enj_istasyon_v1.py::test_atp_stabilization_lock",
+]
+known_issues = [
+  "tests/tools/test_atp_stabilization_lock_v1.py::test_t12/test_t13: HEAD'in baseline commit'e ve canonical DB SHA'sının sabit değere eşit olmasını bekliyor; bu dalda yapısal olarak geçemez (manifestten bağımsız, önceden var olan durum).",
+]
+next_steps = [
+  "Commit öncesi ATP faz kayıtlarını (v1.14.6–v1.14.8) Adem onayına sun.",
+]
