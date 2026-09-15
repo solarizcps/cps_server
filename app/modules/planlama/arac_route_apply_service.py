@@ -75,6 +75,10 @@ class RouteApplyResult:
     reorder_applied: bool = True
 
 
+# In-process idempotency for duplicate browser submits (same plan + client_submit_id).
+_ROUTE_APPLY_SUBMIT_CACHE: dict[str, RouteApplyResult] = {}
+
+
 def _now_str() -> str:
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -156,6 +160,9 @@ def apply_route_order_and_snapshot(
     route_dto_builder: Callable[[dict, list[dict]], dict] | None = None,
     departure_time: str | None = None,
     skip_reorder: bool = False,
+    proposal_hash: str | None = None,
+    proposal_expires_at: str | None = None,
+    client_submit_id: str | None = None,
 ) -> RouteApplyResult:
     """
     Single unit-of-work: reorder plan items + persist route snapshot atomically.
@@ -181,13 +188,40 @@ def apply_route_order_and_snapshot(
         raise RouteApplyValidationError('Aktif plan bulunamadı')
     plan_id = int(plan['id'])
 
+    if client_submit_id:
+        cache_key = f'{plan_id}:{client_submit_id.strip()}'
+        cached = _ROUTE_APPLY_SUBMIT_CACHE.get(cache_key)
+        if cached is not None:
+            return RouteApplyResult(
+                tasks=list(cached.tasks),
+                route_snapshot=dict(cached.route_snapshot),
+                route_version=int(cached.route_version),
+                deduplicated=True,
+                applied=False,
+                eta_applied=cached.eta_applied,
+                eta_by_task=cached.eta_by_task,
+                departure_source=cached.departure_source,
+                reorder_applied=False,
+            )
+
     current_tasks = list_plan_tasks(plan_date, arac_external_id)
     visit_states = load_visit_states_for_tasks(current_tasks)
     constraints = classify_route_tasks(current_tasks, visit_states)
-    validate_apply_task_ids(current_tasks, task_ids, constraints)
-    reordered_tasks = _reordered_tasks_preview(current_tasks, task_ids)
 
     active_ordered = [str(t['id']) for t in active_tasks_sorted(current_tasks)]
+    if task_ids != active_ordered:
+        from modules.planlama.arac_traffic_route_proposal_service import validate_proposal_for_apply
+        validate_proposal_for_apply(
+            tasks=current_tasks,
+            proposed_task_ids=[str(t) for t in task_ids],
+            proposal_hash=proposal_hash,
+            proposal_expires_at=proposal_expires_at,
+            plan_id=plan_id,
+            plan_date=plan_date,
+            vehicle_id=arac_external_id,
+        )
+    validate_apply_task_ids(current_tasks, task_ids, constraints)
+    reordered_tasks = _reordered_tasks_preview(current_tasks, task_ids)
     if skip_reorder and task_ids != active_ordered:
         raise RouteApplyValidationError(
             'Profil uygulamasında sıra değişikliği yapılamaz — gönderilen sıra aktif plan ile uyuşmuyor',
@@ -276,7 +310,7 @@ def apply_route_order_and_snapshot(
         con.close()
 
     tasks = list_plan_tasks(plan_date, arac_external_id)
-    return RouteApplyResult(
+    result = RouteApplyResult(
         tasks=tasks,
         route_snapshot=snapshot,
         route_version=int(snapshot['route_version']),
@@ -287,3 +321,6 @@ def apply_route_order_and_snapshot(
         departure_source=departure_source,
         reorder_applied=not skip_reorder,
     )
+    if client_submit_id:
+        _ROUTE_APPLY_SUBMIT_CACHE[f'{plan_id}:{client_submit_id.strip()}'] = result
+    return result

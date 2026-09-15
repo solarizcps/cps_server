@@ -1,0 +1,44 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.0.0"
+phase_code = "ATP_U0_MULTI_ADD_CLOSURE"
+title = "Araç Takip çoklu ekleme, kimlik ve koordinat seçimi kapatıldı."
+status = "KILITLI"
+date = "2026-08-26"
+summary = "Çoklu ekleme akışında araç kimliği, koordinat kalıcılığı ve dropdown tekilleştirme pytest ile doğrulandı."
+source_type = "commit"
+commit_sha = "88b940ee4ab07e405a22cd39fce52009c7f47840"
+test_result = "Pytest paketi PASS (25 test)"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Commit 88b940e; 7 dosya Git diff."
+changes = [
+  "Kimlik ve koordinat eşlemesi güçlendirildi.",
+  "Filom adaptör entegrasyonu tamamlandı.",
+  "Dropdown tekilleştirme kapatıldı.",
+]
+changed_files = [
+  "app/modules/planlama/arac_add_to_plan_service.py",
+  "app/modules/planlama/arac_operasyonu/services/turkcell_filom_adapter.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/modules/planlama/arac_vehicle_identity_service.py",
+  "app/static/js/planlama_arac_takip.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/test_atp_multi_add_identity_coordinate_dropdown_v1.py",
+]
+locked_rules = [
+  "Kimlik tutarlı çözülür.",
+  "Koordinat kalıcı yazılır.",
+]
+tests = [
+  "Kimlik",
+  "Koordinat",
+  "Dropdown",
+]
+known_issues = [
+]
+next_steps = [
+  "Plan operasyon sertleştirme.",
+]

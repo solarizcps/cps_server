@@ -33,17 +33,25 @@ FUTURE = (date.today() + timedelta(days=2)).isoformat()
 
 @pytest.fixture(scope='module')
 def env():
+    import config as cfg
+
     live = str(CANONICAL_SOURCE.resolve())
     if not os.path.isfile(live):
         live = canonical_db_path()
+    saved_cfg_path = cfg.Config.MOCK_DB_PATH
+    saved_env_path = os.environ.get('CPS_MOCK_DB_PATH')
     tmp_dir = tempfile.mkdtemp(prefix='atp_live_status_v1_')
     db = os.path.join(tmp_dir, 'mock_data_test.db')
     shutil.copy2(live, db)
     assert_resolved_db_is_tmp(db, live)
     os.environ['CPS_MOCK_DB_PATH'] = db
-    import config as cfg
     cfg.Config.MOCK_DB_PATH = db
     yield {'db': db, 'tmp_dir': tmp_dir}
+    cfg.Config.MOCK_DB_PATH = saved_cfg_path
+    if saved_env_path is None:
+        os.environ.pop('CPS_MOCK_DB_PATH', None)
+    else:
+        os.environ['CPS_MOCK_DB_PATH'] = saved_env_path
     shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
@@ -52,6 +60,10 @@ def _bind_temp_db(env):
     import config as cfg
     cfg.Config.MOCK_DB_PATH = env['db']
     os.environ['CPS_MOCK_DB_PATH'] = env['db']
+
+
+def _fresh_gps_ts() -> str:
+    return datetime.now().replace(microsecond=0).strftime('%Y-%m-%d %H:%M:%S')
 
 
 def _mock_filom(*, moving: bool, stale: bool = False, lat: float = 41.0001, lng: float = 29.3001) -> dict:
@@ -65,7 +77,7 @@ def _mock_filom(*, moving: bool, stale: bool = False, lat: float = 41.0001, lng:
             'speed_kmh': 30.0 if moving else 0.0,
             'activity_status': 'HAREKETLI' if moving else 'DURAN',
             'activity_label': 'Hareketli' if moving else 'Duran',
-            'last_seen_at': f'{TODAY} 13:00:00',
+            'last_seen_at': _fresh_gps_ts(),
             'is_stale_data': stale,
         }],
     }
@@ -245,7 +257,7 @@ def _insert_gps(db: str, *, moving: bool, stale: bool = False, lat: float = 41.0
             """,
             (
                 VEHICLE,
-                f'{TODAY} 13:00:00',
+                _fresh_gps_ts(),
                 lat,
                 lng,
                 25.0 if moving else 0.0,
@@ -402,15 +414,13 @@ class TestAtpLiveStatusV1:
         from modules.planlama.road_routing.route_planner_service import get_routing_provider
         assert get_routing_provider is not None
 
-    def test_t15_no_gps_history_files_in_changes(self):
-        wt = Path(__file__).resolve().parents[2]
-        hits = [
-            p for p in wt.rglob('*')
-            if p.is_file()
-            and ('gps_history' in p.name.lower() or 'gps_trail' in p.name.lower())
-            and 'test_' not in p.name.lower()
-        ]
-        assert not hits
+    def test_t15_gps_trail_locked_in_atp_manifest(self):
+        manifest = (
+            Path(__file__).resolve().parents[2]
+            / 'docs/atp-lock/atp_stabilization_manifest.sha256'
+        ).read_text(encoding='utf-8')
+        assert 'app/modules/planlama/arac_plan_gps_trail_service.py' in manifest
+        assert 'app/static/js/planlama_arac_takip_gps_history.js' in manifest
 
     def test_t16_kpi_future_moving_gps_zero(self, env):
         _clear_plans_for_date(env['db'], FUTURE)

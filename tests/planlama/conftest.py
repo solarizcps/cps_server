@@ -70,3 +70,59 @@ def atp_ensure_repo_cwd():
     """Start each test from repo root so combined collection order cannot leak app/ cwd."""
     os.chdir(str(_REPO_ROOT))
     yield
+
+
+@pytest.fixture(autouse=True)
+def atp_worktree_canonical_leak_guard():
+    """Never leave worktree app/mock_data.db behind after a test."""
+    wt = _APP_DIR / 'mock_data.db'
+    if wt.is_file():
+        wt.unlink()
+    yield
+    if wt.is_file():
+        wt.unlink()
+
+
+@pytest.fixture(autouse=True)
+def atp_restore_auth_and_routes():
+    """Restore modules.auth + arac_takip_routes after tests that patch yetki_* globals."""
+    yield
+    import importlib
+
+    import modules.auth as auth_mod
+
+    importlib.reload(auth_mod)
+    try:
+        import modules.planlama.arac_takip_routes as routes_mod
+
+        importlib.reload(routes_mod)
+    except Exception:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def atp_rebind_stale_mock_db(atp_temp_db_session):
+    """Re-bind session temp DB when a prior module left a deleted CPS_MOCK_DB_PATH."""
+    from tools.atp_test_db_guard import bind_temp_db_path
+
+    def _rebind_if_stale() -> None:
+        import config
+
+        mock = config.Config.MOCK_DB_PATH
+        if mock and not Path(str(mock)).is_file():
+            bind_temp_db_path(atp_temp_db_session['temp_db'])
+
+    _rebind_if_stale()
+    yield
+    _rebind_if_stale()
+
+
+@pytest.fixture(scope='session')
+def atp_planlama_db_guard_session(atp_global_db_guard_session):
+    """Alias for ATP R04/R07 tests — uses root tests/conftest session guard."""
+    return atp_global_db_guard_session
+
+
+@pytest.fixture(scope='session')
+def atp_temp_db_session(atp_planlama_db_guard_session):
+    return atp_planlama_db_guard_session

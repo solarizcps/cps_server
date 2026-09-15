@@ -517,7 +517,10 @@ def attach_user():
 # ============================================================
 
 _TIP_GUARD_BYPASS_PREFIXES = ('/static/',)
-_TIP_GUARD_BYPASS_PATHS = ('/favicon.ico', '/giris', '/cikis', '/sifre-degistir')
+_TIP_GUARD_BYPASS_PATHS = (
+    '/favicon.ico', '/giris', '/cikis', '/sifre-degistir',
+    '/planlama/arac-takip/sofor-haritasi',
+)
 
 
 @auth_bp.before_app_request

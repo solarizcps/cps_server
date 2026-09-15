@@ -1,0 +1,43 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.14.4"
+phase_code = "ATP_WHATSAPP_WEB_DIRECT_OPEN_V1"
+title = "WhatsApp Web — rota mesajını doğrudan send URL ile aç"
+status = "ONAYLANDI"
+date = "2026-09-15"
+summary = "API wa.me yanıtından text alınır; başarıda web.whatsapp.com/send?text= ile tek window.open; popup/desktop yedeği yok."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "integration/atp-whatsapp-web-direct-open-v1"
+verification_date = "2026-09-15"
+verification_evidence = "pytest WhatsApp web direct + js regression + legacy t4-t8; Edge web.whatsapp.com/send tek tık."
+test_result = "pytest tests/planlama/test_atp_whatsapp_web_direct_open_v1.py tests/planlama/test_atp_whatsapp_js_regression_v1.py tests/planlama/test_atp_whatsapp_legacy_fallback_hotfix_v1.py passed"
+db_write = false
+server_restart = false
+push_status = "LOCAL_ONLY"
+deployment_status = "LOCAL_ONLY"
+locked_rules = [
+  "WhatsApp açılışı yalnız web.whatsapp.com/send?text=; wa.me/api.whatsapp popup staging yok.",
+  "Araç kartı, harita ve rota JS hunks bu fazda commitlenmez.",
+]
+locked_rules_approval = true
+changes = [
+  "buildWhatsappWebSendUrl + bindWhatsappButton _waInFlight tek bind.",
+  "planlama_arac_takip.js cache v=101.",
+]
+changed_files = [
+  "app/static/js/planlama_arac_takip.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/test_atp_whatsapp_web_direct_open_v1.py",
+  "tests/planlama/test_atp_whatsapp_js_regression_v1.py",
+  "tests/planlama/test_atp_whatsapp_legacy_fallback_hotfix_v1.py",
+  "tests/planlama/test_atp_whatsapp_browser_v1.py",
+]
+tests = [
+  "test_atp_whatsapp_web_direct_open_v1.py",
+  "test_atp_whatsapp_js_regression_v1.py",
+  "test_atp_whatsapp_legacy_fallback_hotfix_v1.py::TestLegacyFallbackRemovalSource",
+  "test_atp_narrow_fix_whatsapp_vehicle_v1.py",
+]
+known_issues = []
+next_steps = []

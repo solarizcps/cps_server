@@ -13,9 +13,6 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-if hasattr(sys.stdout, 'buffer'):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-
 _REPO = Path(__file__).resolve().parents[2]
 _APP = _REPO / 'app'
 _PLANLAMA = Path(__file__).resolve().parent
@@ -51,7 +48,7 @@ def _pick_port() -> int:
 def _prepare_db(runtime: Path) -> str:
     db = str(runtime / 'mock_data_geofence_a3.db')
     os.environ['CPS_TEST_DB_GUARD'] = '1'
-    install_atp_test_db_guard(str(_APP / 'mock_data.db'))
+    install_atp_test_db_guard(str(CANONICAL_SOURCE.resolve()))
     prepare_isolated_a3_db(db)
     return db
 

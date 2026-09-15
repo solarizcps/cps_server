@@ -63,7 +63,11 @@ def _user(con: sqlite3.Connection, uid: int) -> dict:
 
 def _forbidden(body: dict) -> bool:
     err = (body.get('error') or body.get('hata') or '').lower()
-    return body.get('code') == 'FORBIDDEN' or err == 'forbidden' or 'yetkiniz yok' in err
+    return (
+        body.get('code') == 'FORBIDDEN'
+        or err in ('forbidden', 'yetkisiz')
+        or 'yetkiniz yok' in err
+    )
 
 
 def _strip_mehmet_overrides(db: str) -> None:
@@ -284,7 +288,7 @@ class TestAtpMehmetPermissionV1:
         assert r2.status_code == 200
         body = r2.get_json()
         assert body.get('ok') is True
-        assert body.get('message') == 'İş plan dışına alındı.'
+        assert body.get('message') == 'İş aktif plandan kaldırıldı; geçmiş kaydı korundu.'
         con = sqlite3.connect(env['db'])
         con.row_factory = sqlite3.Row
         durum = con.execute(

@@ -1,0 +1,36 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.14.2"
+phase_code = "ATP_APPROACHING_VISIT_LABEL_V1"
+title = "Günlük plan ZİYARET — APPROACHING etiketi Yaklaşıyor"
+status = "ONAYLANDI"
+date = "2026-09-15"
+summary = "APPROACHING visit_state ham metin yerine Yaklaşıyor; API visit_label + günlük tablo JS fallback."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "integration/atp-approaching-visit-label-v1"
+verification_date = "2026-09-15"
+verification_evidence = "pytest test_approaching_visit_label_maps_yaklasiyor; browser 8080 plan_item 160 ZİYARET Yaklaşıyor."
+test_result = "pytest test_atp_stop_overstay_r05_v1.py::test_approaching_visit_label_maps_yaklasiyor passed"
+db_write = false
+server_restart = false
+push_status = "LOCAL_ONLY"
+deployment_status = "LOCAL_ONLY"
+locked_rules = [
+  "Geofence state machine ve geçiş kuralları değiştirilmez.",
+  "Araç kartı, WhatsApp popup ve diğer JS hunks bu fazda commitlenmez.",
+]
+changes = [
+  "VISIT_LABELS APPROACHING -> Yaklaşıyor.",
+  "buildVisitLabel APPROACHING fallback.",
+]
+changed_files = [
+  "app/modules/planlama/arac_today_operations_service.py",
+  "app/static/js/planlama_arac_takip.js",
+  "tests/planlama/test_atp_stop_overstay_r05_v1.py",
+]
+tests = [
+  "test_atp_stop_overstay_r05_v1.py::test_approaching_visit_label_maps_yaklasiyor",
+]
+known_issues = []
+next_steps = []

@@ -260,7 +260,7 @@ class TestMehmetPlanCancelPermissionV1:
         r = _cancel_as(client, env, 31, pid)
         assert r.status_code == 200
         body = r.get_json()
-        assert body.get('ok') and body.get('message') == 'İş plan dışına alındı.'
+        assert body.get('ok') and body.get('message') == 'İş aktif plandan kaldırıldı; geçmiş kaydı korundu.'
         con = sqlite3.connect(env['db'])
         con.row_factory = sqlite3.Row
         durum = con.execute('SELECT durum FROM arac_gunluk_plan_is WHERE id=?', (pid,)).fetchone()['durum']

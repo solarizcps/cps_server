@@ -22,20 +22,24 @@ def test_whatsapp_url_key_only_no_legacy_url():
 def test_no_vehicle_toast_without_fetch():
     idx = MAIN.find("toast('WhatsApp için önce bir araç planı seçin.'")
     fetch_idx = MAIN.find("fetch(waUrl", idx)
-    popup_idx = MAIN.find("window.open('about:blank'", idx)
+    open_idx = MAIN.find('window.open(webSendUrl', idx)
     assert idx != -1
-    assert fetch_idx == -1 or popup_idx == -1 or popup_idx < fetch_idx
+    assert fetch_idx != -1
+    assert open_idx == -1 or fetch_idx < open_idx
 
 
-def test_popup_opens_before_fetch():
-    assert "window.open('about:blank', '_blank')" in BLOCK
-    assert 'popup.location.replace(j.whatsapp_url)' in BLOCK
+def test_success_opens_whatsapp_web_send():
+    assert 'https://web.whatsapp.com/send?text=' in BLOCK
+    assert 'buildWhatsappWebSendUrl' in BLOCK
+    assert 'whatsapp://' not in BLOCK
+    assert "window.open('about:blank'" not in BLOCK
 
 
-def test_backend_error_closes_popup():
-    assert 'closeWhatsappPopup(popup)' in BLOCK
+def test_backend_error_shows_toast():
     assert 'j.error' in BLOCK
+    assert 'WhatsApp planı hazırlanamadı.' in BLOCK
     assert 'j.message' not in BLOCK
+    assert 'closeWhatsappPopup' not in BLOCK
 
 
 def test_legacy_preview_removal_hook():

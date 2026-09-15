@@ -33,6 +33,10 @@ FORBIDDEN_PATH_RE = re.compile(
 
 SEED_FILES = [
     'app/modules/planlama/arac_takip_routes.py',
+    'app/modules/planlama/arac_manual_reorder_service.py',
+    'app/modules/planlama/arac_plan_gps_trail_service.py',
+    'app/modules/planlama/arac_route_realization_models.py',
+    'app/modules/planlama/arac_route_realization_service.py',
     'app/templates/planlama/arac_takip_plan.html',
     'app/modules/planlama/arac_operasyonu/services/turkcell_filom_adapter.py',
     'app/tools/arac_gps_poll_worker.py',
@@ -49,6 +53,7 @@ ATP_MODULE_PREFIXES = (
 
 MIGRATION_GLOB = 'app/migrations/*arac*'
 MIGRATION_GLOB2 = 'app/migrations/189_planlama_arac_takip_rol32_yetki.py'
+MIGRATION_GLOB3 = 'app/migrations/192_arac_plan_olay_auto_tamamlandi.py'
 
 TEST_PATTERNS = (
     'tests/planlama/test_atp_*.py',
@@ -253,7 +258,11 @@ def build_inventory() -> dict:
     static_assets |= _glob_paths('app/static/css/planlama_arac_takip*.css')
     static_assets |= _glob_paths('app/static/js/planlama_arac_takip*.js')
 
-    migrations = _glob_paths(MIGRATION_GLOB) | _glob_paths(MIGRATION_GLOB2)
+    migrations = (
+        _glob_paths(MIGRATION_GLOB)
+        | _glob_paths(MIGRATION_GLOB2)
+        | _glob_paths(MIGRATION_GLOB3)
+    )
 
     tests: set[str] = set()
     for pat in TEST_PATTERNS:

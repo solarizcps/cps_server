@@ -1,0 +1,44 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v0.1.0"
+phase_code = "ATP_U0_ROUTE_DECISION_MODAL"
+title = "Rota karar modalı ve Google profil seçimi kilitlendi."
+status = "KILITLI"
+date = "2026-08-26"
+summary = "Üç commit kapsamı: (1) primary 98a6256 modal UI lock — otomatik test yok; (2) related 68653aa5 Google route decision+profile — 170 pytest; (3) related 9e3187c3 günlük plan aksiyonları lock — otomatik test yok."
+source_type = "commit"
+commit_sha = "98a625683139f961622df0d51ccb6bc5bb556f56"
+test_result = "Primary UI commit: otomatik test yok; related Google route paketi 170 pytest PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = "Primary 98a6256 (modal UI, 0 test); related 68653aa5 (Google route, 170 test); related 9e3187c3 (daily actions lock, 0 test)."
+changes = [
+  "Rota karar modalı UI kilidi uygulandı (primary).",
+  "Google profil seçimi plan satırına bağlandı (related 68653aa5).",
+  "Günlük plan aksiyonları kilitlendi (related 9e3187c3).",
+]
+changed_files = [
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip_route_explainer.js",
+  "app/templates/planlama/arac_takip_plan.html",
+]
+locked_rules = [
+  "Rota karar modalı onaysız uygulanmaz.",
+  "Profil seçimi deterministik yazılır.",
+]
+tests = [
+  "Primary modal UI (otomatik test yok)",
+  "Related Google route pytest (170)",
+  "Related daily actions lock (otomatik test yok)",
+]
+known_issues = [
+]
+next_steps = [
+  "Planlanan-gerçekleşen rota motoru fazına geçiş.",
+]
+related_commits = [
+  "68653aa5b904683869420d0b085974a619d49a6c",
+  "9e3187c30a8e7fb51947c938103774a2ed059f31",
+]

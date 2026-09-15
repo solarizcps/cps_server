@@ -105,6 +105,13 @@ def sort_stops_for_whatsapp(tasks: list[dict]) -> list[dict]:
     return sorted(active, key=_stop_sort_key)
 
 
+def order_stops_for_whatsapp_message(stops: list[dict]) -> list[dict]:
+    """ACİL duraklar mesajda önce; her grupta mevcut plan sırası korunur."""
+    acil = [s for s in stops if _stop_is_acil(s)]
+    normal = [s for s in stops if not _stop_is_acil(s)]
+    return acil + normal
+
+
 def resolve_base_maps_link(base: dict) -> str:
     link = maps_link_from_coordinates(base.get('latitude'), base.get('longitude'))
     if link:
@@ -323,55 +330,71 @@ def _return_from_scoped_route_snapshot(
 
 def build_base_section(base: dict, *, heading: str) -> list[str]:
     if not base.get('configured'):
-        return [f'🏭 *{heading}*', _MISSING_BASE, '']
+        return [f'*{heading}*', _MISSING_BASE, '']
     name = (base.get('base_name') or 'Fabrika').strip()
+    maps = resolve_base_maps_link(base)
     return [
-        f'🏭 *{heading}: {name}*',
-        f'📍 {resolve_base_maps_link(base)}',
+        f'*{heading}: {name}*',
+        f'Konum: {maps}',
         '',
     ]
+
+
+def _stop_is_acil(stop: dict) -> bool:
+    pri = (stop.get('priority') or stop.get('oncelik') or '').strip().upper()
+    return pri == 'ACIL'
+
+
+def _stop_heading_line(display_no: int, company: str, *, is_acil: bool) -> str:
+    if is_acil:
+        return f'*{display_no}. ACİL — {company}*'
+    return f'*{display_no}. {company}*'
 
 
 def build_whatsapp_plan_message_v2(context: dict[str, Any]) -> str:
-    """Plain-text WhatsApp message — safe *bold* only, no HTML."""
+    """Plain-text WhatsApp message — safe *bold* only, no HTML, no emoji literals."""
     lines: list[str] = [
-        '🚚 *GÜNLÜK ARAÇ PROGRAMI*',
-        f"📅 Tarih: {context.get('date_label') or context.get('plan_date') or _DASH}",
-        f"🚘 Plaka: {context.get('plate') or _DASH}",
-        f"👤 Sürücü: {context.get('driver_name') or _DASH}",
-        f"🕐 Çıkış: {context.get('departure_time') or _DASH}",
+        '*GÜNLÜK ARAÇ PROGRAMI*',
+        f"*Tarih:* {context.get('date_label') or context.get('plan_date') or _DASH}",
+        f"*Plaka:* {context.get('plate') or _DASH}",
+        f"*Sürücü:* {context.get('driver_name') or _DASH}",
+        f"*Çıkış:* {context.get('departure_time') or _DASH}",
         '',
     ]
-    lines.extend(build_base_section(context.get('base') or {}, heading='Başlangıç'))
 
-    for stop in context.get('stops') or []:
-        label_no = stop.get('display_order_no') or stop.get('order_no') or '?'
-        company = (stop.get('company_name') or '—').strip()
-        job = (stop.get('job_title') or stop.get('yapilacak_is') or '—').strip()
+    message_stops = order_stops_for_whatsapp_message(context.get('stops') or [])
+    for idx, stop in enumerate(message_stops, start=1):
+        company = (stop.get('company_name') or '\u2014').strip()
+        job = (stop.get('job_title') or stop.get('yapilacak_is') or '\u2014').strip()
         eta = resolve_stop_eta(stop)
-        loc = resolve_stop_location_link(stop)
-        lines.append(f'*{label_no}. {company}*')
+        is_acil = _stop_is_acil(stop)
+        lines.append(_stop_heading_line(idx, company, is_acil=is_acil))
         lines.append(f'İş: {job}')
-        lines.append(f'ETA: {eta}')
+        lines.append(f'Tahmini varış: {eta}')
         if stop.get('phone'):
             lines.append(f'Telefon: {stop["phone"]}')
         addr = (stop.get('address_text') or stop.get('adres') or '').strip()
-        if addr and addr not in (loc, _MISSING_LOCATION):
+        if addr:
             lines.append(f'Adres: {addr}')
-        lines.append(f'📍 {loc}')
+        loc_link = resolve_stop_location_link(stop)
+        if loc_link and loc_link != _MISSING_LOCATION:
+            lines.append(f'Konum: {loc_link}')
+        else:
+            lines.append(_MISSING_LOCATION)
         lines.append('')
 
     base = context.get('base') or {}
     if base.get('configured'):
         name = (base.get('base_name') or 'Fabrika').strip()
-        lines.append(f'🏭 *Dönüş: {name}*')
+        lines.append(f'*Başlangıç:* {name}')
+        lines.append(f'*Dönüş:* {name}')
     else:
-        lines.append('🏭 *Dönüş*')
+        lines.append('*Başlangıç:*')
+        lines.append(_MISSING_BASE)
+        lines.append('*Dönüş:*')
         lines.append(_MISSING_BASE)
     ret = context.get('estimated_return_time')
-    lines.append(f'Tahmini dönüş: {ret if ret else _DASH}')
-    if base.get('configured'):
-        lines.append(f'📍 {resolve_base_maps_link(base)}')
+    lines.append(f'*Tahmini dönüş:* {ret if ret else _DASH}')
     return '\n'.join(lines).strip()
 
 
@@ -408,6 +431,13 @@ def load_whatsapp_plan_context(plan_date: str, vehicle_id: str) -> dict[str, Any
     except ValueError:
         date_label = plan_date
 
+    driver_map_url = ''
+    try:
+        from modules.planlama.arac_driver_map_service import build_driver_map_page_url
+        driver_map_url = build_driver_map_page_url(plan_date, str(vehicle_id), plan_id, external=True)
+    except Exception:
+        driver_map_url = ''
+
     return {
         'plan_id': plan_id,
         'plan_date': plan_date,
@@ -419,6 +449,7 @@ def load_whatsapp_plan_context(plan_date: str, vehicle_id: str) -> dict[str, Any
         'departure_time': plan_row.get('cikis_saati') or None,
         'base': base,
         'stops': stops,
+        'driver_map_url': driver_map_url,
         'estimated_return_time': return_info.get('estimated_return_time'),
         'return_source': return_info.get('return_source', RETURN_SOURCE_NONE),
         'return_scope_valid': bool(return_info.get('return_scope_valid')),
@@ -481,6 +512,7 @@ def build_whatsapp_api_response(
     return {
         'ok': True,
         'whatsapp_url': whatsapp_url,
+        'driver_map_url': context.get('driver_map_url') or '',
         'vehicle_external_id': str(context.get('vehicle_external_id') or vehicle_id),
         'plan_id': context.get('plan_id'),
         'stop_count': len(stops),

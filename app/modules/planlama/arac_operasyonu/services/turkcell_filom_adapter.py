@@ -337,10 +337,23 @@ def get_live_vehicles(retry_auth: bool = True) -> dict:
                 'elapsed_ms': elapsed,
             }
 
-    vehicles = [map_vehicle_dto(r) for r in raw_list]
+    raw_count = len(raw_list)
+    mapped = [map_vehicle_dto(r) for r in raw_list]
+    from modules.planlama.arac_live_vehicle_dedupe import dedupe_live_vehicles, load_preferred_external_ids
+
+    dedupe_result = dedupe_live_vehicles(mapped, load_preferred_external_ids())
+    from modules.planlama.arac_live_vehicle_registry import filter_live_tracking_vehicles
+
+    registry_result = filter_live_tracking_vehicles(dedupe_result['vehicles'])
+    vehicles = registry_result['vehicles']
     valid_loc = sum(1 for v in vehicles if v.get('has_valid_location'))
     elapsed = int((time.perf_counter() - t0) * 1000)
-    _log_call('get_live_vehicles', 200, elapsed, f'vehicle_count={len(vehicles)} valid_location={valid_loc}')
+    _log_call(
+        'get_live_vehicles',
+        200,
+        elapsed,
+        f'raw_count={raw_count} vehicle_count={len(vehicles)} dedupe_suppressed={dedupe_result.get("suppressed_count", 0)} registry_excluded={registry_result.get("excluded_count", 0)} valid_location={valid_loc}',
+    )
     try:
         from modules.planlama.arac_vehicle_identity_service import update_filom_vehicle_catalog
         update_filom_vehicle_catalog(vehicles)
@@ -349,11 +362,22 @@ def get_live_vehicles(retry_auth: bool = True) -> dict:
     return {
         'ok': True,
         'data_source': 'turkcell_filom',
+        'raw_count': raw_count,
         'count': len(vehicles),
         'valid_location_count': valid_loc,
         'missing_location_count': len(vehicles) - valid_loc,
         'vehicles': vehicles,
         'kpi': compute_kpi(vehicles),
+        'deduplicated': dedupe_result.get('deduplicated', False),
+        'duplicate_suppressed_count': dedupe_result.get('suppressed_count', 0),
+        'duplicate_audit': {
+            'suppressed': dedupe_result.get('suppressed') or [],
+            'ambiguous': dedupe_result.get('ambiguous') or [],
+        },
+        'registry_excluded_count': registry_result.get('excluded_count', 0),
+        'registry_audit': {
+            'excluded': registry_result.get('excluded') or [],
+        },
         'error': None,
         'elapsed_ms': elapsed,
     }

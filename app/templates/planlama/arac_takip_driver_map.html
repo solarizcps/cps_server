@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if driver_map %}Günlük Rota — {{ driver_map.plate }}{% else %}Şoför Haritası{% endif %}</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=r04b">
+  <style>
+    body.atp-driver-map-page {
+      margin: 0;
+      font-family: Segoe UI, system-ui, sans-serif;
+      background: #eef2f6;
+      color: #111827;
+      min-height: 100vh;
+    }
+    .atp-driver-shell {
+      box-sizing: border-box;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 10px 12px 12px;
+    }
+    .atp-driver-hdr { margin-bottom: 8px; flex-shrink: 0; }
+    .atp-driver-hdr h1 { font-size: 17px; margin: 0 0 4px; }
+    .atp-driver-meta { font-size: 12.5px; color: #667085; line-height: 1.45; }
+    .atp-driver-warn {
+      background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px;
+      padding: 8px 10px; font-size: 12.5px; margin: 0 0 8px; color: #9a3412;
+    }
+    .atp-driver-layout {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(220px, 32%) 1fr;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .atp-driver-stops-col {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: auto;
+      padding: 10px;
+      min-height: 0;
+    }
+    .atp-driver-stops-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #111827;
+    }
+    .atp-driver-stop-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 7px 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 12.5px;
+      line-height: 1.35;
+    }
+    .atp-driver-stop-item:last-child { border-bottom: none; }
+    .atp-driver-stop-num {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #c8922a;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .atp-driver-stop-num.done { background: #16a34a; }
+    .atp-driver-stop-num.active { background: #2563eb; }
+    .atp-driver-stop-num.acil { box-shadow: 0 0 0 2px #dc2626; }
+    .atp-driver-stop-body { flex: 1; min-width: 0; }
+    .atp-driver-stop-firma { font-weight: 600; }
+    .atp-driver-stop-sub { color: #667085; font-size: 11.5px; margin-top: 2px; }
+    .atp-driver-factory-row {
+      font-size: 11.5px;
+      color: #667085;
+      padding: 6px 0;
+      border-bottom: 1px dashed #e5e7eb;
+      margin-bottom: 4px;
+    }
+    .atp-driver-map-col {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .atp-driver-map-host {
+      flex: 1;
+      min-height: 280px;
+      height: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+      background: #dde9f4;
+    }
+    .atp-driver-leaflet { width: 100%; height: 100%; min-height: 280px; }
+    .atp-driver-missing-inline {
+      margin-top: 8px;
+      font-size: 11.5px;
+      color: #9a3412;
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .atp-driver-err { text-align: center; padding: 48px 16px; color: #667085; }
+    @media (max-width: 768px) {
+      .atp-driver-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(300px, 55vh);
+      }
+      .atp-driver-stops-col { max-height: 38vh; }
+    }
+  </style>
+</head>
+<body class="atp-driver-map-page">
+  <div class="atp-driver-shell">
+    {% if error %}
+    <div class="atp-driver-err"><h1>Harita açılamadı</h1><p>{{ error }}</p></div>
+    {% else %}
+    <div class="atp-driver-hdr">
+      <h1>Günlük Rota Haritası</h1>
+      <div class="atp-driver-meta">
+        <div>{{ driver_map.plate }} · {{ driver_map.driver_name }}</div>
+        <div>{{ driver_map.plan_date }} · {{ driver_map.completeness.valid }}/{{ driver_map.completeness.total_active }} durak konumlu</div>
+      </div>
+    </div>
+    {% if driver_map.route_fallback_message %}
+    <div class="atp-driver-warn" id="atpDriverRouteFallback">{{ driver_map.route_fallback_message }}</div>
+    {% endif %}
+    <div class="atp-driver-layout">
+      <aside class="atp-driver-stops-col" aria-label="Sıralı duraklar">
+        <div class="atp-driver-stops-title">Sıralı Duraklar</div>
+        <div class="atp-driver-factory-row">🏭 Başlangıç: {{ driver_map.base_start.name or 'Fabrika' }}</div>
+        {% for s in driver_map.stops %}
+        <div class="atp-driver-stop-item">
+          <span class="atp-driver-stop-num{% if s.durum == 'TAMAMLANDI' %} done{% elif s.durum == 'BASLADI' %} active{% endif %}{% if s.is_acil %} acil{% endif %}">{{ s.sira }}</span>
+          <div class="atp-driver-stop-body">
+            <div class="atp-driver-stop-firma">{{ s.firma }}{% if s.is_acil %} · ACİL{% endif %}</div>
+            <div class="atp-driver-stop-sub">{{ s.yapilacak_is }}</div>
+            <div class="atp-driver-stop-sub">{{ s.status_label or s.durum }}{% if not s.location_valid %} · Konum eksik{% endif %}</div>
+          </div>
+        </div>
+        {% endfor %}
+        <div class="atp-driver-factory-row" style="margin-top:6px;border-bottom:none">↩ Dönüş: {{ driver_map.base_end.name or 'Fabrika' }}</div>
+        {% if driver_map.missing_location_stops %}
+        <div class="atp-driver-missing-inline">
+          Konumu eksik duraklar ({{ driver_map.completeness.missing }}):
+          {% for s in driver_map.missing_location_stops %}
+          {{ s.sira }}. {{ s.firma }}{% if not loop.last %}; {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </aside>
+      <main class="atp-driver-map-col">
+        <div class="atp-driver-map-host" id="atpDriverMapHost">
+          <div id="atpDriverLeafletMap" class="atp-driver-leaflet"></div>
+        </div>
+      </main>
+    </div>
+    <script id="atpDriverMapJson" type="application/json">{{ driver_map | tojson }}</script>
+    {% endif %}
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="{{ url_for('static', filename='js/planlama_arac_takip_driver_map.js') }}?v=r04b"></script>
+</body>
+</html>

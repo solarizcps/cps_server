@@ -1,0 +1,69 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.3.1"
+phase_code = "ATP_U3C_MANUAL_REORDER_API"
+title = "Manuel rota sıralama API'si ve atomik uygulama (commit bekliyor)."
+status = "TEST"
+date = "2026-08-31"
+summary = "Side branch üzerinde test edildi; ana dalda tam implementasyon commitli değil. Kilitli/canlıda değildir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Manual reorder API 68 test PASS (side branch)"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "94df876c7c36cbbd"
+verification_date = "2026-09-03"
+verification_evidence = "Side branch ref 7244b90; U3C API/UI ana dalda commitli değil"
+current_work = "Manuel rota sıralama API — ana dala commit bekliyor"
+evidence_summary = "Forensic 2026-09-03; branch kanıt ref 7244b90; merge sonrası yeniden değerlendirilecek."
+changes = [
+  "Manuel reorder servisi ve API uçları eklendi.",
+  "State token ve atomik apply akışı bağlandı.",
+  "UI/JS manual reorder wiring tamamlandı.",
+]
+changed_files = [
+  "app/modules/planlama/arac_manual_reorder_service.py",
+  "app/modules/planlama/arac_plan_rota_snapshot_service.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_manual_reorder.js",
+  "app/static/js/planlama_arac_takip_manual_reorder_ui.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/_parity_helper.py",
+  "tests/planlama/test_arac_manual_reorder_api.py",
+  "tests/planlama/test_planlama_arac_takip_manual_reorder.js",
+  "tests/planlama/test_planlama_arac_takip_manual_reorder_parity.js",
+  "tests/planlama/test_planlama_arac_takip_manual_reorder_ui.js",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = [
+  "Main branch üzerinde tam implementasyon bulunmadığı forensic ile kanıtlandığı için yanlış KİLİTLİ metadata durumu kaldırıldı. Feature veya üretim kuralı değiştirilmedi.",
+]
+locked_rules = [
+  "State token kontrolü zorunludur.",
+  "Fail-closed validation reddedilir.",
+  "BEGIN IMMEDIATE atomik apply kullanılır.",
+  "Segment sınırı aşılamaz.",
+  "Task set eşleşmesi zorunludur.",
+  "Kilitli görev hareketi engellenir.",
+  "Plan state conflict reddedilir.",
+  "Snapshot invalidate uygulanır.",
+  "ETA clear uygulanır.",
+]
+tests = [
+  "Manual reorder API pytest (68)",
+  "Manual reorder JS parity",
+  "Manual reorder UI JS",
+]
+known_issues = [
+  "Ana dalda tam implementasyon commitli değil; KILITLI/CANLIDA değildir.",
+]
+next_steps = [
+  "Ana dala commit ve regresyon sonrası yeniden değerlendir.",
+  "GPS geçmişi trail fazına geçiş.",
+]

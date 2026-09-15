@@ -11,9 +11,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-if hasattr(sys.stdout, 'buffer'):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-
 _REPO = Path(__file__).resolve().parents[2]
 _APP = _REPO / 'app'
 _PLANLAMA_TESTS = Path(__file__).resolve().parent
@@ -24,7 +21,12 @@ for _p in (str(_APP), str(_PLANLAMA_TESTS)):
 os.environ['CPS_TEST_DB_GUARD'] = '1'
 from tools.atp_test_db_guard import bind_temp_db_path, install_atp_test_db_guard  # noqa: E402
 
-install_atp_test_db_guard(str(_APP / 'mock_data.db'))
+_CANONICAL_SOURCE = Path(os.environ.get(
+    'CPS_CANONICAL_DB_SOURCE',
+    r'C:\Solariz_CPS_SERVER\app\mock_data.db',
+)).resolve()
+os.environ.setdefault('CPS_CANONICAL_DB_SOURCE', str(_CANONICAL_SOURCE))
+install_atp_test_db_guard(str(_CANONICAL_SOURCE))
 
 from atp_geofence_a3_common import (  # noqa: E402
     A3_VEHICLE,

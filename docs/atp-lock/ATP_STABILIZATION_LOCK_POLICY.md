@@ -52,7 +52,7 @@ Locked via full-file SHA256:
 - `app/modules/planlama/arac_operasyonu/**` (Filom adapter)
 - `app/modules/planlama/road_routing/**` (route planner used by ATP)
 - ATP UI template, CSS, JS
-- ATP migrations `176`–`188` + `189_planlama_arac_takip_rol32_yetki.py`
+- ATP migrations `176`–`188` + `189_planlama_arac_takip_rol32_yetki.py` + `191_arac_plan_olay_auto_tamamlandi.py`
 - GPS worker scripts (`Start-Arac-GPS-Worker.ps1`, `Register-Arac-GPS-Worker-Task.ps1`, `app/tools/arac_gps_poll_*.py`)
 - ATP test suite under `tests/planlama/`
 - `app/tools/atp_test_db_guard.py`

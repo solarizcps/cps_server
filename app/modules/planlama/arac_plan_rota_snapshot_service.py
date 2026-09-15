@@ -35,11 +35,7 @@ def invalidate_active_plan_route_snapshot_conn(
     con: sqlite3.Connection,
     plan_id: int,
 ) -> int:
-    """
-    Deactivate active route snapshots for one plan on caller-owned connection.
-
-    Returns number of rows updated. No-op when table missing or no active row.
-    """
+    """Deactivate active route snapshots for one plan; returns rows updated."""
     if not _plan_rota_snapshot_table_exists_conn(con):
         return 0
     cur = con.execute(
@@ -49,38 +45,57 @@ def invalidate_active_plan_route_snapshot_conn(
     return int(cur.rowcount or 0)
 
 
+def plan_route_rebuild_required_conn(con: sqlite3.Connection, plan_id: int) -> bool:
+    """
+    True when plan had a route snapshot before but none is active now (stale order).
+    """
+    if not _plan_rota_snapshot_table_exists_conn(con):
+        return False
+    had_any = con.execute(
+        'SELECT 1 FROM arac_plan_rota_snapshot WHERE plan_id=? LIMIT 1',
+        (int(plan_id),),
+    ).fetchone()
+    if not had_any:
+        return False
+    active = con.execute(
+        'SELECT 1 FROM arac_plan_rota_snapshot WHERE plan_id=? AND is_active=1 LIMIT 1',
+        (int(plan_id),),
+    ).fetchone()
+    return active is None
+
+
 def invalidate_plan_route_state_after_acil_insert_conn(
     con: sqlite3.Connection,
     plan_id: int,
     oncelik: str | None,
-) -> None:
+) -> dict[str, bool | int]:
     """
     ACIL sıra değişimi sonrası stale snapshot/ETA temizliği — aynı transaction.
-
-    Yalnız ACIL önceliğinde çalışır; rota motoru veya ETA hesabı yapmaz.
     """
     if (oncelik or 'NORMAL').strip().upper() != 'ACIL':
-        return
-    invalidate_active_plan_route_snapshot_conn(con, plan_id)
+        return {'snapshots_deactivated': 0, 'rebuild_required': False}
+    snapshots_deactivated = invalidate_active_plan_route_snapshot_conn(con, plan_id)
     from modules.planlama.arac_takip_repo import clear_plan_item_etas_conn
     clear_plan_item_etas_conn(con, plan_id)
+    rebuild_required = snapshots_deactivated > 0 or plan_route_rebuild_required_conn(con, plan_id)
+    return {
+        'snapshots_deactivated': snapshots_deactivated,
+        'rebuild_required': rebuild_required,
+    }
 
 
 def invalidate_plan_route_state_after_manual_reorder_conn(
     con: sqlite3.Connection,
     plan_id: int,
-) -> dict[str, int]:
-    """
-    Manuel reorder sonrası stale snapshot/ETA temizliği — aynı transaction.
-
-    Öncelik parametresi istemez. Commit/rollback yapmaz.
-    """
+) -> dict[str, int | bool]:
+    """Manuel reorder sonrası stale snapshot/ETA temizliği."""
     snapshots_deactivated = invalidate_active_plan_route_snapshot_conn(con, plan_id)
     from modules.planlama.arac_takip_repo import clear_plan_item_etas_conn
     etas_cleared = clear_plan_item_etas_conn(con, plan_id)
     return {
         'snapshots_deactivated': snapshots_deactivated,
         'etas_cleared': etas_cleared,
+        'rebuild_required': plan_route_rebuild_required_conn(con, plan_id),
     }
 
 

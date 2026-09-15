@@ -158,6 +158,13 @@ def browser_env():
 @pytest.fixture(scope='module')
 def browser_pages(browser_env):
     from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as _p_check:
+        try:
+            _p_check.chromium.launch(headless=True).close()
+        except Exception as _browser_err:
+            pytest.skip(f'Chromium binary unavailable: {_browser_err}')
+
     errors: list[str] = []
     pages = {}
     with sync_playwright() as p:
@@ -166,6 +173,7 @@ def browser_pages(browser_env):
             page = browser.new_page(viewport=size)
             page.on('console', lambda msg: errors.append(msg.text) if msg.type == 'error' else None)
             page.on('pageerror', lambda exc: errors.append(str(exc)))
+            page.on('dialog', lambda dialog: dialog.accept())
             _login(page, 'mehmet')
             pages[vp] = page
         yield {'pages': pages, 'errors': errors, 'db': browser_env['db']}
@@ -190,6 +198,16 @@ class TestMehmetCancelBrowserV1:
                 f'() => {{ window.AtpPlanChange.openChange({plan_is_id}); }}',
             )
             page.wait_for_selector('#atpPcAction', timeout=8000)
+            page.wait_for_function(
+                """() => {
+                  var sel = document.getElementById('atpPcAction');
+                  if (!sel) return false;
+                  return Array.from(sel.options).some(function(o) {
+                    return o.value === 'cancel' && !o.disabled;
+                  });
+                }""",
+                timeout=15000,
+            )
             page.select_option('#atpPcAction', 'cancel')
             page.fill('#atpPcReason', 'Browser iptal testi')
             page.click('#atpPcSaveBtn')

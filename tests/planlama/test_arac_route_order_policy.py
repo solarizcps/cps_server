@@ -19,6 +19,7 @@ from modules.planlama.arac_route_order_policy import (  # noqa: E402
     build_order_with_inserted_task,
     can_move_task,
     classify_order_tasks,
+    compute_acil_insert_index,
     compute_first_safe_insert_index,
     movement_lock_reason,
     normalize_plan_status,
@@ -26,7 +27,7 @@ from modules.planlama.arac_route_order_policy import (  # noqa: E402
     task_id,
 )
 
-CANONICAL_DB = APP / 'mock_data.db'
+CANONICAL_DB = Path(r'C:\Solariz_CPS_SERVER\app\mock_data.db')
 
 
 def _sha256(path: Path) -> str:
@@ -179,16 +180,17 @@ class TestAcilInsertIndex:
     def test_22_empty_list_index_zero(self):
         assert compute_first_safe_insert_index([]) == 0
 
-    def test_23_multiple_acil_relative_order_preserved_on_insert(self):
+    def test_23_multiple_acil_fifo_new_after_existing(self):
         tasks = [
             _task('acil1', priority='ACIL'),
             _task('acil2', priority='ACIL'),
             _task('norm'),
         ]
+        assert compute_acil_insert_index(tasks) == 2
         new_task = _task('new-acil', priority='ACIL')
         result = build_order_with_inserted_task(tasks, new_task)
         ids = [task_id(t) for t in result]
-        assert ids == ['new-acil', 'acil1', 'acil2', 'norm']
+        assert ids == ['acil1', 'acil2', 'new-acil', 'norm']
 
     def test_24_same_input_same_output_deterministic(self):
         tasks = [_task('done', status='TAMAMLANDI'), _task('mov')]

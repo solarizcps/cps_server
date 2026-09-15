@@ -143,26 +143,28 @@ class TestLegacyFallbackRemovalSource:
         assert 'j.url' not in block
         assert 'build_whatsapp_plan_message' not in block
 
-    def test_t4_no_vehicle_message_and_no_fetch_before_popup(self, js_src):
+    def test_t4_no_vehicle_message_fetch_before_open(self, js_src):
         assert "toast('WhatsApp için önce bir araç planı seçin.')" in js_src
         idx = js_src.find("toast('WhatsApp için önce bir araç planı seçin.')")
-        popup_idx = js_src.find("window.open('about:blank'", idx)
         fetch_idx = js_src.find('fetch(waUrl', idx)
-        assert popup_idx == -1 or fetch_idx == -1 or popup_idx < fetch_idx
+        open_idx = js_src.find('buildWhatsappWebSendUrl', idx)
+        assert fetch_idx != -1
+        assert open_idx == -1 or fetch_idx < open_idx
 
-    def test_t5_popup_null_message(self, js_src):
+    def test_t5_popup_blocked_message(self, js_src):
         assert 'Tarayıcı WhatsApp penceresini engelledi' in js_src
 
-    def test_t6_api_error_closes_popup(self, js_src):
-        assert 'closeWhatsappPopup(popup)' in js_src
+    def test_t6_api_error_toast(self, js_src):
         assert 'WhatsApp planı hazırlanamadı.' in js_src
+        assert 'closeWhatsappPopup' not in js_src
 
-    def test_t7_invalid_whatsapp_url_closes_popup(self, js_src):
+    def test_t7_invalid_whatsapp_url_toast(self, js_src):
         assert 'isValidWhatsappUrl' in js_src
-        assert 'closeWhatsappPopup(popup)' in js_src
+        assert 'closeWhatsappPopup' not in js_src
 
-    def test_t8_success_uses_location_replace(self, js_src):
-        assert 'popup.location.replace(j.whatsapp_url)' in js_src
+    def test_t8_success_whatsapp_web_send(self, js_src):
+        assert 'https://web.whatsapp.com/send?text=' in js_src
+        assert 'buildWhatsappWebSendUrl' in js_src
 
     def test_t15_single_encode_in_api_url(self, client, env):
         con = sqlite3.connect(env['db'])
@@ -177,7 +179,7 @@ class TestLegacyFallbackRemovalSource:
         assert url.count('%25') == 0
         decoded = _decode_wa_message(url)
         assert 'GÜNLÜK ARAÇ PROGRAMI' in decoded
-        assert 'şahin taban' in decoded.lower()
+        assert '\u015fahin taban' in decoded.lower()
 
 
 class TestLegacyFallbackApiParity:
@@ -296,7 +298,7 @@ class TestLegacyFallbackApiParity:
         ):
             body = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={VEHICLE}').get_json()
         assert set(body.keys()) == {
-            'ok', 'whatsapp_url', 'vehicle_external_id', 'plan_id', 'stop_count', 'order_ids',
+            'ok', 'whatsapp_url', 'driver_map_url', 'vehicle_external_id', 'plan_id', 'stop_count', 'order_ids',
         }
         assert 'message' not in body
         assert 'url' not in body

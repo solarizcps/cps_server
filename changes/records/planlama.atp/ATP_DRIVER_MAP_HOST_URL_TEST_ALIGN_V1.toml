@@ -1,0 +1,46 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.14.7"
+phase_code = "ATP_DRIVER_MAP_HOST_URL_TEST_ALIGN_V1"
+title = "Şoför haritası link hostu + iki eski test beklentisinin hizalanması"
+summary = "Şoför haritası dış linki istek bağlamında endpoint çözümlenemezse request.host_url ile üretilir (localhost'a düşmez); WhatsApp dönüş testi kalın formata, geofence canonical kontrolü ATP tablo bütünlük kıyasına alındı."
+status = "TEST"
+date = "2026-09-15"
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "integration/solariz-cps-final-20260914-v1"
+verification_date = "2026-09-15"
+verification_evidence = "pytest driver_map + whatsapp_return_scope + geofence_a2 45 passed; whatsapp/driver_map/sofor seçimi 85 passed; tests/planlama tamamı 965 passed (3 başarısız test HEAD kaynaklı: ATP stabilization lock stale baseline ve arac_plan_olay fixture eksiği)."
+test_result = "pytest tests/planlama 965 passed, 4 skipped; hedefli 45 + 85 passed"
+db_write = false
+server_restart = false
+push_status = "LOCAL_ONLY"
+deployment_status = "LOCAL_ONLY"
+locked_rules = [
+  "WhatsApp mesaj gövdesine şoför haritası linki eklenmez; yalnız API alanı olarak döner.",
+  "url_for başarılı olduğunda link üretimi değişmez; host_url yalnız endpoint çözümlenemediğinde kullanılır.",
+  "Canonical DB'de GPS worker yazımı kabul edilir; ATP tabloları değişirse test başarısız olur.",
+]
+changes = [
+  "arac_driver_map_service.build_driver_map_page_url: istek bağlamında url_for hatasında request.host_url tabanlı link.",
+  "test_atp_whatsapp_return_scope_v1: 'Tahmini dönüş' beklentisi mevcut kalın formata güncellendi.",
+  "test_atp_geofence_a2_v1: tam dosya SHA yerine assert_canonical_atp_unchanged (GPS-only drift toleransı).",
+]
+changed_files = [
+  "app/modules/planlama/arac_driver_map_service.py",
+  "tests/planlama/test_atp_whatsapp_return_scope_v1.py",
+  "tests/planlama/test_atp_geofence_a2_v1.py",
+]
+tests = [
+  "test_atp_driver_map_r04_r12_v1.py::test_whatsapp_api_driver_map_url_field",
+  "test_atp_whatsapp_return_scope_v1.py::TestReturnScopeMatrix::test_t4_no_timeline_shows_dash",
+  "test_atp_geofence_a2_v1.py::test_canonical_unchanged",
+]
+known_issues = [
+  "test_migration_190_enj_istasyon_v1.py::test_atp_stabilization_lock: manifest baseline bdec724 sonrası güncel değil; dokunulmayan dosyalar da hash mismatch veriyor (Adem onayı gerekir).",
+  "test_atp_past_plans_history_v1.py iki test: sentetik fixture'da arac_plan_olay tablosu yok (bdec724 kaynaklı), ayrı faz.",
+]
+next_steps = [
+  "ATP stabilization lock manifest yenilemesi için onay al.",
+  "Geçmiş planlar fixture'ına arac_plan_olay şeması ekle.",
+]

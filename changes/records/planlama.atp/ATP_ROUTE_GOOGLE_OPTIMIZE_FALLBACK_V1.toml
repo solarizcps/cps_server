@@ -1,0 +1,61 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.14.9"
+phase_code = "ATP_ROUTE_GOOGLE_OPTIMIZE_FALLBACK_V1"
+title = "Rota — ORS kesintisinde Google waypoint optimizasyonu + gerçek Kazanç/Yakıt hesabı"
+status = "TEST"
+date = "2026-09-15"
+summary = "ORS AUTH/RATE_LIMIT/TIMEOUT/SERVER hatasında google-static fallback, tek çağrıyla hem mevcut sıra hem waypoint-optimize sıra rotasını hesaplar. Kazanç = mevcut km - önerilen km. Yakıt tasarrufu = kazanç km × araç tüketim kuralı (varsayılan 10 L/100 km). Optimizasyon başarısızsa mevcut rota gösterilir; Önerilen/Kazanç/Yakıt '—' kalır. ORS sağlıklıyken mevcut davranış değişmez."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "integration/solariz-cps-final-20260914-v1"
+verification_date = "2026-09-15"
+verification_evidence = "pytest tests/planlama/test_atp_route_google_optimize_fallback_v1.py 13/13 PASS; test_atp_route_google_static_fallback_v1.py 10/10 PASS; tüm tests/planlama 980 passed, 4 skipped, 1 failed (ATP lock — manifest refresh sonrası pass)."
+test_result = "tests/planlama/test_atp_route_google_optimize_fallback_v1.py 13 passed; test_atp_route_google_static_fallback_v1.py 10 passed"
+db_write = false
+server_restart = false
+push_status = "LOCAL_ONLY"
+deployment_status = "LOCAL_ONLY"
+locked_rules = [
+  "ORS sağlıklı çalıştığında rota akışı, sıra önerisi ve gain hesabı değişmez.",
+  "ORS kesintisinde google-static fallback optimizeWaypointOrder=true ile tek HTTP çağrısı yapar; sıra değiştiyse ikinci çağrı eklenir.",
+  "Kazanç = mevcut_km - önerilen_km; sahte 0 veya eşit değer kopyalanmaz.",
+  "Yakıt tasarrufu yalnız gain_km > 0 olduğunda hesaplanır; gain <= 0 ise '—' gösterilir.",
+  "Google optimizasyon hatasında (ikincil RoutingError): Önerilen/Kazanç/Yakıt '—'; route_via_google_static ile yalnız mevcut rota gösterilir.",
+  "Google trafik profillerinde geçmiş departureTime ile istek gönderilmez; PAST_DEPARTURE döner.",
+  "WhatsApp/harita/geofence/ACİL modülleri bu fazda değişmez.",
+]
+changes = [
+  "google_routes_provider.py: GoogleRouteResult'a optimized_waypoint_indices alanı eklendi; _FIELD_MASK'e routes.optimizedIntermediateWaypointIndex eklendi; _parse_google_route parse eder.",
+  "google_static_fallback.py: GoogleOptimizedResult dataclass, route_via_google_optimized (optimizeWaypointOrder=true + mevcut sıra ikinci çağrı), _google_result_to_route_result yardımcısı, FALLBACK_OPTIMIZED_WARNING_MESSAGE sabiti.",
+  "route_planner_service.py: _DEFAULT_FUEL_L_PER_100KM sabiti; ORS fallback bloğu önce route_via_google_optimized; full_task_ids optimize sırası; gain/fuel_saving.",
+  "arac_traffic_route_proposal_service.py: route_fallback_provider varken sync_route_dto_metrics atlanır.",
+  "arac_takip_routes.py: fallback'ta trafik full_task_ids ezilmez; dashboard fuel_saving route DTO'dan.",
+  "planlama_arac_takip_route.js: fallback gain km/süre; fuel liters-only; route.fuel_saving öncelik (v=18).",
+]
+changed_files = [
+  "app/modules/planlama/road_routing/google_routes_provider.py",
+  "app/modules/planlama/road_routing/google_static_fallback.py",
+  "app/modules/planlama/road_routing/route_planner_service.py",
+  "app/modules/planlama/arac_traffic_route_proposal_service.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/static/js/planlama_arac_takip_route.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/test_atp_route_google_optimize_fallback_v1.py",
+  "tests/planlama/test_atp_route_fallback_sync_v1.py",
+]
+tests = [
+  "test_atp_route_fallback_sync_v1.py",
+  "test_atp_route_google_optimize_fallback_v1.py",
+  "test_atp_route_google_static_fallback_v1.py",
+  "test_google_routes_provider.py",
+  "test_google_route_options_service.py",
+  "test_google_route_options_api.py",
+]
+known_issues = [
+  "Tarayıcı doğrulaması yapılmadı; 8080 restart edilmedi (kullanıcı kısıtı).",
+  "Araç tüketim kuralı DB'den okunmuyor; varsayılan 10 L/100 km kullanılıyor (sonraki fazda DB entegrasyonu planlanabilir).",
+]
+next_steps = [
+  "ORS kotası dolu bir plan üzerinde tarayıcı kanıtı al: optimize sıra, Mevcut Plan km, Önerilen km, Kazanç, Yakıt Tasarrufu.",
+]

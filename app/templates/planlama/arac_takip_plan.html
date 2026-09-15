@@ -4,8 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=73">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip_gps_history.css') }}?v=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=77">
 {% endblock %}
 
 {% block content %}
@@ -246,22 +245,21 @@
             <div class="plan-rota-detail" id="atpPlanRotaDetail">
               {# Left: stop list #}
               <div>
-                <div class="atp-stop-list-header">
-                  <div style="font-size:12.5px;font-weight:700;color:#111827;margin-bottom:0" id="atpStopListTitle">Sıralı Duraklar</div>
-                  <div id="atpManualReorderHeaderAction" class="atp-mr-header-action"></div>
-                </div>
-                <div id="atpManualReorderToolbar" class="atp-manual-reorder-toolbar" style="display:none"></div>
-                <div id="atpManualReorderMsg" class="atp-manual-reorder-msg" aria-live="polite"></div>
+                <div style="font-size:12.5px;font-weight:700;color:#111827;margin-bottom:8px" id="atpStopListTitle">Sıralı Duraklar</div>
                 <div id="atpStopListWrap">
                   <div class="atp-v2-empty">Henüz planlanmış durak yok.</div>
                 </div>
               {# keep atpTimelineList in DOM for compat but always hidden — ETAs shown in jobs table #}
               <div id="atpTimelineList" class="atp-timeline-list" style="display:none"></div>
               </div>
-              {# Right: route map + metrics #}
-              <div>
-                <div class="map-wrap" style="height:200px;margin-bottom:12px">
-                  <div id="atp-plan-map-container" style="position:relative;height:100%;background:#dde9f4;border-radius:4px;border:var(--border)">
+              {# Right: route map + metrics + action bar (normal document flow) #}
+              <div class="atp-route-panel-col">
+                <div class="atp-route-map-section">
+                <div class="map-wrap atp-plan-map-wrap">
+                  <div class="atp-plan-map-toolbar">
+                    <button type="button" class="btn btn-outline btn-xs" id="atpBtnPlanMapExpand">Haritayı Büyüt</button>
+                  </div>
+                  <div id="atp-plan-map-container" class="atp-plan-map-container-inner">
                     <div id="atpPlanMapEmpty" style="display:none;position:absolute;inset:0;z-index:2">
                       <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:12px 16px;box-sizing:border-box">
                         <div class="atp-plan-empty-title" style="font-size:12.5px;font-weight:700;color:#111827;margin-bottom:4px"></div>
@@ -275,7 +273,11 @@
                     <span><span class="dot dot-green"></span>Önerilen</span>
                   </div>
                 </div>
+                <div id="atpPlanMapRouteFallback" class="atp-plan-map-fallback" style="display:none"></div>
                 <div id="atpPlanMapCompleteness" style="font-size:10.5px;color:var(--gray);text-align:center;margin-bottom:8px"></div>
+                <div id="atpPlanMapMissingList" class="atp-plan-map-missing" style="display:none"></div>
+                </div>{# /atp-route-map-section #}
+                <div class="atp-route-info-section">
                 {# Hidden elements for route.js compatibility #}
                 <div style="display:none">
                   <span id="atpRouteCurrentOrder"></span>
@@ -306,14 +308,26 @@
                     <div class="rm-sub" id="atpRouteFuelTry">—</div>
                   </div>
                 </div>
+                <div id="atpTrafficProposalPanel" class="atp-traffic-proposal-panel" style="display:none;margin:8px 0;padding:10px 12px;border:1px solid var(--gray-200);border-radius:6px;background:#f8fafc">
+                  <div style="font-weight:600;font-size:13px;margin-bottom:6px">Canlı Trafiğe Göre Önerilen Rota</div>
+                  <div id="atpTrafficSourceLabel" style="font-size:11.5px;color:var(--gray);margin-bottom:4px"></div>
+                  <div id="atpTrafficTimingLabel" style="font-size:11px;color:var(--gray);margin-bottom:4px"></div>
+                  <div id="atpTrafficCompareLabel" style="font-size:11.5px;margin-bottom:4px"></div>
+                  <div id="atpTrafficDelayLabel" style="font-size:11px;color:var(--gray);margin-bottom:4px"></div>
+                  <div id="atpTrafficOrderCompare" style="font-size:11px;margin-bottom:4px"></div>
+                  <div id="atpTrafficMissingLabel" style="font-size:11px;color:#b45309;display:none"></div>
+                  <div id="atpTrafficFallbackLabel" style="font-size:11px;color:#b45309;display:none"></div>
+                  <div id="atpTrafficProposalMessage" style="font-size:11.5px;color:#1e40af;margin-top:4px;display:none"></div>
+                </div>
                 <p id="atpRouteStatusMsg" class="route-status-msg" style="display:none"></p>
                 <div id="atpRouteConstraintBanner" class="route-constraint-banner" style="display:none"></div>
-                <div class="route-btns">
+                </div>{# /atp-route-info-section #}
+                <div class="atp-route-action-bar route-btns">
                   <button type="button" class="btn btn-outline btn-sm" id="atpBtnPreviewSuggestedRoute" disabled>Önerilen Rotayı Göster</button>
                   <button type="button" class="btn btn-blue btn-sm" id="atpBtnRouteExplainer" disabled title="Rota kararını ve sıralamayı açıklar">🗺 Rota Kararını İncele</button>
                   <button type="button" class="btn btn-green btn-sm" id="atpBtnApplySuggestedOrder" disabled>✔ Önerilen Sırayı Uygula</button>
                 </div>
-              </div>
+              </div>{# /atp-route-panel-col #}
             </div>
           </details>
 
@@ -334,7 +348,7 @@
             </div>
             <div class="map-card-body">
               <div class="map-wrap">
-                <div id="atpMiniMap"></div>
+                <div id="atpMiniMap" class="atp-plan-leaflet"></div>
               </div>
             </div>
           </div>
@@ -345,7 +359,11 @@
       {# ── SEÇİLİ PLAN side panel (hidden — for vehicle select) ── #}
       <div id="atpSidePlanWrap" style="display:none">
         <select id="atpSelVehicle" title="Araç">
+          {% if dashboard.selected_vehicle_id %}
+          <option value="{{ dashboard.selected_vehicle_id }}" selected>{{ dashboard.selected_plate or dashboard.selected_vehicle_id }}</option>
+          {% else %}
           <option value="">— Araç seç —</option>
+          {% endif %}
         </select>
       </div>
 
@@ -378,100 +396,86 @@
      GEÇMİŞ PLANLAR PANEL
   ══════════════════════════════════════════════════════ #}
   <div id="atpPanelGecmis" class="atp-panel{% if active_tab == 'gecmis' %} active{% endif %}">
+    {# Hidden legacy inputs — JS still reads these for API params #}
+    <input type="hidden" id="atpHistBaslangic" value="">
+    <input type="hidden" id="atpHistBitis" value="">
+    <input type="hidden" id="atpHistArac" value="">
+    <input type="hidden" id="atpHistSofor" value="">
+
     <div class="history-wrap">
-      <div class="history-filter">
-        <label>Başlangıç:</label>
-        <input type="date" id="atpHistBaslangic" value="">
-        <label>Bitiş:</label>
-        <input type="date" id="atpHistBitis" value="">
-        <label>Araç:</label>
-        <select id="atpHistArac"><option value="">Tümü</option></select>
-        <label>Şoför:</label>
-        <select id="atpHistSofor"><option value="">Tümü</option></select>
-        <button type="button" class="btn btn-gold btn-sm" id="atpBtnHistFiltrele" style="margin-left:auto">Filtrele</button>
+      <div class="history-filter-bar" id="atpHistFilterBar">
+
+        {# 1 — Tarih Aralığı #}
+        <div class="hfb-date-range" id="atpHistDateRangeWrap" aria-expanded="false">
+          <span class="hfb-date-icon">&#128197;</span>
+          <span class="hfb-date-label" id="atpHistDateLabel">—</span>
+          <div class="hfb-date-panel" id="atpHistDatePanel" hidden style="display:none">
+            <label class="hfb-dp-lbl">Başlangıç</label>
+            <input type="date" id="atpHistDPStart" class="hfb-dp-input">
+            <label class="hfb-dp-lbl">Bitiş</label>
+            <input type="date" id="atpHistDPEnd" class="hfb-dp-input">
+            <button type="button" class="btn btn-xs btn-gold" id="atpHistDPApply">Uygula</button>
+          </div>
+        </div>
+
+        {# 2 — Araç dropdown #}
+        <div class="hfb-dropdown" id="atpHistAracDDWrap" data-hfb-dd="arac">
+          <div class="hfb-dd-trigger" id="atpHistAracTrigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false">
+            <span class="hfb-dd-icon">&#128663;</span>
+            <span class="hfb-dd-value" id="atpHistAracLabel">Tüm Araçlar</span>
+            <span class="hfb-dd-caret">&#8964;</span>
+          </div>
+          <div class="hfb-dd-panel" id="atpHistAracPanel" hidden style="display:none" role="listbox">
+            <div class="hfb-dd-search-wrap">
+              <input type="text" class="hfb-dd-search" id="atpHistAracSearch" placeholder="Araç ara…" autocomplete="off">
+            </div>
+            <ul class="hfb-dd-list" id="atpHistAracList"></ul>
+          </div>
+        </div>
+
+        {# 3 — Şoför dropdown #}
+        <div class="hfb-dropdown" id="atpHistSoforDDWrap" data-hfb-dd="sofor">
+          <div class="hfb-dd-trigger" id="atpHistSoforTrigger" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false">
+            <span class="hfb-dd-icon">&#128100;</span>
+            <span class="hfb-dd-value" id="atpHistSoforLabel">Tüm Şoförler</span>
+            <span class="hfb-dd-caret">&#8964;</span>
+          </div>
+          <div class="hfb-dd-panel" id="atpHistSoforPanel" hidden style="display:none" role="listbox">
+            <div class="hfb-dd-search-wrap">
+              <input type="text" class="hfb-dd-search" id="atpHistSoforSearch" placeholder="Şoför ara…" autocomplete="off">
+            </div>
+            <ul class="hfb-dd-list" id="atpHistSoforList"></ul>
+          </div>
+        </div>
+
+        {# 4 — Filtrele #}
+        <button type="button" class="btn btn-gold btn-sm hfb-btn-filtrele" id="atpHistFilterBtn">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none" style="vertical-align:-1px;margin-right:4px"><path d="M3 5h14M6 10h8M9 15h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Filtrele
+        </button>
+
+        {# 5 — Temizle #}
+        <button type="button" class="btn btn-outline btn-sm hfb-btn-temizle" id="atpHistClearBtn">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" style="vertical-align:-1px;margin-right:3px"><path d="M4 4l12 12M16 4L4 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Temizle
+        </button>
+
       </div>
+      <div id="atpHistHint" class="hist-hint" style="display:none"></div>
+      <div class="hist-tbl-wrap">
       <table class="hist-tbl">
         <thead>
           <tr>
             <th>Tarih</th><th>Araç</th><th>Şoför</th>
-            <th>Toplam İş</th><th>Tamamlandı</th>
-            <th>KM</th><th>Durum</th><th>İşlem</th>
+            <th>Toplam</th><th>Tamamlandı</th><th>Gidildi/Bekliyor</th>
+            <th>Gidilmedi</th><th>Plan Dışı</th><th>Gerçekleşme</th><th>Durum</th><th>İşlem</th>
           </tr>
         </thead>
         <tbody id="atpHistBody">
-          <tr><td colspan="8" class="hist-empty">Geçmiş plan verisi yükleniyor…</td></tr>
+          <tr><td colspan="11" class="hist-empty">Geçmiş plan verisi yükleniyor…</td></tr>
         </tbody>
       </table>
-    </div>
-  </div>
-
-  {# ══════════════════════════════════════════════════════
-     GPS GEÇMİŞİ — V3 full-page (Geçmiş Planlar → detay)
-  ══════════════════════════════════════════════════════ #}
-  <div id="atpPanelGpsHistory" class="atp-panel" aria-hidden="true">
-    <div class="atp-gps-bc">
-      <nav class="atp-gps-bc-nav" aria-label="Breadcrumb">
-        <span>Araç Takip</span><span class="sep">›</span>
-        <a href="#" id="atpGpsBcHistory">Geçmiş Planlar</a><span class="sep">›</span>
-        <span class="current">GPS Geçmişi</span>
-      </nav>
-      <button type="button" class="btn btn-outline btn-sm" id="atpGpsBtnBack">← Geçmiş Planlara Dön</button>
-    </div>
-
-    <div class="kpi-band atp-gps-kpi" id="atpGpsKpiBand">
-      <div class="kpi ok"><div class="kpi-icon">🛣️</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiActualKm">—</div><div class="kpi-label">Toplam yol (gerçek)</div></div></div>
-      <div class="kpi"><div class="kpi-icon">📐</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiPlanKm">—</div><div class="kpi-label">Planlanan yol</div></div></div>
-      <div class="kpi err"><div class="kpi-icon">⚠️</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiDevCount">0</div><div class="kpi-label">Sapma sayısı</div></div></div>
-      <div class="kpi warn"><div class="kpi-icon">⏱️</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiDevMin">—</div><div class="kpi-label">Sapmada geçen süre</div></div></div>
-      <div class="kpi"><div class="kpi-icon">🅿️</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiDwell">—</div><div class="kpi-label">Durak bekleme</div></div></div>
-      <div class="kpi warn"><div class="kpi-icon">📡</div><div class="kpi-body"><div class="kpi-val" id="atpGpsKpiQuality">—</div><div class="kpi-label">GPS veri kalitesi</div></div></div>
-    </div>
-
-    <div class="atp-date-bar atp-gps-filters">
-      <label for="atpGpsFilterDate">Tarih:</label>
-      <input type="date" class="atp-date-inp" id="atpGpsFilterDate" readonly>
-      <label for="atpGpsFilterVehicle">Araç:</label>
-      <select class="atp-date-inp" id="atpGpsFilterVehicle" style="width:150px" disabled></select>
-      <span id="atpGpsFilterChips" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto"></span>
-    </div>
-
-    <div id="atpGpsHistoryLoading" style="padding:24px;text-align:center;color:var(--gray)">GPS geçmişi yükleniyor…</div>
-    <div id="atpGpsHistoryBody" class="atp-gps-body" style="display:none">
-      <div class="atp-gps-map-col" id="atpGpsMapCol">
-        <div class="atp-gps-map-head">
-          <h3>Harita — Plan vs Gerçekleşen</h3>
-          <div class="atp-gps-legend">
-            <span><i class="leg-plan"></i>Planlanan</span>
-            <span><i class="leg-act"></i>Gerçek iz</span>
-            <span><i class="leg-dev"></i>Sapma</span>
-            <span><i class="leg-gap"></i>Veri boşluğu</span>
-          </div>
-        </div>
-        <div id="atpGpsHistoryMap"></div>
-        <div class="atp-gps-playback">
-          <div class="atp-gps-playback-row">
-            <span id="atpGpsPlayTime" style="min-width:52px;font-weight:600;color:#111">—</span>
-            <input type="range" class="slider" id="atpGpsPlaySlider" min="0" max="100" value="0">
-            <span id="atpGpsPlaySpeed" style="min-width:52px;text-align:right">0 km/s</span>
-          </div>
-          <div class="atp-gps-playback-ctrl">
-            <button type="button" class="btn btn-orange btn-xs" id="atpGpsBtnPlay">▶ Oynat</button>
-            <button type="button" class="btn btn-outline btn-xs" id="atpGpsBtnStop">⏹</button>
-            <button type="button" class="speed-btn active" data-speed="1">1×</button>
-            <button type="button" class="speed-btn" data-speed="2">2×</button>
-            <button type="button" class="speed-btn" data-speed="4">4×</button>
-          </div>
-        </div>
       </div>
-      <aside class="atp-gps-side">
-        <div class="atp-gps-side-hdr" id="atpGpsSideHdr">Araç Özeti</div>
-        <div class="atp-gps-vehicle-block" id="atpGpsVehicleBlock"></div>
-        <div class="atp-gps-quality" id="atpGpsQualityNote" style="display:none"></div>
-        <div class="atp-gps-timeline-wrap">
-          <div class="atp-gps-timeline-hdr">Zaman Çizelgesi</div>
-          <ul class="atp-gps-timeline" id="atpGpsTimeline"></ul>
-        </div>
-      </aside>
     </div>
   </div>
 
@@ -670,6 +674,28 @@
   </div>
 </div>
 
+{# ── Geçmiş Plan Detay Modal ── #}
+<div id="atpHistDetailBackdrop" class="modal-bg" aria-hidden="true">
+  <div class="modal atp-hist-detail-modal" role="dialog" aria-modal="true" id="atpHistDetailModal" aria-labelledby="atpHistDetailTitle" aria-hidden="true" tabindex="-1">
+    <div class="modal-hdr hdm-hdr">
+      <div class="hdm-title-block">
+        <div class="hdm-title-row">
+          <h3 id="atpHistDetailTitle" class="hdm-plate">Geçmiş Plan Detayı</h3>
+          <span id="atpHistDetailDatePill" class="hdm-date-pill" hidden></span>
+        </div>
+        <div id="atpHistDetailMeta" class="hdm-meta"></div>
+      </div>
+      <button type="button" class="modal-close hdm-x" id="atpHistDetailClose" aria-label="Kapat">✕</button>
+    </div>
+    <div class="modal-body hdm-body" id="atpHistDetailBody">
+      <p class="hdm-loading">Yükleniyor…</p>
+    </div>
+    <div class="modal-footer hdm-footer">
+      <button type="button" class="btn btn-outline" id="atpHistDetailDismiss">Kapat</button>
+    </div>
+  </div>
+</div>
+
 {# ── Timeline Modal ── #}
 <div id="atpTimelineBackdrop" class="modal-bg" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" id="atpTimelineModal" aria-hidden="true">
@@ -689,7 +715,8 @@
 {# ── Route Apply Confirm Modal ── #}
 <div id="atpRouteApplyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1100;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:10px;width:480px;max-width:96vw;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:24px" id="atpRouteApplyInner">
-    <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:16px">Önerilen Sırayı Uygula</div>
+    <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:8px">Önerilen Sırayı Uygula</div>
+    <div style="font-size:11.5px;color:#374151;margin-bottom:12px">Plan sırası önerilen rotaya göre değiştirilecek. ACİL işler önce, başlamış ve tamamlanmış işler sabit kalacaktır.</div>
     <div style="font-size:12px;color:#374151;margin-bottom:8px">Araç: <strong id="atpRouteApplyVehicle">—</strong></div>
     <div style="font-size:12px;color:#374151;margin-bottom:8px">Tarih: <strong id="atpRouteApplyDate">—</strong></div>
     <div style="font-size:12px;color:#374151;margin-bottom:8px">Mevcut km: <strong id="atpRouteApplyCurrentKm">—</strong></div>
@@ -980,18 +1007,6 @@
     <label for="atpPcAction">Aksiyon</label>
     <select id="atpPcAction"></select>
   </div>
-  <div id="atpPcPanelTransfer" style="display:none">
-    <div class="form-2col">
-      <div class="form-ctrl">
-        <label for="atpPcTargetVehicle">Hedef Araç</label>
-        <select id="atpPcTargetVehicle"></select>
-      </div>
-      <div class="form-ctrl">
-        <label for="atpPcTargetDriver">Şoför</label>
-        <input type="text" id="atpPcTargetDriver" placeholder="Şoför adı">
-      </div>
-    </div>
-  </div>
   <div id="atpPcPanelDefer" style="display:none">
     <div class="form-2col">
       <div class="form-ctrl">
@@ -1020,6 +1035,9 @@
   </div>
   <div id="atpPcPanelReorder" style="display:none">
     <p id="atpPcReorderInfo" class="atp-pc-info">Saatler rota hesaplamasıyla atanır.</p>
+  </div>
+  <div id="atpPcCancelNote" class="atp-pc-info-banner" style="display:none">
+    Bu iş aktif plandan kaldırılacak; geçmiş kaydı korunacaktır. Silme yapılmaz.
   </div>
   <div id="atpPcReasonWrap" class="form-ctrl" style="display:none">
     <label for="atpPcReason">Neden</label>
@@ -1085,17 +1103,37 @@
   </div>
 </div>
 
+{# ── Plan map in-page modal (R12) — portaled to body via JS, no navigation ── #}
+<div id="atpPlanMapFullscreenModal" class="atp-plan-map-modal-root" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="atpPlanMapModalTitle">
+  <div class="atp-plan-map-modal-backdrop" data-atp-no-dismiss="1"></div>
+  <div id="atpPlanMapModalDialog" class="atp-plan-map-modal-dialog">
+    <div class="atp-plan-map-modal-hdr">
+      <span id="atpPlanMapModalTitle">Günlük Plan Haritası</span>
+      <button type="button" class="atp-plan-map-modal-x" id="atpPlanMapFullscreenClose" aria-label="Kapat">✕</button>
+    </div>
+    <div class="atp-plan-map-modal-body">
+      <aside class="atp-plan-map-modal-stops" id="atpPlanMapModalStops" aria-label="Sıralı duraklar">
+        <div class="atp-plan-map-modal-stops-title">Sıralı Duraklar</div>
+        <div id="atpPlanMapModalStopsList" class="atp-plan-map-modal-stops-list"></div>
+      </aside>
+      <div class="atp-plan-map-modal-map-col">
+        <div id="atpPlanMapFullscreenLeaflet" class="atp-plan-map-modal-map-host"></div>
+      </div>
+    </div>
+    <div class="atp-plan-map-modal-footer">
+      <button type="button" class="btn btn-outline btn-sm" id="atpPlanMapFullscreenDone">Kapat</button>
+    </div>
+  </div>
+</div>
+
 {# ── Scripts ── #}
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_map.js') }}?v=6"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=12"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=16"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=14"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=18"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=11"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_gps_history.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_manual_reorder.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_manual_reorder_ui.js') }}?v=2"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=93"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=9"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=101"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}

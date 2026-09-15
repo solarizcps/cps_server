@@ -2,7 +2,6 @@
 """ATP Geofence A2 — APPROACHING, order block, EXIT 300m, atomic transaction."""
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import io
 import os
@@ -14,17 +13,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-if hasattr(sys.stdout, 'buffer'):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 _APP = _REPO / 'app'
 _PLANLAMA_TESTS = Path(__file__).resolve().parent
-CANONICAL_PATH = _APP / 'mock_data.db'
-CANONICAL_SHA = (
-    hashlib.sha256(CANONICAL_PATH.read_bytes()).hexdigest()
-    if CANONICAL_PATH.is_file() else ''
-)
+CANONICAL_PATH = Path(os.environ.get(
+    'CPS_CANONICAL_DB_SOURCE',
+    r'C:\Solariz_CPS_SERVER\app\mock_data.db',
+)).resolve()
 for _p in (str(_APP), str(_PLANLAMA_TESTS)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -32,7 +29,15 @@ for _p in (str(_APP), str(_PLANLAMA_TESTS)):
 os.environ.setdefault('CPS_TEST_DB_GUARD', '1')
 from tools.atp_test_db_guard import install_atp_test_db_guard  # noqa: E402
 
+os.environ.setdefault('CPS_CANONICAL_DB_SOURCE', str(CANONICAL_PATH))
 install_atp_test_db_guard(str(CANONICAL_PATH))
+
+from atp_canonical_forensic import assert_canonical_atp_unchanged, canonical_logical_snapshot  # noqa: E402
+
+# Canonical'da tam dosya hash'i canlı GPS worker yazımıyla değişir; ATP tablo bütünlüğü kıyaslanır.
+CANONICAL_BEFORE = (
+    canonical_logical_snapshot(str(CANONICAL_PATH)) if CANONICAL_PATH.is_file() else None
+)
 
 FIXED_NOW = datetime(2026, 12, 20, 12, 0, 0)
 PASS = FAIL = 0
@@ -47,7 +52,9 @@ def ok(name: str) -> None:
 def bad(name: str, detail: str = '') -> None:
     global FAIL
     FAIL += 1
-    print(f'  FAIL {name} {detail}')
+    msg = f'  FAIL {name} {detail}'.strip()
+    print(msg)
+    pytest.fail(msg)
 
 
 def _run_migration(db_path: str, filename: str) -> None:
@@ -68,6 +75,7 @@ def _run_migration_set(db_path: str) -> None:
         '176_arac_takip_v13.py', '177_arac_operasyon_ayar.py',
         '178_arac_is_talebi_ux_v2_fields.py', '179_arac_gps_snapshot_p1.py',
         '180_arac_plan_ziyaret_durum.py',
+        '192_arac_plan_olay_auto_tamamlandi.py',
     ):
         _run_migration(db_path, mig)
 
@@ -131,8 +139,9 @@ def temp_a2_db(*, stops: int = 1, second_offset_m: float = 800.0):
     con.close()
     import config
     with patch.object(config.Config, 'MOCK_DB_PATH', db_path):
-        if CANONICAL_PATH.is_file():
-            bad('canonical_guard', f'unexpected canonical db at {CANONICAL_PATH}')
+        worktree_canonical = _APP / 'mock_data.db'
+        if worktree_canonical.is_file():
+            bad('canonical_guard', f'unexpected worktree canonical db at {worktree_canonical}')
         yield db_path, plan_id, plan_is_ids, lat, lng, coords
 
 
@@ -389,11 +398,21 @@ def test_gf15_ambiguous_same_coord(db_path) -> None:
         n_amb = sqlite3.connect(db2).execute(
             "SELECT COUNT(*) FROM arac_plan_olay WHERE olay_turu='AMBIGUOUS_STOP'",
         ).fetchone()[0]
-        n_arr = _count_events(db2, pids[0], 'KONUMA_VARILDI') + _count_events(db2, pids[1], 'KONUMA_VARILDI')
-        if n_amb >= 1 and n_arr == 0:
+        n0 = _count_events(db2, pids[0], 'KONUMA_VARILDI')
+        n1 = _count_events(db2, pids[1], 'KONUMA_VARILDI')
+        v0 = _visit(db2, pids[0])
+        v1 = _visit(db2, pids[1])
+        # P0: _select_target_item picks lower sira deterministically; AMBIGUOUS only on true tie.
+        if (
+            n_amb == 0
+            and n0 == 0
+            and n1 == 0
+            and (v0 or {}).get('state') in ('APPROACHING', 'OUTSIDE', None)
+            and (v1 or {}).get('state') in (None, 'OUTSIDE')
+        ):
             ok('GF15')
         else:
-            bad('GF15', f'amb={n_amb} arr={n_arr}')
+            bad('GF15', f'amb={n_amb} n0={n0} n1={n1} v0={v0} v1={v1}')
 
 
 def test_gf16_duplicate_snapshot(db_path, plan_is_ids, lat, lng) -> None:
@@ -439,15 +458,20 @@ def test_gf17_restart_recovery(db_path, plan_is_ids, lat, lng) -> None:
             bad('GF17', f'v0={v0} v1={v1} n={n1}')
 
 
-def test_gf18_no_auto_complete(db_path, plan_is_ids) -> None:
+def test_gf18_auto_complete_after_verified_depart(db_path, plan_is_ids) -> None:
     print('GF18')
     st = sqlite3.connect(db_path).execute(
         'SELECT durum FROM arac_gunluk_plan_is WHERE id=?', (plan_is_ids[0],),
     ).fetchone()[0]
-    if st != 'TAMAMLANDI':
+    n_auto = sqlite3.connect(db_path).execute(
+        "SELECT COUNT(*) FROM arac_plan_olay WHERE plan_is_id=? AND olay_turu='AUTO_TAMAMLANDI'",
+        (plan_is_ids[0],),
+    ).fetchone()[0]
+    # P0: verified ENTER+EXIT on shared track auto-completes the planned job.
+    if st == 'TAMAMLANDI' and n_auto >= 1:
         ok('GF18')
     else:
-        bad('GF18', st)
+        bad('GF18', f'st={st} auto_events={n_auto}')
 
 
 def test_gf19_event_insert_rollback(db_path, plan_id, lat, lng) -> None:
@@ -489,7 +513,7 @@ def test_gf19_event_insert_rollback(db_path, plan_id, lat, lng) -> None:
             bad('GF19', f'state={v} events={n}')
 
 
-def test_gf13_oos_no_arrived_at(db_path) -> None:
+def test_gf13_oos_arrived_with_audit(db_path) -> None:
     print('GF13')
     with temp_a2_db(stops=2, second_offset_m=800.0) as (db2, _pid, pids, la, ln, cs):
         second_lat, second_lng = cs[1]
@@ -497,15 +521,13 @@ def test_gf13_oos_no_arrived_at(db_path) -> None:
         _process(db2, s_lat, s_lng, '2026-12-20 12:10:00')
         _process(db2, s_lat, s_lng, '2026-12-20 12:11:00')
         v2 = _visit(db2, pids[1])
-        row = sqlite3.connect(db2).execute(
-            'SELECT arrived_at FROM arac_plan_is_ziyaret_durum WHERE plan_is_id=?', (pids[1],),
-        ).fetchone()
-        arrived_at = row[0] if row else None
         n_arr = _count_events(db2, pids[1], 'KONUMA_VARILDI')
-        if (v2 is None or v2.get('state') in (None, 'OUTSIDE', 'APPROACHING')) and arrived_at is None and n_arr == 0:
+        n_oos = _count_meta_kind(db2, pids[1], 'OUT_OF_SEQUENCE_GEOFENCE')
+        # P0: out-of-sequence stop may ARRIVE with audit; GF12 single-point still blocks.
+        if v2 and v2.get('state') == 'ARRIVED' and n_arr >= 1 and n_oos >= 1:
             ok('GF13')
         else:
-            bad('GF13', f'v2={v2} arrived_at={arrived_at} n={n_arr}')
+            bad('GF13', f'v2={v2} arr={n_arr} oos={n_oos}')
 
 
 def test_gf20_visit_update_rollback(db_path, plan_id, lat, lng) -> None:
@@ -656,19 +678,65 @@ def test_gf25_input_immutable(db_path, lat, lng) -> None:
         bad('GF25', 'row mutated')
 
 
+@pytest.fixture(scope='module')
+def _a2_shared_ctx():
+    with temp_a2_db(stops=1) as ctx:
+        db_path, plan_id, plan_is_ids, lat, lng, coords = ctx
+        yield {
+            'db_path': db_path,
+            'plan_id': plan_id,
+            'plan_is_ids': plan_is_ids,
+            'lat': lat,
+            'lng': lng,
+            'coords': coords,
+        }
+
+
+@pytest.fixture(scope='module')
+def db_path(_a2_shared_ctx):
+    return _a2_shared_ctx['db_path']
+
+
+@pytest.fixture(scope='module')
+def plan_id(_a2_shared_ctx):
+    return _a2_shared_ctx['plan_id']
+
+
+@pytest.fixture(scope='module')
+def plan_is_ids(_a2_shared_ctx):
+    return _a2_shared_ctx['plan_is_ids']
+
+
+@pytest.fixture(scope='module')
+def lat(_a2_shared_ctx):
+    return _a2_shared_ctx['lat']
+
+
+@pytest.fixture(scope='module')
+def lng(_a2_shared_ctx):
+    return _a2_shared_ctx['lng']
+
+
+@pytest.fixture(scope='module')
+def coords(_a2_shared_ctx):
+    return _a2_shared_ctx['coords']
+
+
 def test_canonical_unchanged() -> None:
     print('CANONICAL_GUARD')
-    if not CANONICAL_SHA:
+    if CANONICAL_BEFORE is None:
         ok('canonical_skip')
         return
-    if CANONICAL_PATH.is_file():
-        h = hashlib.sha256(CANONICAL_PATH.read_bytes()).hexdigest()
-        if h == CANONICAL_SHA:
-            ok('canonical_unchanged')
-        else:
-            bad('canonical_unchanged', 'hash mismatch')
-    else:
+    if not CANONICAL_PATH.is_file():
         ok('canonical_absent_ok')
+        return
+    try:
+        root_cause = assert_canonical_atp_unchanged(str(CANONICAL_PATH), CANONICAL_BEFORE)
+    except AssertionError as exc:
+        bad('canonical_atp_unchanged', str(exc))
+        return
+    # NONE veya BACKGROUND_GPS_WORKER kabul edilir; ATP tabloları değişmemiştir.
+    ok(f'canonical_atp_unchanged[{root_cause}]')
 
 
 def main() -> int:
@@ -689,12 +757,12 @@ def main() -> int:
         test_gf10_outside_counter_reset(db_path, plan_is_ids, lat, lng)
         test_gf11_stale_31min(db_path, plan_is_ids, lat, lng)
         test_gf12_order_block(db_path, plan_id, plan_is_ids, coords)
-        test_gf13_oos_no_arrived_at(db_path)
+        test_gf13_oos_arrived_with_audit(db_path)
         test_gf14_complete_enables_second(db_path)
         test_gf15_ambiguous_same_coord(db_path)
         test_gf16_duplicate_snapshot(db_path, plan_is_ids, lat, lng)
         test_gf17_restart_recovery(db_path, plan_is_ids, lat, lng)
-        test_gf18_no_auto_complete(db_path, plan_is_ids)
+        test_gf18_auto_complete_after_verified_depart(db_path, plan_is_ids)
         test_gf19_event_insert_rollback(db_path, plan_id, lat, lng)
         test_gf20_visit_update_rollback(db_path, plan_id, lat, lng)
         test_gf22_completed_task_skipped(db_path)

@@ -12,7 +12,20 @@ from modules.planlama.arac_route_constraints import (
     load_visit_states_for_tasks,
 )
 from modules.planlama.road_routing.cache import cache_get, cache_set, make_cache_key
+from modules.planlama.road_routing.google_static_fallback import (
+    FALLBACK_OPTIMIZED_WARNING_MESSAGE,
+    FALLBACK_WARNING_CODE,
+    FALLBACK_WARNING_MESSAGE,
+    ORS_FALLBACK_CODES,
+    PROVIDER_NAME as GOOGLE_STATIC_PROVIDER,
+    fallback_available,
+    route_via_google_optimized,
+    route_via_google_static,
+)
 from modules.planlama.road_routing.mock_provider import MockRoadRoutingProvider
+
+# Araç tüketim kuralı tanımlı değilse kullanılacak varsayılan değer (L/100 km).
+_DEFAULT_FUEL_L_PER_100KM = 10.0
 from modules.planlama.road_routing.openrouteservice_provider import OpenRouteServiceProvider, provider_available
 from modules.planlama.road_routing.provider_base import RoadRoutingProvider
 from modules.planlama.road_routing.suggest import suggest_segment_order
@@ -213,6 +226,15 @@ def build_plan_route_dto(
     }
 
     if prov is None:
+        fallback_ids = [str(t['id']) for t in active_tasks]
+        empty_route['current']['full_task_ids'] = fallback_ids
+        empty_route['current']['task_ids'] = fallback_ids
+        empty_route['suggested']['full_task_ids'] = fallback_ids
+        empty_route['suggested']['task_ids'] = fallback_ids
+        empty_route['route_fallback'] = True
+        empty_route['route_fallback_message'] = (
+            'Güzergâh çizgisi oluşturulamadı; duraklar plan sırasıyla gösteriliyor.'
+        )
         return empty_route
 
     if not meta['base_ready']:
@@ -231,12 +253,48 @@ def build_plan_route_dto(
 
     current_full_order = [str(t['id']) for t in active_tasks]
 
+    # google-static optimize akışı için önerilen rota/sıra sonuçları
+    _gs_optimized_result = None   # GoogleOptimizedResult | None
+
+    fallback_provider: str | None = None
     try:
         current_route = _route_with_cache(prov, _route_points_with_return(points))
     except RoutingError as exc:
-        empty_route['status'] = exc.code
-        empty_route['message'] = str(exc) or 'Rota hesaplanamadı.'
-        return empty_route
+        current_route = None
+        ors_down = (
+            getattr(prov, 'name', '') == 'ors'
+            and exc.code in ORS_FALLBACK_CODES
+            and fallback_available()
+        )
+        if ors_down:
+            # İlk olarak waypoint-optimize çağrısını dene; başarısız olursa sadece mevcut rotayı al.
+            try:
+                _gs_optimized_result = route_via_google_optimized(
+                    _route_points_with_return(points),
+                )
+                current_route = _gs_optimized_result.current_route
+                fallback_provider = GOOGLE_STATIC_PROVIDER
+            except RoutingError:
+                _gs_optimized_result = None
+                try:
+                    current_route = route_via_google_static(_route_points_with_return(points))
+                    fallback_provider = GOOGLE_STATIC_PROVIDER
+                except RoutingError:
+                    current_route = None
+        if current_route is None:
+            empty_route['status'] = exc.code
+            empty_route['message'] = str(exc) or 'Rota hesaplanamadı.'
+            return empty_route
+        warn_msg = (
+            FALLBACK_OPTIMIZED_WARNING_MESSAGE
+            if _gs_optimized_result is not None
+            else FALLBACK_WARNING_MESSAGE
+        )
+        warnings.append({
+            'code': FALLBACK_WARNING_CODE,
+            'message': warn_msg,
+            'provider': fallback_provider,
+        })
 
     leg_details = []
     for i, stop in enumerate(routable):
@@ -275,10 +333,54 @@ def build_plan_route_dto(
         if str(s['id']) in set(constraints.get('eligible_task_ids') or [])
     ]
 
-    if len(constraints.get('eligible_task_ids') or []) >= 2 and len(eligible_routable) >= 2:
+    if fallback_provider is not None and _gs_optimized_result is not None:
+        # google-static optimize sonucu var → önerilen sıra ve rotayı uygula.
+        gs_opt = _gs_optimized_result
+        if gs_opt.order_changed and gs_opt.optimized_stop_indices:
+            # optimized_stop_indices sadece intermediate (ara) duraklar için —
+            # routable listesini bu indekse göre yeniden sırala.
+            opt_idx = gs_opt.optimized_stop_indices
+            if len(opt_idx) == len(routable):
+                # Tüm routable duraklar değişmiş sırayla geldi.
+                reordered = [routable[i] for i in opt_idx if i < len(routable)]
+                if len(reordered) == len(routable):
+                    suggested_stops = reordered
+                    suggested_routable_ids = [str(s['id']) for s in suggested_stops]
+                    routable_id_set = {str(s['id']) for s in routable}
+                    if (
+                        set(current_full_order) == routable_id_set
+                        and len(current_full_order) == len(suggested_routable_ids)
+                    ):
+                        suggested_full_order = list(suggested_routable_ids)
+                    else:
+                        # full order: locked duraklar korunur, eligibles yeni sıraya alınır.
+                        eligible_ids_set = set(constraints.get('eligible_task_ids') or [])
+                        new_full: list[str] = []
+                        eligible_queue = [
+                            sid for sid in suggested_routable_ids if sid in eligible_ids_set
+                        ]
+                        eq_idx = 0
+                        for tid in current_full_order:
+                            if tid in eligible_ids_set and eq_idx < len(eligible_queue):
+                                new_full.append(eligible_queue[eq_idx])
+                                eq_idx += 1
+                            else:
+                                new_full.append(tid)
+                        while eq_idx < len(eligible_queue):
+                            new_full.append(eligible_queue[eq_idx])
+                            eq_idx += 1
+                        suggested_full_order = new_full
+        suggested_route = gs_opt.suggested_route
+    elif (
+        fallback_provider is None
+        and len(constraints.get('eligible_task_ids') or []) >= 2
+        and len(eligible_routable) >= 2
+    ):
+        # Normal ORS akışı: matrix ile optimize sıra hesapla.
         try:
             matrix = prov.matrix(points)
-            suggested_full_order, warnings = build_constrained_full_order(
+            from modules.planlama.arac_route_constraints import build_r07_constrained_full_order
+            suggested_full_order, warnings = build_r07_constrained_full_order(
                 active_tasks,
                 constraints,
                 routable,
@@ -306,8 +408,14 @@ def build_plan_route_dto(
     gain_km = None
     gain_min = None
     gain_pct = None
+    # Kazanç hesabı: ORS başarılı VEYA google-static optimize akışı varsa mümkün.
+    _can_gain = (
+        fallback_provider is None
+        or (fallback_provider is not None and _gs_optimized_result is not None)
+    )
     if (
-        isinstance(current_dto.get('km'), (int, float))
+        _can_gain
+        and isinstance(current_dto.get('km'), (int, float))
         and isinstance(_format_km(suggested_route.distance_m), (int, float))
         and current_route.distance_m is not None
         and current_route.distance_m > 0
@@ -319,6 +427,13 @@ def build_plan_route_dto(
         sug_min = suggested_route.duration_s / 60.0
         gain_min = int(round(cur_min - sug_min))
         gain_pct = round(100.0 * gain_km / (float(current_route.distance_m) / 1000.0), 1)
+
+    # ── Fuel saving calculation ──
+    # Yakıt tasarrufu: kazanç km × tüketim kuralı.  Araç tüketim bilgisi sonraki fazda
+    # DB'den okunacak; bu fazda varsayılan değer kullanılır.
+    fuel_saving_liters: float | None = None
+    if isinstance(gain_km, (int, float)) and gain_km > 0:
+        fuel_saving_liters = round(gain_km * _DEFAULT_FUEL_L_PER_100KM / 100.0, 2)
 
     # ── Priority context ──
     # ACIL (critical) stops are already locked by _lock_reason → they don't get reordered.
@@ -345,6 +460,10 @@ def build_plan_route_dto(
     ):
         apply_disabled_reason = 'NO_GAIN'
 
+    if fallback_provider and _gs_optimized_result is None:
+        # Optimize çağrı yapılamadı → matrix yok, sıra önerilemiyor.
+        apply_disabled_reason = 'NO_MATRIX_FALLBACK'
+
     apply_enabled = apply_disabled_reason is None and suggested_full_order != current_full_order
 
     suggested_dto = {
@@ -366,6 +485,18 @@ def build_plan_route_dto(
         'provider': suggested_route.provider,
     }
 
+    if fallback_provider and _gs_optimized_result is None:
+        # Optimize çağrı yapılamadı → km/süre/çizgi alanlarında sahte değer yok.
+        suggested_dto.update({
+            'km': '—',
+            'duration_label': '—',
+            'distance_m': None,
+            'duration_s': None,
+            'geometry': [],
+            'legs': [],
+            'provider': fallback_provider,
+        })
+
     partial_msg = None
     if meta['missing_count'] > 0:
         partial_msg = (
@@ -381,6 +512,9 @@ def build_plan_route_dto(
         'ALREADY_OPTIMAL': 'Mevcut sıra rota motoruna göre zaten uygun. Daha kısa bir alternatif bulunamadı.',
         'NO_ELIGIBLE_REORDER': 'Sıralanabilir iş sayısı yetersiz (en az 2 serbest iş gerekir).',
         'NO_GAIN': 'Önerilen sıra mevcut rotadan daha uzun veya eşit; uygulama önerilmiyor.',
+        'NO_MATRIX_FALLBACK': (
+            'Rota servisi kısıtlı; sıra önerisi hesaplanamadı. Mevcut sıra korunuyor.'
+        ),
     }
     apply_disabled_reason_label = _APPLY_REASON_LABELS.get(
         apply_disabled_reason or '', apply_disabled_reason or ''
@@ -388,7 +522,23 @@ def build_plan_route_dto(
 
     # ── Correct decision_reason text ──
     has_priority_reorder = bool(constraints.get('important_task_ids') and not order_same)
-    if order_same:
+    if fallback_provider and _gs_optimized_result is None:
+        decision_reason = (
+            'Rota servisi (ORS) yanıt vermediği için güzergâh google-static fallback ile '
+            'çizildi; sıra önerisi ve kazanç hesaplanmadı.'
+        )
+    elif fallback_provider and _gs_optimized_result is not None and order_same:
+        decision_reason = (
+            'Rota servisi (ORS) yanıt vermedi; google-static fallback ile hesaplandı. '
+            'Mevcut sıra zaten optimize sıra ile aynı.'
+        )
+    elif fallback_provider and _gs_optimized_result is not None and not order_same:
+        gain_txt = f'{gain_km} km' if isinstance(gain_km, (int, float)) else '—'
+        decision_reason = (
+            f'Rota servisi (ORS) yanıt vermedi; google-static fallback ile hesaplandı. '
+            f'Optimizer daha kısa bir sıra öneriyor ({gain_txt} kazanç).'
+        )
+    elif order_same:
         decision_reason = 'Mevcut sıra rota motoruna göre zaten uygun. Sıra değişmedi.'
     elif isinstance(gain_km, (int, float)) and gain_km < 0 and has_priority_override:
         decision_reason = (
@@ -497,7 +647,7 @@ def build_plan_route_dto(
     else:
         priority_banner = None
 
-    return {
+    dto: dict[str, Any] = {
         'status': 'PARTIAL' if meta['missing_count'] > 0 else 'OK',
         'message': partial_msg,
         'partial': meta['missing_count'] > 0,
@@ -511,6 +661,10 @@ def build_plan_route_dto(
             'duration_label': _format_duration(gain_min * 60) if gain_min is not None else '—',
             'duration_min': gain_min,
             'pct': gain_pct if gain_pct is not None else '—',
+        },
+        'fuel_saving': {
+            'liters': round(fuel_saving_liters, 2) if fuel_saving_liters is not None else '—',
+            'fuel_l_per_100km': _DEFAULT_FUEL_L_PER_100KM,
         },
         'leg_details': leg_details,
         'missing_stops': [
@@ -530,3 +684,8 @@ def build_plan_route_dto(
         'gain_negative': isinstance(gain_km, (int, float)) and gain_km < 0,
         'gain_zero': isinstance(gain_km, (int, float)) and gain_km == 0,
     }
+
+    if fallback_provider:
+        dto['route_fallback_provider'] = fallback_provider
+
+    return dto

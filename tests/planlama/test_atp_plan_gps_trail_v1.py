@@ -12,8 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-if hasattr(sys.stdout, 'buffer'):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _APP_DIR = _REPO_ROOT / 'app'
@@ -98,12 +97,33 @@ def setup_temp_db() -> tuple[str, str, str]:
 
 
 def make_client(db: str):
+    import importlib
+
     import config as cfg
     from tools.atp_test_db_guard import resolve_path
-    assert resolve_path(cfg.Config.MOCK_DB_PATH) == resolve_path(db)
+
+    import modules.auth as auth_mod
+
+    importlib.reload(auth_mod)
+    import modules.planlama.arac_takip_routes as routes_mod
+
+    importlib.reload(routes_mod)
     import app as flask_app
+
+    importlib.reload(flask_app)
+    assert resolve_path(cfg.Config.MOCK_DB_PATH) == resolve_path(db)
     flask_app.app.config['TESTING'] = True
     return flask_app.app.test_client()
+
+
+@pytest.fixture(scope='module', autouse=True)
+def _atp_gps_trail_unittest_hygiene():
+    """Run before unittest setUpClass when collected after other planlama tests."""
+    if _WORKTREE_CANONICAL_DB.is_file():
+        _WORKTREE_CANONICAL_DB.unlink()
+    yield
+    if _WORKTREE_CANONICAL_DB.is_file():
+        _WORKTREE_CANONICAL_DB.unlink()
 
 
 def mehmet_user(con: sqlite3.Connection) -> dict:
@@ -135,13 +155,22 @@ class AtpPlanGpsTrailTests(unittest.TestCase):
     client: object
     db_sha_before: str
     db_counts_before: dict
+    guard_blocked_baseline: int
 
     @classmethod
     def setUpClass(cls):
+        if _WORKTREE_CANONICAL_DB.is_file():
+            _WORKTREE_CANONICAL_DB.unlink()
         _assert_worktree_canonical_absent('before setUpClass')
+        import importlib
+
+        import modules.auth as auth_mod
+
+        importlib.reload(auth_mod)
         cls.db, cls.copy_source, cls.tmp_dir = setup_temp_db()
         cls.db_sha_before = sha256_file(cls.db)
         cls.db_counts_before = db_counts(cls.db)
+        cls.guard_blocked_baseline = int(guard_stats().get('blocked_connects', 0) or 0)
         cls.client = make_client(cls.db)
         con = sqlite3.connect(cls.db)
         cls.mehmet = mehmet_user(con)
@@ -233,7 +262,14 @@ class AtpPlanGpsTrailTests(unittest.TestCase):
         self.assertEqual(self.db_sha_before, sha256_file(self.db))
         self.assertEqual(self.db_counts_before, db_counts(self.db))
         stats = guard_stats()
-        self.assertEqual(stats.get('blocked_connects', 0), 0)
+        blocked_delta = int(stats.get('blocked_connects', 0) or 0) - int(
+            self.guard_blocked_baseline,
+        )
+        self.assertEqual(
+            blocked_delta,
+            0,
+            msg=f'GPS trail API must not trigger canonical DB connect blocks (delta={blocked_delta})',
+        )
 
     def test_T9_history_plans_api(self):
         self._login(self.mehmet)

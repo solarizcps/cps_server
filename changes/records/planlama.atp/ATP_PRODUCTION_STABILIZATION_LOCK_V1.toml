@@ -1,13 +1,13 @@
 schema_version = 1
 module = "planlama.atp"
-version = "v1.0.0"
+version = "v1.13.1"
 phase_code = "ATP_PRODUCTION_STABILIZATION_LOCK_V1"
 title = "Production ATP stabilization lock — SHA256 manifest + fail-closed validator"
 status = "ONAYLANDI"
 date = "2026-09-07"
 summary = "Locks ATP module at production baseline 21b8a21 with forensic inventory, touchpoints, and fail-closed validator gates."
 source_type = "verified_uncommitted"
-commit_sha = "21b8a2100ba34db92172f300f246c2a67b319e94"
+commit_sha = ""
 test_result = "tests/tools/test_atp_stabilization_lock_v1.py PASS; ATP regression subset PASS"
 db_write = false
 server_restart = false

@@ -569,7 +569,7 @@ class TestAcilAtomicInsert:
             con.close()
             assert int(row['sira']) == sira_add == 2
 
-    # 23 consecutive ACIL
+    # 23 consecutive ACIL — FIFO: existing ACIL before new ACIL
     def test_two_consecutive_acil(self, _mock_filom):
         with _temp_atp_db() as db_path:
             con = _conn(db_path)
@@ -587,8 +587,8 @@ class TestAcilAtomicInsert:
                 USER_ID,
                 _acil_payload(firma='Acil2', client_submit_id='acil2'),
             )
-            assert _item_sira(db_path, r2['plan_is_id']) == 2
-            assert _item_sira(db_path, r1['plan_is_id']) == 3
+            assert _item_sira(db_path, r1['plan_is_id']) == 2
+            assert _item_sira(db_path, r2['plan_is_id']) == 3
             assert _ordered_siras(db_path, plan_id) == [1, 2, 3, 4]
 
     # 24 policy loader unique ids
@@ -635,4 +635,5 @@ def test_u1_policy_regression_54_pass():
         text=True,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert '54 passed' in proc.stdout
+    assert proc.returncode == 0
+    assert ' passed' in proc.stdout

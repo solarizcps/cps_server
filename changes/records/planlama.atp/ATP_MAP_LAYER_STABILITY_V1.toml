@@ -1,0 +1,55 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.5.0"
+phase_code = "ATP_MAP_LAYER_STABILITY_V1"
+title = "Harita katman yaşam döngüsü stabilize edildi (commit bekliyor)."
+status = "TEST"
+date = "2026-09-01"
+summary = "Side branch üzerinde test edildi; ana dalda tam implementasyon commitli değil. Kilitli/canlıda değildir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "node:test 18 primary PASS (side branch)"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "4bc0e16be72366ae"
+verification_date = "2026-09-03"
+verification_evidence = "Side branch atp/u3-reconcile ref 015aed7; lifecycle testleri ana dalda yok"
+current_work = "Harita katman stabilizasyonu — ana dala commit bekliyor"
+evidence_summary = "Forensic 2026-09-03; branch kanıt ref 015aed7; merge sonrası yeniden değerlendirilecek."
+changes = [
+  "Katman lifecycle stabilize edildi.",
+  "Özdeş overlay gizlendi.",
+  "Viewport restore eklendi.",
+]
+changed_files = [
+  "app/static/js/planlama_arac_takip_plan_map.js",
+  "tests/planlama/test_planlama_arac_takip_plan_map_route_layers.js",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = [
+  "Main branch üzerinde tam implementasyon bulunmadığı forensic ile kanıtlandığı için yanlış KİLİTLİ metadata durumu kaldırıldı. Feature veya üretim kuralı değiştirilmedi.",
+]
+locked_rules = [
+  "Özdeş overlay gösterilmez.",
+  "Son iyi viewport geri yüklenir.",
+]
+tests = [
+  "Route layer lifecycle node:test (18 primary)",
+  "Overlay hide node:test (related 8834836e)",
+  "Viewport restore node:test (related 1192a797)",
+  "Cumulative node:test 36",
+]
+known_issues = [
+  "Ana dalda tam implementasyon commitli değil; KILITLI/CANLIDA değildir.",
+]
+next_steps = [
+  "Ana dala commit ve regresyon sonrası yeniden değerlendir.",
+  "GPS geofence sertleştirme (P3).",
+]
+related_commits = [
+  "8834836e1aec6c19aa62747df30e1d7dd0315096",
+  "1192a7976d4b0c687a586829bf8e92d66f902b70",
+]

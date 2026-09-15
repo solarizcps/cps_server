@@ -1,0 +1,50 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.8.0"
+phase_code = "ATP_PAST_PLANS_COMPACT_UI_V1"
+title = "Geçmiş Planlar — kompakt filtre, işlevsel tarih/araç/şoför filtreleri ve detay modalı."
+status = "TEST"
+date = "2026-09-13"
+summary = "Candidate branch follow-up patch; Adem manuel onayı alındı. Production deploy yok; read-only canonical DB."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "History/filter/modal 76/76 PASS; ATP regression base fail list unchanged"
+db_write = false
+server_restart = false
+push_status = "PENDING"
+deployment_status = "NOT_DEPLOYED"
+worktree_fingerprint = "cps_candidate_atp_compact_filter_v1"
+verification_date = "2026-09-13"
+verification_evidence = "Plaka dedupe; date apply closes panel; modal isolates filter panels; Plan ID=7 unchanged"
+current_work = "Geçmiş Planlar compact filter + detail modal — candidate patch lock"
+evidence_summary = "8080 visual approval by Adem; BASE_HEAD=4740af6; no new regression"
+changes = [
+  "Kompakt tek satır filtre toolbar (tarih, araç, şoför, Filtrele, Temizle).",
+  "Plaka normalize dedupe ve isim bazlı şoför filtresi.",
+  "Tarih Uygula otomatik fetch; panel/dropdown kapanma düzeltmeleri.",
+  "Kompakt geçmiş plan detay modalı (özet kartlar, progress, durak tablosu).",
+  "Modal backdrop tıklaması kapatmaz; X/Kapat/Escape + focus return.",
+]
+changed_files = [
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/static/js/planlama_arac_takip.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "app/static/css/planlama_arac_takip.css",
+  "tests/planlama/test_atp_past_plans_history_v1.py",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = []
+locked_rules = [
+  "History 4740af6 sınıflandırma ve sayaç mantığı değişmez.",
+  "Canonical DB yazılmaz; production deploy bu patch ile yapılmaz.",
+  "Filtre panelleri modal açılınca gerçekten kapanır.",
+]
+tests = [
+  "tests/planlama/test_atp_past_plans_history_v1.py (76)",
+]
+known_issues = []
+next_steps = [
+  "Production tabanında 21b8a21 + P0 + registry + history 4740af6 + bu commit cherry-pick.",
+]

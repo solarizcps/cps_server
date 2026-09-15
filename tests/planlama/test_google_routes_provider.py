@@ -43,8 +43,10 @@ PLAN41_POINTS = [
     (41.0731,    28.2464),     # Silivri
     (40.9928283, 28.6947341),  # Fabrika (return)
 ]
-DEPARTURE_UTC = '2026-08-27T05:00:00Z'
-DEPARTURE_LOCAL = '2026-08-27T08:00:00+03:00'
+# Trafik profilleri geçmiş departureTime'da PAST_DEPARTURE ile bloke edilir →
+# offline fikstür gelecekte sabit tutulur.
+DEPARTURE_UTC = '2099-08-27T05:00:00Z'
+DEPARTURE_LOCAL = '2099-08-27T08:00:00+03:00'
 
 
 def _make_fake_google_response(

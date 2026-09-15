@@ -1,0 +1,54 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.14.6"
+phase_code = "ATP_ROUTE_GOOGLE_STATIC_FALLBACK_V1"
+title = "Rota hattı — ORS kesintisinde google-static yedeği + PAST_DEPARTURE koruması"
+status = "TEST"
+date = "2026-09-15"
+summary = "ORS AUTH/RATE_LIMIT/TIMEOUT/SERVER hatasında güzergâh çizgisi ve mevcut plan km/süre google-static ile üretilir; matrix olmadığı için önerilen sıra mevcut sıra kalır ve Kazanç/Yakıt kartları '—' gösterir. Google trafik profilleri geçmiş departureTime'da hiç istek göndermez, PAST_DEPARTURE döner."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "integration/solariz-cps-final-20260914-v1"
+verification_date = "2026-09-15"
+verification_evidence = "pytest yeni dar süit 10/10 PASS; mevcut google provider/options/api süitleri 146 PASS; route/google/traffic/map seçimi 478 PASS (2 başarısız test HEAD'de mevcut ve WhatsApp mesaj biçimi + sürücü haritası public URL ile ilgili)."
+test_result = "pytest tests/planlama/test_atp_route_google_static_fallback_v1.py 10 passed; tests/planlama/test_google_routes_provider.py + test_google_route_options_service.py + test_google_route_options_api.py 146 passed"
+db_write = false
+server_restart = false
+push_status = "LOCAL_ONLY"
+deployment_status = "LOCAL_ONLY"
+locked_rules = [
+  "ORS sağlıklı çalıştığında rota akışı ve gain hesabı değişmez; yedek yalnız AUTH/RATE_LIMIT/TIMEOUT/SERVER kodlarında devreye girer.",
+  "Yedek sağlayıcı yalnız directions içindir; matrix yedeği yok, önerilen sıra mevcut sıra olarak korunur.",
+  "google-static yedeğinde Kazanç/Yakıt kartlarında türetilmiş veya sıfır değer gösterilmez.",
+  "Google trafik profillerinde geçmiş departureTime ile istek gönderilmez; PAST_DEPARTURE döner.",
+  "Statik yedek departureTime göndermez; WhatsApp/harita/geofence akışları bu fazda değişmez.",
+]
+changes = [
+  "google_static_fallback.py: polyline decode + route_via_google_static + ORS_FALLBACK_CODES + uyarı sabitleri.",
+  "route_planner_service.py: ORS hatasında google-static yedeği, warnings kaydı, route_fallback_provider, NO_MATRIX_FALLBACK, gain suppression.",
+  "google_routes_provider.py: trafik profilleri için _guard_traffic_departure → PAST_DEPARTURE (0 HTTP).",
+  "planlama_arac_takip_route.js: yedek kullanıldığında 'mevcut sıra zaten uygun' metni yerine sağlayıcı uyarısı gösterilir (cache v=17).",
+  "test_google_routes_provider.py: offline fikstür departureTime'ı gelecekte sabitlendi.",
+]
+changed_files = [
+  "app/modules/planlama/road_routing/google_static_fallback.py",
+  "app/modules/planlama/road_routing/route_planner_service.py",
+  "app/modules/planlama/road_routing/google_routes_provider.py",
+  "app/static/js/planlama_arac_takip_route.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/test_atp_route_google_static_fallback_v1.py",
+  "tests/planlama/test_google_routes_provider.py",
+]
+tests = [
+  "test_atp_route_google_static_fallback_v1.py",
+  "test_google_routes_provider.py",
+  "test_google_route_options_service.py",
+  "test_google_route_options_api.py",
+]
+known_issues = [
+  "Tarayıcı doğrulaması yapılmadı; 8080 restart edilmedi (kullanıcı kısıtı).",
+  "Google Route Matrix akışı bu fazda geçmiş departureTime için korunmadı; kapsam dışı bırakıldı.",
+]
+next_steps = [
+  "ORS kotası dolu bir plan üzerinde tarayıcı kanıtı al (çizgi + Mevcut Plan km/süre + uyarı metni).",
+]

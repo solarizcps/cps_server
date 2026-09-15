@@ -1,0 +1,48 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v0.6.0"
+phase_code = "BACKFILL_ATP_MANUAL_REORDER_UI_V1"
+title = "Araç rota sıralama ve plan modal düzeni kilitlendi."
+status = "ONAYLANDI"
+date = "2026-08-24"
+summary = "Manuel rota sıralama güvenliği ve plan modal layout restore commitlendi."
+source_type = "commit"
+commit_sha = "861d39c4d3d34f7bff2aea32b990670a7e6e9647"
+test_result = "Commit doğrulandı; otomatik pytest yok"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "Rota sıralama güvenliği.",
+  "Plan modal layout restore.",
+
+]
+changed_files = [
+  "app/modules/planlama/arac_route_apply_service.py",
+  "app/modules/planlama/arac_route_constraints.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/modules/planlama/arac_today_operations_service.py",
+  "app/modules/planlama/road_routing/route_planner_service.py",
+  "app/modules/planlama/road_routing/suggest.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_route.js",
+  "app/templates/planlama/arac_takip_plan.html",
+
+]
+locked_rules = [
+
+]
+tests = [
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "d27324d5aec85be79d4690a6ff9983343162804d",
+]

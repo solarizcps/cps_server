@@ -128,6 +128,15 @@ def browser_env():
 def browser_pages(browser_env):
     from playwright.sync_api import sync_playwright
 
+    # Playwright may be importable but the browser binaries may not be
+    # downloaded (e.g. CI sandbox / dev candidate env).  Try a dry launch to
+    # detect a missing binary and skip gracefully rather than erroring.
+    with sync_playwright() as _p_check:
+        try:
+            _p_check.chromium.launch(headless=True).close()
+        except Exception as _browser_err:
+            pytest.skip(f'Chromium binary unavailable: {_browser_err}')
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     errors: list[str] = []
     opened: list[str] = []
@@ -137,34 +146,27 @@ def browser_pages(browser_env):
         for name, size in (('1920', {'width': 1920, 'height': 1080}), ('1366', {'width': 1366, 'height': 768})):
             page = browser.new_page(viewport=size)
             page.on('console', lambda msg: errors.append(msg.text) if msg.type == 'error' else None)
+            page.on('dialog', lambda dialog: dialog.accept())
             page.add_init_script(
                 """
                 window.__waOpened = [];
-                window.__waPopupUrls = [];
-                window.open = function(url) {
-                  window.__waOpened.push(url || 'about:blank');
-                  const popup = {
-                    closed: false,
-                    close: function() { this.closed = true; },
-                    location: {
-                      replace: function(nextUrl) {
-                        window.__waPopupUrls.push(nextUrl);
-                        window.__waOpened.push(nextUrl);
-                        let el = document.getElementById('atp-wa-test-preview');
-                        if (!el) {
-                          el = document.createElement('pre');
-                          el.id = 'atp-wa-test-preview';
-                          el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;max-height:40vh;overflow:auto;background:#111;color:#0f0;z-index:99999;padding:8px;font-size:11px;';
-                          document.body.appendChild(el);
-                        }
-                        try {
-                          const text = decodeURIComponent((nextUrl.split('text=')[1] || ''));
-                          el.textContent = text;
-                        } catch (e) { el.textContent = nextUrl; }
-                      }
-                    }
-                  };
-                  return popup;
+                window.__waOpenCount = 0;
+                window.open = function(url, name, features) {
+                  window.__waOpenCount += 1;
+                  window.__waOpened.push(url || '');
+                  let el = document.getElementById('atp-wa-test-preview');
+                  if (!el) {
+                    el = document.createElement('pre');
+                    el.id = 'atp-wa-test-preview';
+                    el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;max-height:40vh;overflow:auto;background:#111;color:#0f0;z-index:99999;padding:8px;font-size:11px;';
+                    document.body.appendChild(el);
+                  }
+                  if (url && url.indexOf('text=') !== -1) {
+                    try {
+                      el.textContent = decodeURIComponent((url.split('text=')[1] || ''));
+                    } catch (e) { el.textContent = url; }
+                  }
+                  return { closed: false, close: function() { this.closed = true; } };
                 };
                 """
             )
@@ -182,15 +184,31 @@ class TestWhatsAppBrowserV1:
             body_before = page.inner_text('body')
             assert 'Sürücü: Ali (Üretim Operatörü)' not in body_before
             assert 'GÜNLÜK ARAÇ PROGRAMI' not in body_before
-            page.click('#atpBtnWhatsapp')
-            page.wait_for_timeout(2000)
+            with page.expect_response(
+                lambda r: '/planlama/arac-takip/api/whatsapp' in r.url,
+                timeout=30000,
+            ) as wa_resp_info:
+                page.click('#atpBtnWhatsapp')
+            wa_resp = wa_resp_info.value
+            wa_body = wa_resp.json()
+            assert wa_resp.status == 200, wa_body
+            assert wa_body.get('ok') is True, wa_body
+            assert str(wa_body.get('whatsapp_url') or '').startswith('https://'), wa_body
+            page.wait_for_function(
+                '() => window.__waOpened && window.__waOpened.length > 0',
+                timeout=20000,
+            )
+            open_count = page.evaluate('window.__waOpenCount')
+            assert open_count == 1
             opened = page.evaluate('window.__waOpened')
-            assert opened and opened[0] == 'about:blank'
-            popup_urls = page.evaluate('window.__waPopupUrls')
-            assert popup_urls and popup_urls[0].startswith('https://wa.me/?text=')
-            preview = page.locator('#atp-wa-test-preview')
-            preview.wait_for(state='attached', timeout=15000)
-            text = preview.inner_text()
+            assert opened and opened[0].startswith('https://web.whatsapp.com/send?text=')
+            text = page.evaluate(
+                """() => {
+                  var u = window.__waOpened[0] || '';
+                  try { return decodeURIComponent((u.split('text=')[1] || '')); }
+                  catch (e) { return u; }
+                }"""
+            )
             decoded_messages[vp] = text
             assert PLAKA in text
             assert SOFOR in text

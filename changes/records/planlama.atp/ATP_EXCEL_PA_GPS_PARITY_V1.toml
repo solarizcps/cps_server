@@ -1,0 +1,53 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.8.1"
+phase_code = "ATP_EXCEL_PA_GPS_PARITY_V1"
+title = "Excel PA R01/R02/R13 — sıra dışı ziyaret görünür uyarı"
+status = "ONAYLANDI"
+date = "2026-09-14"
+summary = "P0 geofence sıra dışı tamamlama korunur; doğrulanmış OOS ziyaretler today-operations alerts[] üzerinden Dikkat Gerekenler'de öncelikli gösterilir ve Görüldü ile acknowledge edilir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "P0_MATRIX=10/10 | R13_ALERT=6/6 | ATP_REGRESSION=0 FAIL 0 ERROR"
+db_write = false
+server_restart = false
+push_status = "PENDING"
+deployment_status = "PATCH_LOCKED_NOT_YET_DEPLOYED"
+worktree_fingerprint = "candidate/atp-excel-pa-gps-parity-v1@5740001"
+verification_date = "2026-09-14"
+verification_evidence = "Adem UI: R01/R02/R13 görsel onay; OOS alert ilk satır; Görüldü + refresh dedupe PASS"
+current_work = "Patch locked on integration branch; production deploy ayrı faz"
+evidence_summary = "TEMP DB manual UI v3 + automated matrix; canonical DB unchanged"
+changes = [
+  "arac_geofence_service.py: OUT_OF_SEQUENCE_VISIT_ALERT emit on verified OOS auto-complete.",
+  "arac_geofence_repo.py: list/acknowledge out-of-sequence visit alerts.",
+  "arac_today_operations_service.py: alert sort priority + vehicle filter.",
+  "arac_takip_routes.py: today-operations vehicle_id + alerts/acknowledge API.",
+  "planlama_arac_takip.js: OOS alert row, Görüldü, pin-first render.",
+]
+changed_files = [
+  "app/modules/planlama/arac_geofence_service.py",
+  "app/modules/planlama/arac_geofence_repo.py",
+  "app/modules/planlama/arac_today_operations_service.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/static/js/planlama_arac_takip.js",
+  "tests/planlama/test_atp_out_of_sequence_visit_alert_v1.py",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = []
+locked_rules = [
+  "Canonical DB'ye yazma yapılmaz.",
+  "Production deploy bu commit ile yapılmaz.",
+  "Migration production'a uygulanmaz.",
+  "Worker/server restart yapılmaz.",
+]
+tests = [
+  "P0 matrix 10/10",
+  "R13 out-of-sequence alert pytest",
+  "ATP full regression 0 FAIL",
+]
+known_issues = []
+next_steps = [
+  "Production cherry-pick ayrı onay fazında.",
+]

@@ -265,14 +265,17 @@ class TestReturnScopeMatrix:
     def test_t4_no_timeline_shows_dash(self, env):
         con = sqlite3.connect(env['db'])
         seed_plan2_fixture(con, with_coords=True)
+        con.execute('DELETE FROM arac_plan_rota_snapshot')
+        con.commit()
         con.close()
         with patch(
             'modules.planlama.arac_timeline_service.build_timeline_for_plan',
             return_value={'timeline_complete': False, 'status': 'AYAK_EKSIK'},
         ):
             ctx = load_whatsapp_plan_context(PLAN_DATE, VEHICLE)
+        assert ctx['return_source'] == RETURN_SOURCE_NONE
         msg = ctx and build_whatsapp_payload(PLAN_DATE, VEHICLE)['message']
-        assert 'Tahmini dönüş: —' in msg
+        assert '*Tahmini dönüş:* —' in msg
 
     def test_t5_midnight_next_day_format(self):
         display = format_return_time_display(

@@ -47,6 +47,7 @@ WATCH_FILE_PATTERNS = (
     re.compile(r'^tests/planlama/(test_atp_|test_arac_|test_filom_|test_google_route|test_planlama_arac_takip|atp_|conftest\.py|_parity_helper\.py)'),
     re.compile(r'^app/migrations/.*arac.*\.py$'),
     re.compile(r'^app/migrations/189_planlama_arac_takip.*\.py$'),
+    re.compile(r'^app/migrations/192_arac_plan_olay_auto_tamamlandi\.py$'),
     re.compile(r'^Start-Arac-GPS-Worker\.ps1$'),
     re.compile(r'^app/templates/planlama/arac_takip_plan\.html$'),
 )

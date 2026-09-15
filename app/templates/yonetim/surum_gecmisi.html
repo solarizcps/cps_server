@@ -1,0 +1,644 @@
+{% extends "base.html" %}
+{% block title %}Geliştirme ve Sürüm Geçmişi — Yönetim{% endblock %}
+
+{% block head %}
+<style>
+main:has(.rh-page) { overflow:hidden; display:flex; flex-direction:column; padding-top:12px; padding-bottom:12px; }
+.rh-page { display:flex; flex-direction:column; flex:1 1 auto; min-height:0; gap:8px; }
+.rh-page .page-header { margin-bottom:0; align-items:flex-start; flex-shrink:0; }
+.rh-page .page-title { font-size:15px; line-height:1.2; }
+.rh-page .page-sub { font-size:10px; margin-top:1px; line-height:1.3; }
+
+.rh-summary {
+  background:#fff; border:0.5px solid var(--border); border-radius:8px;
+  padding:7px 12px; box-shadow:var(--shadow-sm); flex-shrink:0;
+}
+.rh-summary-primary { display:flex; flex-wrap:wrap; gap:4px 14px; align-items:baseline; }
+.rh-stat { display:inline-flex; align-items:baseline; gap:5px; white-space:nowrap; }
+.rh-stat .lbl { font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.8px; }
+.rh-stat .val { font-size:14px; font-weight:700; color:var(--text1); line-height:1; }
+.rh-stat .sub { font-size:9px; color:var(--text3); margin-left:2px; }
+.rh-summary-secondary {
+  margin-top:5px; padding-top:5px; border-top:0.5px dashed var(--border);
+  display:flex; flex-wrap:wrap; gap:3px 12px; font-size:10px; color:var(--text3); line-height:1.3;
+}
+.rh-summary-secondary .lbl { font-weight:600; }
+.rh-summary-secondary .val { font-weight:700; color:var(--text1); }
+
+.rh-filtre {
+  background:#fff; border:0.5px solid var(--border); border-radius:8px;
+  padding:6px 10px; box-shadow:var(--shadow-sm); flex-shrink:0;
+}
+.rh-filtre form { display:grid; grid-template-columns:minmax(160px,2fr) minmax(100px,0.9fr) minmax(120px,1fr) auto; gap:6px; align-items:center; }
+.rh-filtre .rh-sr { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.rh-filtre input, .rh-filtre select { width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:11px; font-family:var(--sans); }
+.rh-filtre-actions { display:flex; gap:4px; align-items:center; white-space:nowrap; }
+
+.rh-tablo {
+  background:#fff; border:0.5px solid var(--border); border-radius:10px; overflow:hidden;
+  box-shadow:var(--shadow-sm); display:flex; flex-direction:column; flex:1 1 auto; min-height:0;
+}
+.rh-tablo-body { overflow-y:auto; flex:1 1 auto; min-height:0; }
+.rh-tablo-head {
+  position:sticky; top:0; z-index:20; flex-shrink:0;
+  background:var(--bg4); border-bottom:0.5px solid var(--border); box-shadow:0 1px 0 var(--border);
+}
+.rh-row {
+  display:grid;
+  grid-template-columns:minmax(130px,1.35fr) minmax(64px,0.55fr) minmax(150px,1.25fr) minmax(110px,0.95fr) minmax(72px,0.55fr) minmax(100px,0.85fr) minmax(78px,0.5fr);
+  gap:8px; padding:8px 12px; font-size:11px; align-items:center;
+}
+.rh-row.hdr { font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.8px; min-height:32px; }
+.rh-row.hdr > div { line-height:1.2; white-space:normal; }
+.rh-module-row { border-bottom:0.5px solid var(--border); transition:background .12s ease; cursor:default; }
+.rh-module-row:hover { background:var(--bg3); }
+.rh-module-row.is-open { background:var(--bg4); border-bottom-color:transparent; }
+.rh-module-block.is-open .rh-inline-detail { display:block; }
+.rh-module-block.is-open { border-bottom:0.5px solid var(--border); }
+
+.rh-cell { min-width:0; }
+.rh-clamp2 {
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  line-height:1.35;
+  word-break:break-word;
+}
+.rh-row .mono { font-family:var(--mono); font-size:10px; color:var(--text2); }
+.rh-row .mod { font-weight:600; font-size:12px; line-height:1.3; }
+.rh-row .sub { font-size:10px; color:var(--text3); margin-top:2px; }
+
+.rh-badge { display:inline-block; padding:2px 7px; border-radius:999px; font-size:9px; font-weight:700; letter-spacing:0.3px; white-space:nowrap; }
+.rh-badge.kilitli { background:#dcfce7; color:#166534; }
+.rh-badge.onaylandi { background:#dbeafe; color:#1d4ed8; }
+.rh-badge.test { background:#fef9c3; color:#854d0e; }
+.rh-badge.taslak { background:#ffedd5; color:#9a3412; }
+.rh-badge.geri { background:#fee2e2; color:#991b1b; }
+.rh-badge.commit-bekliyor { background:#f3e8ff; color:#6b21a8; }
+
+.rh-detail-btn {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:4px 8px; border:1px solid var(--border); border-radius:6px;
+  background:#fff; font-size:10px; font-weight:600; color:var(--text2);
+  cursor:pointer; font-family:var(--sans); white-space:nowrap;
+}
+.rh-detail-btn:hover { background:var(--bg3); }
+.rh-detail-btn .chev { display:inline-block; transition:transform .15s ease; font-size:9px; }
+.rh-module-block.is-open .rh-detail-btn .chev { transform:rotate(180deg); }
+
+.rh-inline-detail {
+  display:none; position:relative; z-index:1; background:var(--bg4);
+  border-top:0.5px solid var(--border); padding:10px 12px 12px;
+}
+.rh-inline-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px; margin-bottom:8px; }
+.rh-inline-head h3 { margin:0; font-size:14px; font-weight:700; color:var(--text1); }
+.rh-inline-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px; margin-bottom:8px; }
+.rh-inline-box { border:0.5px solid var(--border); border-radius:8px; padding:8px 10px; background:#fff; min-height:56px; }
+.rh-inline-box h4 { margin:0 0 6px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--text3); }
+.rh-inline-box .val { font-size:12px; line-height:1.4; color:var(--text1); }
+.rh-inline-meta { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; margin-bottom:12px; }
+.rh-inline-meta .box { border:0.5px solid var(--border); border-radius:8px; padding:8px 10px; background:#fff; font-size:11px; }
+.rh-inline-meta .lbl { font-size:9px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:4px; }
+.rh-inline-lists { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+.rh-inline-lists .box { border:0.5px solid var(--border); border-radius:8px; padding:8px 10px; background:#fff; }
+.rh-inline-lists h4 { margin:0 0 6px; font-size:9px; font-weight:700; text-transform:uppercase; color:var(--text3); }
+.rh-inline-lists ul { margin:0; padding-left:16px; font-size:11px; line-height:1.4; }
+
+.rh-history-toggle { font-size:11px; font-weight:600; color:var(--text2); background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; font-family:var(--sans); }
+.rh-history-panel { display:none; margin-top:12px; border-top:0.5px dashed var(--border); padding-top:10px; }
+.rh-history-panel.is-visible { display:block; }
+.rh-timeline-item { display:grid; grid-template-columns:88px 64px 1fr; gap:8px; padding:7px 0; border-bottom:0.5px dashed var(--border); font-size:11px; align-items:start; }
+.rh-timeline-item:last-child { border-bottom:none; }
+
+.rh-empty { padding:28px; text-align:center; color:var(--text3); font-size:13px; }
+.rh-alert { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:8px; padding:8px 10px; font-size:11px; flex-shrink:0; }
+
+@media (max-width: 1366px) {
+  .rh-row { padding:6px 10px; font-size:10px; }
+  .rh-row.hdr { min-height:28px; font-size:8px; }
+  .rh-row .mod { font-size:11px; }
+  .rh-filtre form { grid-template-columns:minmax(140px,2fr) minmax(92px,0.85fr) minmax(108px,0.95fr) auto; gap:5px; }
+  .rh-inline-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .rh-inline-meta { grid-template-columns:1fr 1fr; }
+  .rh-inline-lists { grid-template-columns:1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rh-page">
+<div class="page-header">
+  <div>
+    <div class="page-title">Geliştirme ve Sürüm Geçmişi</div>
+    <div class="page-sub">Canonical TOML kayıtları · otomatik push/deploy durumu · {{ summary.total_records }} kayıt</div>
+  </div>
+</div>
+
+{% if summary.invalid_records > 0 %}
+<div class="rh-alert">Geçersiz {{ summary.invalid_records }} kayıt atlandı. Detay için validator çalıştırın.</div>
+{% endif %}
+
+<div class="rh-summary">
+  <div class="rh-summary-primary">
+    <div class="rh-stat"><span class="lbl">Toplam Modül</span><span class="val">{{ summary.total_modules }} modül</span></div>
+    <div class="rh-stat"><span class="lbl">Toplam Kayıt</span><span class="val">{{ summary.total_records }} kayıt</span></div>
+    <div class="rh-stat"><span class="lbl">Devam Eden</span><span class="val">{{ summary.in_progress_modules }} modül</span></div>
+    <div class="rh-stat"><span class="lbl">Commit Bekleyen</span><span class="val">{{ summary.commit_pending_records }} kayıt · {{ summary.commit_pending_modules }} modül</span></div>
+    <div class="rh-stat"><span class="lbl">Push Bekleyen</span><span class="val">{{ summary.push_waiting_modules }} modül</span></div>
+    <div class="rh-stat"><span class="lbl">Deploy Bekleyen</span><span class="val">{{ summary.deploy_waiting_modules }} modül</span></div>
+    <div class="rh-stat"><span class="lbl">Açık Sorun</span><span class="val">{{ summary.open_issues }} madde</span><span class="sub">(known_issues)</span></div>
+  </div>
+  <div class="rh-summary-secondary">
+    <span><span class="lbl">Deploy Bilinmiyor:</span> <span class="val">{{ summary.deploy_unknown_modules }} modül</span></span>
+    <span><span class="lbl">Canlı Güncel:</span> <span class="val">{{ summary.live_current_modules }} modül</span></span>
+    <span><span class="lbl">Kilitli Modül:</span> <span class="val">{{ summary.locked_modules }} modül</span></span>
+  </div>
+</div>
+
+<div class="rh-filtre">
+  <form method="get">
+    <label class="rh-sr" for="rh-q">Modül Ara</label>
+    <input id="rh-q" type="text" name="q" value="{{ filters.module_query }}" placeholder="Modül ara (nexgen.mo, APS...)" aria-label="Modül Ara">
+    <label class="rh-sr" for="rh-status">Durum</label>
+    <select id="rh-status" name="status" aria-label="Durum">
+      <option value="">Durum — Tümü</option>
+      {% for st in status_options %}
+      <option value="{{ st }}" {% if filters.status == st %}selected{% endif %}>{{ status_labels.get(st, st) }}</option>
+      {% endfor %}
+    </select>
+    <label class="rh-sr" for="rh-deploy">Deployment</label>
+    <select id="rh-deploy" name="deploy" aria-label="Deployment">
+      <option value="">Deployment — Tümü</option>
+      <option value="COMMIT_PENDING" {% if filters.deployment == 'COMMIT_PENDING' %}selected{% endif %}>Commit bekliyor</option>
+      <option value="LOCAL_WAIT" {% if filters.deployment == 'LOCAL_WAIT' %}selected{% endif %}>Server aktarımı bekliyor</option>
+      <option value="PUSH_WAIT" {% if filters.deployment == 'PUSH_WAIT' %}selected{% endif %}>Push bekliyor</option>
+      <option value="DEPLOYMENT_UNKNOWN" {% if filters.deployment == 'DEPLOYMENT_UNKNOWN' %}selected{% endif %}>Deploy bilinmiyor</option>
+    </select>
+    <div class="rh-filtre-actions">
+      <button type="submit" class="btn btn-primary btn-sm">Filtrele</button>
+      <a href="/yonetim/surum-gecmisi" class="btn btn-outline btn-sm">Temizle</a>
+    </div>
+  </form>
+</div>
+
+<div class="rh-tablo" id="rh-table">
+  <div class="rh-tablo-head">
+    <div class="rh-row hdr">
+      <div>Modül</div>
+      <div>Sürüm</div>
+      <div>Son Tamamlanan</div>
+      <div>Mevcut Durum</div>
+      <div>Commit</div>
+      <div>Deploy</div>
+      <div>Detay</div>
+    </div>
+  </div>
+
+  <div class="rh-tablo-body">
+  {% if modules %}
+    {% for item in modules %}
+    {% set mod_tl = module_timelines.get(item.module, []) %}
+    {% set selected_rules = module_selected_rules.get(item.module) %}
+    <div class="rh-module-block" data-module="{{ item.module }}" data-default-phase="{{ item.latest_phase }}" id="rh-mod-{{ item.module | replace('.', '-') }}">
+      <div class="rh-row rh-module-row" data-module-row="{{ item.module }}">
+        <div class="rh-cell">
+          <div class="mod rh-clamp2">{{ item.module_label }}</div>
+          <div class="sub mono">{{ item.module }}</div>
+        </div>
+        <div class="rh-cell">
+          <div class="rh-clamp2">{{ item.local_version or item.current_version }}</div>
+        </div>
+        <div class="rh-cell">
+          <div class="rh-clamp2">{{ item.last_completed_title if item.last_completed_title != '—' else '—' }}</div>
+        </div>
+        <div class="rh-cell">
+          <div class="rh-clamp2">
+            {% if item.commit_pending_count > 0 %}
+              <span class="rh-badge commit-bekliyor">Commit bekliyor</span>
+            {% else %}
+              {{ status_labels.get(item.status, item.status) }}
+            {% endif %}
+          </div>
+        </div>
+        <div class="rh-cell">
+          {% if item.commit_pending_count > 0 %}
+            <span class="rh-badge commit-bekliyor">{{ item.commit_pending_count }}</span>
+          {% elif item.commit_short and item.commit_short != '—' %}
+            <span class="mono">{{ item.commit_short }}</span>
+          {% else %}
+            —
+          {% endif %}
+        </div>
+        <div class="rh-cell">
+          <div class="rh-clamp2">{{ item.deploy_label }}</div>
+        </div>
+        <div class="rh-cell">
+          {% if detail_allowed %}
+          <button type="button" class="rh-detail-btn" data-rh-toggle="{{ item.module }}" aria-expanded="false">
+            <span class="rh-detail-label">Detay</span>
+            <span class="chev" aria-hidden="true">▼</span>
+          </button>
+          {% else %}
+          <span class="sub">—</span>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if detail_allowed %}
+      <div class="rh-inline-detail" id="rh-detail-{{ item.module | replace('.', '-') }}" hidden>
+        <div class="rh-inline-head">
+          <h3>{{ item.module_label }} · {{ item.local_version or item.current_version }}</h3>
+          {% if item.commit_pending_count > 0 %}
+          <span class="rh-badge commit-bekliyor">{{ item.commit_pending_count }} commit bekleyen kayıt</span>
+          {% endif %}
+        </div>
+
+        <div class="rh-inline-grid">
+          <div class="rh-inline-box">
+            <h4>Son tamamlanan</h4>
+            <div class="val rh-clamp2">{{ item.last_completed_title if item.last_completed_title != '—' else '—' }}</div>
+          </div>
+          <div class="rh-inline-box">
+            <h4>Devam eden</h4>
+            <div class="val rh-clamp2">{{ item.current_work if item.current_work != '—' else '—' }}</div>
+          </div>
+          <div class="rh-inline-box">
+            <h4>Sıradaki</h4>
+            <div class="val rh-clamp2">{{ item.next_step if item.next_step != '—' else '—' }}</div>
+          </div>
+          <div class="rh-inline-box">
+            <h4>Test ve dağıtım</h4>
+            <div class="val rh-clamp2">{{ item.test_result[:120] }}{% if item.test_result|length > 120 %}…{% endif %}</div>
+            <div class="sub" style="margin-top:4px;">{{ item.deploy_label }}</div>
+          </div>
+        </div>
+
+        <div class="rh-inline-meta">
+          {% set phase_open = detail_module == item.module and detail_phase %}
+          {% set phase_panel = module_phase_rules.get(item.module, {}).get(detail_phase) if phase_open else none %}
+          <div class="box"><div class="lbl">Commit durumu</div><div data-rh-commit-box>{% if phase_panel %}{% if phase_panel.commit_pending %}<span class="rh-badge commit-bekliyor">Commit bekliyor</span>{% elif phase_panel.commit_short != '—' %}<span class="mono" data-rh-commit-status>{{ phase_panel.commit_short }}</span>{% else %}—{% endif %}{% elif item.commit_pending_count > 0 %}<span class="rh-badge commit-bekliyor">{{ item.commit_pending_count }} bekliyor</span>{% elif item.commit_short != '—' %}<span class="mono" data-rh-commit-status>{{ item.commit_short }}</span>{% else %}—{% endif %}</div></div>
+          <div class="box"><div class="lbl">Push durumu</div><span data-rh-push-status>{% if phase_panel %}{{ phase_panel.push_status_label }}{% else %}{{ item.push_status_label }}{% endif %}</span></div>
+          <div class="box"><div class="lbl">Deploy durumu</div><span data-rh-deploy-status>{% if phase_panel %}{{ phase_panel.deploy_status_label }}{% else %}{{ item.deploy_label }}{% endif %}</span></div>
+        </div>
+
+        <div class="rh-inline-lists">
+          <div class="box">
+            <h4 data-rh-rules-heading>{% if selected_rules %}{{ selected_rules.heading }}{% else %}Kilitli kurallar{% endif %}</h4>
+            <ul data-rh-rules-list>{% if selected_rules and selected_rules.rules %}{% for line in selected_rules.rules[:8] %}<li>{{ line }}</li>{% endfor %}{% else %}<li>—</li>{% endif %}</ul>
+          </div>
+          <div class="box">
+            <h4>Açık sorunlar</h4>
+            <ul data-rh-issues-list>{% if selected_rules and selected_rules.known_issues %}{% for line in selected_rules.known_issues[:8] %}<li>{{ line }}</li>{% endfor %}{% else %}<li>—</li>{% endif %}</ul>
+          </div>
+        </div>
+
+        <button type="button" class="rh-history-toggle" data-rh-history="{{ item.module }}">Tüm sürüm geçmişini aç</button>
+        <div class="rh-history-panel" id="rh-history-{{ item.module | replace('.', '-') }}">
+          <h4 style="font-size:10px; text-transform:uppercase; color:var(--text3); margin:0 0 8px;">Sürüm Zaman Çizelgesi ({{ mod_tl|length }})</h4>
+          {% for t in mod_tl %}
+          <div class="rh-timeline-item">
+            <div>{{ t.date }}</div>
+            <div>{{ t.version }}</div>
+            <div>
+              <strong>{{ t.phase_code }}</strong> — {{ t.title }}
+              {% if t.is_uncommitted %}<span class="rh-badge commit-bekliyor">Commit bekliyor</span>
+              {% elif t.status == 'KILITLI' %}<span class="rh-badge kilitli">Kilitli</span>
+              {% elif t.status == 'TEST' %}<span class="rh-badge test">Test</span>
+              {% elif t.status == 'ONAYLANDI' %}<span class="rh-badge onaylandi">Onaylandı</span>
+              {% endif %}
+            </div>
+          </div>
+          {% else %}
+          <div class="sub">—</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="rh-empty">Kayıt bulunamadı.</div>
+  {% endif %}
+  </div>
+</div>
+
+{% if not detail_allowed %}
+<div class="rh-alert">Detay görünümü için Audit Log yetkisi veya superadmin gerekir.</div>
+{% endif %}
+</div>
+
+{% if detail_allowed %}
+<script type="application/json" id="rh-phase-rules-data">{{ module_phase_rules | tojson }}</script>
+<script>
+(function () {
+  var blocks = Array.prototype.slice.call(document.querySelectorAll('.rh-module-block'));
+  var scrollHost = document.querySelector('.rh-tablo-body') || document.querySelector('main');
+  var scrollRestore = null;
+  var suppressHistory = false;
+  var phaseRulesData = {};
+
+  (function loadPhaseRules() {
+    var el = document.getElementById('rh-phase-rules-data');
+    if (!el) return;
+    try {
+      phaseRulesData = JSON.parse(el.textContent || '{}');
+    } catch (err) {
+      phaseRulesData = {};
+    }
+  })();
+
+  function fillList(ul, items) {
+    while (ul.firstChild) {
+      ul.removeChild(ul.firstChild);
+    }
+    if (!items || !items.length) {
+      var emptyLi = document.createElement('li');
+      emptyLi.textContent = '—';
+      ul.appendChild(emptyLi);
+      return;
+    }
+    var limit = Math.min(items.length, 8);
+    for (var i = 0; i < limit; i++) {
+      var li = document.createElement('li');
+      li.textContent = items[i];
+      ul.appendChild(li);
+    }
+  }
+
+  function setCommitBox(box, panel) {
+    if (!box) return;
+    while (box.firstChild) {
+      box.removeChild(box.firstChild);
+    }
+    if (!panel) {
+      box.textContent = '—';
+      return;
+    }
+    if (panel.commit_pending) {
+      var badge = document.createElement('span');
+      badge.className = 'rh-badge commit-bekliyor';
+      badge.textContent = 'Commit bekliyor';
+      box.appendChild(badge);
+      return;
+    }
+    if (panel.commit_short && panel.commit_short !== '—') {
+      var mono = document.createElement('span');
+      mono.className = 'mono';
+      mono.setAttribute('data-rh-commit-status', '');
+      mono.textContent = panel.commit_short;
+      box.appendChild(mono);
+      return;
+    }
+    box.textContent = '—';
+  }
+
+  function applyPhaseRules(block, moduleId, phaseCode) {
+    if (!block || !moduleId || !phaseCode) return;
+    var headingEl = block.querySelector('[data-rh-rules-heading]');
+    var rulesUl = block.querySelector('[data-rh-rules-list]');
+    var issuesUl = block.querySelector('[data-rh-issues-list]');
+    var pushEl = block.querySelector('[data-rh-push-status]');
+    var deployEl = block.querySelector('[data-rh-deploy-status]');
+    var commitBox = block.querySelector('[data-rh-commit-box]');
+    if (!headingEl || !rulesUl || !issuesUl) return;
+    var modData = phaseRulesData[moduleId];
+    var panel = modData && modData[phaseCode];
+    if (panel) {
+      headingEl.textContent = panel.heading || 'Kilitli kurallar';
+      fillList(rulesUl, panel.rules || []);
+      fillList(issuesUl, panel.known_issues || []);
+      setCommitBox(commitBox, panel);
+      if (pushEl) pushEl.textContent = panel.push_status_label || 'Push durumu bilinmiyor';
+      if (deployEl) deployEl.textContent = panel.deploy_status_label || 'Deploy durumu bilinmiyor';
+    } else {
+      headingEl.textContent = 'Kilitli kurallar';
+      fillList(rulesUl, []);
+      fillList(issuesUl, []);
+      setCommitBox(commitBox, null);
+      if (pushEl) pushEl.textContent = 'Push durumu bilinmiyor';
+      if (deployEl) deployEl.textContent = 'Deploy durumu bilinmiyor';
+    }
+  }
+
+  function resetPhaseRules(block) {
+    if (!block) return;
+    var headingEl = block.querySelector('[data-rh-rules-heading]');
+    var rulesUl = block.querySelector('[data-rh-rules-list]');
+    var issuesUl = block.querySelector('[data-rh-issues-list]');
+    var pushEl = block.querySelector('[data-rh-push-status]');
+    var deployEl = block.querySelector('[data-rh-deploy-status]');
+    var commitBox = block.querySelector('[data-rh-commit-box]');
+    if (!headingEl || !rulesUl || !issuesUl) return;
+    headingEl.textContent = 'Kilitli kurallar';
+    fillList(rulesUl, []);
+    fillList(issuesUl, []);
+    if (commitBox) commitBox.textContent = '—';
+    if (pushEl) pushEl.textContent = 'Push durumu bilinmiyor';
+    if (deployEl) deployEl.textContent = 'Deploy durumu bilinmiyor';
+  }
+
+  function scrollTop() {
+    return scrollHost ? scrollHost.scrollTop : window.scrollY;
+  }
+
+  function setScrollTop(y) {
+    if (scrollHost) {
+      scrollHost.scrollTop = y;
+    } else {
+      window.scrollTo(0, y);
+    }
+  }
+
+  function parseUrlState() {
+    var p = new URLSearchParams(window.location.search);
+    return {
+      module: p.get('modul') || '',
+      phase: p.get('faz') || '',
+      history: p.get('history') === '1'
+    };
+  }
+
+  function buildUrl(moduleId, phaseCode) {
+    var p = new URLSearchParams(window.location.search);
+    if (moduleId) {
+      p.set('modul', moduleId);
+      if (phaseCode) {
+        p.set('faz', phaseCode);
+      } else {
+        p.delete('faz');
+      }
+    } else {
+      p.delete('modul');
+      p.delete('faz');
+      p.delete('history');
+    }
+    var qs = p.toString();
+    return window.location.pathname + (qs ? '?' + qs : '');
+  }
+
+  function writeUrl(moduleId, phaseCode, mode) {
+    var url = buildUrl(moduleId, phaseCode);
+    var state = { module: moduleId || '', phase: phaseCode || '' };
+    if (mode === 'replace') {
+      history.replaceState(state, '', url);
+    } else if (mode === 'push') {
+      history.pushState(state, '', url);
+    }
+  }
+
+  function modulePhase(block, overridePhase, useUrlPhase) {
+    if (overridePhase) return overridePhase;
+    if (useUrlPhase && block) {
+      var urlState = parseUrlState();
+      var mod = block.getAttribute('data-module') || '';
+      if (urlState.module === mod && urlState.phase) return urlState.phase;
+    }
+    if (!block) return '';
+    return block.getAttribute('data-default-phase') || '';
+  }
+
+  function setBtnState(block, open) {
+    var btn = block.querySelector('.rh-detail-btn');
+    var row = block.querySelector('.rh-module-row');
+    if (!btn) return;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    var label = btn.querySelector('.rh-detail-label');
+    if (label) label.textContent = open ? 'Kapat' : 'Detay';
+    block.classList.toggle('is-open', open);
+    if (row) row.classList.toggle('is-open', open);
+    var panel = block.querySelector('.rh-inline-detail');
+    if (panel) {
+      if (open) {
+        panel.removeAttribute('hidden');
+      } else {
+        panel.setAttribute('hidden', 'hidden');
+        resetPhaseRules(block);
+        var hist = block.querySelector('.rh-history-panel');
+        if (hist) hist.classList.remove('is-visible');
+        var histBtn = block.querySelector('.rh-history-toggle');
+        if (histBtn) histBtn.textContent = 'Tüm sürüm geçmişini aç';
+      }
+    }
+  }
+
+  function closeAll(exceptModule) {
+    blocks.forEach(function (block) {
+      if (block.getAttribute('data-module') !== exceptModule) {
+        setBtnState(block, false);
+      }
+    });
+  }
+
+  function openBlock(moduleId, opts) {
+    opts = opts || {};
+    var block = document.querySelector('.rh-module-block[data-module="' + moduleId + '"]');
+    if (!block) return false;
+    scrollRestore = scrollTop();
+    closeAll(moduleId);
+    setBtnState(block, true);
+    var phase = modulePhase(block, opts.phase || '', !!opts.fromHistory);
+    if (opts.showHistory) {
+      var hist = block.querySelector('.rh-history-panel');
+      if (hist) hist.classList.add('is-visible');
+      var histBtn = block.querySelector('.rh-history-toggle');
+      if (histBtn) histBtn.textContent = 'Sürüm geçmişi açık';
+    }
+    if (opts.updateUrl) {
+      writeUrl(moduleId, phase, opts.urlMode || 'push');
+    }
+    applyPhaseRules(block, moduleId, phase);
+    if (opts.scroll) {
+      var row = block.querySelector('.rh-module-row');
+      if (row && scrollHost) {
+        requestAnimationFrame(function () {
+          var head = document.querySelector('.rh-tablo-head');
+          var headH = head ? head.offsetHeight : 0;
+          var hostRect = scrollHost.getBoundingClientRect();
+          var rowRect = row.getBoundingClientRect();
+          var offset = scrollHost.scrollTop + (rowRect.top - hostRect.top) - headH - 8;
+          if (Math.abs(scrollHost.scrollTop - offset) > 8) {
+            scrollHost.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+          }
+        });
+      }
+    } else if (scrollRestore !== null && !opts.fromHistory) {
+      requestAnimationFrame(function () { setScrollTop(scrollRestore); });
+    }
+    return true;
+  }
+
+  function closeBlock(block, opts) {
+    opts = opts || {};
+    if (!block) return;
+    setBtnState(block, false);
+    if (opts.updateUrl) {
+      writeUrl('', '', opts.urlMode || 'push');
+    }
+  }
+
+  document.addEventListener('click', function (ev) {
+    var toggle = ev.target.closest('[data-rh-toggle]');
+    if (toggle) {
+      ev.preventDefault();
+      var moduleId = toggle.getAttribute('data-rh-toggle');
+      var block = toggle.closest('.rh-module-block');
+      var isOpen = block && block.classList.contains('is-open');
+      if (isOpen) {
+        closeBlock(block, { updateUrl: true, urlMode: 'push' });
+      } else {
+        openBlock(moduleId, { scroll: true, updateUrl: true, urlMode: 'push' });
+      }
+      return;
+    }
+    var histBtn = ev.target.closest('[data-rh-history]');
+    if (histBtn) {
+      ev.preventDefault();
+      var mod = histBtn.getAttribute('data-rh-history');
+      var block = document.querySelector('.rh-module-block[data-module="' + mod + '"]');
+      if (!block) return;
+      if (!block.classList.contains('is-open')) {
+        openBlock(mod, { scroll: false, updateUrl: true, showHistory: true, urlMode: 'push' });
+      } else {
+        var panel = block.querySelector('.rh-history-panel');
+        if (panel) panel.classList.add('is-visible');
+        histBtn.textContent = 'Sürüm geçmişi açık';
+        var histPhase = modulePhase(block, parseUrlState().phase, true);
+        writeUrl(mod, histPhase, 'push');
+        applyPhaseRules(block, mod, histPhase);
+      }
+    }
+  });
+
+  window.addEventListener('popstate', function () {
+    if (suppressHistory) return;
+    var urlState = parseUrlState();
+    if (!urlState.module) {
+      blocks.forEach(function (block) { setBtnState(block, false); });
+      return;
+    }
+    openBlock(urlState.module, {
+      scroll: false,
+      updateUrl: false,
+      showHistory: !!urlState.phase || urlState.history,
+      phase: urlState.phase,
+      fromHistory: true
+    });
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var urlState = parseUrlState();
+    if (!urlState.module) return;
+    openBlock(urlState.module, {
+      scroll: false,
+      updateUrl: false,
+      showHistory: !!urlState.phase || urlState.history,
+      phase: urlState.phase,
+      fromHistory: true
+    });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,13 +1,13 @@
 schema_version = 1
 module = "planlama.atp"
-version = "v1.1.0"
+version = "v1.13.2"
 phase_code = "ATP_PRODUCTION_STABILIZATION_LOCK_V1_1_AUDIT_FIX"
 title = "ATP lock audit fix — enforcement wiring, inventory reconcile, regression ERROR=0"
 status = "ONAYLANDI"
 date = "2026-09-07"
 summary = "Audit fixes for ATP stabilization lock: deploy_preflight enforcement, disjoint inventory (134 files), deterministic builder, canonical DB test fixture, removed orphan gates script."
 source_type = "verified_uncommitted"
-commit_sha = "21b8a2100ba34db92172f300f246c2a67b319e94"
+commit_sha = ""
 test_result = "tests/tools/test_atp_stabilization_lock_v1.py 13/13 PASS; filom canonical ERROR=0"
 db_write = false
 server_restart = false

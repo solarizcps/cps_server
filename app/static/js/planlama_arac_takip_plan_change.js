@@ -1,5 +1,5 @@
 /**
- * ATP Plan Change — compact modal for cancel / defer / transfer / bind location.
+ * ATP Plan Change — compact modal for cancel / defer / bind location.
  */
 (function () {
   'use strict';
@@ -78,7 +78,6 @@
   function togglePanels(action) {
     var active = _isActionSelected(action);
     var panels = {
-      transfer_vehicle: qs('atpPcPanelTransfer'),
       defer_next_day: qs('atpPcPanelDefer'),
       bind_location: qs('atpPcPanelLocation'),
       reorder_info: qs('atpPcPanelReorder'),
@@ -91,6 +90,10 @@
     if (reasonWrap) {
       reasonWrap.style.display = (active && actionNeedsReason(action)) ? 'block' : 'none';
     }
+    var cancelNote = qs('atpPcCancelNote');
+    if (cancelNote) {
+      cancelNote.style.display = (active && action === 'cancel') ? 'block' : 'none';
+    }
     var info = qs('atpPcReorderInfo');
     if (info && action === 'reorder_info') {
       info.textContent = 'Saatler rota hesaplamasıyla atanır. Sıra değişikliği rota panelinden uygulanır.';
@@ -101,12 +104,16 @@
   function updateSaveButtonState(action) {
     var saveBtn = qs('atpPcSaveBtn');
     if (!saveBtn || _state.isLocked) return;
-    /* Kaydet always visible; reorder_info and empty show messages on click, no POST */
     saveBtn.disabled = false;
   }
 
   function populateSummary(d) {
-    qs('atpPcSummaryJob').textContent = fmtVal(d.job_title) + (d.company_name ? ' / ' + d.company_name : '');
+    var jobEl = qs('atpPcSummaryJob');
+    if (jobEl) {
+      var jobTxt = fmtVal(d.job_title) + (d.company_name ? ' / ' + d.company_name : '');
+      var pri = (d.priority || d.oncelik || '').toString().trim().toUpperCase();
+      jobEl.innerHTML = jobTxt + (pri === 'ACIL' ? ' <span class="badge badge-red atp-acil-badge">ACİL</span>' : '');
+    }
     qs('atpPcSummaryDate').textContent = fmtVal(d.plan_tarihi);
     qs('atpPcSummaryVehicle').textContent = fmtVal(d.arac_plaka_snapshot) + ' · ' + fmtVal(d.sofor_adi_snapshot);
     qs('atpPcSummaryStatus').textContent = fmtVal(d.status_label || d.status);
@@ -121,7 +128,6 @@
     var opts = [
       { v: '_none', l: '— Aksiyon seç —', placeholder: true },
       { v: 'bind_location', l: 'Konum Bağla/Düzelt', key: 'bind_location' },
-      { v: 'transfer_vehicle', l: 'Başka Araca Aktar', key: 'transfer_vehicle' },
       { v: 'defer_next_day', l: 'Sonraki Güne Aktar', key: 'defer_next_day' },
       { v: 'cancel', l: 'İptal Et (Plan Dışına Al)', key: 'cancel' },
       { v: 'reorder_info', l: 'Saat/Sıra Değiştir (bilgi)', key: 'reorder_info' },
@@ -144,42 +150,37 @@
     togglePanels('_none');
   }
 
-  function populateVehicles(vehicles, currentVid) {
-    var sel = qs('atpPcTargetVehicle');
-    var deferSel = qs('atpPcDeferVehicle');
-    if (!sel && !deferSel) return;
+  function _vehicleOptionsHtml(vehicles, opts) {
+    opts = opts || {};
     var seen = {};
-    var html = '<option value="">— Araç seç —</option>';
+    var html = opts.placeholder
+      ? '<option value="" selected disabled>' + esc(opts.placeholder) + '</option>'
+      : '<option value="">— Araç seç —</option>';
     (vehicles || []).forEach(function (v) {
       var vid = String(v.arac_external_id || '');
       if (!vid || seen[vid]) return;
+      if (opts.excludeVid && vid === String(opts.excludeVid)) return;
       seen[vid] = true;
       var pl = v.arac_plaka_snapshot || vid;
       var drv = v.sofor_adi_snapshot || '';
       html += '<option value="' + esc(vid) + '" data-driver="' + esc(drv) + '">' +
         esc(pl) + '</option>';
     });
-    if (sel) sel.innerHTML = html;
-    if (deferSel) deferSel.innerHTML = html;
-    if (currentVid) {
-      if (sel) sel.value = String(currentVid);
-      if (deferSel) deferSel.value = String(currentVid);
+    return html;
+  }
+
+  function populateVehicles(vehicles, currentVid) {
+    var deferSel = qs('atpPcDeferVehicle');
+    if (deferSel) {
+      deferSel.innerHTML = _vehicleOptionsHtml(vehicles);
+      if (currentVid) deferSel.value = String(currentVid);
     }
-    syncDriverFromVehicle();
     syncDeferDriverFromVehicle();
   }
 
   function syncDeferDriverFromVehicle() {
     var sel = qs('atpPcDeferVehicle');
     var drv = qs('atpPcDeferDriver');
-    if (!sel || !drv) return;
-    var opt = sel.options[sel.selectedIndex];
-    if (opt && opt.getAttribute('data-driver')) drv.value = opt.getAttribute('data-driver');
-  }
-
-  function syncDriverFromVehicle() {
-    var sel = qs('atpPcTargetVehicle');
-    var drv = qs('atpPcTargetDriver');
     if (!sel || !drv) return;
     var opt = sel.options[sel.selectedIndex];
     if (opt && opt.getAttribute('data-driver')) drv.value = opt.getAttribute('data-driver');
@@ -322,7 +323,6 @@
       }
       var msgs = [];
       if (!allowed.cancel) msgs.push('iptal');
-      if (!allowed.transfer_vehicle) msgs.push('araca aktar');
       if (!allowed.bind_location) msgs.push('konum değiştir');
       if (msgs.length) {
         note.textContent = 'Kısıtlı: ' + msgs.join(', ') + ' işlemi bu durumda yapılamaz.';
@@ -338,9 +338,11 @@
     if (acil) acil.style.display = (allowed.acil_warning) ? 'block' : 'none';
     if (actionSel && !actionSel.disabled) {
       actionSel.addEventListener('change', function () { togglePanels(actionSel.value); });
+      if (_state.presetAction && allowed[_state.presetAction]) {
+        actionSel.value = _state.presetAction;
+        togglePanels(_state.presetAction);
+      }
     }
-    var vsel = qs('atpPcTargetVehicle');
-    if (vsel) vsel.addEventListener('change', syncDriverFromVehicle);
     var dsel = qs('atpPcDeferVehicle');
     if (dsel) dsel.addEventListener('change', syncDeferDriverFromVehicle);
 
@@ -356,10 +358,6 @@
       arac_external_id: d.arac_external_id,
       client_submit_id: _state.clientSubmitId,
     };
-    if (action === 'transfer_vehicle') {
-      payload.target_vehicle_external_id = qs('atpPcTargetVehicle') && qs('atpPcTargetVehicle').value;
-      payload.sofor_adi = qs('atpPcTargetDriver') && qs('atpPcTargetDriver').value;
-    }
     if (action === 'defer_next_day') {
       payload.target_date = qs('atpPcTargetDate') && qs('atpPcTargetDate').value;
       payload.target_vehicle_external_id = qs('atpPcDeferVehicle') && qs('atpPcDeferVehicle').value
@@ -377,17 +375,19 @@
   }
 
   function validate(action) {
+    var d = _state.detail || {};
     if (action === 'reorder_info') return true;
+    if (action === 'cancel') {
+      var jobLabel = fmtVal(d.job_title) + (d.company_name ? ' / ' + d.company_name : '');
+      var msg = jobLabel + '\n\nBu iş aktif plandan kaldırılacak; geçmiş kaydı korunacaktır.\n\nOnaylıyor musunuz?';
+      if (!window.confirm(msg)) return false;
+    }
     if (actionNeedsReason(action)) {
       var reason = qs('atpPcReason') && qs('atpPcReason').value.trim();
       if (!reason || reason.length < 2) {
         showWarn('Neden alanı zorunlu (min 2 karakter).');
         return false;
       }
-    }
-    if (action === 'transfer_vehicle') {
-      var vid = qs('atpPcTargetVehicle') && qs('atpPcTargetVehicle').value;
-      if (!vid) { showWarn('Hedef araç seçin.'); return false; }
     }
     if (action === 'defer_next_day') {
       var dt = qs('atpPcTargetDate') && qs('atpPcTargetDate').value;
@@ -399,9 +399,8 @@
       var lng = qs('atpPcLocLng') && qs('atpPcLocLng').value;
       if (!locId && !(lat && lng)) { showWarn('Konum seçin veya koordinat girin.'); return false; }
     }
-    var d = _state.detail || {};
     if (d.allowed_actions && d.allowed_actions.acil_warning &&
-        (action === 'transfer_vehicle' || action === 'defer_next_day')) {
+        action === 'defer_next_day') {
       if (!window.confirm('ACİL iş — taşıma/erteleme onaylıyor musunuz?')) return false;
     }
     return true;
@@ -468,13 +467,19 @@
         throw new Error(errMsg);
       }
       applyOpsRefresh(res.j);
-      if (res.j.message && window.toast) window.toast(res.j.message);
+      if (window.toast) {
+        if (action === 'cancel') {
+          window.toast('İş aktif plandan kaldırıldı; geçmiş kaydı korundu.', { type: 'success', duration: 4000 });
+        } else if (res.j.message) {
+          window.toast(res.j.message);
+        }
+      }
       closeModal();
     }).catch(function (err) {
       showWarn(_friendlyChangeError(err.message || 'Kaydetme hatası'));
     }).finally(function () {
       _state.submitting = false;
-      if (btn) btn.disabled = false;
+      updateSaveButtonState(qs('atpPcAction') && qs('atpPcAction').value);
     });
   }
 
@@ -507,9 +512,11 @@
     }
   }
 
-  function openChange(planItemId) {
+  function openChange(planItemId, options) {
+    options = options || {};
     _state.planItemId = planItemId;
     _state.clientSubmitId = null;
+    _state.presetAction = options.presetAction || null;
     loadDetail(planItemId);
   }
 

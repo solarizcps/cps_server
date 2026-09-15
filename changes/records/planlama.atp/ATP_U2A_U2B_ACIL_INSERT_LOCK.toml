@@ -1,0 +1,50 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.2.0"
+phase_code = "ATP_U2A_U2B_ACIL_INSERT_LOCK"
+title = "Acil iş ekleme ve rota durumu kilidi tamamlandı (commit bekliyor)."
+status = "TEST"
+date = "2026-08-30"
+summary = "Side branch üzerinde test edildi; ana dalda tam implementasyon commitli değil. Kilitli/canlıda değildir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+test_result = "Pytest PASS 42 (side branch)"
+db_write = false
+server_restart = false
+push_status = "WORKING"
+deployment_status = "WORKING"
+worktree_fingerprint = "2ffd868431c47aea"
+verification_date = "2026-09-03"
+verification_evidence = "Side branch atp/u2a-acil-atomic-insert ref d5d3181; acil testleri ana dalda yok"
+current_work = "Acil iş ekleme kilidi — ana dala commit bekliyor"
+evidence_summary = "Forensic 2026-09-03; branch kanıt ref d5d3181; merge sonrası yeniden değerlendirilecek."
+changes = [
+  "Atomik acil ekleme servisi eklendi.",
+  "Rota snapshot invalidation uygulandı.",
+]
+changed_files = [
+  "app/modules/planlama/arac_add_to_plan_service.py",
+  "app/modules/planlama/arac_plan_rota_snapshot_service.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "tests/planlama/test_arac_acil_atomic_insert.py",
+  "tests/planlama/test_arac_acil_route_state_invalidation.py",
+]
+approved_by = "Adem Terzi"
+locked_rules_approval = true
+breaking_rules = [
+  "Main branch üzerinde tam implementasyon bulunmadığı forensic ile kanıtlandığı için yanlış KİLİTLİ metadata durumu kaldırıldı. Feature veya üretim kuralı değiştirilmedi.",
+]
+locked_rules = [
+  "Acil ekleme atomik olmalıdır.",
+]
+tests = [
+  "Atomik insert (24)",
+  "State invalidation (18)",
+]
+known_issues = [
+  "Ana dalda tam implementasyon commitli değil; KILITLI/CANLIDA değildir.",
+]
+next_steps = [
+  "Ana dala commit ve regresyon sonrası yeniden değerlendir.",
+  "Manuel sıralama fazı (U3B).",
+]

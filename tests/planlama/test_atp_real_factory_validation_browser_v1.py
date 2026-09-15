@@ -181,6 +181,13 @@ def browser_env(factory_resolution):
 @pytest.fixture(scope='module')
 def browser_pages(browser_env):
     from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as _p_check:
+        try:
+            _p_check.chromium.launch(headless=True).close()
+        except Exception as _browser_err:
+            pytest.skip(f'Chromium binary unavailable: {_browser_err}')
+
     errors: list[str] = []
     pages = {}
     with sync_playwright() as p:

@@ -1,0 +1,66 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v0.4.0"
+phase_code = "BACKFILL_ATP_GPS_FOUNDATION_P3"
+title = "ATP GPS temel v1-v2 ve günlük plan okuma modeli kilitlendi."
+status = "KILITLI"
+date = "2026-08-23"
+summary = "GPS geçmiş atomik yazım, rota sapma motoru ve günlük plan read model pytest ile doğrulandı."
+source_type = "commit"
+commit_sha = "c3e61e0c4829fdd1d956f678e241cfe90f594fe4"
+test_result = "GPS foundation pytest PASS"
+db_write = false
+server_restart = false
+push_status = "DEPLOYMENT_UNKNOWN"
+deployment_status = "DEPLOYMENT_UNKNOWN"
+evidence_summary = ""
+changes = [
+  "GPS geçmiş atomik yazım.",
+  "Rota sapma motoru.",
+  "Günlük plan read model.",
+
+]
+changed_files = [
+  "app/migrations/178_arac_is_talebi_ux_v2_fields.py",
+  "app/modules/planlama/arac_dashboard_service.py",
+  "app/modules/planlama/arac_lokasyon_service.py",
+  "app/modules/planlama/arac_operasyonu/__init__.py",
+  "app/modules/planlama/arac_operasyonu/services/__init__.py",
+  "app/modules/planlama/arac_plan_service.py",
+  "app/modules/planlama/arac_sofor_service.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/modules/planlama/road_routing/__init__.py",
+  "app/modules/planlama/road_routing/cache.py",
+  "app/modules/planlama/road_routing/env_loader.py",
+  "app/modules/planlama/road_routing/mock_provider.py",
+  "app/modules/planlama/road_routing/openrouteservice_provider.py",
+  "app/modules/planlama/road_routing/provider_base.py",
+  "app/modules/planlama/road_routing/route_planner_service.py",
+  "app/modules/planlama/road_routing/suggest.py",
+  "app/modules/planlama/road_routing/types.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_location.js",
+  "app/static/js/planlama_arac_takip_plan_map.js",
+  "app/static/js/planlama_arac_takip_pool.js",
+  "app/static/js/planlama_arac_takip_request.js",
+  "app/static/js/planlama_arac_takip_route.js",
+  "app/templates/planlama/arac_takip_plan.html",
+
+]
+locked_rules = [
+
+]
+tests = [
+  "GPS foundation pytest",
+
+]
+known_issues = [
+]
+next_steps = [
+
+]
+related_commits = [
+  "a65a959dbf8f46b414ff6b3449e6ba9b66b13d5f",
+]

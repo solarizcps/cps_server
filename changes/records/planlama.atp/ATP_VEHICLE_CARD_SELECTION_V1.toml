@@ -1,0 +1,42 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.14.3"
+phase_code = "ATP_VEHICLE_CARD_SELECTION_V1"
+title = "Canlı araç kartı — doğrudan tıklama ve klavye seçimi"
+status = "ONAYLANDI"
+date = "2026-09-15"
+summary = "vcard tıklama/Enter-Space ile openPlanRouteForVehicle; seçili kart; cursor:pointer; WhatsApp/rota hunks hariç."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "integration/atp-vehicle-card-selection-v1"
+verification_date = "2026-09-15"
+verification_evidence = "pytest test_atp_vehicle_card_selection_v1.py (5 passed)."
+test_result = "pytest tests/planlama/test_atp_vehicle_card_selection_v1.py passed"
+db_write = false
+server_restart = false
+push_status = "LOCAL_ONLY"
+deployment_status = "LOCAL_ONLY"
+locked_rules = [
+  "WhatsApp popup ve rota/harita JS hunks bu fazda commitlenmez.",
+  "Yalnız #atpV2Root .vcard cursor ve kart delegasyonu.",
+]
+locked_rules_approval = true
+changes = [
+  "initVehicleCardSelection delegated click/keydown.",
+  "vcard role=button tabindex aria-label; vid before selected class.",
+  "planlama_arac_takip.js cache v=100.",
+]
+changed_files = [
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/css/planlama_arac_takip.css",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/test_atp_vehicle_card_selection_v1.py",
+]
+tests = [
+  "test_atp_vehicle_card_selection_v1.py",
+  "test_atp_narrow_fix_whatsapp_vehicle_v1.py",
+]
+known_issues = []
+next_steps = [
+  "WhatsApp single-popup dar fix ayrı commit.",
+]

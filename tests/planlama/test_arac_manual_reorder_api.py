@@ -33,9 +33,14 @@ from tools.atp_test_db_guard import (  # noqa: E402
     resolve_path,
 )
 
-# Bind guard to worktree default path before any get_conn() from route/service imports.
+# Bind guard to live canonical source — never worktree app/mock_data.db.
+_CANONICAL_SOURCE = Path(os.environ.get(
+    'CPS_CANONICAL_DB_SOURCE',
+    r'C:\Solariz_CPS_SERVER\app\mock_data.db',
+)).resolve()
 os.environ['CPS_TEST_DB_GUARD'] = '1'
-install_atp_test_db_guard(str(_WORKTREE_CANONICAL_DB))
+os.environ.setdefault('CPS_CANONICAL_DB_SOURCE', str(_CANONICAL_SOURCE))
+install_atp_test_db_guard(str(_CANONICAL_SOURCE))
 
 PLAN_DATE = '2026-08-26'
 OTHER_DATE = '2026-08-27'
@@ -1224,14 +1229,12 @@ class TestCanonicalDbSafety:
         assert 'remove(' not in combined
         assert 'os.remove' not in combined
 
-    def test_guard_blocks_worktree_canonical_connect(self):
+    def test_guard_blocks_live_canonical_connect(self):
         from tools.nexgen_tmp_db import LiveDbWriteError
-        from db import get_conn
 
         with pytest.raises(LiveDbWriteError):
-            import config
-            config.Config.MOCK_DB_PATH = str(_WORKTREE_CANONICAL_DB)
-            get_conn()
+            sqlite3.connect(str(_CANONICAL_SOURCE))
+        _assert_worktree_canonical_absent('after guard_blocks_live_canonical_connect')
 
 
 # ── Inactive contract ─────────────────────────────────────────────────────────
