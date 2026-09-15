@@ -498,12 +498,12 @@
       var planEmpty = total === 0;
       var deviating = v.route_state === 'DEVIATING';
       var stale = v.gps_is_stale || v.gps_stale || v.is_stale_data;
+      var planId = v.plan_id || '';
+      var vid = v.arac_external_id || v.id || '';
       var cardCls = 'vcard' + (deviating ? ' warn' : (stale ? ' stale' : ' ok'));
       if (_activeVehicleExtId && String(vid) === String(_activeVehicleExtId)) cardCls += ' selected';
       var fillCls = deviating ? 'orange' : (stale ? 'gray' : 'green');
       var badge = routeStateBadge(v);
-      var planId = v.plan_id || '';
-      var vid = v.arac_external_id || v.id || '';
       /* Next stop: canonical label from API or local fallback */
       var nextName = v.next_stop || v.next_stop_name || '';
       var nextLabel = v.next_stop_label || '';
@@ -575,7 +575,7 @@
       var actionBtn = deviating
         ? '<button class="btn btn-orange btn-sm atp-v2-open-plan" data-vid="' + vid + '" data-plan-id="' + planId + '">İncele</button>'
         : '<button class="btn btn-outline btn-sm atp-v2-open-plan" data-vid="' + vid + '" data-plan-id="' + planId + '">Planı Aç</button>';
-      return '<div class="' + cardCls + '" data-vid="' + vid + '" data-plan-id="' + planId + '">' +
+      return '<div class="' + cardCls + '" data-vid="' + vid + '" data-plan-id="' + planId + '" role="button" tabindex="0" aria-label="Araç ' + plate + '">' +
         '<div class="vcard-inner">' +
         '<div class="vcard-main">' +
         '<div class="vcard-plate-row"><div class="vcard-plate">' + plate + '</div>' + badge + '</div>' +
@@ -600,6 +600,29 @@
         e.stopPropagation();
         openTimelineModal(btn.getAttribute('data-plan-id'), btn.getAttribute('data-vid'));
       });
+    });
+  }
+
+  function initVehicleCardSelection() {
+    var wrap = qs('atpVehicleCards');
+    if (!wrap || initVehicleCardSelection._bound) return;
+    initVehicleCardSelection._bound = true;
+    wrap.addEventListener('click', function (e) {
+      if (e.target.closest('.atp-v2-open-plan, .atp-v2-timeline-btn, button, a, input, select, textarea, label')) {
+        return;
+      }
+      var card = e.target.closest('.vcard');
+      if (!card) return;
+      var vid = card.getAttribute('data-vid');
+      if (vid) openPlanRouteForVehicle(vid);
+    });
+    wrap.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var card = e.target.closest('.vcard');
+      if (!card) return;
+      e.preventDefault();
+      var vid = card.getAttribute('data-vid');
+      if (vid) openPlanRouteForVehicle(vid);
     });
   }
 
@@ -4310,6 +4333,7 @@
       });
     }
   }());
+  initVehicleCardSelection();
   if (initTab === 'gunluk') {
     loadOps();
     opsTimer = setInterval(loadOps, 60000);

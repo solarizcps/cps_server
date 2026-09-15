@@ -184,7 +184,7 @@
 #atpV2Root .vehicle-grid { display:flex;flex-direction:column;gap:10px;margin-bottom:14px; }
 #atpV2Root .vcard {
   background:var(--white);border:var(--border);border-radius:var(--radius);
-  overflow:hidden;box-shadow:var(--shadow);
+  overflow:hidden;box-shadow:var(--shadow);cursor:pointer;
 }
 #atpV2Root .vcard.ok { border-left:4px solid var(--green); }
 #atpV2Root .vcard.warn { border-left:4px solid var(--orange); }
