@@ -1,0 +1,1 @@
+Rota hattı: ORS kesintisinde güzergâh çizgisi ve mevcut plan km/süre google-static fallback ile üretilir; önerilen sıra mevcut sıra kalır, Kazanç/Yakıt boş gösterilir. Google trafik hesabı geçmiş çıkış saatinde istek göndermez, PAST_DEPARTURE döner.

@@ -1,0 +1,11 @@
+## v1.14.7 — ATP_ROUTE_GOOGLE_OPTIMIZE_FALLBACK_V1 (2026-09-15)
+
+**Rota — ORS kesintisinde Google waypoint optimizasyonu + gerçek Kazanç/Yakıt hesabı**
+
+- ORS kesintisinde google-static fallback `optimizeWaypointOrder=true` ile tek HTTP çağrısı yapar.
+- Sıra değiştiyse mevcut sıra için ikinci çağrı eklenir (toplam maks. 2 çağrı).
+- Kazanç = mevcut_km − önerilen_km; Yakıt = kazanç_km × 10 L/100 km (varsayılan).
+- Optimizasyon hatasında Önerilen/Kazanç/Yakıt `—`; mevcut rota korunur.
+- ORS sağlıklıyken tüm davranış değişmez.
+- 13 yeni dar test: ORS başarı, optimize sıra, km/süre doğruluğu, kazanç/yakıt, hata graceful degradation, cache, PAST_DEPARTURE.
+- Tüm tests/planlama 980 passed.

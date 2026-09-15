@@ -39,6 +39,7 @@ PROFILE_TRAFFIC_FREE = 'google-traffic-free'   # TRAFFIC_AWARE_OPTIMAL, avoidTol
 PROFILE_STATIC       = 'google-static'         # TRAFFIC_UNAWARE
 
 _VALID_PROFILES = frozenset({PROFILE_TRAFFIC_FAST, PROFILE_TRAFFIC_FREE, PROFILE_STATIC})
+_TRAFFIC_PROFILES = frozenset({PROFILE_TRAFFIC_FAST, PROFILE_TRAFFIC_FREE})
 
 # Field mask sent with every request
 _FIELD_MASK = (
@@ -48,6 +49,7 @@ _FIELD_MASK = (
     'routes.routeLabels,'
     'routes.polyline.encodedPolyline,'
     'routes.travelAdvisory.tollInfo,'
+    'routes.optimizedIntermediateWaypointIndex,'
     'routes.legs.distanceMeters,'
     'routes.legs.duration,'
     'routes.legs.staticDuration,'
@@ -87,6 +89,8 @@ class GoogleRouteResult:
     toll_info: dict | None
     route_labels: list[str]
     legs: list[GoogleLeg]
+    # set by parser when optimizeWaypointOrder=true was requested
+    optimized_waypoint_indices: list[int] = field(default_factory=list)
 
     @property
     def distance_km(self) -> float:
@@ -119,6 +123,20 @@ def _redact_key(key: str | None) -> str:
     if not key:
         return '<absent>'
     return f'{key[:4]}***{key[-2:]}(len={len(key)})'
+
+
+def _parse_departure_utc(value: str | None) -> datetime | None:
+    """RFC3339 Zulu string → aware datetime; None/parse hatasında None."""
+    if not value:
+        return None
+    raw = value.strip()
+    if raw.endswith('Z'):
+        raw = raw[:-1] + '+00:00'
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
 def _parse_duration_s(val: str | None) -> float:
@@ -241,6 +259,10 @@ def _parse_google_route(
             toll_info=leg_toll,
         ))
 
+    opt_indices: list[int] = list(
+        route.get('optimizedIntermediateWaypointIndex') or []
+    )
+
     return GoogleRouteResult(
         profile=profile,
         profile_label=_PROFILE_LABELS.get(profile, profile),
@@ -253,6 +275,7 @@ def _parse_google_route(
         toll_info=toll_advisory,
         route_labels=route_labels,
         legs=legs,
+        optimized_waypoint_indices=opt_indices,
     )
 
 
@@ -362,6 +385,21 @@ class GoogleRoutesProvider(RoadRoutingProvider):
             )
         self._timeout = timeout if timeout is not None else _timeout_sec()
 
+    def _guard_traffic_departure(self) -> None:
+        """Trafik profilleri gelecek departureTime ister (Google 400 'future time').
+
+        Geçmiş saatte hiç istek gönderilmez; PAST_DEPARTURE döner.
+        Statik profil departureTime göndermediği için kapsam dışıdır.
+        """
+        if self.profile not in _TRAFFIC_PROFILES:
+            return
+        dep = _parse_departure_utc(self._departure_utc)
+        if dep is not None and dep <= datetime.now(timezone.utc):
+            raise RoutingError(
+                'Google trafik tahmini için çıkış zamanı gelecekte olmalıdır.',
+                code='PAST_DEPARTURE',
+            )
+
     def _build_body(self, points: Sequence[tuple[float, float]]) -> dict[str, Any]:
         if self.profile == PROFILE_TRAFFIC_FAST:
             return build_traffic_fast_body(points, self._departure_utc)
@@ -374,6 +412,7 @@ class GoogleRoutesProvider(RoadRoutingProvider):
         pts = list(points)
         if len(pts) < 2:
             raise RoutingError('En az iki nokta gerekli.', code='NO_ROUTE')
+        self._guard_traffic_departure()
         body = self._build_body(pts)
         raw = _post_routes(body, self._key, self._timeout)
         return _parse_route(raw, self.name, self.profile)
@@ -383,6 +422,7 @@ class GoogleRoutesProvider(RoadRoutingProvider):
         pts = list(points)
         if len(pts) < 2:
             raise RoutingError('En az iki nokta gerekli.', code='NO_ROUTE')
+        self._guard_traffic_departure()
         body = self._build_body(pts)
         raw = _post_routes(body, self._key, self._timeout)
         return _parse_google_route(raw, self.profile)

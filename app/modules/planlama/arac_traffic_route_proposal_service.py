@@ -209,6 +209,9 @@ def sync_route_dto_metrics_from_traffic_proposal(
     """Overwrite route card metrics with traffic proposal matrix totals."""
     if not traffic_proposal:
         return route_dto
+    # Google/ORS routing fallback sonuçları trafik matrisi toplamlarıyla ezilmez.
+    if route_dto.get('route_fallback_provider'):
+        return route_dto
     if traffic_proposal.get('provider') == 'current_order_fallback':
         return route_dto
     if traffic_proposal.get('current_total_duration_seconds') is None:

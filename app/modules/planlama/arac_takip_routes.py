@@ -31,6 +31,22 @@ arac_takip_bp = Blueprint(
 
 _VALID_TABS = frozenset({'canli', 'gunluk', 'haftalik', 'gecmis'})
 
+
+def _route_fuel_saving_for_dashboard(route_dto: dict) -> dict:
+    """Dashboard route_analysis yakıt kartı — önce rota DTO fuel_saving."""
+    fs = route_dto.get('fuel_saving') or {}
+    liters = fs.get('liters')
+    if liters not in (None, '', '—'):
+        out: dict = {'liters': liters}
+        try_amt = fs.get('try_amount')
+        if try_amt not in (None, '', '—'):
+            out['try_amount'] = try_amt
+        else:
+            out['try_amount'] = '—'
+        return out
+    return {'liters': '—', 'try_amount': '—'}
+
+
 _VEHICLE_IDENTITY_SCOPE_ENDPOINTS = frozenset({
     'arac_takip_bp.arac_takip_api_plana_is_ekle',
     'arac_takip_bp.arac_takip_api_plana_is_ekle_batch',
@@ -723,7 +739,7 @@ def arac_takip_api_route_plan():
         departure_hhmm=(plan_row_pre or {}).get('cikis_saati'),
     )
     route_dto['traffic_proposal'] = traffic_proposal
-    if traffic_proposal.get('suggested_task_ids'):
+    if traffic_proposal.get('suggested_task_ids') and not route_dto.get('route_fallback_provider'):
         sug_ids = traffic_proposal['suggested_task_ids']
         route_dto.setdefault('suggested', {})
         route_dto['suggested']['full_task_ids'] = sug_ids
@@ -775,7 +791,7 @@ def arac_takip_api_route_plan():
             'duration_label': route_dto['gain']['duration_label'],
             'pct': route_dto['gain']['pct'],
         },
-        'fuel_saving': {'liters': '—', 'try_amount': '—'},
+        'fuel_saving': _route_fuel_saving_for_dashboard(route_dto),
         'current_order': route_dto['current'].get('order_labels', ''),
         'suggested_order': route_dto['suggested'].get('order_labels', ''),
         'status': route_dto.get('status'),

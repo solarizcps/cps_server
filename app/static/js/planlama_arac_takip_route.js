@@ -226,19 +226,25 @@
 
     var tryAmt = fs && (fs.try_amount != null ? fs.try_amount : fs.try);
 
-    var hasFuel = liters != null && liters !== '—' && liters !== '' &&
+    var hasFuelLiters = liters != null && liters !== '—' && liters !== '';
 
-      tryAmt != null && tryAmt !== '—' && tryAmt !== '';
-
-    if (hasFuel) {
+    if (hasFuelLiters) {
 
       if (fuelEl) fuelEl.textContent = liters + (String(liters).indexOf('L') >= 0 ? '' : ' L');
 
       if (fuelTryEl) {
 
-        var tryStr = String(tryAmt);
+        if (tryAmt != null && tryAmt !== '—' && tryAmt !== '') {
 
-        fuelTryEl.textContent = tryStr.indexOf('₺') >= 0 ? tryStr : '≈ ₺' + tryAmt;
+          var tryStr = String(tryAmt);
+
+          fuelTryEl.textContent = tryStr.indexOf('₺') >= 0 ? tryStr : '≈ ₺' + tryAmt;
+
+        } else {
+
+          fuelTryEl.textContent = '—';
+
+        }
 
       }
 
@@ -423,7 +429,12 @@
     var tpMetrics = ra.traffic_proposal || {};
     var gainPrimary = gain.time_delta_label || gain.duration_label || '—';
     var gainSecondary = gain.comparison_label || gain.distance_label || '—';
-    if (tpMetrics.traffic_compare_label && tpMetrics.comparison_label) {
+    if (ra.route_fallback_provider) {
+      if (typeof gain.km === 'number') {
+        gainPrimary = gain.km + ' km';
+      }
+      gainSecondary = gain.duration_label || '—';
+    } else if (tpMetrics.traffic_compare_label && tpMetrics.comparison_label) {
       gainPrimary = tpMetrics.time_delta_label || gainPrimary;
       gainSecondary = tpMetrics.comparison_label;
     }
@@ -461,6 +472,10 @@
       } else if (typeof gain.km === 'number' && gain.km < 0) {
 
         msg = (msg ? msg + ' · ' : '') + 'API önerisi mevcut rotadan daha uzun (' + gain.km + ' km).';
+
+      } else if (ra.route_fallback_provider) {
+
+        msg = ra.message || '';
 
       } else if (isSameRoute(ra) && ra.status === 'OK') {
 
@@ -953,7 +968,8 @@
 
         if (opts.onStale && opts.onStale(expectedVid)) return;
 
-        var fuelSaving = j.dashboard && j.dashboard.route_analysis && j.dashboard.route_analysis.fuel_saving;
+        var dashFuel = j.dashboard && j.dashboard.route_analysis && j.dashboard.route_analysis.fuel_saving;
+        var fuelSaving = route.fuel_saving || dashFuel;
 
         lastRoute = route;
 
