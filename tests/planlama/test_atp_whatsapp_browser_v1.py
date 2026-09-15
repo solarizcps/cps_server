@@ -141,31 +141,23 @@ def browser_pages(browser_env):
             page.add_init_script(
                 """
                 window.__waOpened = [];
-                window.__waPopupUrls = [];
-                window.open = function(url) {
-                  window.__waOpened.push(url || 'about:blank');
-                  const popup = {
-                    closed: false,
-                    close: function() { this.closed = true; },
-                    location: {
-                      replace: function(nextUrl) {
-                        window.__waPopupUrls.push(nextUrl);
-                        window.__waOpened.push(nextUrl);
-                        let el = document.getElementById('atp-wa-test-preview');
-                        if (!el) {
-                          el = document.createElement('pre');
-                          el.id = 'atp-wa-test-preview';
-                          el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;max-height:40vh;overflow:auto;background:#111;color:#0f0;z-index:99999;padding:8px;font-size:11px;';
-                          document.body.appendChild(el);
-                        }
-                        try {
-                          const text = decodeURIComponent((nextUrl.split('text=')[1] || ''));
-                          el.textContent = text;
-                        } catch (e) { el.textContent = nextUrl; }
-                      }
-                    }
-                  };
-                  return popup;
+                window.__waOpenCount = 0;
+                window.open = function(url, name, features) {
+                  window.__waOpenCount += 1;
+                  window.__waOpened.push(url || '');
+                  let el = document.getElementById('atp-wa-test-preview');
+                  if (!el) {
+                    el = document.createElement('pre');
+                    el.id = 'atp-wa-test-preview';
+                    el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;max-height:40vh;overflow:auto;background:#111;color:#0f0;z-index:99999;padding:8px;font-size:11px;';
+                    document.body.appendChild(el);
+                  }
+                  if (url && url.indexOf('text=') !== -1) {
+                    try {
+                      el.textContent = decodeURIComponent((url.split('text=')[1] || ''));
+                    } catch (e) { el.textContent = url; }
+                  }
+                  return { closed: false, close: function() { this.closed = true; } };
                 };
                 """
             )
@@ -194,16 +186,20 @@ class TestWhatsAppBrowserV1:
             assert wa_body.get('ok') is True, wa_body
             assert str(wa_body.get('whatsapp_url') or '').startswith('https://'), wa_body
             page.wait_for_function(
-                '() => window.__waPopupUrls && window.__waPopupUrls.length > 0',
-                timeout=15000,
+                '() => window.__waOpened && window.__waOpened.length > 0',
+                timeout=20000,
             )
+            open_count = page.evaluate('window.__waOpenCount')
+            assert open_count == 1
             opened = page.evaluate('window.__waOpened')
-            assert opened and opened[0] == 'about:blank'
-            popup_urls = page.evaluate('window.__waPopupUrls')
-            assert popup_urls and popup_urls[0].startswith('https://wa.me/?text=')
-            preview = page.locator('#atp-wa-test-preview')
-            preview.wait_for(state='attached', timeout=15000)
-            text = preview.inner_text()
+            assert opened and opened[0].startswith('https://web.whatsapp.com/send?text=')
+            text = page.evaluate(
+                """() => {
+                  var u = window.__waOpened[0] || '';
+                  try { return decodeURIComponent((u.split('text=')[1] || '')); }
+                  catch (e) { return u; }
+                }"""
+            )
             decoded_messages[vp] = text
             assert PLAKA in text
             assert SOFOR in text

@@ -4353,60 +4353,83 @@
   }
   removeLegacyWhatsappPreview();
 
-  function closeWhatsappPopup(popup) {
-    try {
-      if (popup && !popup.closed) popup.close();
-    } catch (e) { /* ignore */ }
-  }
+  var _waInFlight = false;
 
   function isValidWhatsappUrl(url) {
     return typeof url === 'string' && /^https:\/\//.test(url);
   }
 
-  var btnWa = qs('atpBtnWhatsapp');
-  if (btnWa) btnWa.addEventListener('click', function () {
-    var vid = vehicleId();
-    if (!vid) {
-      toast('WhatsApp için önce bir araç planı seçin.');
-      return;
-    }
-    var popup = window.open('about:blank', '_blank');
-    if (!popup) {
-      toast('Tarayıcı WhatsApp penceresini engelledi. Açılır pencerelere izin verin.');
-      return;
-    }
-    var waUrl = '/planlama/arac-takip/api/whatsapp?date=' + encodeURIComponent(planDate)
-      + '&vehicle_id=' + encodeURIComponent(vid);
-    fetch(waUrl, { credentials: 'same-origin' })
-      .then(function (r) {
-        return r.json().then(function (j) {
-          return { httpOk: r.ok, body: j || {} };
+  /** API wa.me yanıtındaki text= sorgu değeri (encode edilmiş, çift encode yok). */
+  function whatsappTextQueryFromApiUrl(apiWaUrl) {
+    if (!apiWaUrl) return '';
+    try {
+      var u = new URL(apiWaUrl);
+      var t = u.searchParams.get('text');
+      if (t != null && t !== '') return encodeURIComponent(t);
+    } catch (e1) { /* ignore */ }
+    var m = String(apiWaUrl).match(/[?&]text=([^&]+)/);
+    return m ? m[1] : '';
+  }
+
+  function buildWhatsappWebSendUrl(apiWaUrl) {
+    var q = whatsappTextQueryFromApiUrl(apiWaUrl);
+    if (!q) return '';
+    return 'https://web.whatsapp.com/send?text=' + q;
+  }
+
+  function bindWhatsappButton() {
+    var btnWa = qs('atpBtnWhatsapp');
+    if (!btnWa || btnWa.getAttribute('data-atp-wa-bound') === '1') return;
+    btnWa.setAttribute('data-atp-wa-bound', '1');
+    btnWa.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (_waInFlight) return;
+      var vid = vehicleId();
+      if (!vid) {
+        toast('WhatsApp için önce bir araç planı seçin.');
+        return;
+      }
+      _waInFlight = true;
+      btnWa.disabled = true;
+      var waUrl = '/planlama/arac-takip/api/whatsapp?date=' + encodeURIComponent(planDate)
+        + '&vehicle_id=' + encodeURIComponent(vid);
+      fetch(waUrl, { credentials: 'same-origin' })
+        .then(function (r) {
+          return r.json().then(function (j) {
+            return { httpOk: r.ok, body: j || {} };
+          });
+        })
+        .then(function (res) {
+          var j = res.body;
+          if (!res.httpOk || !j.ok) {
+            toast(j.error || 'WhatsApp planı hazırlanamadı.');
+            return;
+          }
+          if (!isValidWhatsappUrl(j.whatsapp_url)) {
+            toast('WhatsApp planı hazırlanamadı.');
+            return;
+          }
+          var webSendUrl = buildWhatsappWebSendUrl(j.whatsapp_url);
+          if (!webSendUrl || webSendUrl.indexOf('https://web.whatsapp.com/send?text=') !== 0) {
+            toast('WhatsApp planı hazırlanamadı.');
+            return;
+          }
+          var opened = window.open(webSendUrl, '_blank', 'noopener');
+          if (!opened) {
+            toast('Tarayıcı WhatsApp penceresini engelledi. Açılır pencerelere izin verin.');
+          }
+        })
+        .catch(function () {
+          toast('WhatsApp planı hazırlanamadı.');
+        })
+        .finally(function () {
+          _waInFlight = false;
+          btnWa.disabled = false;
         });
-      })
-      .then(function (res) {
-        var j = res.body;
-        if (!res.httpOk || !j.ok) {
-          closeWhatsappPopup(popup);
-          toast(j.error || 'WhatsApp planı hazırlanamadı.');
-          return;
-        }
-        if (!isValidWhatsappUrl(j.whatsapp_url)) {
-          closeWhatsappPopup(popup);
-          toast('WhatsApp planı hazırlanamadı.');
-          return;
-        }
-        try {
-          popup.location.replace(j.whatsapp_url);
-        } catch (e) {
-          closeWhatsappPopup(popup);
-          toast('WhatsApp planı hazırlanamadı.');
-        }
-      })
-      .catch(function () {
-        closeWhatsappPopup(popup);
-        toast('WhatsApp planı hazırlanamadı.');
-      });
-  });
+    });
+  }
+  bindWhatsappButton();
 
   /* ─── Base location button — focus mini map preview ─── */
   var btnBase = qs('atpBtnBaseLocation');
