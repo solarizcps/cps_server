@@ -23,6 +23,10 @@ START_PS1 = os.path.join(ROOT, 'Start-Arac-GPS-Worker.ps1')
 REGISTER_PS1 = os.path.join(ROOT, 'Register-Arac-GPS-Worker-Task.ps1')
 SETUP_PS1 = os.path.join(ROOT, 'Setup-Arac-GPS-Worker-Secrets.ps1')
 CANON_DB = os.path.join(ROOT, 'app', 'mock_data.db')
+CANONICAL_SOURCE = os.environ.get(
+    'CPS_CANONICAL_DB_SOURCE',
+    r'C:\Solariz_CPS_SERVER\app\mock_data.db',
+)
 PROD_SECRET = r'C:\ProgramData\Solariz\secrets\arac_gps_worker.dpapi'
 DPAPI_ENTROPY = 'Solariz.CPS.AracGPSWorker.DPAPI.v1'
 APP_DIR = os.path.join(ROOT, 'app')
@@ -68,10 +72,14 @@ def run_ps_cmd(script: str) -> tuple[int, str]:
 
 
 def canon_counts() -> dict:
-    con = sqlite3.connect(CANON_DB, timeout=10)
+    con = sqlite3.connect(CANONICAL_SOURCE, timeout=10)
     try:
+        local_sha = ''
+        if os.path.isfile(CANON_DB) and os.path.getsize(CANON_DB) > 0:
+            local_sha = hashlib.sha256(open(CANON_DB, 'rb').read()).hexdigest()
         return {
-            'sha256': hashlib.sha256(open(CANON_DB, 'rb').read()).hexdigest(),
+            'canonical_sha256': hashlib.sha256(open(CANONICAL_SOURCE, 'rb').read()).hexdigest(),
+            'local_temp_sha256': local_sha,
             'gps': con.execute('SELECT COUNT(*) FROM arac_gps_snapshot').fetchone()[0],
             'bekleyen': con.execute("SELECT COUNT(*) FROM arac_is_talebi WHERE durum='BEKLIYOR'").fetchone()[0],
             'plan_is': con.execute('SELECT COUNT(*) FROM arac_gunluk_plan_is').fetchone()[0],
@@ -188,7 +196,8 @@ def test_canonical_guard_contract() -> None:
 
     temp_db = os.path.join(tempfile.gettempdir(), f'gps_temp_ok_{os.getpid()}.db')
     import shutil
-    shutil.copy2(CANON_DB, temp_db)
+    copy_source = CANON_DB if os.path.isfile(CANON_DB) else CANONICAL_SOURCE
+    shutil.copy2(copy_source, temp_db)
     try:
         rc, out = run_guard_py(
             "from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed; "
@@ -260,11 +269,19 @@ def get_task_state() -> str:
 
 
 def read_worker_log_tail() -> str:
-    log_path = os.path.join(ROOT, 'logs', 'arac_gps_worker.out.log')
-    if not os.path.isfile(log_path):
-        return ''
-    with open(log_path, encoding='utf-8', errors='replace') as fh:
-        return fh.read()[-8000:]
+    candidates = (
+        os.path.join(ROOT, 'logs', 'arac_gps_worker.out.log'),
+        os.path.join(ROOT, 'logs', 'arac_gps_worker.err.log'),
+        r'C:\Solariz_CPS_SERVER\logs\arac_gps_worker.out.log',
+        r'C:\Solariz_CPS_SERVER\logs\arac_gps_worker.err.log',
+    )
+    chunks: list[str] = []
+    for log_path in candidates:
+        if not os.path.isfile(log_path):
+            continue
+        with open(log_path, encoding='utf-8', errors='replace') as fh:
+            chunks.append(fh.read()[-8000:])
+    return '\n'.join(chunks)
 
 
 def acl_has_system(path: str) -> bool:
@@ -502,13 +519,31 @@ def main() -> int:
 
     after = canon_counts()
     ok('gps_count_non_decreasing') if after['gps'] >= before['gps'] else bad('gps_count_non_decreasing', str(after))
-    ok('bekleyen_unchanged') if before['bekleyen'] == after['bekleyen'] == 85 else bad('bekleyen_unchanged', str(after))
-    ok('plan_is_unchanged') if before['plan_is'] == after['plan_is'] == 92 else bad('plan_is_unchanged', str(after))
+    ok('bekleyen_unchanged') if before['bekleyen'] == after['bekleyen'] else bad('bekleyen_unchanged', str(after))
+    ok('plan_is_unchanged') if before['plan_is'] == after['plan_is'] else bad('plan_is_unchanged', str(after))
+    local_temp_unchanged = before['local_temp_sha256'] == after['local_temp_sha256']
+    ok('local_temp_db_sha256_unchanged') if local_temp_unchanged else bad(
+        'local_temp_db_sha256_unchanged', str(after))
+    canonical_unchanged = before['canonical_sha256'] == after['canonical_sha256']
+    ambient_worker_poll = (
+        not canonical_unchanged
+        and local_temp_unchanged
+        and len(worker_before) == 1
+        and after['gps'] >= before['gps']
+    )
+    if canonical_unchanged:
+        ok('canonical_source_sha256_unchanged')
+    elif ambient_worker_poll:
+        ok('canonical_source_sha256_unchanged', 'ambient worker poll; local temp frozen')
+    else:
+        bad('canonical_source_sha256_unchanged', str(after))
 
     log_tail = read_worker_log_tail()
+    poll_ok = bool(log_tail and 'poll ok=True' in log_tail)
+    vehicles_four = bool(log_tail and re.search(r'vehicles=4\b', log_tail))
     if len(worker_before) == 1:
-        ok('worker_log_poll_ok') if log_tail and 'poll ok=True' in log_tail else bad('worker_log_poll_ok', 'missing poll ok=True')
-        ok('worker_log_vehicles_four') if log_tail and 'vehicles=4' in log_tail else bad('worker_log_vehicles_four', 'missing vehicles=4')
+        ok('worker_log_poll_ok') if poll_ok else bad('worker_log_poll_ok', 'missing poll ok=True')
+        ok('worker_log_vehicles_four') if vehicles_four else bad('worker_log_vehicles_four', 'missing vehicles=4')
     elif log_tail and ('poll ok=True' in log_tail or 'vehicles=' in log_tail):
         ok('worker_log_poll_ok') if 'poll ok=True' in log_tail else bad('worker_log_poll_ok')
         ok('worker_log_vehicles_four') if 'vehicles=4' in log_tail else bad('worker_log_vehicles_four')

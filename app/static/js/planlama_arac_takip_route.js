@@ -16,6 +16,8 @@
 
   var _hooks = {};
 
+  var _clientSubmitSeq = 0;
+
 
 
   function el(id) { return document.getElementById(id); }
@@ -162,11 +164,17 @@
 
     if (_applyInFlight || !vehicleId || !route) return false;
 
+    var tp = route.traffic_proposal || {};
+
+    if (tp.apply_enabled === false) return false;
+
+    if (tp.provider === 'current_order_fallback') return false;
+
     var sug = route.suggested || {};
 
-    if (sug.apply_enabled === false) return false;
+    if (sug.apply_enabled === false && tp.apply_enabled !== true) return false;
 
-    if (sug.apply_disabled_reason) return false;
+    if (sug.apply_disabled_reason && tp.apply_enabled !== true) return false;
 
     if (!hasOrderDiff(route)) return false;
 
@@ -412,15 +420,15 @@
 
     setText(el('atpRouteSugDur'), sug.duration_label || '—');
 
-    setText(el('atpRouteGainKm'), fmtGainKm(gain.km != null && gain.km !== '—' ? gain.km : '—'));
-
-    var gainDur = gain.duration_label || '—';
-
-    var gainPct = gain.pct != null && gain.pct !== '—' ? '%' + gain.pct + ' daha kısa' : '—';
-
-    if (gain.pct === 0 || gain.pct === '0' || gain.pct === 0.0) gainPct = '%0 daha kısa';
-
-    setText(el('atpRouteGainDetail'), gainDur + (gainPct !== '—' ? ' · ' + gainPct : ''));
+    var tpMetrics = ra.traffic_proposal || {};
+    var gainPrimary = gain.time_delta_label || gain.duration_label || '—';
+    var gainSecondary = gain.comparison_label || gain.distance_label || '—';
+    if (tpMetrics.traffic_compare_label && tpMetrics.comparison_label) {
+      gainPrimary = tpMetrics.time_delta_label || gainPrimary;
+      gainSecondary = tpMetrics.comparison_label;
+    }
+    setText(el('atpRouteGainKm'), gainPrimary);
+    setText(el('atpRouteGainDetail'), gainSecondary);
 
     updateFuelDisplay(ra, opts.fuelSaving);
 
@@ -478,6 +486,16 @@
 
     }
 
+    if (global.AtpPlanMap && global.AtpPlanMap.showRouteFallback) {
+      var fbMsg = '';
+      if (ra.route_fallback || ra.status === 'UNCONFIGURED' || ra.status === 'UNAVAILABLE') {
+        fbMsg = ra.route_fallback_message || ra.message || 'Güzergâh çizgisi oluşturulamadı; duraklar plan sırasıyla gösteriliyor.';
+      } else if (!(cur.geometry && cur.geometry.length) && (cur.full_task_ids && cur.full_task_ids.length)) {
+        fbMsg = 'Güzergâh çizgisi oluşturulamadı; duraklar plan sırasıyla gösteriliyor.';
+      }
+      global.AtpPlanMap.showRouteFallback(fbMsg);
+    }
+
     var legsEl = el('atpRouteLegs');
 
     if (legsEl) {
@@ -504,8 +522,79 @@
 
     }
 
+    updateTrafficProposalPanel(ra);
+
     updateRouteButtons(ra);
 
+  }
+
+
+
+  function _providerLabel(tp) {
+    if (!tp) return '';
+    if (tp.provider === 'google_traffic') return 'Veri kaynağı: Google Canlı Trafik';
+    if (tp.provider === 'ors_no_traffic') return 'Veri kaynağı: ORS (trafik dahil değil)';
+    return 'Veri kaynağı: Mevcut plan sırası';
+  }
+
+
+
+  function updateTrafficProposalPanel(route) {
+    var panel = el('atpTrafficProposalPanel');
+    if (!panel) return;
+    var tp = route && route.traffic_proposal;
+    if (!tp) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = '';
+    setText(el('atpTrafficSourceLabel'), _providerLabel(tp));
+    var timing = 'Hesaplanma: ' + (tp.calculated_at || '—');
+    if (tp.expires_at) timing += ' · Geçerlilik: ' + tp.expires_at;
+    setText(el('atpTrafficTimingLabel'), timing);
+    var compareLine = tp.traffic_compare_label || '—';
+    if (compareLine === '—') {
+      var curDur = tp.current_duration_label || '—';
+      var sugDur = tp.suggested_duration_label || '—';
+      var savedLabel = tp.time_delta_label || '—';
+      compareLine = 'Mevcut: ' + curDur + ' · Önerilen: ' + sugDur + ' · ' + savedLabel;
+    }
+    setText(el('atpTrafficCompareLabel'), compareLine);
+    var delayEl = el('atpTrafficDelayLabel');
+    if (tp.traffic_available && tp.traffic_delay_seconds != null) {
+      setText(delayEl, 'Trafik gecikmesi: ' + Math.round(tp.traffic_delay_seconds / 60) + ' dk');
+      delayEl.style.display = '';
+    } else {
+      delayEl.style.display = 'none';
+    }
+    setText(el('atpTrafficOrderCompare'), 'Mevcut sıra: ' + (tp.current_item_ids || []).join(' → ') +
+      ' · Önerilen: ' + (tp.suggested_item_ids || []).join(' → '));
+    var missEl = el('atpTrafficMissingLabel');
+    if (tp.missing_location_item_ids && tp.missing_location_item_ids.length) {
+      missEl.textContent = 'Eksik konum: ' + tp.missing_location_item_ids.join(', ');
+      missEl.style.display = '';
+    } else if (missEl) missEl.style.display = 'none';
+    var fbEl = el('atpTrafficFallbackLabel');
+    if (tp.fallback_reason && tp.provider === 'current_order_fallback') {
+      fbEl.textContent = 'Canlı trafik verisi alınamadı; mevcut plan sırası korunuyor.';
+      fbEl.style.display = '';
+    } else if (tp.provider === 'ors_no_traffic') {
+      fbEl.textContent = 'Yol süresine göre öneri — canlı trafik dahil değildir.';
+      fbEl.style.display = '';
+    } else if (fbEl) fbEl.style.display = 'none';
+    var msgEl = el('atpTrafficProposalMessage');
+    if (msgEl) {
+      if (tp.user_message) {
+        msgEl.textContent = tp.user_message;
+        msgEl.style.display = '';
+      } else if (tp.proposal_reason === 'NO_IMPROVEMENT') {
+        msgEl.textContent = 'Mevcut rota trafik koşullarına göre zaten uygun.';
+        msgEl.style.display = '';
+      } else {
+        msgEl.textContent = '';
+        msgEl.style.display = 'none';
+      }
+    }
   }
 
 
@@ -956,17 +1045,13 @@
 
     setText(el('atpRouteApplyNew'), sug.order_labels || '—');
 
-    var gainParts = [];
-
-    if (gain.km != null && gain.km !== '—') gainParts.push(gain.km + ' km');
-
-    if (gain.duration_label && gain.duration_label !== '—') gainParts.push(gain.duration_label);
-
-    if (gain.pct != null && gain.pct !== '—') gainParts.push('%' + gain.pct + ' daha kısa');
-
-    else if (gain.pct === 0 || gain.pct === '0') gainParts.push('%0 daha kısa');
-
-    setText(el('atpRouteApplyGain'), gainParts.length ? gainParts.join(' · ') : '—');
+    var applyGain = gain.comparison_label || '—';
+    if (applyGain === '—' && (gain.time_delta_label || gain.distance_label)) {
+      applyGain = [gain.distance_label, gain.time_delta_label].filter(function (x) {
+        return x && x !== '—';
+      }).join(' · ');
+    }
+    setText(el('atpRouteApplyGain'), applyGain || '—');
 
     var warnEl = el('atpRouteApplyWarnings');
 
@@ -1090,7 +1175,13 @@
 
         vehicle_id: String(vehicleId),
 
-        task_ids: taskIds
+        task_ids: taskIds,
+
+        proposal_hash: lastRoute.traffic_proposal && lastRoute.traffic_proposal.proposal_hash,
+
+        proposal_expires_at: lastRoute.traffic_proposal && lastRoute.traffic_proposal.expires_at,
+
+        client_submit_id: 'r07-' + String(++_clientSubmitSeq)
 
       })
 
@@ -1122,59 +1213,63 @@
 
         }
 
-        var reload = _hooks.reloadAfterApply;
+        if (res.status < 200 || res.status >= 300) {
 
-        if (typeof reload === 'function') {
+          _applyInFlight = false;
 
-          var reloadResult = reload(vehicleId, appliedTaskIds);
+          updateRouteButtons(lastRoute);
 
-          if (reloadResult && typeof reloadResult.then === 'function') {
+          notify('Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.');
 
-            reloadResult.then(function (verified) {
-
-              _applyInFlight = false;
-
-              if (lastRoute) updateRouteButtons(lastRoute);
-
-              if (verified) notify('Önerilen sıra uygulandı.');
-
-              else notify('Sıra kaydedildi ancak ekran doğrulanamadı. Lütfen yenileyin.');
-
-            }).catch(function () {
-
-              _applyInFlight = false;
-
-              if (lastRoute) updateRouteButtons(lastRoute);
-
-              notify('Sıra kaydedildi ancak ekran doğrulanamadı. Lütfen yenileyin.');
-
-            });
-
-            return;
-
-          }
+          return;
 
         }
 
-        _applyInFlight = false;
+        var reload = _hooks.reloadAfterApply;
 
-        fetchPlanRoute(planDate, vehicleId, _hooks.onDashboard, {
+        if (typeof reload !== 'function') {
 
-          expectedVehicleId: vehicleId,
+          _applyInFlight = false;
 
-          onStale: function (vid) {
+          updateRouteButtons(lastRoute);
 
-            return typeof _hooks.isStaleVehicle === 'function' && _hooks.isStaleVehicle(vid);
+          notify('Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.');
 
-          },
+          return;
 
-          onComplete: function () {
+        }
 
-            if (lastRoute) updateRouteButtons(lastRoute);
+        var reloadResult = reload(vehicleId, appliedTaskIds);
 
-            notify('Önerilen sıra uygulandı.');
+        if (!reloadResult || typeof reloadResult.then !== 'function') {
 
-          }
+          _applyInFlight = false;
+
+          updateRouteButtons(lastRoute);
+
+          notify('Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.');
+
+          return;
+
+        }
+
+        reloadResult.then(function (verified) {
+
+          _applyInFlight = false;
+
+          if (lastRoute) updateRouteButtons(lastRoute);
+
+          if (verified) notify('Önerilen sıra uygulandı.');
+
+          else notify('Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.');
+
+        }).catch(function () {
+
+          _applyInFlight = false;
+
+          if (lastRoute) updateRouteButtons(lastRoute);
+
+          notify('Rota sırası doğrulanamadı. Plan değiştirilmedi olarak kabul edin.');
 
         });
 

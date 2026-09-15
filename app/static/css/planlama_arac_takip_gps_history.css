@@ -1,0 +1,243 @@
+/* ── GPS Geçmişi V3 (read-only trail viewer) ───────────────── */
+#atpV2Root.atp-gps-history-active .atp-hdr,
+#atpV2Root.atp-gps-history-active .atp-tabs,
+#atpV2Root.atp-gps-history-active .atp-panel { display: none !important; }
+#atpV2Root.atp-gps-history-active #atpPanelGpsHistory { display: flex !important; }
+
+#atpV2Root #atpPanelGpsHistory {
+  display: none;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  background: var(--gray-100);
+}
+
+#atpV2Root .atp-gps-bc {
+  background: var(--white);
+  border-bottom: var(--border);
+  padding: 8px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+#atpV2Root .atp-gps-bc-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--gray);
+  flex-wrap: wrap;
+}
+#atpV2Root .atp-gps-bc-nav .sep { opacity: .45; }
+#atpV2Root .atp-gps-bc-nav .current { color: #111827; font-weight: 700; }
+
+#atpV2Root .kpi-band.atp-gps-kpi {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+}
+
+#atpV2Root .atp-gps-filters {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#atpV2Root .atp-gps-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(330px, 19vw, 360px);
+  gap: 12px;
+  padding: 12px 16px 14px;
+  overflow: hidden;
+}
+
+#atpV2Root .atp-gps-map-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--white);
+  border: var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+#atpV2Root .atp-gps-map-head {
+  padding: 8px 12px;
+  border-bottom: var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+#atpV2Root .atp-gps-map-head h3 { font-size: 12.5px; font-weight: 700; margin: 0; }
+#atpV2Root .atp-gps-legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 10.5px;
+  color: var(--gray);
+}
+#atpV2Root .atp-gps-legend i {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 3px;
+}
+#atpV2Root .leg-plan { background: #1976d2; }
+#atpV2Root .leg-act { background: var(--green); }
+#atpV2Root .leg-dev { background: var(--red); }
+#atpV2Root .leg-gap {
+  background: repeating-linear-gradient(90deg, var(--orange) 0 3px, transparent 3px 6px);
+}
+
+#atpV2Root #atpGpsHistoryMap {
+  flex: 1 1 auto;
+  min-height: 360px;
+  width: 100%;
+}
+
+#atpV2Root .atp-gps-playback {
+  flex-shrink: 0;
+  border-top: var(--border);
+  background: var(--gray-100);
+  padding: 6px 10px;
+}
+#atpV2Root .atp-gps-playback-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--gray);
+}
+#atpV2Root .atp-gps-playback-row .slider {
+  flex: 1;
+  accent-color: var(--gold);
+  min-width: 0;
+}
+#atpV2Root .atp-gps-playback-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+#atpV2Root .speed-btn {
+  padding: 2px 7px;
+  border: var(--border);
+  background: #fff;
+  border-radius: 4px;
+  font-size: 10.5px;
+  cursor: pointer;
+  font-weight: 600;
+}
+#atpV2Root .speed-btn.active {
+  background: var(--gold-light);
+  border-color: var(--gold-border);
+  color: var(--gold-h);
+}
+
+#atpV2Root .atp-gps-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--white);
+  border: var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+#atpV2Root .atp-gps-side-hdr {
+  padding: 10px 12px;
+  border-bottom: var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+#atpV2Root .atp-gps-vehicle-block { padding: 10px 12px; border-bottom: var(--border); flex-shrink: 0; }
+#atpV2Root .atp-gps-timeline-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#atpV2Root .atp-gps-timeline-hdr {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  flex-shrink: 0;
+}
+#atpV2Root .atp-gps-timeline {
+  list-style: none;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 0 12px 10px;
+  margin: 0;
+}
+#atpV2Root .atp-gps-timeline li {
+  display: flex;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--gray-200);
+  font-size: 11.5px;
+}
+#atpV2Root .atp-gps-timeline li:last-child { border-bottom: none; }
+#atpV2Root .tl-t { font-weight: 700; min-width: 40px; font-variant-numeric: tabular-nums; }
+#atpV2Root .tl-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+  background: var(--gray-200);
+}
+#atpV2Root .tl-ok .tl-dot { background: var(--green); }
+#atpV2Root .tl-warn .tl-dot { background: var(--orange); }
+#atpV2Root .tl-err .tl-dot { background: var(--red); }
+#atpV2Root .tl-info .tl-dot { background: var(--blue); }
+#atpV2Root .tl-sub { font-size: 10px; color: var(--gray); margin-top: 2px; }
+#atpV2Root .atp-gps-quality {
+  margin: 0 12px 10px;
+  padding: 7px 9px;
+  border-radius: var(--radius);
+  background: var(--orange-light);
+  border: 1px solid var(--orange-border);
+  font-size: 10.5px;
+  color: #7c4a00;
+  flex-shrink: 0;
+}
+#atpV2Root .atp-gps-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--gray);
+  font-size: 13px;
+}
+
+@media (max-width: 1400px) {
+  #atpV2Root .kpi-band.atp-gps-kpi {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  #atpV2Root .atp-gps-body {
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 22vw, 310px);
+    padding: 10px 12px 12px;
+  }
+  #atpV2Root #atpGpsHistoryMap { min-height: 400px; }
+  #atpV2Root .atp-gps-bc { padding: 8px 12px; }
+}

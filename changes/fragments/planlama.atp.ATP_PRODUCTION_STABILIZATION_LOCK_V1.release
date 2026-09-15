@@ -1,0 +1,1 @@
+Production ATP stabilization lock at baseline ``21b8a21``: forensic inventory, SHA256 manifest (132 files), shared-file touchpoints, fail-closed validator, and pre-release gate orchestrator. No ATP application behavior change. Unlock requires explicit Adem approval and new baseline manifest.

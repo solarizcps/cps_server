@@ -21,11 +21,33 @@ if hasattr(sys.stdout, 'buffer'):
 
 _ROOT = Path(__file__).resolve().parent
 _APP = _ROOT / 'app'
+_LIVE_CANONICAL: Path | None = None
+_LOCAL_MOCK_PREEXISTED = False
+
+
+def _prepare_gate_canonical() -> Path:
+    """Byte-copy live canonical into integration TEMP; never run write suites on live file."""
+    global _LIVE_CANONICAL, _LOCAL_MOCK_PREEXISTED
+    env = os.environ.get('CPS_CANONICAL_DB_SOURCE', '').strip()
+    if env:
+        _LIVE_CANONICAL = Path(env)
+        gate = _ROOT / '_tempdb' / 'gps_master_gate_source.db'
+        gate.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_LIVE_CANONICAL, gate)
+        local_mock = _APP / 'mock_data.db'
+        _LOCAL_MOCK_PREEXISTED = local_mock.exists()
+        if not _LOCAL_MOCK_PREEXISTED:
+            shutil.copy2(gate, local_mock)
+        print(f'GPS_MASTER_GATE_DB={gate}')
+        print(f'GPS_MASTER_LIVE_CANONICAL={_LIVE_CANONICAL}')
+        print(f'GPS_MASTER_LOCAL_MOCK={local_mock}')
+        return gate
+    return _APP / 'mock_data.db'
+
+
 CANONICAL = _APP / 'mock_data.db'
-CANON_SHA = hashlib.sha256(CANONICAL.read_bytes()).hexdigest() if CANONICAL.is_file() else ''
-CANON_SIZE = CANONICAL.stat().st_size if CANONICAL.is_file() else 0
-CANON_MIG_MAX = 99
-CANON_BEKLEYEN = 85
+CANON_SHA = ''
+CANON_SIZE = 0
 
 # Self-isolated — kendi temp DB'sini kurar
 ISOLATED_SUITES = [
@@ -97,6 +119,92 @@ def run_migrations(temp_db: Path) -> None:
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         mod.run(str(temp_db))
+
+
+def bootstrap_vehui_fixture(target_db: Path, *, source_canonical: Path | None = None) -> Path:
+    """Isolated TEMP DB for VEHUI read-only suite (no canonical writes)."""
+    src = source_canonical or CANONICAL
+    if not src.is_file():
+        raise FileNotFoundError(f'Canonical source missing: {src}')
+    target_db.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, target_db)
+    run_migrations(target_db)
+    spec = importlib.util.spec_from_file_location(
+        '180_arac_plan_ziyaret_durum.py', _APP / 'migrations' / '180_arac_plan_ziyaret_durum.py',
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.run(str(target_db))
+
+    plan_date = '2026-09-14'
+    vehicle = '45077045'
+    plaka = '34 MOR 049'
+    user_id = 1
+    now = '2026-09-14 10:00:00'
+    con = sqlite3.connect(str(target_db))
+    try:
+        con.execute(
+            "DELETE FROM arac_gunluk_plan_is WHERE plan_id IN "
+            "(SELECT id FROM arac_gunluk_plan WHERE arac_external_id=? AND plan_tarihi=?)",
+            (vehicle, plan_date),
+        )
+        con.execute(
+            "DELETE FROM arac_gunluk_plan WHERE arac_external_id=? AND plan_tarihi=?",
+            (vehicle, plan_date),
+        )
+        if not con.execute('SELECT 1 FROM arac_operasyon_ayar LIMIT 1').fetchone():
+            con.execute(
+                """
+                INSERT INTO arac_operasyon_ayar (
+                    base_name, base_latitude, base_longitude, base_address, aktif,
+                    created_at, updated_at, updated_by
+                ) VALUES (?,?,?,?,1,datetime('now'),datetime('now'),1)
+                """,
+                ('Fabrika', 41.0, 29.0, 'Istanbul'),
+            )
+        loc_id = con.execute(
+            """
+            INSERT INTO arac_kayitli_yer (
+                firma_adi, adres, latitude, longitude, aktif, kullanim_sayisi, created_at, created_by
+            ) VALUES (?,?,?,?,1,0,?,?)
+            """,
+            ('VEHUI Test Firma', 'Istanbul', 41.01, 29.01, now, user_id),
+        ).lastrowid
+        talep_id = con.execute(
+            """
+            INSERT INTO arac_is_talebi (
+                talep_no, talep_eden_user_id, talep_eden_adi_snapshot, talep_tarihi,
+                kayitli_yer_id, firma_adi, adres, latitude, longitude, yapilacak_is,
+                oncelik, durum, save_to_master, created_at, created_by, updated_at, updated_by
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?)
+            """,
+            (
+                'VEHUI-12-BOOT', user_id, 'Admin', plan_date, loc_id, 'VEHUI Test Firma',
+                'Istanbul', 41.01, 29.01, 'WhatsApp test stop', 'NORMAL', 'BEKLIYOR',
+                now, user_id, now, user_id,
+            ),
+        ).lastrowid
+        plan_id = con.execute(
+            """
+            INSERT INTO arac_gunluk_plan (
+                plan_tarihi, arac_provider, arac_external_id, arac_plaka_snapshot,
+                sofor_adi_snapshot, durum, created_at, created_by, updated_at, updated_by
+            ) VALUES (?,?,?,?,'Test Sofor','AKTIF',?,?,?,?)
+            """,
+            (plan_date, 'TURKCELL_FILOM', vehicle, plaka, now, user_id, now, user_id),
+        ).lastrowid
+        con.execute(
+            """
+            INSERT INTO arac_gunluk_plan_is (
+                plan_id, is_talebi_id, sira, durum, created_at, created_by
+            ) VALUES (?,?,1,'PLANLANDI',?,?)
+            """,
+            (plan_id, talep_id, now, user_id),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return target_db
 
 
 def parse_suite_output(stdout: str) -> tuple[int, int, int]:
@@ -278,10 +386,115 @@ def temp_e2e_gps(temp_db: Path) -> dict:
     return {'passed': passed, 'total': len(results), 'ok': passed == len(results), 'results': results}
 
 
+def _run_guard_subprocess(code: str, *, env: dict | None = None) -> tuple[int, str]:
+    """Invoke arac_gps_canonical_guard in isolated subprocess (parity with hardening suite)."""
+    env2 = os.environ.copy()
+    env2['PYTHONPATH'] = str(_APP)
+    for key in ('CPS_MOCK_DB_PATH', 'CPS_ARAC_GPS_CANONICAL_WRITE'):
+        env2.pop(key, None)
+    if env:
+        for key, val in env.items():
+            if val is None:
+                env2.pop(key, None)
+            else:
+                env2[key] = val
+    proc = subprocess.run(
+        [sys.executable, '-c', code],
+        cwd=str(_APP),
+        env=env2,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+    )
+    return proc.returncode, (proc.stdout or '') + (proc.stderr or '')
+
+
+def _verify_canonical_guard_behavior() -> dict[str, bool]:
+    """
+    Behavior contract for arac_gps_canonical_guard (replaces legacy static grep).
+
+    Legacy runner expected worker source to contain private `_assert_temp_db` text.
+    Worker now delegates to assert_gps_db_write_allowed(); verify runtime gates instead.
+    """
+    if not CANONICAL.is_file() or CANONICAL.stat().st_size <= 0:
+        return {
+            'behavior_canonical_no_env_rejected': False,
+            'behavior_canonical_wrong_env_rejected': False,
+            'behavior_canonical_yes_allowed': False,
+            'behavior_temp_allowed': False,
+            'worker_entry_rejects_without_yes': False,
+        }
+
+    guard_call = (
+        'from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed\n'
+        'assert_gps_db_write_allowed()\n'
+    )
+    rc_no_env, _ = _run_guard_subprocess(
+        guard_call,
+        env={'CPS_ARAC_GPS_CANONICAL_WRITE': None, 'CPS_MOCK_DB_PATH': None},
+    )
+    rc_wrong_env, _ = _run_guard_subprocess(
+        guard_call,
+        env={'CPS_ARAC_GPS_CANONICAL_WRITE': 'NO', 'CPS_MOCK_DB_PATH': None},
+    )
+    rc_yes, _ = _run_guard_subprocess(
+        guard_call,
+        env={'CPS_ARAC_GPS_CANONICAL_WRITE': 'YES', 'CPS_MOCK_DB_PATH': None},
+    )
+
+    temp_path = _APP / f'_gps_guard_behavior_{os.getpid()}.db'
+    temp_ok = False
+    try:
+        shutil.copy2(CANONICAL, temp_path)
+        rc_temp, out_temp = _run_guard_subprocess(
+            'from modules.planlama.arac_gps_canonical_guard import assert_gps_db_write_allowed\n'
+            'p = assert_gps_db_write_allowed()\n'
+            'print("TEMP_OK:" + p)\n',
+            env={'CPS_MOCK_DB_PATH': str(temp_path.resolve()), 'CPS_ARAC_GPS_CANONICAL_WRITE': None},
+        )
+        temp_ok = rc_temp == 0 and 'TEMP_OK:' in out_temp
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    worker_env = os.environ.copy()
+    worker_env['PYTHONPATH'] = str(_APP)
+    worker_env.pop('CPS_MOCK_DB_PATH', None)
+    worker_env.pop('CPS_ARAC_GPS_CANONICAL_WRITE', None)
+    worker_rc = subprocess.run(
+        [sys.executable, str(_APP / 'tools' / 'arac_gps_poll_worker.py'), '--once'],
+        cwd=str(_APP),
+        env=worker_env,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+    ).returncode
+
+    return {
+        'behavior_canonical_no_env_rejected': rc_no_env == 2,
+        'behavior_canonical_wrong_env_rejected': rc_wrong_env == 2,
+        'behavior_canonical_yes_allowed': rc_yes == 0,
+        'behavior_temp_allowed': temp_ok,
+        'worker_entry_rejects_without_yes': worker_rc == 2,
+    }
+
+
 def verify_worker_security() -> dict:
     src = (_APP / 'tools' / 'arac_gps_poll_worker.py').read_text(encoding='utf-8')
+    behavior = _verify_canonical_guard_behavior()
     checks = {
-        'rejects_canonical': '_assert_temp_db' in src and 'canonical DB write forbidden' in src,
+        'rejects_canonical': (
+            behavior['behavior_canonical_no_env_rejected']
+            and behavior['behavior_canonical_wrong_env_rejected']
+            and behavior['worker_entry_rejects_without_yes']
+        ),
+        'canonical_yes_gate_opens': behavior['behavior_canonical_yes_allowed'],
+        'explicit_temp_db_allowed': behavior['behavior_temp_allowed'],
+        'uses_shared_canonical_guard': (
+            '_assert_db_write' in src
+            and 'assert_gps_db_write_allowed' in src
+        ),
         'single_instance_lock': '_SingleInstanceLock' in src and 'another worker instance' in src,
         'default_60s': "DEFAULT_INTERVAL_SEC = int(os.environ.get('ARAC_GPS_POLL_INTERVAL_SEC', '60'))" in src,
         'api_backoff': 'BACKOFF_BASE_SEC' in src and 'backoff * 2' in src,
@@ -289,6 +502,7 @@ def verify_worker_security() -> dict:
         'once_flag': "'--once' in sys.argv" in src,
         'no_token_log': 'FILOM_PASSWORD' not in src and 'api_key' not in src.lower(),
     }
+    checks.update(behavior)
     return checks
 
 
@@ -336,6 +550,12 @@ def git_diff_audit() -> dict:
 
 
 def main() -> int:
+    global CANONICAL, CANON_SHA, CANON_SIZE
+    CANONICAL = _prepare_gate_canonical()
+    CANON_SHA = sha256(CANONICAL) if CANONICAL.is_file() else ''
+    CANON_SIZE = CANONICAL.stat().st_size if CANONICAL.is_file() else 0
+    live_before_sha = sha256(_LIVE_CANONICAL) if _LIVE_CANONICAL and _LIVE_CANONICAL.is_file() else ''
+
     if not CANONICAL.exists():
         print('Canonical DB missing')
         return 1
@@ -345,7 +565,7 @@ def main() -> int:
     print('=' * 72)
 
     before = db_stats(CANONICAL)
-    print(f'CANONICAL_BEFORE {before}')
+    print(f'GATE_DB_BEFORE {before}')
 
     all_results: list[dict] = []
 
@@ -359,11 +579,23 @@ def main() -> int:
             print(f'STOP: {name} failed')
             return 1
 
-    # Read-only suites
+    # Read-only suites (VEHUI uses isolated TEMP fixture — no canonical dependency)
+    vehui_db = _ROOT / '_tempdb' / f'gps_master_vehui_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db'
+    try:
+        bootstrap_vehui_fixture(vehui_db, source_canonical=CANONICAL)
+        assert_not_canonical(str(vehui_db))
+        print(f'VEHUI_TEMP_DB={vehui_db}')
+    except Exception as exc:
+        print(f'STOP: VEHUI bootstrap failed: {exc}')
+        return 1
+
     for name, script in READONLY_SUITES:
         print('=' * 72)
         print(f'READONLY SUITE: {name}')
-        r = run_subprocess_suite(name, script)
+        suite_env = os.environ.copy()
+        if script == '_test_faz_arac_takip_v1_1.py':
+            suite_env['CPS_MOCK_DB_PATH'] = str(vehui_db.resolve())
+        r = run_subprocess_suite(name, script, suite_env)
         all_results.append(r)
         if not r['ok']:
             print(f'STOP: {name} failed')
@@ -397,14 +629,20 @@ def main() -> int:
 
     after = db_stats(CANONICAL)
     print('=' * 72)
-    print(f'CANONICAL_AFTER {after}')
+    print(f'GATE_DB_AFTER {after}')
     canon_ok = (
         before['sha256'] == after['sha256']
         and before['size'] == after['size']
-        and str(before['migration_max']) == str(after['migration_max']) == str(CANON_MIG_MAX)
-        and before['bekleyen'] == after['bekleyen'] == CANON_BEKLEYEN
+        and str(before['migration_max']) == str(after['migration_max'])
+        and before['bekleyen'] == after['bekleyen']
     )
-    print(f'CANONICAL_UNCHANGED={canon_ok}')
+    print(f'GATE_DB_UNCHANGED={canon_ok}')
+    live_after_sha = sha256(_LIVE_CANONICAL) if _LIVE_CANONICAL and _LIVE_CANONICAL.is_file() else ''
+    live_unchanged = (not live_before_sha) or (live_before_sha == live_after_sha)
+    print(f'LIVE_CANONICAL_UNCHANGED={live_unchanged}')
+    if _LIVE_CANONICAL:
+        print(f'LIVE_CANONICAL_SHA_BEFORE={live_before_sha}')
+        print(f'LIVE_CANONICAL_SHA_AFTER={live_after_sha}')
 
     worker = verify_worker_security()
     print('=' * 72)
@@ -424,6 +662,8 @@ def main() -> int:
     total_pass = sum(r['passed'] for r in all_results) + e2e['passed']
     total_tests = sum(r['total'] for r in all_results) + e2e['total']
     all_ok = all(r['ok'] for r in all_results) and e2e['ok'] and canon_ok and all(worker.values())
+    if _LIVE_CANONICAL and not live_unchanged:
+        print('NOTE: live canonical changed during run (likely external 8080/worker); gate DB unchanged.')
 
     print('=' * 72)
     print('SUMMARY')
@@ -436,6 +676,10 @@ def main() -> int:
 
     try:
         temp_db.unlink(missing_ok=True)
+        vehui_db.unlink(missing_ok=True)
+        local_mock = _APP / 'mock_data.db'
+        if not _LOCAL_MOCK_PREEXISTED and local_mock.exists():
+            local_mock.unlink()
     except Exception:
         pass
     return 0 if all_ok else 1

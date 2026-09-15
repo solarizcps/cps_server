@@ -1,0 +1,60 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.9.1"
+phase_code = "ATP_FILOM_FRESHEST_GPS_SOURCE_V1"
+title = "Filom/SQLite arasında en güncel GPS kaynağı seçimi"
+status = "ONAYLANDI"
+date = "2026-09-14"
+summary = "Bugün operasyonlarında GPS alanları atomik olarak en taze Filom veya SQLite kaynağından seçilir; stale SQLite overlay engellenir."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "candidate/atp-excel-pb-urgent-order-badge-v1@d92f7ed"
+verification_date = "2026-09-14"
+verification_evidence = "test_arac_gps_source_selector_v1.py 14/14 PASS; MOR049 Filom newer than SQLite; plan/driver/next_stop preserved; R06/R08/R10 unchanged."
+test_result = "GPS selector 14/14; Filom redirect 10/10; ATP regression 0 fail"
+db_write = false
+server_restart = false
+push_status = "PENDING"
+deployment_status = "NOT_DEPLOYED"
+root_cause = "arac_today_operations_service gps_db or filom + JS mergeLiveData stale SQLite overlay."
+evidence_summary = "select_freshest_gps_source atomic bundle; TEMP snapshot preserved."
+
+changes = [
+  "select_freshest_gps_source compares Filom vs SQLite timestamps.",
+  "Atomic GPS field bundle from winning source.",
+  "arac_today_operations_service wired to selector.",
+]
+
+changed_files = [
+  "app/modules/planlama/arac_gps_source_selector.py",
+  "app/modules/planlama/arac_today_operations_service.py",
+  "tests/planlama/test_arac_gps_source_selector_v1.py",
+]
+
+locked_rules = [
+  "R01/R02/R13 protection unchanged.",
+  "R06/R08/R10 urgent order unchanged.",
+  "No canonical DB write in lock phase.",
+  "ROUTE_MAP_PARITY deferred R04.",
+]
+
+tests = [
+  "test_arac_gps_source_selector_v1",
+  "test_filom_register_redirect_v1",
+  "test_atp_live_vehicle_dedupe_v1",
+  "test_atp_out_of_sequence_visit_alert_v1",
+  "test_atp_past_plans_history_v1",
+  "test_atp_urgent_stop_order_v1",
+]
+
+known_issues = [
+  "Filom/device source ping saha konusu devam ediyor.",
+  "Route/map parity R04'te ele alınacak.",
+]
+
+next_steps = [
+  "Production deploy ayrı faz.",
+]
+
+related_commits = [
+]

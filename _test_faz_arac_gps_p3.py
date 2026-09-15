@@ -61,6 +61,7 @@ def temp_p3_db():
         '176_arac_takip_v13.py', '177_arac_operasyon_ayar.py',
         '178_arac_is_talebi_ux_v2_fields.py', '179_arac_gps_snapshot_p1.py',
         '180_arac_plan_ziyaret_durum.py',
+        '191_arac_plan_olay_auto_tamamlandi.py',
     ):
         _run_migration(db_path, mig)
     con = sqlite3.connect(db_path)
@@ -106,12 +107,37 @@ def temp_p3_db():
         (plan_id, talep_id, now, 1),
     )
     plan_is_id = int(con.execute('SELECT id FROM arac_gunluk_plan_is').fetchone()[0])
+    # P0: Hysteresis ve no-auto testi için ikinci ayrı item (plan_is_id2)
+    lat2, lng2 = 40.9950, 28.9050  # farklı konum (~600m uzakta)
+    tcur2 = con.execute(
+        """
+        INSERT INTO arac_is_talebi (
+            talep_no, talep_eden_user_id, talep_eden_adi_snapshot, talep_tarihi,
+            firma_adi, adres, yapilacak_is, oncelik, durum,
+            latitude, longitude, created_at, created_by, updated_at, updated_by
+        ) VALUES ('P3-2',1,'Test','2026-12-20','Firma B','Adres B','Teslim','NORMAL',
+         'PLANA_ALINDI',?,?,?,?,?,?)
+        """,
+        (lat2, lng2, now, 1, now, 1),
+    )
+    talep_id2 = int(tcur2.lastrowid)
+    con.execute(
+        """
+        INSERT INTO arac_gunluk_plan_is (
+            plan_id, is_talebi_id, sira, planlanan_saat, durum, created_at, created_by
+        ) VALUES (?,?,2,'10:30','PLANLANDI',?,?)
+        """,
+        (plan_id, talep_id2, now, 1),
+    )
+    plan_is_id2 = int(con.execute(
+        'SELECT id FROM arac_gunluk_plan_is ORDER BY id DESC LIMIT 1',
+    ).fetchone()[0])
     con.commit()
     con.close()
     import config
     with patch.object(config.Config, 'MOCK_DB_PATH', db_path):
         print(f'  [DB-PATH-TEMP] {db_path}')
-        yield db_path, plan_id, plan_is_id, lat, lng
+        yield db_path, plan_id, plan_is_id, plan_is_id2, lat, lng
 
 
 def _snap(con, vid, ts, lat, lng, stale=0):
@@ -199,15 +225,17 @@ def test_stale_gps_skipped(db_path, plan_id, plan_is_id, lat, lng) -> None:
         bad('stale_skipped')
 
 
-def test_no_auto_tamamlandi(db_path, plan_is_id) -> None:
-    print('NO_AUTO_TAMAMLANDI')
+def test_auto_tamamlandi_on_departure(db_path, plan_is_id) -> None:
+    """P0: GPS ile ENTER+EXIT sonrası plan_is_id TAMAMLANDI olmalı (auto-complete)."""
+    print('AUTO_TAMAMLANDI_ON_DEPARTURE')
     st = sqlite3.connect(db_path).execute(
         'SELECT durum FROM arac_gunluk_plan_is WHERE id=?', (plan_is_id,),
     ).fetchone()[0]
-    if st == 'PLANLANDI':
-        ok('plan_item_not_auto_completed')
+    # P0: GPS replay sonrası DEPARTED_PENDING veya TAMAMLANDI beklenir
+    if st in ('TAMAMLANDI', 'DEPARTED_PENDING'):
+        ok('plan_item_auto_completed_by_gps')
     else:
-        bad('plan_item_not_auto_completed', st)
+        bad('plan_item_auto_completed_by_gps', st)
 
 
 def test_atomic_plana_is_ekle(db_path) -> None:
@@ -451,14 +479,14 @@ def main() -> int:
     print('=' * 60)
     print('GPS P3 TEST SUITE')
     test_canonical_db_unchanged()
-    with temp_p3_db() as (db_path, plan_id, plan_is_id, lat, lng):
+    with temp_p3_db() as (db_path, plan_id, plan_is_id, plan_is_id2, lat, lng):
         test_single_point_no_arrival(db_path, plan_id, plan_is_id, lat, lng)
         test_geofence_arrival_two_points(db_path, plan_id, plan_is_id, lat, lng)
         test_geofence_departure_two_points(db_path, plan_id, plan_is_id, lat, lng)
-        test_geofence_hysteresis(db_path, plan_id, plan_is_id, lat, lng)
+        test_geofence_hysteresis(db_path, plan_id, plan_is_id2, lat, lng)
         test_geofence_event_idempotency(db_path, plan_is_id)
         test_stale_gps_skipped(db_path, plan_id, plan_is_id, lat, lng)
-        test_no_auto_tamamlandi(db_path, plan_is_id)
+        test_auto_tamamlandi_on_departure(db_path, plan_is_id)
         test_atomic_plana_is_ekle(db_path)
         test_today_operations_dto(db_path)
         test_a0_bekleyen_havuz_gizleme(db_path)

@@ -1,34 +1,68 @@
 # -*- coding: utf-8 -*-
-"""Geofence ziyaret state machine — GPS P3."""
+"""Geofence ziyaret state machine — GPS P3 + P0 auto-complete patch.
+
+P0 DEĞİŞİKLİKLER (candidate/atp-route-status-p0-auto-complete-v1):
+- _active_expected_task kısıtlaması kaldırıldı: tüm açık duraklar taranır.
+- Sıra dışı durağa gerçekten gidilirse ARRIVED/DEPARTED/TAMAMLANDI zinciri çalışır.
+- Deterministik çoklu eşleşme kuralı uygulanır.
+- DEPARTED_PENDING → TAMAMLANDI otomatik zinciri eklendi.
+- İdempotency: aynı GPS snapshot'ı veya aynı complete iki kez çalışmaz.
+"""
 from __future__ import annotations
 
 from datetime import datetime
 
 from modules.planlama.arac_geo_distance import haversine_m
 from modules.planlama.arac_geofence_repo import (
-    event_exists,
+    event_exists_conn,
+    geofence_metadata_event_exists_conn,
     geofence_tables_ready,
-    get_visit_state,
-    insert_geofence_event,
-    upsert_visit_state,
+    geofence_write_transaction,
+    get_visit_state_conn,
+    insert_geofence_event_conn,
+    upsert_visit_state_conn,
 )
 from modules.planlama.arac_gps_poll_service import parse_gps_timestamp
 from modules.planlama.arac_takip_repo import get_active_plan_row, list_plan_tasks
 
+APPROACHING_M = 500.0
 ENTER_M = 200.0
-EXIT_M = 250.0
+EXIT_M = 300.0
 CONFIRM_INSIDE = 2
 CONFIRM_OUTSIDE = 2
+GEOFENCE_STALE_SECONDS = 30 * 60
 
 STATE_OUTSIDE = 'OUTSIDE'
+STATE_APPROACHING = 'APPROACHING'
 STATE_ARRIVED = 'ARRIVED'
 STATE_DEPARTED_PENDING = 'DEPARTED_PENDING'
 
+# DB CHECK constraint uyumlu olay tipleri (migration 180)
+EVENT_APPROACHING = 'GEOFENCE_GIRIS'
+EVENT_ARRIVED = 'KONUMA_VARILDI'
+EVENT_DEPARTED = 'KONUMDAN_AYRILDI'
+EVENT_RESULT_PENDING = 'ZIYARET_SONUC_BEKLIYOR'
+EVENT_AMBIGUOUS = 'AMBIGUOUS_STOP'
+EVENT_OUT_OF_SEQUENCE = 'NOT'
+EVENT_AUTO_COMPLETE = 'AUTO_TAMAMLANDI'
+OUT_OF_SEQUENCE_KIND = 'OUT_OF_SEQUENCE_GEOFENCE'
+OUT_OF_SEQUENCE_VISIT_ALERT_KIND = 'OUT_OF_SEQUENCE_VISIT_ALERT'
+APPROACHING_KIND = 'APPROACHING'
+AUTO_COMPLETE_KIND = 'AUTO_COMPLETE_GPS'
+
 ACTIVE_ITEM_STATUSES = frozenset({'PLANLANDI', 'BASLADI'})
+TERMINAL_VISIT_STATES = frozenset({STATE_DEPARTED_PENDING})
+
+# Priority rank for deterministic tie-breaking (P0)
+_PRIORITY_RANK = {'ACIL': 0, 'YUKSEK': 1, 'NORMAL': 2, 'DUSUK': 3}
 
 
 def _now_str() -> str:
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _plan_is_id(item: dict) -> int:
+    return int(item.get('plan_item_id') or str(item['id']).replace('pi-', ''))
 
 
 def _eligible_items(plan_date: str, vehicle_id: str) -> list[dict]:
@@ -42,20 +76,35 @@ def _eligible_items(plan_date: str, vehicle_id: str) -> list[dict]:
     return items
 
 
-def _should_process(gps_row: dict, visit: dict | None) -> bool:
+def _active_expected_task(items: list[dict]) -> dict | None:
+    """First open automation-eligible task by canonical order_no/sira."""
+    if not items:
+        return None
+    return min(items, key=lambda x: (x.get('order_no') or 999, x.get('id') or ''))
+
+
+def _geofence_gps_unusable(gps_row: dict, now: datetime) -> bool:
     if gps_row.get('is_stale'):
-        return False
+        return True
     gps_dt = parse_gps_timestamp(gps_row.get('gps_timestamp') or '')
     if gps_dt is None:
-        return False
+        return True
+    age = (now - gps_dt).total_seconds()
+    if age > GEOFENCE_STALE_SECONDS:
+        return True
+    return False
+
+
+def _should_process(gps_row: dict, visit: dict | None) -> bool:
     if visit and visit.get('last_gps_snapshot_id') == gps_row.get('id'):
         return False
     if visit and visit.get('last_gps_snapshot_id'):
         from modules.planlama.arac_gps_snapshot_repo import get_gps_snapshot_by_id
         prev_row = get_gps_snapshot_by_id(int(visit['last_gps_snapshot_id']))
         if prev_row:
+            gps_dt = parse_gps_timestamp(gps_row.get('gps_timestamp') or '')
             prev = parse_gps_timestamp(prev_row.get('gps_timestamp') or '')
-            if prev and gps_dt < prev:
+            if prev and gps_dt and gps_dt < prev:
                 return False
     return True
 
@@ -67,7 +116,7 @@ def _distance_to_item(gps_row: dict, item: dict) -> float:
     )
 
 
-def _inside_candidates(gps_row: dict, items: list[dict]) -> list[tuple[dict, float]]:
+def _inside_enter_candidates(gps_row: dict, items: list[dict]) -> list[tuple[dict, float]]:
     out: list[tuple[dict, float]] = []
     for item in items:
         d = _distance_to_item(gps_row, item)
@@ -76,17 +125,482 @@ def _inside_candidates(gps_row: dict, items: list[dict]) -> list[tuple[dict, flo
     return out
 
 
+def _select_target_item(
+    candidates: list[tuple[dict, float]],
+    visit_states: dict[int, dict],
+) -> dict | None:
+    """
+    P0: Deterministik tek hedef seçimi.
+    1. En kısa mesafe (±1m tolerans)
+    2. Mevcut ARRIVED/APPROACHING state'i olan
+    3. Öncelik: ACIL > YUKSEK > NORMAL > DUSUK
+    4. Düşük sira
+    5. Hâlâ eşitse: AMBIGUOUS → None
+    """
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0][0]
+
+    min_dist = min(d for _, d in candidates)
+    close = [(item, d) for item, d in candidates if abs(d - min_dist) <= 1.0]
+    if len(close) == 1:
+        return close[0][0]
+
+    active_visit = [
+        (item, d) for item, d in close
+        if (visit_states.get(_plan_is_id(item)) or {}).get('state') in (STATE_ARRIVED, STATE_APPROACHING)
+    ]
+    if len(active_visit) == 1:
+        return active_visit[0][0]
+    pool = active_visit if active_visit else close
+
+    def _sk(pair: tuple) -> tuple:
+        item, _ = pair
+        pri = _PRIORITY_RANK.get((item.get('priority') or item.get('oncelik') or 'NORMAL').upper(), 2)
+        sira = int(item.get('order_no') or 999)
+        return (pri, sira)
+
+    pool.sort(key=_sk)
+    if len(pool) > 1 and _sk(pool[0]) == _sk(pool[1]):
+        return None  # AMBIGUOUS
+    return pool[0][0]
+
+
+def _auto_complete_task_conn(
+    con,
+    *,
+    plan_id: int,
+    plan_is_id: int,
+    vehicle_id: str,
+    item: dict,
+    visit: dict,
+    gps_row: dict,
+    updated_at: str,
+    is_out_of_sequence: bool = False,
+    expected_item_id: int | None = None,
+) -> None:
+    """P0: DEPARTED_PENDING → TAMAMLANDI. Idempotent."""
+    import sqlite3 as _sq
+    row = con.execute(
+        'SELECT durum FROM arac_gunluk_plan_is WHERE id=?', (plan_is_id,)
+    ).fetchone()
+    if not row:
+        return
+    current = row['durum'] if hasattr(row, '__getitem__') else row[0]
+    if current == 'TAMAMLANDI':
+        return  # idempotent
+    if current not in ACTIVE_ITEM_STATUSES:
+        return  # IPTAL/inactive — never auto-complete
+    con.execute(
+        'UPDATE arac_gunluk_plan_is SET durum=? WHERE id=?',
+        ('TAMAMLANDI', plan_is_id),
+    )
+    con.execute(
+        "UPDATE arac_plan_is_ziyaret_durum SET result_status='SONUC_BEKLIYOR', updated_at=? WHERE plan_is_id=?",
+        (updated_at, plan_is_id),
+    )
+    insert_geofence_event_conn(
+        con,
+        plan_id=plan_id,
+        plan_is_id=plan_is_id,
+        arac_external_id=vehicle_id,
+        olay_turu=EVENT_AUTO_COMPLETE,
+        mesaj='GPS hareketine göre rota görevi otomatik tamamlandı',
+        metadata={
+            'geofence_kind': AUTO_COMPLETE_KIND,
+            'arrived_at': visit.get('arrived_at'),
+            'departed_at': visit.get('departed_at'),
+            'dwell_seconds': visit.get('dwell_seconds'),
+            'gps_snapshot_id': gps_row.get('id'),
+            'plan_item_id': item.get('id'),
+            'actual_item_id': item.get('plan_item_id') or item.get('id'),
+            'expected_item_id': expected_item_id,
+            'out_of_sequence': is_out_of_sequence,
+            'p0_trigger': 'confirmed_enter_confirmed_exit',
+        },
+        olay_zamani=gps_row.get('gps_timestamp'),
+        created_at=updated_at,
+    )
+
+
+def _stop_label(item: dict | None) -> str:
+    if not item:
+        return '—'
+    return (
+        item.get('company_name')
+        or item.get('job_title')
+        or f"Durak #{item.get('order_no') or item.get('display_order_no') or '?'}"
+    )
+
+
+def _emit_out_of_sequence_visit_alert_conn(
+    con,
+    *,
+    plan_id: int,
+    plan_is_id: int,
+    vehicle_id: str,
+    item: dict,
+    expected_item: dict | None,
+    gps_row: dict,
+    updated_at: str,
+) -> None:
+    """R13: doğrulanmış sıra dışı geofence tamamlaması için kullanıcı uyarısı."""
+    if geofence_metadata_event_exists_conn(
+        con, plan_is_id, EVENT_OUT_OF_SEQUENCE, OUT_OF_SEQUENCE_VISIT_ALERT_KIND,
+    ):
+        return
+    expected_name = _stop_label(expected_item)
+    actual_name = _stop_label(item)
+    plate = item.get('arac_plaka_snapshot') or item.get('plate') or vehicle_id
+    expected_item_id = None
+    if expected_item:
+        expected_item_id = expected_item.get('plan_item_id') or expected_item.get('id')
+    actual_item_id = item.get('plan_item_id') or item.get('id')
+    message = (
+        f"Araç planlanan {expected_name} durağı yerine {actual_name} durağına ulaştı. "
+        f"{actual_name} tamamlandı; {expected_name} sıradaki açık durak olarak korundu."
+    )
+    insert_geofence_event_conn(
+        con,
+        plan_id=plan_id,
+        plan_is_id=plan_is_id,
+        arac_external_id=vehicle_id,
+        olay_turu=EVENT_OUT_OF_SEQUENCE,
+        mesaj=message,
+        metadata={
+            'geofence_kind': OUT_OF_SEQUENCE_VISIT_ALERT_KIND,
+            'plate': plate,
+            'expected_stop': expected_name,
+            'actual_stop': actual_name,
+            'expected_item_id': expected_item_id,
+            'actual_item_id': actual_item_id,
+            'vehicle_id': vehicle_id,
+            'plan_id': plan_id,
+            'result': 'TAMAMLANDI',
+            'gps_snapshot_id': gps_row.get('id'),
+            'olay_zamani': gps_row.get('gps_timestamp'),
+        },
+        olay_zamani=gps_row.get('gps_timestamp'),
+        created_at=updated_at,
+    )
+
+
+def _emit_out_of_sequence_conn(
+    con,
+    *,
+    plan_id: int,
+    plan_is_id: int,
+    vehicle_id: str,
+    item: dict,
+    dist: float,
+    gps_row: dict,
+    updated_at: str,
+) -> None:
+    if geofence_metadata_event_exists_conn(
+        con, plan_is_id, EVENT_OUT_OF_SEQUENCE, OUT_OF_SEQUENCE_KIND,
+    ):
+        return
+    insert_geofence_event_conn(
+        con,
+        plan_id=plan_id,
+        plan_is_id=plan_is_id,
+        arac_external_id=vehicle_id,
+        olay_turu=EVENT_OUT_OF_SEQUENCE,
+        mesaj='Sıra dışı geofence — audit kaydı (P0: ziyaret işleniyor)',
+        metadata={
+            'geofence_kind': OUT_OF_SEQUENCE_KIND,
+            'distance_m': round(dist, 1),
+            'gps_snapshot_id': gps_row.get('id'),
+            'plan_item_id': item.get('id'),
+            'kayitli_yer_id': item.get('kayitli_yer_id'),
+        },
+        olay_zamani=gps_row.get('gps_timestamp'),
+        created_at=updated_at,
+    )
+
+
+def _apply_state_machine(
+    *,
+    dist: float,
+    state: str,
+    ci: int,
+    co: int,
+    arrived_at: str | None,
+    departed_at: str | None,
+    gps_row: dict,
+    plan_is_id: int,
+    plan_id: int,
+    vehicle_id: str,
+    item: dict,
+    con,
+    updated_at: str,
+) -> tuple[str, int, int, str | None, str | None, int | None, bool, bool]:
+    """Returns new_state, ci, co, arrived_at, departed_at, dwell_seconds, emit_arrived, emit_departed."""
+    new_state = state
+    emit_arrived = emit_departed = False
+    dwell_seconds = None
+
+    if state in TERMINAL_VISIT_STATES:
+        return state, ci, co, arrived_at, departed_at, None, False, False
+
+    if state == STATE_ARRIVED:
+        if dist < EXIT_M:
+            co = 0
+        elif dist >= EXIT_M:
+            co += 1
+            ci = 0
+            if co >= CONFIRM_OUTSIDE:
+                new_state = STATE_DEPARTED_PENDING
+                departed_at = gps_row.get('gps_timestamp')
+                if not event_exists_conn(con, plan_is_id, EVENT_DEPARTED):
+                    emit_departed = True
+        return new_state, ci, co, arrived_at, departed_at, None, emit_arrived, emit_departed
+
+    if state == STATE_APPROACHING:
+        if dist > APPROACHING_M:
+            new_state = STATE_OUTSIDE
+            ci = 0
+            co = 0
+        elif dist <= ENTER_M:
+            ci += 1
+            co = 0
+            if ci == 1:
+                arrived_at = gps_row.get('gps_timestamp')
+            if ci >= CONFIRM_INSIDE:
+                new_state = STATE_ARRIVED
+                if not arrived_at:
+                    arrived_at = gps_row.get('gps_timestamp')
+                if not event_exists_conn(con, plan_is_id, EVENT_ARRIVED):
+                    emit_arrived = True
+        return new_state, ci, co, arrived_at, departed_at, None, emit_arrived, emit_departed
+
+    # OUTSIDE (default)
+    if dist <= ENTER_M:
+        ci += 1
+        co = 0
+        if ci == 1:
+            arrived_at = gps_row.get('gps_timestamp')
+        if ci >= CONFIRM_INSIDE:
+            new_state = STATE_ARRIVED
+            if not arrived_at:
+                arrived_at = gps_row.get('gps_timestamp')
+            if not event_exists_conn(con, plan_is_id, EVENT_ARRIVED):
+                emit_arrived = True
+    elif dist <= APPROACHING_M:
+        new_state = STATE_APPROACHING
+        ci = 0
+        co = 0
+        if not event_exists_conn(con, plan_is_id, EVENT_APPROACHING):
+            insert_geofence_event_conn(
+                con,
+                plan_id=plan_id,
+                plan_is_id=plan_is_id,
+                arac_external_id=vehicle_id,
+                olay_turu=EVENT_APPROACHING,
+                mesaj='Duraga yaklaşıyor',
+                metadata={
+                    'geofence_kind': APPROACHING_KIND,
+                    'distance_m': round(dist, 1),
+                    'gps_snapshot_id': gps_row.get('id'),
+                    'plan_item_id': item.get('id'),
+                    'approaching_radius_m': APPROACHING_M,
+                },
+                olay_zamani=gps_row.get('gps_timestamp'),
+                created_at=updated_at,
+            )
+    else:
+        ci = 0
+        co = 0
+
+    return new_state, ci, co, arrived_at, departed_at, dwell_seconds, emit_arrived, emit_departed
+
+
+def _process_single_item_conn(
+    *,
+    gps_row: dict,
+    item: dict,
+    plan_id: int,
+    vehicle_id: str,
+    is_out_of_sequence: bool,
+    expected_item: dict | None = None,
+    con,
+    updated_at: str,
+) -> dict:
+    """P0: state machine + auto-complete zinciri tek kalem için, mevcut transaction içinde."""
+    plan_is_id = _plan_is_id(item)
+    dist = _distance_to_item(gps_row, item)
+
+    visit = get_visit_state_conn(con, plan_is_id)
+    if not _should_process(gps_row, visit):
+        return {'plan_is_id': plan_is_id, 'skipped': True, 'distance_m': round(dist, 1)}
+
+    state = (visit or {}).get('state') or STATE_OUTSIDE
+    ci = int((visit or {}).get('consecutive_inside') or 0)
+    co = int((visit or {}).get('consecutive_outside') or 0)
+    arrived_at = (visit or {}).get('arrived_at')
+    departed_at = (visit or {}).get('departed_at')
+    dwell_seconds = (visit or {}).get('dwell_seconds')
+
+    new_state, ci, co, arrived_at, departed_at, _, emit_arrived, emit_departed = _apply_state_machine(
+        dist=dist,
+        state=state,
+        ci=ci,
+        co=co,
+        arrived_at=arrived_at,
+        departed_at=departed_at,
+        gps_row=gps_row,
+        plan_is_id=plan_is_id,
+        plan_id=plan_id,
+        vehicle_id=vehicle_id,
+        item=item,
+        con=con,
+        updated_at=updated_at,
+    )
+
+    if emit_arrived:
+        insert_geofence_event_conn(
+            con,
+            plan_id=plan_id,
+            plan_is_id=plan_is_id,
+            arac_external_id=vehicle_id,
+            olay_turu=EVENT_ARRIVED,
+            mesaj='Araç planlı durağa vardı' + (' (sıra dışı)' if is_out_of_sequence else ''),
+            metadata={
+                'distance_m': round(dist, 1),
+                'gps_snapshot_id': gps_row.get('id'),
+                'plan_item_id': item.get('id'),
+                'kayitli_yer_id': item.get('kayitli_yer_id'),
+                'enter_radius_m': ENTER_M,
+                'arrived_at_rule': 'first_inside_candidate_timestamp',
+                'confirmed_at': gps_row.get('gps_timestamp'),
+                'out_of_sequence': is_out_of_sequence,
+            },
+            olay_zamani=arrived_at or gps_row.get('gps_timestamp'),
+            created_at=updated_at,
+        )
+
+    if emit_departed:
+        dwell = None
+        if arrived_at and gps_row.get('gps_timestamp'):
+            a_dt = parse_gps_timestamp(arrived_at)
+            d_dt = parse_gps_timestamp(gps_row['gps_timestamp'])
+            if a_dt and d_dt:
+                dwell = int((d_dt - a_dt).total_seconds())
+                dwell_seconds = dwell
+        insert_geofence_event_conn(
+            con,
+            plan_id=plan_id,
+            plan_is_id=plan_is_id,
+            arac_external_id=vehicle_id,
+            olay_turu=EVENT_DEPARTED,
+            mesaj='Konumdan ayrıldı — iş sonucu doğrulanmadı',
+            metadata={
+                'distance_m': round(dist, 1),
+                'gps_snapshot_id': gps_row.get('id'),
+                'plan_item_id': item.get('id'),
+                'exit_radius_m': EXIT_M,
+                'dwell_seconds': dwell,
+                'out_of_sequence': is_out_of_sequence,
+            },
+            olay_zamani=gps_row.get('gps_timestamp'),
+            created_at=updated_at,
+        )
+        insert_geofence_event_conn(
+            con,
+            plan_id=plan_id,
+            plan_is_id=plan_is_id,
+            arac_external_id=vehicle_id,
+            olay_turu=EVENT_RESULT_PENDING,
+            mesaj='Ziyaret sonucu bekleniyor',
+            metadata={'plan_item_id': item.get('id')},
+            olay_zamani=gps_row.get('gps_timestamp'),
+            created_at=updated_at,
+        )
+
+    upsert_visit_state_conn(con, {
+        'plan_id': plan_id,
+        'plan_is_id': plan_is_id,
+        'arac_external_id': vehicle_id,
+        'kayitli_yer_id': item.get('kayitli_yer_id'),
+        'state': new_state,
+        'geofence_radius_m': ENTER_M,
+        'exit_radius_m': EXIT_M,
+        'consecutive_inside': ci,
+        'consecutive_outside': co,
+        'arrived_at': arrived_at,
+        'departed_at': departed_at,
+        'dwell_seconds': dwell_seconds,
+        'last_gps_snapshot_id': gps_row.get('id'),
+        'result_status': 'SONUC_BEKLIYOR' if new_state == STATE_DEPARTED_PENDING else None,
+        'updated_at': updated_at,
+        'created_at': (visit or {}).get('created_at') or updated_at,
+    })
+
+    # P0: DEPARTED_PENDING + emit_departed → otomatik TAMAMLANDI
+    auto_completed = False
+    if new_state == STATE_DEPARTED_PENDING and emit_departed:
+        updated_visit = get_visit_state_conn(con, plan_is_id)
+        _auto_complete_task_conn(
+            con,
+            plan_id=plan_id,
+            plan_is_id=plan_is_id,
+            vehicle_id=vehicle_id,
+            item=item,
+            visit=dict(updated_visit) if updated_visit else {
+                'arrived_at': arrived_at,
+                'departed_at': departed_at,
+                'dwell_seconds': dwell_seconds,
+            },
+            gps_row=gps_row,
+            updated_at=updated_at,
+            is_out_of_sequence=is_out_of_sequence,
+            expected_item_id=(
+                (expected_item.get('plan_item_id') or expected_item.get('id'))
+                if expected_item else None
+            ),
+        )
+        auto_completed = True
+        if is_out_of_sequence:
+            _emit_out_of_sequence_visit_alert_conn(
+                con,
+                plan_id=plan_id,
+                plan_is_id=plan_is_id,
+                vehicle_id=vehicle_id,
+                item=item,
+                expected_item=expected_item,
+                gps_row=gps_row,
+                updated_at=updated_at,
+            )
+
+    saved = get_visit_state_conn(con, plan_is_id)
+    return {
+        'plan_is_id': plan_is_id,
+        'state': saved.get('state') if saved else new_state,
+        'distance_m': round(dist, 1),
+        'out_of_sequence': is_out_of_sequence,
+        'auto_completed': auto_completed,
+    }
+
+
 def process_gps_snapshot_for_geofence(
     gps_row: dict,
     *,
     plan_date: str | None = None,
     now: datetime | None = None,
 ) -> dict:
-    """Per-vehicle geofence pass — never marks TAMAMLANDI."""
+    """
+    P0: Per-vehicle geofence pass.
+    - Tüm açık planlı durakları tarar (sıra kısıtı yok).
+    - Doğrulanmış ENTER+EXIT sonrası TAMAMLANDI yazar.
+    """
     now = now or datetime.now()
     updated_at = now.strftime('%Y-%m-%d %H:%M:%S')
     if not geofence_tables_ready():
         return {'ok': False, 'reason': 'geofence_tables_not_ready'}
+
+    if _geofence_gps_unusable(gps_row, now):
+        return {'ok': True, 'skipped': True, 'reason': 'geofence_stale_gps'}
 
     vehicle_id = str(gps_row.get('arac_external_id') or '')
     pd = plan_date or (gps_row.get('gps_timestamp') or '')[:10]
@@ -99,153 +613,120 @@ def process_gps_snapshot_for_geofence(
     if not items:
         return {'ok': True, 'processed': 0, 'plan_id': plan_id}
 
-    inside = _inside_candidates(gps_row, items)
-    results: list[dict] = []
+    # P0: expected_task referans için (artık işlemi kısıtlamaz)
+    expected = _active_expected_task(items)
+    expected_id = _plan_is_id(expected) if expected else None
+
+    inside = _inside_enter_candidates(gps_row, items)
 
     if len(inside) > 1:
-        insert_geofence_event(
-            plan_id=plan_id,
-            plan_is_id=None,
-            arac_external_id=vehicle_id,
-            olay_turu='AMBIGUOUS_STOP',
-            mesaj='Birden fazla durak geofence içinde — otomatik varış yapılmadı',
-            metadata={
-                'candidates': [
-                    {'plan_item_id': it['id'], 'distance_m': round(d, 1)}
-                    for it, d in inside
-                ],
-                'gps_snapshot_id': gps_row.get('id'),
-            },
-            olay_zamani=gps_row.get('gps_timestamp'),
-            created_at=updated_at,
-        )
-        return {'ok': True, 'ambiguous': True, 'candidate_count': len(inside)}
-
-    target_items = [inside[0][0]] if inside else items
-
-    for item in target_items:
-        plan_is_id = int(item.get('plan_item_id') or str(item['id']).replace('pi-', ''))
-        visit = get_visit_state(plan_is_id)
-        if not _should_process(gps_row, visit):
-            continue
-
-        dist = _distance_to_item(gps_row, item)
-        state = (visit or {}).get('state') or STATE_OUTSIDE
-        ci = int((visit or {}).get('consecutive_inside') or 0)
-        co = int((visit or {}).get('consecutive_outside') or 0)
-        arrived_at = (visit or {}).get('arrived_at')
-        departed_at = (visit or {}).get('departed_at')
-        new_state = state
-        emit_arrived = emit_departed = False
-
-        if dist <= ENTER_M:
-            ci += 1
-            co = 0
-            if state == STATE_OUTSIDE and ci == 1:
-                # İlk giriş adayı — arrived_at burada kaydedilir, doğrulama 2. noktada
-                arrived_at = gps_row.get('gps_timestamp')
-            if state == STATE_OUTSIDE and ci >= CONFIRM_INSIDE:
-                new_state = STATE_ARRIVED
-                # arrived_at zaten ilk giriş adayının timestamp'i (ci==1)
-                if not arrived_at:
-                    arrived_at = gps_row.get('gps_timestamp')
-                if not event_exists(plan_is_id, 'KONUMA_VARILDI'):
-                    emit_arrived = True
-        elif dist >= EXIT_M:
-            co += 1
-            ci = 0
-            if state == STATE_ARRIVED and co >= CONFIRM_OUTSIDE:
-                new_state = STATE_DEPARTED_PENDING
-                departed_at = gps_row.get('gps_timestamp')
-                if not event_exists(plan_is_id, 'KONUMDAN_AYRILDI'):
-                    emit_departed = True
-
-        out_of_sequence = False
-        if inside:
-            first_pending = min(
-                items,
-                key=lambda x: x.get('order_no') or 999,
+        # P0: deterministik seçim dene
+        with geofence_write_transaction() as con:
+            vs_map = {
+                _plan_is_id(it): dict(get_visit_state_conn(con, _plan_is_id(it)) or {})
+                for it, _ in inside
+            }
+            target = _select_target_item(inside, vs_map)
+            if target is None:
+                insert_geofence_event_conn(
+                    con,
+                    plan_id=plan_id,
+                    plan_is_id=None,
+                    arac_external_id=vehicle_id,
+                    olay_turu=EVENT_AMBIGUOUS,
+                    mesaj='Birden fazla durak geofence içinde — AMBIGUOUS_STOP_MATCH',
+                    metadata={
+                        'candidates': [
+                            {'plan_item_id': it['id'], 'distance_m': round(d, 1)}
+                            for it, d in inside
+                        ],
+                        'gps_snapshot_id': gps_row.get('id'),
+                    },
+                    olay_zamani=gps_row.get('gps_timestamp'),
+                    created_at=updated_at,
+                )
+                return {'ok': True, 'ambiguous': True, 'candidate_count': len(inside)}
+            # Deterministik hedef seçildi
+            target_id = _plan_is_id(target)
+            is_oos = (expected_id is not None and target_id != expected_id)
+            if is_oos:
+                _emit_out_of_sequence_conn(
+                    con, plan_id=plan_id, plan_is_id=target_id,
+                    vehicle_id=vehicle_id, item=target,
+                    dist=_distance_to_item(gps_row, target),
+                    gps_row=gps_row, updated_at=updated_at,
+                )
+            result = _process_single_item_conn(
+                gps_row=gps_row, item=target, plan_id=plan_id,
+                vehicle_id=vehicle_id, is_out_of_sequence=is_oos,
+                expected_item=expected, con=con, updated_at=updated_at,
             )
-            if first_pending.get('id') != item.get('id'):
-                out_of_sequence = True
+            return {'ok': True, 'plan_id': plan_id, 'processed': 1, 'results': [result]}
 
-        if emit_arrived:
-            insert_geofence_event(
-                plan_id=plan_id,
-                plan_is_id=plan_is_id,
-                arac_external_id=vehicle_id,
-                olay_turu='KONUMA_VARILDI',
-                mesaj='Araç planlı durağa vardı',
-                metadata={
-                    'distance_m': round(dist, 1),
-                    'gps_snapshot_id': gps_row.get('id'),
-                    'plan_item_id': item.get('id'),
-                    'kayitli_yer_id': item.get('kayitli_yer_id'),
-                    'enter_radius_m': ENTER_M,
-                    'out_of_sequence': out_of_sequence,
-                    'arrived_at_rule': 'first_inside_candidate_timestamp',
-                    'confirmed_at': gps_row.get('gps_timestamp'),
-                },
-                olay_zamani=arrived_at or gps_row.get('gps_timestamp'),
-                created_at=updated_at,
+    elif len(inside) == 1:
+        target = inside[0][0]
+        target_id = _plan_is_id(target)
+        is_oos = (expected_id is not None and target_id != expected_id)
+        with geofence_write_transaction() as con:
+            if is_oos:
+                _emit_out_of_sequence_conn(
+                    con, plan_id=plan_id, plan_is_id=target_id,
+                    vehicle_id=vehicle_id, item=target,
+                    dist=inside[0][1], gps_row=gps_row, updated_at=updated_at,
+                )
+            result = _process_single_item_conn(
+                gps_row=gps_row, item=target, plan_id=plan_id,
+                vehicle_id=vehicle_id, is_out_of_sequence=is_oos,
+                expected_item=expected, con=con, updated_at=updated_at,
             )
+            return {'ok': True, 'plan_id': plan_id, 'processed': 1, 'results': [result]}
 
-        dwell_seconds = (visit or {}).get('dwell_seconds')
-        if emit_departed:
-            dwell = None
-            if arrived_at and gps_row.get('gps_timestamp'):
-                a_dt = parse_gps_timestamp(arrived_at)
-                d_dt = parse_gps_timestamp(gps_row['gps_timestamp'])
-                if a_dt and d_dt:
-                    dwell = int((d_dt - a_dt).total_seconds())
-                    dwell_seconds = dwell
-            insert_geofence_event(
-                plan_id=plan_id,
-                plan_is_id=plan_is_id,
-                arac_external_id=vehicle_id,
-                olay_turu='KONUMDAN_AYRILDI',
-                mesaj='Konumdan ayrıldı — iş sonucu doğrulanmadı',
-                metadata={
-                    'distance_m': round(dist, 1),
-                    'gps_snapshot_id': gps_row.get('id'),
-                    'plan_item_id': item.get('id'),
-                    'exit_radius_m': EXIT_M,
-                    'dwell_seconds': dwell,
-                    'out_of_sequence': out_of_sequence,
-                },
-                olay_zamani=gps_row.get('gps_timestamp'),
-                created_at=updated_at,
-            )
-            insert_geofence_event(
-                plan_id=plan_id,
-                plan_is_id=plan_is_id,
-                arac_external_id=vehicle_id,
-                olay_turu='ZIYARET_SONUC_BEKLIYOR',
-                mesaj='Ziyaret sonucu bekleniyor',
-                metadata={'plan_item_id': item.get('id')},
-                olay_zamani=gps_row.get('gps_timestamp'),
-                created_at=updated_at,
-            )
+    else:
+        # Hiçbiri ENTER mesafesinde değil.
+        # P0: ARRIVED state'indeki duraklar EXIT → TAMAMLANDI için işlenmeli.
+        # Ayrıca expected durağı APPROACHING/OUTSIDE için işle.
+        with geofence_write_transaction() as con:
+            results = []
 
-        saved = upsert_visit_state({
-            'plan_id': plan_id,
-            'plan_is_id': plan_is_id,
-            'arac_external_id': vehicle_id,
-            'kayitli_yer_id': item.get('kayitli_yer_id'),
-            'state': new_state,
-            'consecutive_inside': ci,
-            'consecutive_outside': co,
-            'arrived_at': arrived_at,
-            'departed_at': departed_at,
-            'dwell_seconds': dwell_seconds,
-            'last_gps_snapshot_id': gps_row.get('id'),
-            'result_status': 'SONUC_BEKLIYOR' if new_state == STATE_DEPARTED_PENDING else None,
-            'updated_at': updated_at,
-            'created_at': (visit or {}).get('created_at') or updated_at,
-        })
-        results.append({'plan_is_id': plan_is_id, 'state': saved.get('state'), 'distance_m': round(dist, 1)})
+            # ARRIVED durakları EXIT için işle (expected dışındaki sıra dışı olanlar dahil)
+            for item in items:
+                item_id = _plan_is_id(item)
+                visit = get_visit_state_conn(con, item_id)
+                visit_state = (visit or {}).get('state') or STATE_OUTSIDE
+                is_oos = (expected_id is not None and item_id != expected_id)
 
-    return {'ok': True, 'plan_id': plan_id, 'processed': len(results), 'results': results}
+                if visit_state == STATE_ARRIVED:
+                    # Bu durak ARRIVED — EXIT kontrolü yap
+                    result = _process_single_item_conn(
+                        gps_row=gps_row, item=item, plan_id=plan_id,
+                        vehicle_id=vehicle_id, is_out_of_sequence=is_oos,
+                        expected_item=expected, con=con, updated_at=updated_at,
+                    )
+                    results.append(result)
+                elif item_id == expected_id:
+                    # Expected durak — APPROACHING/OUTSIDE state güncellemesi
+                    dist_other = _distance_to_item(gps_row, item)
+                    if dist_other <= APPROACHING_M:
+                        result = _process_single_item_conn(
+                            gps_row=gps_row, item=item, plan_id=plan_id,
+                            vehicle_id=vehicle_id, is_out_of_sequence=False,
+                            expected_item=expected, con=con, updated_at=updated_at,
+                        )
+                        results.append(result)
+                else:
+                    # Diğer duraklar — sadece APPROACHING mesafesinde OUT_OF_SEQUENCE audit
+                    dist_other = _distance_to_item(gps_row, item)
+                    if dist_other <= APPROACHING_M:
+                        _emit_out_of_sequence_conn(
+                            con, plan_id=plan_id, plan_is_id=item_id,
+                            vehicle_id=vehicle_id, item=item,
+                            dist=dist_other, gps_row=gps_row, updated_at=updated_at,
+                        )
+
+            return {
+                'ok': True, 'plan_id': plan_id, 'processed': len(results),
+                'results': results,
+            }
 
 
 def process_new_snapshots_since(last_id: int = 0) -> dict:

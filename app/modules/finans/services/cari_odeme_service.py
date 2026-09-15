@@ -13,9 +13,9 @@ from datetime import datetime, timedelta
 
 
 def _db_path():
-    """app/mock_data.db full path"""
-    here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "mock_data.db")
+    """Effective app DB — tek resolver (db.get_db_path)."""
+    from db import get_db_path
+    return get_db_path()
 
 
 def _durum_class(durum):

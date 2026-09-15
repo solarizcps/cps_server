@@ -161,6 +161,38 @@ def compute_first_safe_insert_index(tasks: list[dict]) -> int:
     return last_locked_index + 1
 
 
+def normalize_priority(value: Any) -> str:
+    """Normalize talep priority; blank → NORMAL."""
+    if value is None:
+        return 'NORMAL'
+    text = str(value).strip().upper()
+    return text or 'NORMAL'
+
+
+def _priority_raw(task: dict) -> Any:
+    for key in ('priority', 'oncelik'):
+        val = task.get(key)
+        if val not in (None, ''):
+            return val
+    return 'NORMAL'
+
+
+def compute_acil_insert_index(tasks: list[dict]) -> int:
+    """
+    0-based insert index for a new ACIL plan item.
+
+    1. After last locked/inactive-prefix task (compute_first_safe_insert_index).
+    2. After the last existing ACIL at/after base (FIFO = current sira order).
+    3. If no ACIL in open tail, at base (front of remaining open queue).
+    """
+    base = compute_first_safe_insert_index(tasks)
+    last_acil_index = base - 1
+    for index in range(base, len(tasks)):
+        if normalize_priority(_priority_raw(tasks[index])) == 'ACIL':
+            last_acil_index = index
+    return last_acil_index + 1
+
+
 def build_order_with_inserted_task(
     tasks: list[dict],
     new_task: dict,
@@ -178,10 +210,226 @@ def build_order_with_inserted_task(
     if new_tid in seen:
         raise RouteOrderPolicyError(f'Duplicate task ID: {new_tid}')
 
-    index = compute_first_safe_insert_index(tasks) if insert_index is None else insert_index
+    if insert_index is None:
+        pri = normalize_priority(_priority_raw(new_task))
+        index = compute_acil_insert_index(tasks) if pri == 'ACIL' else compute_first_safe_insert_index(tasks)
+    else:
+        index = insert_index
     if index < 0 or index > len(tasks):
         raise RouteOrderPolicyError(f'Insert index out of range: {index}')
 
     ordered = [dict(t) for t in tasks]
     ordered.insert(index, dict(new_task))
     return ordered
+
+
+# ── U3B — Manual reorder validation (pure, no DB) ───────────────────────────
+
+
+class ManualReorderValidationError(Exception):
+    """Fail-closed manual reorder validation error with stable machine code."""
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        task_id: str | None = None,
+        canonical_index: int | None = None,
+        proposed_index: int | None = None,
+        segment_index: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.task_id = task_id
+        self.canonical_index = canonical_index
+        self.proposed_index = proposed_index
+        self.segment_index = segment_index
+
+    def to_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            'code': self.code,
+            'message': self.message,
+        }
+        if self.task_id is not None:
+            out['task_id'] = self.task_id
+        if self.canonical_index is not None:
+            out['canonical_index'] = self.canonical_index
+        if self.proposed_index is not None:
+            out['proposed_index'] = self.proposed_index
+        if self.segment_index is not None:
+            out['segment_index'] = self.segment_index
+        return out
+
+
+def _normalize_proposed_task_ids(proposed_task_ids: list[Any]) -> list[str]:
+    if not isinstance(proposed_task_ids, list):
+        raise ManualReorderValidationError(
+            'INVALID_PROPOSED_ORDER',
+            'Proposed order must be a list of task IDs',
+        )
+    normalized: list[str] = []
+    for index, raw in enumerate(proposed_task_ids):
+        if raw is None or str(raw).strip() == '':
+            raise ManualReorderValidationError(
+                'INVALID_PROPOSED_ORDER',
+                f'Proposed task ID missing at index {index}',
+                proposed_index=index,
+            )
+        normalized.append(str(raw).strip())
+    return normalized
+
+
+def _canonical_task_ids(tasks: list[dict]) -> list[str]:
+    if not isinstance(tasks, list):
+        raise ManualReorderValidationError(
+            'INVALID_CANONICAL_TASKS',
+            'Canonical tasks must be a list',
+        )
+    ids: list[str] = []
+    seen: set[str] = set()
+    for index, task in enumerate(tasks):
+        if not isinstance(task, dict):
+            raise ManualReorderValidationError(
+                'INVALID_CANONICAL_TASKS',
+                f'Canonical task at index {index} must be a dict',
+                canonical_index=index,
+            )
+        try:
+            tid = task_id(task)
+        except RouteOrderPolicyError as exc:
+            raise ManualReorderValidationError(
+                'MISSING_TASK_ID',
+                str(exc),
+                canonical_index=index,
+            ) from exc
+        if tid in seen:
+            raise ManualReorderValidationError(
+                'DUPLICATE_CANONICAL_TASK_ID',
+                f'Duplicate canonical task ID: {tid}',
+                task_id=tid,
+                canonical_index=index,
+            )
+        seen.add(tid)
+        ids.append(tid)
+    return ids
+
+
+def build_manual_reorder_segments(tasks: list[dict]) -> list[dict[str, Any]]:
+    """
+    Build locked/movable segment model from canonical task order.
+
+    Locked tasks are fixed boundaries; movable tasks belong to a segment index
+    between those boundaries (or at the ends).
+    """
+    canonical_ids = _canonical_task_ids(tasks)
+    segments: list[dict[str, Any]] = []
+    segment_index = 0
+    index = 0
+    while index < len(tasks):
+        if not can_move_task(tasks[index]):
+            segments.append({
+                'kind': 'locked',
+                'segment_index': segment_index,
+                'task_id': canonical_ids[index],
+                'canonical_index': index,
+                'lock_reason': movement_lock_reason(tasks[index]),
+            })
+            segment_index += 1
+            index += 1
+            continue
+        start = index
+        movable_ids: list[str] = []
+        while index < len(tasks) and can_move_task(tasks[index]):
+            movable_ids.append(canonical_ids[index])
+            index += 1
+        segments.append({
+            'kind': 'movable',
+            'segment_index': segment_index,
+            'start_index': start,
+            'end_index': index,
+            'task_ids': list(movable_ids),
+        })
+        segment_index += 1
+    return segments
+
+
+def validate_manual_reorder(
+    tasks: list[dict],
+    proposed_task_ids: list[Any],
+) -> list[str]:
+    """
+    Validate a proposed manual reorder against canonical task order.
+
+    Returns the normalized proposed ID list on success. Inputs are not mutated.
+    Raises ManualReorderValidationError on any rule violation.
+    """
+    canonical_ids = _canonical_task_ids(tasks)
+    proposed = _normalize_proposed_task_ids(proposed_task_ids)
+
+    if len(proposed) != len(canonical_ids):
+        raise ManualReorderValidationError(
+            'TASK_SET_MISMATCH',
+            'Proposed order length does not match canonical task count',
+        )
+
+    seen_proposed: set[str] = set()
+    for index, tid in enumerate(proposed):
+        if tid in seen_proposed:
+            raise ManualReorderValidationError(
+                'DUPLICATE_PROPOSED_TASK_ID',
+                f'Duplicate proposed task ID: {tid}',
+                task_id=tid,
+                proposed_index=index,
+            )
+        seen_proposed.add(tid)
+
+    canonical_set = set(canonical_ids)
+    proposed_set = set(proposed)
+    if proposed_set != canonical_set:
+        missing = sorted(canonical_set - proposed_set)
+        extra = sorted(proposed_set - canonical_set)
+        if missing and not extra:
+            raise ManualReorderValidationError(
+                'TASK_SET_MISMATCH',
+                f'Missing task IDs in proposed order: {", ".join(missing)}',
+                task_id=missing[0],
+            )
+        if extra and not missing:
+            raise ManualReorderValidationError(
+                'TASK_SET_MISMATCH',
+                f'Extra task IDs in proposed order: {", ".join(extra)}',
+                task_id=extra[0],
+            )
+        raise ManualReorderValidationError(
+            'TASK_SET_MISMATCH',
+            'Proposed task set does not match canonical task set',
+        )
+
+    for index, (task, cid) in enumerate(zip(tasks, canonical_ids)):
+        if not can_move_task(task) and proposed[index] != cid:
+            raise ManualReorderValidationError(
+                'LOCKED_TASK_MOVE',
+                f'Locked task cannot move: {cid}',
+                task_id=cid,
+                canonical_index=index,
+                proposed_index=index,
+            )
+
+    segments = build_manual_reorder_segments(tasks)
+    for segment in segments:
+        if segment['kind'] != 'movable':
+            continue
+        start = int(segment['start_index'])
+        end = int(segment['end_index'])
+        canonical_seg = canonical_ids[start:end]
+        proposed_seg = proposed[start:end]
+        if sorted(proposed_seg) != sorted(canonical_seg):
+            raise ManualReorderValidationError(
+                'SEGMENT_BOUNDARY_CROSS',
+                'Movable task crossed a locked segment boundary',
+                segment_index=int(segment['segment_index']),
+            )
+
+    return list(proposed)

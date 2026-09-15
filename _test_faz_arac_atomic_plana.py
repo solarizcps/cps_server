@@ -91,8 +91,17 @@ def _counts(db_path: str) -> dict:
         con.close()
 
 
+def _fake_vehicle_identity(provider, external_id):
+    return {
+        'arac_provider': provider or 'TURKCELL_FILOM',
+        'arac_external_id': str(external_id),
+        'arac_plaka_snapshot': '34 MOR 049',
+    }
+
+
 BASE_PAYLOAD = {
     'plan_tarihi': '2026-12-20',
+    'arac_provider': 'TURKCELL_FILOM',
     'arac_external_id': 'V1',
     'arac_plaka': '34 MOR 049',
     'firma': 'Test Firma',
@@ -178,7 +187,7 @@ def test_4_item_insert_fail(db_path: str) -> None:
 
     original = svc._add_plan_item_conn
 
-    def fail_item(con, uid, plan_id, talep_id, saat, sira, now):
+    def fail_item(con, uid, plan_id, talep_id, saat, sira, now, **kwargs):
         raise sqlite3.OperationalError('injected item insert failure')
 
     svc._add_plan_item_conn = fail_item
@@ -336,7 +345,10 @@ def main() -> int:
     print('=' * 60)
     print('ATOMIC PLANA IS EKLE TEST SUITE')
     test_11_canonical_hash()
-    with temp_atomic_db() as db_path:
+    with temp_atomic_db() as db_path, patch(
+        'modules.planlama.arac_vehicle_identity_service.resolve_vehicle_identity',
+        side_effect=_fake_vehicle_identity,
+    ):
         test_1_payload_validation_fail(db_path)
         test_2_talep_insert_fail(db_path)
         test_3_plan_create_fail(db_path)

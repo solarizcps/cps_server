@@ -1,0 +1,76 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.13.0"
+phase_code = "ATP_EXCEL_R07_TRAFFIC_PROXIMITY_V1"
+title = "Canlı trafik rota önerisi ve yakınlık optimizasyonu (R07)"
+status = "ONAYLANDI"
+date = "2026-09-14"
+summary = "Google traffic matrix ile kısıtlı rota önerisi; ACİL/FIFO ve BAŞLADI/TAMAMLANDI kilitleri; kullanıcı onaylı apply; tek proposal metrik kaynağı; action bar layout fix."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "candidate/atp-excel-r07-traffic-proximity-v1@0e68c6ef"
+verification_date = "2026-09-14"
+verification_evidence = "Adem UI/layout/metric parity onay; R07 gate clean; 8080 TEMP preview; MAP_ACTION_OVERLAP_PX=0."
+test_result = "R07 52/52 PASS; metric parity 6/6; planlama full PASS; GPS master 328/328; unified PASS; release validator PASS"
+db_write = false
+server_restart = false
+push_status = "PENDING"
+deployment_status = "NOT_DEPLOYED"
+root_cause = "Rota önerisi ORS mesafe tabanlı hesaplanıyordu; canlı trafik süre optimizasyonu ve UI metrikleri çelişiyordu."
+evidence_summary = "Adem UI/layout/metric parity onay; 8080 TEMP preview; MAP_ACTION_OVERLAP_PX=0; APPLY user-confirmed only."
+approved_by = "Adem Terzi"
+
+changes = [
+  "Google traffic matrix → ORS → current_order fallback zinciri.",
+  "5 dakika cache + single-flight proposal.",
+  "ACİL ilk / eligible FIFO; BAŞLADI/TAMAMLANDI/IPTAL kilitleri.",
+  "Fabrika başlangıç + dönüş kenarı süre/mesafe toplamına dahil.",
+  "Apply yalnız kullanıcı onayı; stale/concurrent/idempotent/rollback koruması.",
+  "Kötü normal öneri (süre iyileşmez) apply disabled.",
+  "Üst kart + alt trafik paneli tek traffic_proposal metrik kaynağı.",
+  "Action bar harita altında normal flow; overlap=0.",
+  "Frontend ikinci metrik hesabı yapmaz.",
+]
+
+changed_files = [
+  "app/modules/planlama/arac_route_apply_service.py",
+  "app/modules/planlama/arac_route_constraints.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/modules/planlama/road_routing/route_planner_service.py",
+  "app/modules/planlama/arac_traffic_route_proposal_service.py",
+  "app/modules/planlama/road_routing/google_route_matrix.py",
+  "app/modules/planlama/road_routing/traffic_proposal_cache.py",
+  "app/static/js/planlama_arac_takip_route.js",
+  "app/static/css/planlama_arac_takip.css",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/test_atp_traffic_route_proposal_r07_v1.py",
+  "tests/planlama/test_atp_traffic_route_apply_contracts_r07_v1.py",
+  "tests/planlama/test_atp_traffic_route_metric_parity_r07_v1.py",
+  "changes/records/planlama.atp/ATP_EXCEL_R07_TRAFFIC_PROXIMITY_V1.toml",
+  "changes/fragments/planlama.atp.ATP_EXCEL_R07_TRAFFIC_PROXIMITY_V1.release",
+]
+
+locked_rules = [
+  "Rota apply yalnız kullanıcı onayı ile DB yazar.",
+  "Canonical/production DB bu fazda yazılmaz.",
+  "Frontend ikinci traffic/metric hesabı eklemez.",
+  "ACİL önceliği ve visit-state kilitleri bypass edilemez.",
+]
+
+tests = [
+  "test_atp_traffic_route_proposal_r07_v1",
+  "test_atp_traffic_route_apply_contracts_r07_v1",
+  "test_atp_traffic_route_metric_parity_r07_v1",
+  "tests/planlama full suite",
+  "_run_arac_gps_master_regression",
+  "_run_atp_unified_suite_v1",
+  "validate_release_history",
+]
+
+known_issues = []
+
+next_steps = [
+  "Production deploy ayrı faz; Adem final integration emri beklenir.",
+]
+
+related_commits = []

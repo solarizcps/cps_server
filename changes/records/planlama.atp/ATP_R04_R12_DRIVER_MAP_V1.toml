@@ -1,0 +1,69 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.10.0"
+phase_code = "ATP_R04_R12_DRIVER_MAP_V1"
+title = "Birleşik şoför rota haritası (R04) ve planlama içi büyük harita modalı (R12)"
+status = "ONAYLANDI"
+date = "2026-09-14"
+summary = "WhatsApp tek şoför harita bağlantısı; token korumalı /sofor-haritasi; günlük planda %88 in-page modal; ORS unconfigured marker fallback."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "candidate/atp-excel-r04-r12-driver-map-v1@adb7e888"
+verification_date = "2026-09-14"
+verification_evidence = "Adem UI onay; modal runtime 88% 1366/1920; driver map 7/7 PASS; MAP14A PASS; GPS master PASS; planlama full PASS; unified PASS."
+test_result = "driver-map R04/R12 PASS; MAP14A PASS; GPS master PASS; planlama full PASS; unified PASS"
+db_write = false
+server_restart = false
+push_status = "PENDING"
+deployment_status = "NOT_DEPLOYED"
+root_cause = "WhatsApp ham maps?q linkleri ve plan haritası 200px; modal runtime 175px daralma."
+evidence_summary = "8080 runtime computed-style; token negatif testleri; tek L.map reparent; URL değişmez modal."
+
+changes = [
+  "Token imzalı public /planlama/arac-takip/sofor-haritasi sayfası.",
+  "WhatsApp driver_map_url; durak başına ham maps linki kaldırıldı.",
+  "Günlük planda Haritayı Büyüt in-page modal ~88% viewport split.",
+  "ORS unconfigured route_fallback_message ve marker fallback.",
+]
+
+changed_files = [
+  "app/app.py",
+  "app/modules/auth.py",
+  "app/modules/planlama/arac_dashboard_service.py",
+  "app/modules/planlama/arac_driver_map_service.py",
+  "app/modules/planlama/arac_driver_map_token.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/modules/planlama/arac_whatsapp_message_service.py",
+  "app/modules/planlama/road_routing/route_planner_service.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip_driver_map.js",
+  "app/static/js/planlama_arac_takip_plan_map.js",
+  "app/static/js/planlama_arac_takip_route.js",
+  "app/templates/planlama/arac_takip_driver_map.html",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/test_atp_driver_map_r04_r12_v1.py",
+  "_test_atp_whatsapp_real_endpoint_v1.py",
+]
+
+locked_rules = [
+  "Şoför haritası ayrı sayfa; plan modal URL değiştirmez.",
+  "Tek Leaflet L.map instance reparent korunur.",
+  "R13/history/dedupe/urgent korumaları bozulmaz.",
+]
+
+tests = [
+  "test_atp_driver_map_r04_r12_v1",
+  "_test_faz_arac_map14a",
+  "_test_atp_whatsapp_real_endpoint_v1",
+  "tests/planlama full suite",
+  "_run_atp_unified_suite_v1",
+  "GPS master gate",
+]
+
+known_issues = []
+
+next_steps = [
+  "Production deploy ayrı faz; Adem talimatı beklenir.",
+]
+
+related_commits = []

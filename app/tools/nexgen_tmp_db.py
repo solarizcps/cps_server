@@ -54,9 +54,12 @@ def _norm(p: str) -> str:
 
 def canonical_db_path(live_path: str | None = None) -> str:
     """Canonical mock_data.db absolute path."""
+    explicit = (live_path or os.environ.get('CPS_CANONICAL_DB_SOURCE') or '').strip()
+    if explicit:
+        return _norm(explicit)
     tools_dir = os.path.dirname(os.path.abspath(__file__))
     app_dir = os.path.dirname(tools_dir)
-    return _norm(live_path or os.path.join(app_dir, 'mock_data.db'))
+    return _norm(os.path.join(app_dir, 'mock_data.db'))
 
 
 def _script_context_hint() -> str:

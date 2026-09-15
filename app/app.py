@@ -93,7 +93,8 @@ def oturum_kontrol():
     acik = (yol.startswith('/static')
             or yol.startswith('/giris')
             or yol.startswith('/personel-giris')
-            or yol == '/favicon.ico')
+            or yol == '/favicon.ico'
+            or yol.startswith('/planlama/arac-takip/sofor-haritasi'))
 
     if g.user and not acik and not sistem_session_gecerli_mi(g.user):
         session.clear()
@@ -307,6 +308,18 @@ def format_boyut(b):
             return f"{b} {unit}"
         b //= 1024
     return f"{b} TB"
+
+
+# [CH_TITLECASE_V1] Display-only firma adı normalleştirme — finans modülü scope
+# Implementasyon: modules/finans/read_model/display_helpers.py
+# DB'ye yazmaz; yalnız Jinja render'da cari_adi_display filter olarak kullanılır.
+from modules.finans.read_model.display_helpers import cari_adi_display as _cari_adi_display_fn
+
+@app.template_filter('cari_adi_display')
+def cari_adi_display_filter(s):
+    """Firma adını title-case ile gösterir — DB'ye yazmaz. (finans scope)"""
+    return _cari_adi_display_fn(s)
+# [/CH_TITLECASE_V1]
 
 
 # ============================================================

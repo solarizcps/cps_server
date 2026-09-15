@@ -1,0 +1,152 @@
+schema_version = 1
+module = "finans"
+version = "CARI_HAREKETLER_COMPACT_UI_V1"
+phase_code = "CARI_HAREKETLER_COMPACT_UI_V1"
+title = "Cari Hareketler — Kompakt UI, Hız, Filtre, Arama, Display Final"
+status = "ONAYLANDI"
+date = "2026-09-07"
+summary = """
+Tüm önceki PAYABLE_READ_MODEL_V1 çalışmalarının final regression'ı + UI tamamlama.
+
+Yapılanlar:
+- Sayfa adı 'Cari Hareketler' (eski 'Ödeme Planı')
+- Kompakt tek satır başlık: breadcrumb, başlık, durum badge, sağ aksiyonlar
+- Sekme isimleri: 'Müşteri Carileri' ve 'Tedarikçi Carileri'
+- 6 KPI kartı tek satır
+- Geniş arama: cari_adi + cari_kod + location/lokasyon adı, Türkçe İ duyarsız
+- Hareketli/Hareketsiz/Aktif Takip/Tüm Cariler filtre butonları
+- Varsayılan görünüm: hareketsiz cariler gizli, active_count gösterim
+- Hareketsiz cari arama ile bulunabiliyor (bakiye_f bypass mantığı)
+- Gelişmiş sayfalama: ilk/son/önceki/sonraki, sayfaya git, sayfa boyutu
+- display_helpers.py finans modülü scope'unda: tr_title_case() DB'ye yazmaz
+- Müşteri Carileri CUSTOMER_SCOPE_IMPLEMENTED=false: tedarikçi verisi müşteri gibi gösterilmez
+- Tüm sekmeler <1000ms, WEB_KORGUN_CALL_COUNT=0
+- Canonical DB'ye yazılmadı, integrity_check=ok
+- 49 pytest PASS 0 FAIL, 39 route/HTTP test PASS 0 FAIL
+"""
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "release/finans-odeme-plani-payable-read-model-v1"
+verification_date = "2026-09-07"
+verification_evidence = "pytest 49 pass 0 fail — temp SQLite, Flask route 39/39 HTTP 200, DB sha unchanged"
+
+changes = [
+    "app/app.py — cari_adi_display Jinja filter (finans scope, display_helpers'tan import)",
+    "app/db.py — get_db_path() merkezi resolver eklendi",
+    "app/modules/finans/read_model/rm_config.py — SCHEMA_VERSION=2",
+    "app/modules/finans/read_model/rm_reader.py — hareketli/hareketsiz filtre, active_count, arama kapsamı genişleme, Türkçe İ fix",
+    "app/modules/finans/read_model/rm_refresh.py — V2 enrichment alanları",
+    "app/modules/finans/read_model/rm_schema.py — V2 şema DDL",
+    "app/modules/finans/read_model/display_helpers.py — YENİ: tr_title_case, cari_adi_display",
+    "app/modules/finans/routes.py — tab labels, qf map, bypass tabs, Müşteri Carileri safe placeholder",
+    "app/modules/finans/services/tedarikci_ayar_page_service.py — snapshot yolu",
+    "app/modules/finans/services/cari_odeme_service.py — db.get_db_path() resolver",
+    "app/modules/finans/services/konsol_service.py — db.get_db_path() resolver",
+    "app/modules/finans/services/kredi_karti_service.py — db.get_db_path() resolver",
+    "app/modules/finans/services/manuel_odeme_service.py — db.get_db_path() resolver",
+    "app/modules/finans/services/odeme_plani_service.py — odeme_plani_sayfa_verisi_safe",
+    "app/modules/finans/services/odeme_takip_service.py — db.get_db_path() resolver",
+    "app/modules/finans/services/takvim_service.py — db.get_db_path() resolver",
+    "app/templates/finans/odeme_plani.html — Cari Hareketler kompakt UI tam redesign",
+    "app/templates/finans/_odeme_plani_styles.inc.html — CH stil sınıfları",
+    "tests/finans/test_payable_read_model.py — test_route_no_snapshot banner assertion güncellendi",
+]
+
+changed_files = [
+    "app/app.py",
+    "app/db.py",
+    "app/modules/finans/read_model/rm_config.py",
+    "app/modules/finans/read_model/rm_reader.py",
+    "app/modules/finans/read_model/rm_refresh.py",
+    "app/modules/finans/read_model/rm_schema.py",
+    "app/modules/finans/read_model/display_helpers.py",
+    "app/modules/finans/routes.py",
+    "app/modules/finans/services/tedarikci_ayar_page_service.py",
+    "app/modules/finans/services/cari_odeme_service.py",
+    "app/modules/finans/services/konsol_service.py",
+    "app/modules/finans/services/kredi_karti_service.py",
+    "app/modules/finans/services/manuel_odeme_service.py",
+    "app/modules/finans/services/odeme_plani_service.py",
+    "app/modules/finans/services/odeme_takip_service.py",
+    "app/modules/finans/services/takvim_service.py",
+    "app/templates/finans/odeme_plani.html",
+    "app/templates/finans/_odeme_plani_styles.inc.html",
+    "tests/finans/test_payable_read_model.py",
+]
+
+locked_rules = []
+
+tests = [
+    "TestSchemaBootstrap::test_bootstrap_idempotent PASS",
+    "TestSchemaBootstrap::test_refresh_control_seeded PASS",
+    "TestSchemaBootstrap::test_pointer_seeded PASS",
+    "TestCanonicalDBPathRejection::test_mock_data_db_rejected PASS",
+    "TestCanonicalDBPathRejection::test_mock_data_db_windows_path_rejected PASS",
+    "TestCanonicalDBPathRejection::test_mock_data_variant_rejected PASS",
+    "TestCanonicalDBPathRejection::test_temp_path_accepted PASS",
+    "TestCanonicalDBPathRejection::test_assert_test_path_rejects_production PASS",
+    "TestParityGate::test_parity_pass_matching_data PASS",
+    "TestParityGate::test_parity_fail_row_count_diff PASS",
+    "TestParityGate::test_parity_fail_hash_mismatch PASS",
+    "TestParityGate::test_parity_fail_company_set_diff PASS",
+    "TestParityGate::test_parity_fixture_muhasebe PASS",
+    "TestRefreshProcess::test_first_successful_refresh PASS",
+    "TestRefreshProcess::test_second_refresh_rotates_generation PASS",
+    "TestRefreshProcess::test_third_refresh_retention PASS",
+    "TestRefreshProcess::test_refresh_exception_keeps_active PASS",
+    "TestRefreshProcess::test_parity_failure_rejects_publish PASS",
+    "TestConcurrentRefreshLock::test_lease_busy_returns_lease_busy PASS",
+    "TestConcurrentRefreshLock::test_stale_lease_recovered PASS",
+    "TestWebReadOnly::test_snapshot_read_no_korgun PASS",
+    "TestWebReadOnly::test_no_snapshot_response PASS",
+    "TestWebReadOnly::test_no_snapshot_db_file_missing PASS",
+    "TestWebReadOnly::test_fresh_snapshot_read PASS",
+    "TestWebReadOnly::test_snapshot_read_under_800ms PASS",
+    "TestWebReadOnly::test_stale_snapshot_shows_data PASS",
+    "TestWebReadOnly::test_failed_refresh_shows_last_success PASS",
+    "TestWebReadOnly::test_pagination PASS",
+    "TestWebReadOnly::test_location_filter PASS",
+    "TestWebReadOnly::test_same_snapshot_id_in_response PASS",
+    "TestCanonicalDBIntegrity::test_canonical_db_sha_unchanged PASS",
+    "TestDryRun::test_dry_run_parity_passes_no_publish PASS",
+    "TestRealRouteCariler::test_route_http_200_with_snapshot PASS",
+    "TestRealRouteCariler::test_route_no_snapshot_http_200 PASS",
+    "TestRealRouteCariler::test_route_stale_snapshot_http_200 PASS",
+    "TestRealRouteCariler::test_route_bare_odeme_plani_defaults_cariler PASS",
+    "TestOdemePlaniErrorClassification::test_sqlite_error_classified_local PASS",
+    "TestOdemePlaniErrorClassification::test_route_failed_refresh_keeps_last_success PASS",
+    "TestRowContractV2::test_debt_row_has_nonzero_bakiye PASS",
+    "TestRowContractV2::test_credit_row_correct_direction PASS",
+    "TestRowContractV2::test_fa_tarih_stored_from_layer2 PASS",
+    "TestRowContractV2::test_fa_cek_takes_priority_when_newer PASS",
+    "TestRowContractV2::test_son_alim_stored_from_layer2 PASS",
+    "TestRowContractV2::test_aktif_takip_stored PASS",
+    "TestRowContractV2::test_usd_and_eur_rows_stored PASS",
+    "TestRowContractV2::test_no_wrong_zero_balance_in_snapshot PASS",
+    "TestRowContractV2::test_missing_layer2_does_not_crash PASS",
+    "TestRowContractV2::test_schema_v1_db_rejected PASS",
+    "TestRowContractV2::test_cross_company_cari_has_correct_location PASS",
+]
+
+known_issues = [
+    "Müşteri Carileri (tahsilat/receivable) veri modeli uygulanmadı — CUSTOMER_SCOPE_IMPLEMENTED=false",
+    "Manuel refresh butonu V1'de yoktur — Scheduled Task yönetir",
+    "Cari detay drill-down (popup) hâlâ Korgün lazy bağlantı kullanıyor — kasıtlı V1",
+    "Windows Scheduled Task bu fazda kayıtlı değildir — deploy adımı 6'da yapılacak",
+]
+
+next_steps = [
+    "Production deploy + Scheduled Task kaydı",
+    "Canlı parity kabul: snapshot KPI = canlı Korgün KPI",
+    "Müşteri/tahsilat (RECEIVABLE) faz — ayrı release",
+]
+
+test_result = "49 PASS 0 FAIL"
+db_write = false
+server_restart = false
+push_status = "pending"
+related_commits = [
+    "b32652be9d43995dc77015376a3fe779be0540f6",
+    "21f1814ccf53ba2d9dcbc8e3f33d18404e2d09f7",
+    "628b1c09f7545496130a29e66ab8f02e240b6de2",
+]

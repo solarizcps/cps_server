@@ -514,7 +514,12 @@
         {% if can_admin %}
         <button type="button" class="pzm-btn pzm-btn-red-outline pzm-admin-sil-btn"
                 id="pzm-detay-btn-sil" style="display:none;"
-                onclick="pzmSilModalAc()">Siparişi Sil</button>
+                onclick="pzmSilModalAc()">Taslağı Sil</button>
+        {% endif %}
+        {% if can_manage %}
+        <button type="button" class="pzm-btn pzm-btn-red-outline"
+                id="pzm-detay-btn-uretim-iptal" style="display:none;"
+                onclick="pzmUretimIptalModalAc()">Siparişi İptal Et</button>
         {% endif %}
       </div>
     </div>
@@ -2367,9 +2372,9 @@ button.rm-page-geri { appearance:none; }
 {% if can_admin %}
 <div id="pzm-sil-panel" class="pzm-basari-panel" style="display:none;" role="dialog" aria-modal="true">
   <div class="pzm-basari-kart" style="text-align:left;max-width:460px;">
-    <div class="pzm-basari-baslik" style="color:var(--rm-red);">Siparişi Kalıcı Sil</div>
+    <div class="pzm-basari-baslik" style="color:var(--rm-red);">Taslağı Sil</div>
     <div style="font-size:12px;color:var(--rm-t2);line-height:1.5;margin:8px 0 12px;">
-      Bu işlem geri alınamaz. Bu işlem siparişe bağlı test planlarını ve batch kayıtlarını kalıcı olarak siler.
+      Bu işlem yalnız taslak siparişi kalıcı olarak siler. Üretime gönderilmiş siparişler bu yolla silinemez.
       Silmek için sipariş numarasını aynen yazın:
       <strong id="pzm-sil-hedef-no" style="display:block;margin-top:6px;font-size:13px;color:var(--rm-t1);"></strong>
     </div>
@@ -2381,7 +2386,34 @@ button.rm-page-geri { appearance:none; }
     <div class="pzm-aksiyon" style="justify-content:flex-end;gap:8px;">
       <button type="button" class="pzm-btn pzm-btn-outline" onclick="pzmSilModalKapat()">Vazgeç</button>
       <button type="button" class="pzm-btn pzm-btn-red-outline" id="pzm-sil-onay-btn" disabled
-              onclick="pzmSilOnayla()">Kalıcı Sil</button>
+              onclick="pzmSilOnayla()">Taslağı Sil</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% if can_manage %}
+<div id="pzm-uretim-iptal-panel" class="pzm-basari-panel" style="display:none;" role="dialog" aria-modal="true">
+  <div class="pzm-basari-kart" style="text-align:left;max-width:480px;">
+    <div class="pzm-basari-baslik" style="color:var(--rm-red);">Siparişi İptal Et</div>
+    <div style="font-size:12px;color:var(--rm-t2);line-height:1.5;margin:8px 0 12px;">
+      Bu işlem üretim başlamamış siparişi ve bağlı üretim kayıtlarını İPTAL durumuna getirir. Kayıt geçmişi silinmez.
+      Doğrulamak için sipariş numarasını aynen yazın:
+      <strong id="pzm-uretim-iptal-hedef-no" style="display:block;margin-top:6px;font-size:13px;color:var(--rm-t1);"></strong>
+    </div>
+    <label style="font-size:11px;font-weight:600;color:var(--rm-t2);display:block;margin-bottom:4px;">İptal nedeni (zorunlu)</label>
+    <textarea id="pzm-uretim-iptal-neden" class="pzm-inp" rows="3" maxlength="500"
+              placeholder="İptal nedenini yazın"
+              style="width:100%;margin-bottom:10px;resize:vertical;"
+              oninput="pzmUretimIptalConfirmGuncelle()"></textarea>
+    <input type="text" id="pzm-uretim-iptal-confirm-inp" class="pzm-inp" autocomplete="off"
+           placeholder="Sipariş numarasını yazın"
+           style="width:100%;margin-bottom:10px;"
+           oninput="pzmUretimIptalConfirmGuncelle()">
+    <div id="pzm-uretim-iptal-hata" class="pzm-hata" style="display:none;margin-bottom:8px;"></div>
+    <div class="pzm-aksiyon" style="justify-content:flex-end;gap:8px;">
+      <button type="button" class="pzm-btn pzm-btn-outline" onclick="pzmUretimIptalModalKapat()">Vazgeç</button>
+      <button type="button" class="pzm-btn pzm-btn-red-outline" id="pzm-uretim-iptal-onay-btn" disabled
+              onclick="pzmUretimIptalOnayla()">Siparişi İptal Et</button>
     </div>
   </div>
 </div>
@@ -6189,9 +6221,10 @@ function pzmDetayAdminSilBtnGuncelle(t) {
     return;
   }
   var d = (t.durum || '').toUpperCase();
-  // FAZ-1B: allowlist yok — yalnız sonuç durumları UI'da pasif
+  var taslakMi = (d === 'TASLAK');
+  btn.style.display = taslakMi ? '' : 'none';
+  if (!taslakMi) return;
   var aktif = (d !== 'BITTI' && d !== 'SEVK_EDILDI' && d !== 'TAMAMLANDI');
-  btn.style.display = '';
   if (t.sevkiyat_bagli) {
     btn.disabled = true;
     btn.title = 'Bu siparişe bağlı sevkiyat kaydı bulunduğu için silinemez.';
@@ -6199,8 +6232,64 @@ function pzmDetayAdminSilBtnGuncelle(t) {
   }
   btn.disabled = !aktif;
   btn.title = aktif
-    ? 'Siparişi kalıcı sil (ADMIN) — finans/sevkiyat/stok ilişkisi varsa engellenir'
+    ? 'Taslak siparişi kalıcı sil (ADMIN) — finans/sevkiyat/stok ilişkisi varsa engellenir'
     : ('Bu durumdaki sipariş silinemez: ' + (t.durum || '—'));
+}
+
+var _pzmUretimIptalDurumCache = {};
+
+function pzmDetayUretimIptalBtnGuncelle(t) {
+  var btn = $id('pzm-detay-btn-uretim-iptal');
+  if (!btn) return;
+  if (!_pzmCanManage || !t) {
+    btn.style.display = 'none';
+    return;
+  }
+  var d = (t.durum || '').toUpperCase();
+  if (d !== 'URETIMDE') {
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
+  var key = String(t.id);
+  var cached = _pzmUretimIptalDurumCache[key];
+  if (!cached || cached.loading) {
+    btn.disabled = true;
+    btn.title = 'İptal uygunluğu kontrol ediliyor…';
+    if (!cached || !cached.loading) {
+      _pzmUretimIptalDurumCache[key] = { loading: true };
+      fetch('/nexgen/api/pazarlama/siparis/' + t.id + '/uretim-iptal-durum', { credentials: 'same-origin' })
+        .then(function(r) { return r.json().then(function(j) { return { status: r.status, body: j }; }); })
+        .then(function(res) {
+          _pzmUretimIptalDurumCache[key] = { loading: false, status: res.status, body: res.body || {} };
+          if (_pzmDetayAktifId === t.id) pzmDetayUretimIptalBtnGuncelle(t);
+          if (_pzmDetayAktifId === t.id) pzmDetV3SiradakiRender(t, pzmMprStateEnsure(t.id));
+        })
+        .catch(function() {
+          _pzmUretimIptalDurumCache[key] = { loading: false, hata: true };
+          if (_pzmDetayAktifId === t.id) pzmDetayUretimIptalBtnGuncelle(t);
+        });
+    }
+    return;
+  }
+  if (cached.hata) {
+    btn.disabled = true;
+    btn.title = 'İptal uygunluğu alınamadı.';
+    return;
+  }
+  var body = cached.body || {};
+  if (body.already_cancelled) {
+    btn.style.display = 'none';
+    return;
+  }
+  if (body.iptal_edilebilir) {
+    btn.disabled = false;
+    btn.title = 'Üretim başlamamış siparişi ve bağlı kayıtları İPTAL durumuna getirir.';
+    return;
+  }
+  btn.disabled = true;
+  var neden = (body.nedenler && body.nedenler.length) ? body.nedenler.join(' ') : '';
+  btn.title = neden || 'Üretim başladığı için bu sipariş buradan iptal edilemez.';
 }
 
 function pzmDetayRender(t) {
@@ -6209,6 +6298,7 @@ function pzmDetayRender(t) {
   var st = pzmMprStateEnsure(t.id);
   pzmDetayHydrate(t, st);
   pzmDetayAdminSilBtnGuncelle(t);
+  pzmDetayUretimIptalBtnGuncelle(t);
 
   // ── V3 IA renderers ──
   pzmDetV3HdrRender(t);
@@ -6596,10 +6686,25 @@ function pzmDetV3SiradakiRender(t, st) {
     }
 
   } else if (d === 'URETIMDE') {
-    html += '<div class="pzm-det-v3-siradaki-aciklama">Üretim devam ediyor. Ali Tablet ekranından takip edebilirsiniz.</div>';
+    var iptalCached = _pzmUretimIptalDurumCache[String(t.id)] || null;
+    var iptalEdilebilir = iptalCached && iptalCached.body && iptalCached.body.iptal_edilebilir;
+    var uretimBasladi = iptalCached && iptalCached.body && !iptalCached.body.iptal_edilebilir && !iptalCached.body.already_cancelled;
+    if (uretimBasladi && iptalCached.body.nedenler && iptalCached.body.nedenler.length) {
+      html += '<div class="pzm-det-v3-siradaki-aciklama" style="color:var(--rm-red);">' +
+        pzmEsc(iptalCached.body.nedenler[0]) + '</div>';
+    } else {
+      html += '<div class="pzm-det-v3-siradaki-aciklama">Üretim devam ediyor. Ali Tablet ekranından takip edebilirsiniz.</div>';
+    }
     var ilkPlan = (st.planlar && st.planlar.length) ? st.planlar[0] : null;
     if (ilkPlan && ilkPlan.batch_kodu) {
       html += '<a href="/nexgen/tablet/uretim-islem/' + encodeURIComponent(ilkPlan.batch_kodu) + '" class="pzm-det-v3-tablet-link" target="_blank">Üretim Detayı →</a>';
+    }
+    if (_pzmCanManage && iptalEdilebilir) {
+      html += '<div style="margin-top:10px;">';
+      html += '<button type="button" class="pzm-btn pzm-btn-red-outline pzm-btn-blk" onclick="pzmUretimIptalModalAc(' + t.id + ')">Siparişi İptal Et</button>';
+      html += '</div>';
+    } else if (_pzmCanManage && uretimBasladi) {
+      html += '<div class="pzm-det-v3-siradaki-aciklama" style="margin-top:8px;color:var(--rm-t3);">Üretim başladığı için bu sipariş buradan iptal edilemez.</div>';
     }
 
   } else if (d === 'IPTAL') {
@@ -7073,7 +7178,7 @@ function satirHtml(lbl, val) {
   return '<div class="pzm-detay-satir"><span>' + lbl + '</span><strong>' + val + '</strong></div>';
 }
 
-/* İptal */
+/* İptal — taslak erken iptal (legacy) */
 window.pzmIptal = function(id) {
   if (!confirm('Bu siparişi iptal etmek istediğinizden emin misiniz?')) return;
   fetch('/nexgen/api/pazarlama/talep/' + id + '/iptal', { method:'POST' })
@@ -7087,6 +7192,108 @@ window.pzmIptal = function(id) {
     });
 };
 
+/* Üretim zinciri cascade iptal */
+var _pzmUretimIptalTid = null;
+var _pzmUretimIptalNo = '';
+
+window.pzmUretimIptalModalAc = function(tid) {
+  if (!_pzmCanManage) return;
+  tid = tid || _pzmDetayAktifId;
+  var t = pzmTalepBul(tid);
+  if (!t) return;
+  if ((t.durum || '').toUpperCase() !== 'URETIMDE') return;
+  _pzmUretimIptalTid = tid;
+  _pzmUretimIptalNo = (t.siparis_no || '').trim();
+  var panel = $id('pzm-uretim-iptal-panel');
+  var hedef = $id('pzm-uretim-iptal-hedef-no');
+  var inp = $id('pzm-uretim-iptal-confirm-inp');
+  var neden = $id('pzm-uretim-iptal-neden');
+  var hata = $id('pzm-uretim-iptal-hata');
+  if (hedef) hedef.textContent = _pzmUretimIptalNo;
+  if (inp) inp.value = '';
+  if (neden) neden.value = '';
+  if (hata) { hata.style.display = 'none'; hata.textContent = ''; }
+  pzmUretimIptalConfirmGuncelle();
+  if (panel) panel.style.display = 'flex';
+  if (neden) setTimeout(function() { neden.focus(); }, 50);
+};
+
+window.pzmUretimIptalModalKapat = function() {
+  var panel = $id('pzm-uretim-iptal-panel');
+  if (panel) panel.style.display = 'none';
+  _pzmUretimIptalTid = null;
+  _pzmUretimIptalNo = '';
+};
+
+window.pzmUretimIptalConfirmGuncelle = function() {
+  var inp = $id('pzm-uretim-iptal-confirm-inp');
+  var neden = $id('pzm-uretim-iptal-neden');
+  var btn = $id('pzm-uretim-iptal-onay-btn');
+  if (!btn) return;
+  var noOk = !!(inp && _pzmUretimIptalNo && inp.value.trim() === _pzmUretimIptalNo);
+  var nedenOk = !!(neden && neden.value.trim().length >= 3);
+  btn.disabled = !(noOk && nedenOk);
+};
+
+window.pzmUretimIptalOnayla = function() {
+  if (!_pzmCanManage || !_pzmUretimIptalTid) return;
+  var inp = $id('pzm-uretim-iptal-confirm-inp');
+  var nedenEl = $id('pzm-uretim-iptal-neden');
+  var yazilan = inp ? inp.value.trim() : '';
+  var neden = nedenEl ? nedenEl.value.trim() : '';
+  if (yazilan !== _pzmUretimIptalNo) {
+    var hata = $id('pzm-uretim-iptal-hata');
+    if (hata) { hata.style.display = ''; hata.textContent = 'Sipariş numarası eşleşmiyor.'; }
+    pzmUretimIptalConfirmGuncelle();
+    return;
+  }
+  if (neden.length < 3) {
+    var hata2 = $id('pzm-uretim-iptal-hata');
+    if (hata2) { hata2.style.display = ''; hata2.textContent = 'İptal nedeni zorunludur.'; }
+    return;
+  }
+  var btn = $id('pzm-uretim-iptal-onay-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'İptal ediliyor…'; }
+  var tid = _pzmUretimIptalTid;
+  var no = _pzmUretimIptalNo;
+  var submitId = 'pzm-ui-' + Date.now();
+  fetch('/nexgen/api/pazarlama/siparis/' + tid + '/uretim-iptal', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ siparis_no: no, iptal_nedeni: neden, client_submit_id: submitId })
+  })
+    .then(function(r) { return r.json().then(function(j) { return { status: r.status, body: j }; }); })
+    .then(function(res) {
+      if (!res.body || !res.body.ok) {
+        var msg = (res.body && (res.body.hata || (res.body.nedenler || []).join(' '))) || 'İptal başarısız.';
+        alert(msg);
+        if (btn) { btn.textContent = 'Siparişi İptal Et'; }
+        pzmUretimIptalConfirmGuncelle();
+        return;
+      }
+      pzmUretimIptalModalKapat();
+      alert(res.body.mesaj || 'Sipariş ve bağlı üretim zinciri iptal edildi.');
+      delete _pzmUretimIptalDurumCache[String(tid)];
+      var t = pzmTalepBul(tid);
+      if (t) {
+        t.durum = 'IPTAL';
+        t.durum_etiket = 'İptal';
+      }
+      pzmTabloRender(_pzmTalepCache || []);
+      if (_pzmDetayAktifId === tid && t) {
+        pzmDetayRender(t);
+      } else {
+        pzmEkranGec('liste');
+      }
+    })
+    .catch(function() {
+      alert('İptal isteği gönderilemedi.');
+      if (btn) { btn.textContent = 'Siparişi İptal Et'; }
+      pzmUretimIptalConfirmGuncelle();
+    });
+};
+
 /* ADMIN — kalıcı silme */
 var _pzmSilTid = null;
 var _pzmSilNo = '';
@@ -7097,6 +7304,10 @@ window.pzmSilModalAc = function(tid) {
   var t = pzmTalepBul(tid);
   if (!t) return;
   var d = (t.durum || '').toUpperCase();
+  if (d !== 'TASLAK') {
+    alert('Kalıcı silme yalnız taslak siparişler için kullanılabilir.');
+    return;
+  }
   if (d === 'BITTI' || d === 'SEVK_EDILDI' || d === 'TAMAMLANDI') {
     alert('Bu durumdaki sipariş silinemez: ' + (t.durum || '—'));
     return;
@@ -7161,7 +7372,7 @@ window.pzmSilOnayla = function() {
         hata2.style.display = '';
         hata2.textContent = d.hata || 'Silme başarısız.';
       }
-      if (btn) { btn.textContent = 'Kalıcı Sil'; }
+      if (btn) { btn.textContent = 'Taslağı Sil'; }
       pzmSilConfirmGuncelle();
       return;
     }
@@ -7190,7 +7401,7 @@ window.pzmSilOnayla = function() {
       hata3.style.display = '';
       hata3.textContent = 'Bağlantı hatası.';
     }
-    if (btn) { btn.textContent = 'Kalıcı Sil'; }
+    if (btn) { btn.textContent = 'Taslağı Sil'; }
     pzmSilConfirmGuncelle();
   });
 };

@@ -568,3 +568,150 @@
 
 /* Status select */
 .op-status-select { font-size: 12px; padding: 4px 8px; border-radius: 6px; border: 1px solid #d1d5db; }
+
+/* =========================================================
+   CH_HEADER_V1 — Kompakt başlık
+   ========================================================= */
+.op-ch-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0 6px;
+  border-bottom: 1px solid #f3f4f6;
+  margin-bottom: 10px;
+}
+.op-ch-breadcrumb {
+  font-size: 11.5px;
+  color: #9ca3af;
+  margin-bottom: 2px;
+}
+.op-ch-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.op-ch-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  line-height: 1.2;
+}
+.op-ch-status {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.op-ch-status-fresh    { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+.op-ch-status-refreshing{ background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+.op-ch-status-stale    { background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
+.op-ch-status-warn     { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
+.op-ch-status-info     { background:#f0f9ff; color:#0369a1; border:1px solid #bae6fd; }
+.op-ch-header-actions  { display: flex; align-items: center; gap: 8px; }
+
+/* =========================================================
+   CH_TOOLBAR_V1 — Sekme + kontrol satırı
+   ========================================================= */
+.op-ch-toolbar { margin-bottom: 6px; }
+.op-ch-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  margin-bottom: 4px;
+}
+.op-ch-search-form { flex: 1 1 180px; min-width: 160px; }
+.op-ch-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.op-ch-search-icon {
+  position: absolute;
+  left: 8px;
+  color: #9ca3af;
+  pointer-events: none;
+}
+.op-ch-search-input {
+  width: 100%;
+  padding: 5px 28px 5px 28px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12.5px;
+  outline: none;
+  background: #fff;
+  box-sizing: border-box;
+}
+.op-ch-search-input:focus { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245,158,11,0.1); }
+.op-ch-search-clear {
+  position: absolute;
+  right: 7px;
+  color: #9ca3af;
+  font-size: 14px;
+  text-decoration: none;
+  line-height: 1;
+}
+.op-ch-sirket-form { display: flex; align-items: center; gap: 4px; }
+.op-ch-sirket-sel  { font-size: 12.5px; padding: 5px 8px; border-radius: 6px; border: 1px solid #d1d5db; }
+.op-ch-filter-btn  { font-size: 12px; padding: 5px 10px; }
+.op-ch-view-toggle { display: flex; gap: 2px; }
+.op-ch-count-row   { font-size: 11.5px; color: #6b7280; margin-top: 3px; padding: 0 2px; }
+
+/* =========================================================
+   CH_ACTIVE_FILTERS — filtre satırı
+   ========================================================= */
+.op-ch-active-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  margin-top: 4px;
+  margin-bottom: 2px;
+}
+
+/* =========================================================
+   CH_FOOTER_V1 — Tam genişlik footer
+   ========================================================= */
+.op-ch-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid #f3f4f6;
+  padding: 8px 0 4px;
+  margin-top: 4px;
+}
+.op-ch-pagination {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.op-pg-goto-label, .op-pg-size-label { font-size: 12px; color: #6b7280; }
+.op-pg-goto-input {
+  width: 48px;
+  padding: 4px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 12px;
+  text-align: center;
+}
+.op-pg-goto-input:focus { border-color: #f59e0b; outline: none; }
+.op-pg-goto-btn { font-size: 12px; padding: 4px 10px; }
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .op-ch-controls { gap: 4px; }
+  .op-ch-search-form { flex: 1 1 140px; }
+}
+@media (max-width: 768px) {
+  .op-ch-header { flex-direction: column; align-items: flex-start; }
+  .op-ch-view-toggle { flex-wrap: wrap; }
+  .op-ch-footer { flex-direction: column; align-items: flex-start; }
+}

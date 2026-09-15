@@ -61,9 +61,6 @@ def _lock_reason(task: dict, visit_states: dict[int, dict] | None) -> str | None
         return str(visit_state)
     if arrived_at or departed_at:
         return 'VISIT_TIMESTAMP'
-    pri = normalize_priority(task.get('priority'))
-    if pri == 'ACIL':
-        return 'ACIL'
     return None
 
 
@@ -206,6 +203,87 @@ def build_constrained_full_order(
                 output.append(routable_queue.pop(0))
             else:
                 output.append(seg_id)
+
+    return output, warnings
+
+
+def build_r07_constrained_full_order(
+    active_tasks: list[dict],
+    constraints: dict[str, Any],
+    routable_stops: list[dict],
+    duration_matrix: list[list[float | None]],
+    *,
+    suggest_segment_order_fn,
+) -> tuple[list[str], list[dict]]:
+    """R07: hard locks fixed; unstarted ACIL block (FIFO) before optimized normals."""
+    from modules.planlama.road_routing.suggest import detect_important_order_warnings
+
+    sorted_active = sorted(active_tasks, key=lambda x: x.get('order_no') or 0)
+    locked = set(constraints.get('locked_task_ids') or [])
+    eligible = set(constraints.get('eligible_task_ids') or [])
+    critical = set(constraints.get('critical_task_ids') or [])
+    routable_by_id = {str(s['id']): s for s in routable_stops}
+    warnings: list[dict] = []
+    output: list[str] = []
+    idx = 0
+
+    while idx < len(sorted_active):
+        task = sorted_active[idx]
+        tid = str(task['id'])
+        if tid in locked or tid not in eligible:
+            output.append(tid)
+            idx += 1
+            continue
+
+        segment: list[dict] = []
+        while idx < len(sorted_active):
+            seg_task = sorted_active[idx]
+            seg_id = str(seg_task['id'])
+            if seg_id in eligible:
+                segment.append(seg_task)
+                idx += 1
+            else:
+                break
+
+        acil_seg = [t for t in segment if str(t['id']) in critical]
+        normal_seg = [t for t in segment if str(t['id']) not in critical]
+
+        acil_routable = [
+            routable_by_id[str(t['id'])]
+            for t in acil_seg
+            if str(t['id']) in routable_by_id
+        ]
+        normal_routable = [
+            routable_by_id[str(t['id'])]
+            for t in normal_seg
+            if str(t['id']) in routable_by_id
+        ]
+
+        output.extend(str(t['id']) for t in acil_seg)
+
+        if len(normal_routable) >= 2:
+            start_index = _start_matrix_index(output, routable_by_id)
+            old_order = [str(t['id']) for t in normal_routable]
+            new_order = suggest_segment_order_fn(
+                normal_routable,
+                duration_matrix,
+                start_index=start_index,
+            )
+            warnings.extend(
+                detect_important_order_warnings(
+                    old_order,
+                    new_order,
+                    constraints.get('important_task_ids') or [],
+                ),
+            )
+            output.extend(new_order)
+        else:
+            output.extend(str(t['id']) for t in normal_routable)
+
+        output.extend(
+            str(t['id']) for t in normal_seg
+            if str(t['id']) not in routable_by_id
+        )
 
     return output, warnings
 

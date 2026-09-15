@@ -1,0 +1,58 @@
+schema_version = 1
+module = "test.infra"
+version = "v1.8.0"
+phase_code = "ATP_PB_GATE_RUNNERS_V1"
+title = "ATP PB post-lock gate runners committed to repo root"
+status = "ONAYLANDI"
+date = "2026-09-14"
+summary = "P0 matrix, WhatsApp real endpoint, active snapshot, and unified gate runner moved from _tempdb to committed repo-root scripts."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "candidate/atp-excel-pb-urgent-order-badge-v1@501b9ba"
+verification_date = "2026-09-14"
+verification_evidence = "Scripts runnable from clean checkout; unified runner writes JSON to system temp only."
+test_result = "PENDING full gate on verify worktree"
+db_write = false
+server_restart = false
+push_status = "PENDING"
+deployment_status = "NOT_DEPLOYED"
+root_cause = "Post-lock reproducibility gate required committed runners; _tempdb copies were not on remote."
+evidence_summary = "No DB/env/secret in commit; runner output to tempfile."
+
+changes = [
+  "Commit _test_atp_p0_matrix.py at repo root.",
+  "Commit _test_atp_whatsapp_real_endpoint_v1.py at repo root.",
+  "Commit _test_atp_active_snapshot_v1.py at repo root.",
+  "Commit _run_atp_unified_suite_v1.py orchestrator.",
+]
+
+changed_files = [
+  "_test_atp_p0_matrix.py",
+  "_test_atp_whatsapp_real_endpoint_v1.py",
+  "_test_atp_active_snapshot_v1.py",
+  "_run_atp_unified_suite_v1.py",
+]
+
+locked_rules = [
+  "No canonical DB write.",
+  "No production product code change.",
+  "Runner JSON output must not live in repo.",
+]
+
+tests = [
+  "_test_atp_p0_matrix.py",
+  "_test_atp_whatsapp_real_endpoint_v1.py",
+  "_test_atp_active_snapshot_v1.py",
+  "_run_atp_unified_suite_v1.py",
+]
+
+known_issues = [
+  "Full gate requires fresh canonical DB byte-copy in verify worktree local mock DB slot.",
+]
+
+next_steps = [
+  "Run unified gate on clean checkout with TEMP DB bootstrap.",
+]
+
+related_commits = [
+]

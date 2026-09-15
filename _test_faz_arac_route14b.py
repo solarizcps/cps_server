@@ -36,8 +36,23 @@ from modules.planlama.road_routing.suggest import suggest_stop_order
 from modules.planlama.road_routing.route_planner_service import (
     build_plan_route_dto,
     get_routing_provider,
-    _merge_apply_order,
 )
+
+
+def _test_merge_apply_order(all_tasks: list[dict], suggested_routable_ids: list[str]) -> list[str]:
+    """Test-local mirror of legacy route_planner_service._merge_apply_order (removed in 861d39c)."""
+    canonical = sorted(all_tasks, key=lambda x: x.get('order_no') or 0)
+    by_id = {t['id']: t for t in canonical}
+    queue = [by_id[i] for i in suggested_routable_ids if i in by_id]
+    out: list[str] = []
+    for t in canonical:
+        if not t.get('has_coordinates'):
+            out.append(t['id'])
+        elif queue:
+            out.append(queue.pop(0)['id'])
+    for t in queue:
+        out.append(t['id'])
+    return out
 
 # ROUTE14B-01 provider interface
 ok('ROUTE14B-01 provider interface', issubclass(MockRoadRoutingProvider, RoadRoutingProvider))
@@ -215,7 +230,7 @@ with _isolated_route14b_db():
     else:
         ok('ROUTE14B-25 bulk reorder fn exists', False, 'tables missing on temp db')
 
-merged = _merge_apply_order(tasks, ['pi-3', 'pi-1'])
+merged = _test_merge_apply_order(tasks, ['pi-3', 'pi-1'])
 ok('ROUTE14B-26 merge keeps missing slot', 'pi-2' in merged and merged.index('pi-2') == 1)
 
 # ROUTE14B-27/28 regression hooks — template assets present

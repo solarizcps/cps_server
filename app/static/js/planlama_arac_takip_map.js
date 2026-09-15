@@ -25,10 +25,19 @@
   }
 
   function isLiveMapVisible() {
-    var box = document.getElementById('atp-live-map-container');
+    /* Check both the container and the map element itself */
+    var box = document.getElementById('atp-live-map-container') ||
+              document.getElementById('atpLeafletMap');
     if (!box) return false;
     var st = window.getComputedStyle(box);
-    return st.display !== 'none' && st.visibility !== 'hidden' && box.offsetWidth > 0 && box.offsetHeight > 0;
+    if (st.display === 'none' || st.visibility === 'hidden') return false;
+    /* Also check that parent canli view is visible */
+    var canliView = document.getElementById('atpCanliView');
+    if (canliView) {
+      var cvSt = window.getComputedStyle(canliView);
+      if (cvSt.display === 'none') return false;
+    }
+    return true;
   }
 
   function markerIcon(status) {
@@ -142,6 +151,14 @@
         if (lastVehicles.length) updateVehicleMarkers(lastVehicles);
       });
     });
+    /* Extra invalidateSize after a short delay for cases where container
+       size is still settling (tab animation, etc.) */
+    setTimeout(function () {
+      if (map) {
+        map.invalidateSize({ animate: false });
+        if (lastVehicles.length) updateVehicleMarkers(lastVehicles);
+      }
+    }, 300);
     return true;
   }
 
@@ -214,25 +231,45 @@
   }
 
   function onLiveTabShown() {
-    if (!isLiveMapVisible()) return;
     if (!map) {
-      ensureLiveMap();
+      /* Try immediately, then after short delay in case tab just became visible */
+      if (!ensureLiveMap()) {
+        setTimeout(function () {
+          if (!map && ensureLiveMap() && lastVehicles.length) {
+            updateVehicleMarkers(lastVehicles);
+          }
+        }, 100);
+      }
       return;
     }
-    syncMapSize(function () {
-      updateVehicleMarkers(lastVehicles);
-    });
+    /* Map exists — just resize and refresh markers */
+    setTimeout(function () {
+      if (map) {
+        map.invalidateSize({ animate: false });
+        updateVehicleMarkers(lastVehicles);
+      }
+    }, 50);
   }
 
   function refreshLiveVehicles(vehicles, opts) {
     opts = opts || {};
     if (vehicles && vehicles.length) {
       lastVehicles = vehicles;
-      if (map && isLiveMapVisible()) updateVehicleMarkers(vehicles);
       if (!opts.silent) setWarning('');
       if (opts.success) {
         lastSuccessAt = new Date();
         setLastUpdate(lastSuccessAt);
+      }
+      if (!map) {
+        /* Map not initialized yet — try to init now */
+        if (ensureLiveMap()) {
+          updateVehicleMarkers(vehicles);
+        } else {
+          /* Will be picked up on next onLiveTabShown */
+        }
+      } else {
+        updateVehicleMarkers(vehicles);
+        if (isLiveMapVisible()) map.invalidateSize({ animate: false });
       }
       return validVehicles(vehicles).length;
     }

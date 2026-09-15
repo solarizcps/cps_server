@@ -19,8 +19,8 @@ KART_TIPI_SET = ("kredi", "bankamatik", "ticari", "diger")
 
 
 def _db_path():
-    here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(here))), "mock_data.db")
+    from db import get_db_path
+    return get_db_path()
 
 
 def _conn(db_path=None):

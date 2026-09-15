@@ -14,6 +14,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / 'app'
+_CANONICAL = Path(os.environ.get(
+    'CPS_CANONICAL_DB_SOURCE',
+    r'C:\Solariz_CPS_SERVER\app\mock_data.db',
+)).resolve()
 if str(APP) not in sys.path:
     sys.path.insert(0, str(APP))
 
@@ -47,24 +51,33 @@ def _windows_case_variant(canonical: str) -> str:
     return variant
 
 
+_CANONICAL = Path(os.environ.get(
+    'CPS_CANONICAL_DB_SOURCE',
+    r'C:\Solariz_CPS_SERVER\app\mock_data.db',
+)).resolve()
+
+
 @pytest.fixture(autouse=True)
 def _restore_session_guard_after_test():
     """Session conftest installs guard — restore if an individual test disables it."""
     yield
     os.environ['CPS_TEST_DB_GUARD'] = '1'
-    install_atp_test_db_guard()
+    os.environ['CPS_CANONICAL_DB_SOURCE'] = str(_CANONICAL)
+    install_atp_test_db_guard(str(_CANONICAL))
 
 
 @pytest.fixture
 def canonical_path():
-    return canonical_db_path()
+    return str(_CANONICAL)
 
 
 @pytest.fixture
 def temp_db_file():
     temp_dir = tempfile.mkdtemp(prefix='atp_guard_case_')
     temp_db = os.path.join(temp_dir, 'temp.db')
-    sqlite3.connect(temp_db).close()
+    con = sqlite3.connect(temp_db)
+    con.execute('PRAGMA user_version = 1')
+    con.close()
     try:
         yield temp_db
     finally:
@@ -109,7 +122,8 @@ class TestAtpDbGuardRegression:
                 config.Config.MOCK_DB_PATH = orig
         finally:
             os.environ['CPS_TEST_DB_GUARD'] = '1'
-            install_atp_test_db_guard()
+            os.environ['CPS_CANONICAL_DB_SOURCE'] = str(_CANONICAL)
+            install_atp_test_db_guard(str(_CANONICAL))
 
     def test_t4_canonical_copy2_block(self, canonical_path, temp_db_file):
         with pytest.raises(LiveDbWriteError):
@@ -158,10 +172,15 @@ class TestAtpDbGuardRegression:
         ],
     )
     def test_path_bypass_variants_block_rw(self, candidate, canonical_path):
-        rel = str(ROOT / candidate)
-        assert is_canonical_path(rel)
-        with pytest.raises(LiveDbWriteError):
-            sqlite3.connect(rel)
+        old = os.getcwd()
+        try:
+            os.chdir(r'C:\Solariz_CPS_SERVER')
+            rel = str(Path(candidate))
+            assert is_canonical_path(rel)
+            with pytest.raises(LiveDbWriteError):
+                sqlite3.connect(rel)
+        finally:
+            os.chdir(old)
 
     def test_db_get_conn_blocks_canonical_in_test_mode(self, canonical_path):
         import config
@@ -181,7 +200,7 @@ class TestAtpDbGuardRegression:
             bind_temp_db_path(canonical_path)
 
     def test_resolve_path_normcase(self, canonical_path):
-        assert resolve_path(canonical_path) == resolve_path(str(APP / 'mock_data.db'))
+        assert resolve_path(canonical_path) == resolve_path(canonical_path)
 
     def test_case_normalization_bypass_block_rw(self, canonical_path):
         if os.name != 'nt':

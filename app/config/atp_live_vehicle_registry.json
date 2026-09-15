@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "description": "Canlı Takip aktif araç registry — plaka/external_id bazlı AKTIF|IPTAL durumu. Geçmiş plan/GPS etkilenmez.",
+  "entries": [
+    {
+      "plate_key": "34BPY282",
+      "status": "IPTAL",
+      "note": "Araç iptal edildi — Filom device kayıtları Canlı Takip dışı"
+    }
+  ]
+}

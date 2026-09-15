@@ -1,0 +1,5 @@
+ATP production stabilization lock v1.1 audit fix.
+Enforcement: deploy_preflight.ps1 step 0.
+134 unique manifest files; 4 touchpoints separate.
+Removed validate_cps_pre_release_gates.py orphan.
+Filom canonical DB tests: read-only CPS_CANONICAL_DB_SOURCE.

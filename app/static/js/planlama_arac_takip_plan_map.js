@@ -36,18 +36,44 @@
     });
   }
 
-  function stopIcon(orderNo) {
-    var n = esc(orderNo);
+  function stopFill(stop) {
+    var st = ((stop && stop.status) || '').toUpperCase();
+    if (st === 'TAMAMLANDI') return '#16a34a';
+    if (st === 'BASLADI') return '#2563eb';
+    var pri = ((stop && stop.priority) || '').toUpperCase();
+    if (pri === 'ACIL') return '#dc2626';
+    return '#c8922a';
+  }
+
+  function stopIcon(orderNo, stop) {
+    var n = esc(stop && (stop.display_order_no || stop.order_no) || orderNo);
+    var fill = stopFill(stop);
+    var acil = stop && ((stop.priority || '').toUpperCase() === 'ACIL')
+      ? '<circle cx="24" cy="6" r="5" fill="#dc2626" stroke="#fff" stroke-width="1"/>' : '';
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">' +
-      '<circle cx="15" cy="15" r="13" fill="#c8922a" stroke="#fff" stroke-width="2"/>' +
+      acil +
+      '<circle cx="15" cy="15" r="13" fill="' + fill + '" stroke="#fff" stroke-width="2"/>' +
       '<text x="15" y="19" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">' + n + '</text>' +
-      '<path d="M15 28 L10 38 L20 38 Z" fill="#c8922a" stroke="#fff" stroke-width="1"/></svg>';
+      '<path d="M15 28 L10 38 L20 38 Z" fill="' + fill + '" stroke="#fff" stroke-width="1"/></svg>';
     return L.divIcon({
       className: 'atp-plan-pin atp-plan-pin-stop',
       html: svg,
       iconSize: [30, 38],
       iconAnchor: [15, 38],
       popupAnchor: [0, -36]
+    });
+  }
+
+  function endIcon() {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40">' +
+      '<path d="M16 0C9 0 4 5 4 12c0 9 12 28 12 28s12-19 12-28C28 5 23 0 16 0z" fill="#1d4ed8" stroke="#fff" stroke-width="2"/>' +
+      '<text x="16" y="17" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">↩</text></svg>';
+    return L.divIcon({
+      className: 'atp-plan-pin atp-plan-pin-base',
+      html: svg,
+      iconSize: [32, 40],
+      iconAnchor: [16, 40],
+      popupAnchor: [0, -38]
     });
   }
 
@@ -59,14 +85,42 @@
       '</div>';
   }
 
+  function safeMapsLink(lat, lng) {
+    if (lat == null || lng == null) return '';
+    var url = 'https://www.google.com/maps?q=' + encodeURIComponent(String(lat) + ',' + String(lng));
+    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">Haritada Aç</a>';
+  }
+
   function stopPopupHtml(stop) {
+    var acilHtml = (stop.priority || '').toString().toUpperCase() === 'ACIL'
+      ? '<div><span class="badge badge-red atp-acil-badge">ACİL</span></div>'
+      : '';
+    var mapLink = stop.has_coordinates ? safeMapsLink(stop.latitude, stop.longitude) : '';
     return '<div class="atp-popup atp-plan-popup">' +
-      '<strong>' + esc(stop.order_no) + ' · ' + esc(stop.company_name) + '</strong>' +
+      '<strong>' + esc(stop.display_order_no || stop.order_no) + ' · ' + esc(stop.company_name) + '</strong>' +
+      acilHtml +
       '<div>İş: ' + esc(stop.job_title || '—') + '</div>' +
       '<div>Saat: ' + esc(stop.planned_time || '—') + '</div>' +
       '<div>Adres: ' + esc(stop.address_text || '—') + '</div>' +
-      '<div>Konum: ' + esc(stop.location_source_label || '—') + '</div>' +
+      '<div>Durum: ' + esc(stop.status_label || stop.status || '—') + '</div>' +
+      (mapLink ? '<div style="margin-top:6px">' + mapLink + '</div>' : '') +
       '</div>';
+  }
+
+  function updateMissingList(stops) {
+    var el = document.getElementById('atpPlanMapMissingList');
+    if (!el) return;
+    var missing = (stops || []).filter(function (s) { return !s.has_coordinates; });
+    if (!missing.length) {
+      el.style.display = 'none';
+      el.innerHTML = '';
+      return;
+    }
+    el.style.display = '';
+    var items = missing.map(function (s) {
+      return '<li>' + esc(s.display_order_no || s.order_no) + '. ' + esc(s.company_name) + '</li>';
+    }).join('');
+    el.innerHTML = '<strong>Konumu eksik duraklar (' + missing.length + ')</strong><ul style="margin:6px 0 0;padding-left:18px">' + items + '</ul>';
   }
 
   function clearPlanMarkers() {
@@ -262,13 +316,24 @@
     (lastPlanPayload.stops || []).forEach(function (stop) {
       if (!stop.has_coordinates || stop.latitude == null || stop.longitude == null) return;
       var mk = L.marker([stop.latitude, stop.longitude], {
-        icon: stopIcon(stop.order_no),
+        icon: stopIcon(stop.order_no, stop),
         zIndexOffset: 800 + (stop.order_no || 0)
       });
+      mk._atpPlanItemId = stop.plan_item_id;
       mk.bindPopup(stopPopupHtml(stop));
       mk.addTo(planMap);
       planMarkers.push(mk);
     });
+
+    if (base && base.has_coordinates && base.latitude != null && base.longitude != null) {
+      var ep = [parseFloat(base.latitude) + 0.00012, parseFloat(base.longitude) + 0.00012];
+      var emk = L.marker(ep, { icon: endIcon(), zIndexOffset: 950 });
+      emk.bindPopup('<strong>Dönüş</strong><div>' + esc(base.base_name || 'Fabrika') + '</div>');
+      emk.addTo(planMap);
+      planMarkers.push(emk);
+    }
+
+    updateMissingList(lastPlanPayload.stops || []);
 
     var lastR = global.AtpRoute && global.AtpRoute.getLastRoute && global.AtpRoute.getLastRoute();
     var routeGeom = (lastR && lastR.current && lastR.current.geometry) || [];
@@ -296,10 +361,141 @@
     });
   }
 
+  var mapElHome = null;
+  var fsExpandTrigger = null;
+  var modalPortaled = false;
+
+  function ensurePlanMapModalPortal() {
+    var modal = document.getElementById('atpPlanMapFullscreenModal');
+    if (!modal || modalPortaled) return;
+    if (modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
+    }
+    modalPortaled = true;
+  }
+
+  function syncModalStopList() {
+    var src = document.getElementById('atpStopListWrap');
+    var dest = document.getElementById('atpPlanMapModalStopsList');
+    if (!dest) return;
+    if (src && src.innerHTML) {
+      dest.innerHTML = src.innerHTML;
+      return;
+    }
+    if (!lastPlanPayload || !lastPlanPayload.stops) {
+      dest.innerHTML = '<div class="atp-v2-empty">Plan boş — aktif durak yok.</div>';
+      return;
+    }
+    var base = (lastPlanPayload.base && lastPlanPayload.base.base_name) || 'Fabrika';
+    var html = '<div class="factory-row"><span class="fl">🏭</span><span class="factory-label">Başlangıç: ' + esc(base) + '</span></div><div class="stop-list">';
+    (lastPlanPayload.stops || []).forEach(function (stop) {
+      var n = esc(stop.display_order_no || stop.order_no || '?');
+      var firma = esc(stop.company_name || '—');
+      var st = (stop.status || '').toUpperCase();
+      var done = st === 'TAMAMLANDI';
+      var active = st === 'BASLADI';
+      var acil = ((stop.priority || '').toUpperCase() === 'ACIL')
+        ? ' <span class="badge badge-red atp-acil-badge">ACİL</span>' : '';
+      var numCls = 'stop-num' + (done ? ' done' : (active ? ' active' : ''));
+      var cls = 'stop-item' + (done ? ' done' : (active ? ' active' : ''));
+      html += '<div class="' + cls + '"><span class="' + numCls + '">' + n + '</span>' +
+        '<span class="stop-name">' + firma + '</span>' + acil +
+        '<span class="badge badge-gray">' + esc(stop.status_label || stop.status || '—') + '</span></div>';
+    });
+    html += '</div><div class="factory-row" style="margin-top:4px"><span class="fl">🏭</span><span class="factory-label">Bitiş: Fabrika Dönüş — ' + esc(base) + '</span></div>';
+    dest.innerHTML = html;
+  }
+
+  function openPlanMapFullscreen(ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    ensurePlanMapModalPortal();
+    var modal = document.getElementById('atpPlanMapFullscreenModal');
+    var mapEl = document.getElementById('atpPlanLeafletMap');
+    var fsHost = document.getElementById('atpPlanMapFullscreenLeaflet');
+    var btn = document.getElementById('atpBtnPlanMapExpand');
+    if (!modal || !mapEl || !fsHost || !lastPlanPayload) return;
+    if (!ensurePlanMap()) return;
+    fsExpandTrigger = btn || document.activeElement;
+    syncModalStopList();
+    if (!mapElHome) mapElHome = mapEl.parentElement;
+    fsHost.appendChild(mapEl);
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('atp-plan-map-modal-open');
+    requestAnimationFrame(function () {
+      syncPlanMapSize(function () {
+        requestAnimationFrame(function () {
+          if (planMap) planMap.invalidateSize({ animate: false });
+          fitMapToContent([]);
+          syncRouteFromLast();
+        });
+      });
+    });
+    var closeBtn = document.getElementById('atpPlanMapFullscreenClose');
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function closePlanMapFullscreen() {
+    var modal = document.getElementById('atpPlanMapFullscreenModal');
+    var mapEl = document.getElementById('atpPlanLeafletMap');
+    if (!modal) return;
+    if (mapEl && mapElHome) mapElHome.appendChild(mapEl);
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('atp-plan-map-modal-open');
+    syncPlanMapSize(function () {
+      fitMapToContent([]);
+      syncRouteFromLast();
+    });
+    if (fsExpandTrigger && fsExpandTrigger.focus) fsExpandTrigger.focus();
+  }
+
+  function bindPlanMapFullscreen() {
+    var btn = document.getElementById('atpBtnPlanMapExpand');
+    if (btn) {
+      btn.setAttribute('type', 'button');
+      btn.addEventListener('click', openPlanMapFullscreen);
+    }
+    var closeBtn = document.getElementById('atpPlanMapFullscreenClose');
+    var doneBtn = document.getElementById('atpPlanMapFullscreenDone');
+    if (closeBtn) closeBtn.addEventListener('click', closePlanMapFullscreen);
+    if (doneBtn) doneBtn.addEventListener('click', closePlanMapFullscreen);
+    var modal = document.getElementById('atpPlanMapFullscreenModal');
+    ensurePlanMapModalPortal();
+    if (modal) {
+      modal.addEventListener('click', function (ev) {
+        if (ev.target === modal || ev.target.classList.contains('atp-plan-map-modal-backdrop')) {
+          ev.stopPropagation();
+        }
+      });
+    }
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape') {
+        var m = document.getElementById('atpPlanMapFullscreenModal');
+        if (m && m.classList.contains('is-open')) {
+          ev.preventDefault();
+          closePlanMapFullscreen();
+        }
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindPlanMapFullscreen);
+  } else {
+    bindPlanMapFullscreen();
+  }
+
   global.AtpPlanMap = {
     ensurePlanMap: ensurePlanMap,
     onPlanTabShown: onPlanTabShown,
     renderPlanMap: renderPlanMap,
+    showRouteFallback: function (msg) {
+      var el = document.getElementById('atpPlanMapRouteFallback');
+      if (!el) return;
+      if (msg) { el.style.display = ''; el.textContent = msg; }
+      else { el.style.display = 'none'; el.textContent = ''; }
+    },
     setCurrentRouteGeometry: setCurrentRouteGeometry,
     setSuggestedRouteGeometry: setSuggestedRouteGeometry,
     clearSuggestedRouteGeometry: clearSuggestedRouteGeometry,

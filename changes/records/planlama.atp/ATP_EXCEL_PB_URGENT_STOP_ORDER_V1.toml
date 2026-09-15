@@ -1,0 +1,70 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.9.0"
+phase_code = "ATP_EXCEL_PB_URGENT_STOP_ORDER_V1"
+title = "ACIL güvenli durak sırası ve etiketler (R06/R08/R10)"
+status = "ONAYLANDI"
+date = "2026-09-14"
+summary = "Günlük planda ACIL işler için FIFO güvenli sıra, rota snapshot invalidation, WhatsApp plan mesajı ve UI etiketleri."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "candidate/atp-excel-pb-urgent-order-badge-v1@798fe8a"
+verification_date = "2026-09-14"
+verification_evidence = "R06/R08/R10 UI onay; urgent matrix 113 PASS; WhatsApp endpoint PASS; R13/history/dedupe PASS; ATP full regression PASS."
+test_result = "urgent+atomic+invalidation+policy PASS; WhatsApp PASS; R13 protection PASS"
+db_write = false
+server_restart = false
+push_status = "PENDING"
+deployment_status = "NOT_DEPLOYED"
+root_cause = "Excel PB ACIL maddeleri — güvenli sıra ve görünür etiket eksikliği."
+evidence_summary = "7-item FIFO fixture; PNG onay; ROUTE_MAP_PARITY deferred R04."
+
+changes = [
+  "ACIL insert index policy and route order enforcement.",
+  "Rota snapshot invalidation on ACIL insert.",
+  "WhatsApp plan message service wired to /api/whatsapp.",
+  "UI ACIL badge and ordered stop labels.",
+]
+
+changed_files = [
+  "app/modules/planlama/arac_add_to_plan_service.py",
+  "app/modules/planlama/arac_plan_rota_snapshot_service.py",
+  "app/modules/planlama/arac_route_order_policy.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/modules/planlama/arac_whatsapp_message_service.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_plan_change.js",
+  "app/static/js/planlama_arac_takip_plan_map.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/test_arac_acil_atomic_insert.py",
+  "tests/planlama/test_arac_acil_route_state_invalidation.py",
+  "tests/planlama/test_atp_urgent_stop_order_v1.py",
+  "tests/planlama/test_arac_route_order_policy.py",
+]
+
+locked_rules = [
+  "R13 locked hunks at 798fe8a korunur.",
+  "ROUTE_MAP_PARITY deferred to R04.",
+]
+
+tests = [
+  "test_atp_urgent_stop_order_v1",
+  "test_arac_acil_atomic_insert",
+  "test_arac_acil_route_state_invalidation",
+  "test_arac_route_order_policy",
+  "test_atp_whatsapp_real_endpoint_v1",
+  "test_atp_out_of_sequence_visit_alert_v1",
+]
+
+known_issues = [
+  "Route/map parity R04'te ele alınacak.",
+]
+
+next_steps = [
+  "Production deploy ayrı faz.",
+]
+
+related_commits = [
+]

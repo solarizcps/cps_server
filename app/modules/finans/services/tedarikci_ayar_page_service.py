@@ -40,6 +40,95 @@ VALID_PAGE_SIZES = (10, 20, 50)
 VALID_FILTERS = ('tumu', 'ayari_olmayan', 'kritik', 'duzenli_odeme')
 
 
+# ─── Snapshot yardımcı fonksiyonları ────────────────────────────────────────
+
+class _SnapshotSupplier:
+    """SupplierBalance duck-type — snapshot row'dan."""
+    __slots__ = ('location', 'cari_kod', 'cari_adi')
+    def __init__(self, location: str, cari_kod: str, cari_adi: str):
+        self.location = location
+        self.cari_kod = cari_kod
+        self.cari_adi = cari_adi
+
+
+def _suppliers_from_snapshot(locations: List[str]):
+    """
+    Aktif snapshot'tan cari listesi döner.
+    Snapshot yoksa → None (fallback tetiklenir).
+    Korgün çağrısı YOK.
+    """
+    import sqlite3 as _sqlite3, os as _os
+    rm_path = _os.environ.get('ODEME_PLANI_RM_PATH', '')
+    if not rm_path or not _os.path.exists(rm_path):
+        return None
+    try:
+        conn = _sqlite3.connect(rm_path, timeout=5)
+        conn.row_factory = _sqlite3.Row
+        ptr = conn.execute(
+            "SELECT active_snapshot_id FROM rm_pointer WHERE direction='PAYABLE' LIMIT 1"
+        ).fetchone()
+        if not ptr or not ptr['active_snapshot_id']:
+            conn.close()
+            return None
+        sid = ptr['active_snapshot_id']
+        loc_ph = ','.join(['?' for _ in locations])
+        rows = conn.execute(
+            f"""SELECT DISTINCT location, cari_kod, cari_adi
+                FROM rm_snapshot_row
+                WHERE snapshot_id=? AND location IN ({loc_ph})
+                ORDER BY location, cari_adi""",
+            [sid] + list(locations),
+        ).fetchall()
+        conn.close()
+        if not rows:
+            return None
+        return [_SnapshotSupplier(r['location'], r['cari_kod'], r['cari_adi']) for r in rows]
+    except Exception:
+        return None
+
+
+def _term_map_from_snapshot(locations: List[str]) -> dict:
+    """
+    Aktif snapshot'tan cari_kod → {vade_gun, source} haritası.
+    Korgün çağrısı YOK. build_term_dto() ile uyumlu format.
+    """
+    import sqlite3 as _sqlite3, os as _os
+    rm_path = _os.environ.get('ODEME_PLANI_RM_PATH', '')
+    if not rm_path or not _os.path.exists(rm_path):
+        return {}
+    try:
+        conn = _sqlite3.connect(rm_path, timeout=5)
+        conn.row_factory = _sqlite3.Row
+        ptr = conn.execute(
+            "SELECT active_snapshot_id FROM rm_pointer WHERE direction='PAYABLE' LIMIT 1"
+        ).fetchone()
+        if not ptr or not ptr['active_snapshot_id']:
+            conn.close()
+            return {}
+        sid = ptr['active_snapshot_id']
+        loc_ph = ','.join(['?' for _ in locations])
+        rows = conn.execute(
+            f"""SELECT cari_kod, vade_gun, vade_has_term, anlasma_durumu
+                FROM rm_snapshot_row
+                WHERE snapshot_id=? AND location IN ({loc_ph})""",
+            [sid] + list(locations),
+        ).fetchall()
+        conn.close()
+        out = {}
+        for r in rows:
+            ck = r['cari_kod']
+            if ck and ck not in out:
+                vg = r['vade_gun']
+                out[ck] = {
+                    'vade_gun': int(vg) if vg else None,
+                    'odeme_sekil': None,
+                    'source': 'Snapshot',
+                }
+        return out
+    except Exception:
+        return {}
+
+
 def _parse_page(raw: Any, default: int = 1) -> int:
     try:
         return max(1, int(raw or default))
@@ -220,18 +309,28 @@ def tedarikci_ayarlari_sayfa_verisi(
     ff = ff if ff in VALID_FILTERS else 'tumu'
     search_norm = _normalize_search(search_q)
 
-    adapter = KorgunFinanceAdapter()
-    query_count += 1
-    suppliers = adapter.fetch_supplier_master_balances(
-        locations=locations,
-        force_refresh=force_refresh,
-    )
-
-    cari_kods = sorted({s.cari_kod for s in suppliers if s.cari_kod})
-    query_count += 1
+    # [TA_RM_V1 BAS] ─────────────────────────────────────────────────────────
+    # Cari listesi + vade bilgisi: Korgün inline yerine aktif snapshot'tan oku.
+    # Snapshot yoksa fallback → eski Korgün path (davranış değişmez).
+    suppliers = _suppliers_from_snapshot(locations)
+    if suppliers is not None:
+        # Snapshot path — Korgün çağrısı YOK
+        cari_kods = sorted({s.cari_kod for s in suppliers if s.cari_kod})
+        term_raw = _term_map_from_snapshot(locations)
+        query_count += 2  # snapshot reads (hızlı)
+    else:
+        # Fallback: legacy Korgün path
+        adapter = KorgunFinanceAdapter()
+        query_count += 1
+        suppliers = adapter.fetch_supplier_master_balances(
+            locations=locations,
+            force_refresh=force_refresh,
+        )
+        cari_kods = sorted({s.cari_kod for s in suppliers if s.cari_kod})
+        query_count += 1
+        term_raw = fetch_supplier_term_map(cari_kods)
+    # [TA_RM_V1 SON] ──────────────────────────────────────────────────────────
     settings_map = ayar_svc.fetch_settings_map(locations=locations, db_path=db_path)
-    query_count += 1
-    term_raw = fetch_supplier_term_map(cari_kods)
     query_count += 1
     categories = ayar_svc.list_categories(db_path=db_path)
     query_count += 1

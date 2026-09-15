@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -61,13 +62,71 @@ class FilomApiError(Exception):
         self.category = category
 
 
+def _normalize_filom_base_url(raw: str) -> str:
+    """
+    Canonical Filom service root — matches .env.example / web live path.
+
+    DPAPI worker secrets may store http:// or accidental /register suffix;
+    both can trigger redirect loops on POST /register (TooManyRedirects).
+    """
+    base = (raw or '').strip().rstrip('/')
+    if not base:
+        return base
+    low = base.lower()
+    for suffix in ('/register', '/mobiles'):
+        if low.endswith(suffix):
+            base = base[: -len(suffix)].rstrip('/')
+            low = base.lower()
+    if low.startswith('http://'):
+        base = 'https://' + base[7:]
+    return base
+
+
 def _cfg() -> Tuple[str, str, str]:
-    base = (os.environ.get('TURKCELL_FILOM_BASE_URL') or '').rstrip('/')
+    base = _normalize_filom_base_url(os.environ.get('TURKCELL_FILOM_BASE_URL') or '')
     user = os.environ.get('TURKCELL_FILOM_USERNAME') or ''
     pwd = os.environ.get('TURKCELL_FILOM_PASSWORD') or ''
     if not base or not user or not pwd:
         raise FilomApiError('Filom credential yapılandırması eksik', category='config')
     return base, user, pwd
+
+
+def _same_filom_host(url_a: str, url_b: str) -> bool:
+    return urlparse(url_a).netloc.lower() == urlparse(url_b).netloc.lower()
+
+
+def _post_register(url: str, user: str, pwd: str) -> requests.Response:
+    """
+    Register without redirect chains — one same-host Location follow only.
+    Credentials are never sent to a different host.
+    """
+    headers = {'username': user, 'password': pwd}
+    timeout = (_CONNECT_TIMEOUT, _READ_TIMEOUT)
+    r = requests.post(
+        url,
+        params={'language': 'tr'},
+        headers=headers,
+        timeout=timeout,
+        allow_redirects=False,
+    )
+    if r.status_code not in (301, 302, 303, 307, 308):
+        return r
+    location = (r.headers.get('Location') or '').strip()
+    if not location:
+        return r
+    next_url = urljoin(url, location)
+    if not _same_filom_host(url, next_url):
+        raise FilomApiError(
+            'Filom register cross-host redirect reddedildi',
+            category='network',
+        )
+    return requests.post(
+        next_url,
+        params={'language': 'tr'},
+        headers=headers,
+        timeout=timeout,
+        allow_redirects=False,
+    )
 
 
 def _log_call(endpoint: str, status: int, elapsed_ms: int, extra: str = '') -> None:
@@ -83,12 +142,7 @@ def authenticate(force: bool = False) -> str:
     url = f'{base}/register'
     t0 = time.perf_counter()
     try:
-        r = requests.post(
-            url,
-            params={'language': 'tr'},
-            headers={'username': user, 'password': pwd},
-            timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
-        )
+        r = _post_register(url, user, pwd)
     except requests.Timeout as e:
         raise FilomApiError('Filom register timeout', category='timeout') from e
     except requests.RequestException as e:
@@ -283,10 +337,23 @@ def get_live_vehicles(retry_auth: bool = True) -> dict:
                 'elapsed_ms': elapsed,
             }
 
-    vehicles = [map_vehicle_dto(r) for r in raw_list]
+    raw_count = len(raw_list)
+    mapped = [map_vehicle_dto(r) for r in raw_list]
+    from modules.planlama.arac_live_vehicle_dedupe import dedupe_live_vehicles, load_preferred_external_ids
+
+    dedupe_result = dedupe_live_vehicles(mapped, load_preferred_external_ids())
+    from modules.planlama.arac_live_vehicle_registry import filter_live_tracking_vehicles
+
+    registry_result = filter_live_tracking_vehicles(dedupe_result['vehicles'])
+    vehicles = registry_result['vehicles']
     valid_loc = sum(1 for v in vehicles if v.get('has_valid_location'))
     elapsed = int((time.perf_counter() - t0) * 1000)
-    _log_call('get_live_vehicles', 200, elapsed, f'vehicle_count={len(vehicles)} valid_location={valid_loc}')
+    _log_call(
+        'get_live_vehicles',
+        200,
+        elapsed,
+        f'raw_count={raw_count} vehicle_count={len(vehicles)} dedupe_suppressed={dedupe_result.get("suppressed_count", 0)} registry_excluded={registry_result.get("excluded_count", 0)} valid_location={valid_loc}',
+    )
     try:
         from modules.planlama.arac_vehicle_identity_service import update_filom_vehicle_catalog
         update_filom_vehicle_catalog(vehicles)
@@ -295,11 +362,22 @@ def get_live_vehicles(retry_auth: bool = True) -> dict:
     return {
         'ok': True,
         'data_source': 'turkcell_filom',
+        'raw_count': raw_count,
         'count': len(vehicles),
         'valid_location_count': valid_loc,
         'missing_location_count': len(vehicles) - valid_loc,
         'vehicles': vehicles,
         'kpi': compute_kpi(vehicles),
+        'deduplicated': dedupe_result.get('deduplicated', False),
+        'duplicate_suppressed_count': dedupe_result.get('suppressed_count', 0),
+        'duplicate_audit': {
+            'suppressed': dedupe_result.get('suppressed') or [],
+            'ambiguous': dedupe_result.get('ambiguous') or [],
+        },
+        'registry_excluded_count': registry_result.get('excluded_count', 0),
+        'registry_audit': {
+            'excluded': registry_result.get('excluded') or [],
+        },
         'error': None,
         'elapsed_ms': elapsed,
     }
