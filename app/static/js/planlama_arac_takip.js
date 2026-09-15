@@ -4174,6 +4174,26 @@
     if (kind === 'miss') return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s6.5-6.6 6.5-11a6.5 6.5 0 10-13 0c0 4.4 6.5 11 6.5 11z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2" fill="currentColor"/></svg>';
     return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M8 12h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   }
+  function _hdmOosAlertsBlock(alerts, planDate) {
+    if (!alerts || !alerts.length) return '';
+    var rows = alerts.map(function (a) {
+      var plate = fmtVal(a.plate || a.vehicle_id || '—');
+      var expected = fmtVal(a.expected_stop || '—');
+      var actual = fmtVal(a.actual_stop || '—');
+      var when = _hdmClock(a.olay_zamani, planDate) || fmtVal(a.olay_zamani || '—');
+      return '<div class="hdm-oos-alert-row">' +
+        '<div class="hdm-oos-alert-title">⚠️ Sıra dışı ziyaret</div>' +
+        '<div class="hdm-oos-alert-meta">' +
+        'Araç: <strong>' + escapeHtml(plate) + '</strong>' +
+        ' · Beklenen: <strong>' + escapeHtml(expected) + '</strong>' +
+        ' · Gidilen: <strong>' + escapeHtml(actual) + '</strong>' +
+        ' · Zaman: <strong>' + escapeHtml(when) + '</strong>' +
+        '</div></div>';
+    }).join('');
+    return '<div class="hdm-oos-alerts">' +
+      '<div class="hdm-stops-title">Sıra dışı ziyaret uyarıları</div>' +
+      rows + '</div>';
+  }
   function _hdmCard(kind, cls, n, label) {
     return '<div class="hdm-card ' + cls + '" data-hdm-card="' + kind + '">' +
       '<div class="hdm-card-ico">' + _hdmIco(kind) + '</div>' +
@@ -4248,6 +4268,7 @@
             '<td>' + _hdmVisitCell(it, p.date) + '</td></tr>';
         }).join('');
         body.innerHTML = cards + progress +
+          _hdmOosAlertsBlock(d.out_of_sequence_alerts || [], p.date) +
           '<div class="hdm-stops-title">Duraklar</div>' +
           '<div class="hdm-table-wrap"><table class="hist-detail-tbl">' +
           '<colgroup><col class="hdm-c-sira"><col class="hdm-c-is"><col class="hdm-c-adres"><col class="hdm-c-pri"><col class="hdm-c-sonuc"><col></colgroup>' +

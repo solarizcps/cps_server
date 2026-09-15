@@ -1,0 +1,47 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.14.5"
+phase_code = "ATP_OUT_OF_SEQUENCE_VISIT_ARRIVAL_V1"
+title = "Sıra dışı ziyaret — ARRIVED anında tek uyarı, plaka ve geçmiş gösterim"
+status = "ONAYLANDI"
+date = "2026-09-15"
+summary = "OUT_OF_SEQUENCE_VISIT_ALERT doğrulanmış ARRIVED (2× GPS) anında tek kayıt; günlük Dikkat Gerekenler plaka plan snapshot; geçmiş İncele out_of_sequence_alerts bloğu."
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "integration/atp-oos-visit-arrival-v1"
+verification_date = "2026-09-15"
+verification_evidence = "pytest OOS suite; browser 8080 Plaka 34 DEMO 001; geçmiş OOS blok 04_gecmis_oos_block_after_restart.png"
+test_result = "pytest test_atp_out_of_sequence_visit_alert_v1.py test_atp_oos_alert_ui_regression_v1.py passed; validate_release_history PASS"
+db_write = false
+server_restart = true
+push_status = "LOCAL_ONLY"
+deployment_status = "LOCAL_ONLY"
+locked_rules = [
+  "WhatsApp, rota sapması, ACİL ve OUT_OF_SEQUENCE_GEOFENCE audit hunks bu fazda commitlenmez.",
+  "Çıkış/auto-complete anında ikinci VISIT_ALERT üretilmez.",
+]
+changes = [
+  "arac_geofence_service: VISIT_ALERT emit on emit_arrived+OOS; not on departure.",
+  "arac_geofence_repo: list_out_of_sequence_visit_alerts_for_plan.",
+  "arac_takip_repo: history-plan-detail out_of_sequence_alerts.",
+  "arac_today_operations_service: _resolve_out_of_sequence_alert_plate for daily alerts.",
+  "planlama_arac_takip.js/css: geçmiş OOS uyarı bloğu.",
+]
+changed_files = [
+  "app/modules/planlama/arac_geofence_service.py",
+  "app/modules/planlama/arac_geofence_repo.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/modules/planlama/arac_today_operations_service.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip.js",
+  "tests/planlama/test_atp_out_of_sequence_visit_alert_v1.py",
+  "tests/planlama/test_atp_oos_alert_ui_regression_v1.py",
+  "changes/records/planlama.atp/ATP_OUT_OF_SEQUENCE_VISIT_ARRIVAL_V1.toml",
+  "changes/fragments/planlama.atp.ATP_OUT_OF_SEQUENCE_VISIT_ARRIVAL_V1.release",
+]
+tests = [
+  "test_atp_out_of_sequence_visit_alert_v1.py",
+  "test_atp_oos_alert_ui_regression_v1.py",
+]
+known_issues = []
+next_steps = []

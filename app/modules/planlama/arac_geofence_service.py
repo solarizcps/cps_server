@@ -244,8 +244,9 @@ def _emit_out_of_sequence_visit_alert_conn(
     expected_item: dict | None,
     gps_row: dict,
     updated_at: str,
+    olay_zamani: str | None = None,
 ) -> None:
-    """R13: doğrulanmış sıra dışı geofence tamamlaması için kullanıcı uyarısı."""
+    """R13: doğrulanmış sıra dışı ARRIVED (2× GPS) için tek kullanıcı uyarısı."""
     if geofence_metadata_event_exists_conn(
         con, plan_is_id, EVENT_OUT_OF_SEQUENCE, OUT_OF_SEQUENCE_VISIT_ALERT_KIND,
     ):
@@ -257,9 +258,10 @@ def _emit_out_of_sequence_visit_alert_conn(
     if expected_item:
         expected_item_id = expected_item.get('plan_item_id') or expected_item.get('id')
     actual_item_id = item.get('plan_item_id') or item.get('id')
+    when = olay_zamani or gps_row.get('gps_timestamp')
     message = (
-        f"Araç planlanan {expected_name} durağı yerine {actual_name} durağına ulaştı. "
-        f"{actual_name} tamamlandı; {expected_name} sıradaki açık durak olarak korundu."
+        f"Araç planlanan {expected_name} durağı yerine {actual_name} durağına ulaştı (GPS doğrulandı). "
+        f"{expected_name} sıradaki beklenen durak olarak korunuyor."
     )
     insert_geofence_event_conn(
         con,
@@ -277,11 +279,11 @@ def _emit_out_of_sequence_visit_alert_conn(
             'actual_item_id': actual_item_id,
             'vehicle_id': vehicle_id,
             'plan_id': plan_id,
-            'result': 'TAMAMLANDI',
+            'result': 'ARRIVED',
             'gps_snapshot_id': gps_row.get('id'),
-            'olay_zamani': gps_row.get('gps_timestamp'),
+            'olay_zamani': when,
         },
-        olay_zamani=gps_row.get('gps_timestamp'),
+        olay_zamani=when,
         created_at=updated_at,
     )
 
@@ -479,6 +481,18 @@ def _process_single_item_conn(
             olay_zamani=arrived_at or gps_row.get('gps_timestamp'),
             created_at=updated_at,
         )
+        if is_out_of_sequence:
+            _emit_out_of_sequence_visit_alert_conn(
+                con,
+                plan_id=plan_id,
+                plan_is_id=plan_is_id,
+                vehicle_id=vehicle_id,
+                item=item,
+                expected_item=expected_item,
+                gps_row=gps_row,
+                updated_at=updated_at,
+                olay_zamani=arrived_at or gps_row.get('gps_timestamp'),
+            )
 
     if emit_departed:
         dwell = None
@@ -561,17 +575,6 @@ def _process_single_item_conn(
             ),
         )
         auto_completed = True
-        if is_out_of_sequence:
-            _emit_out_of_sequence_visit_alert_conn(
-                con,
-                plan_id=plan_id,
-                plan_is_id=plan_is_id,
-                vehicle_id=vehicle_id,
-                item=item,
-                expected_item=expected_item,
-                gps_row=gps_row,
-                updated_at=updated_at,
-            )
 
     saved = get_visit_state_conn(con, plan_is_id)
     return {

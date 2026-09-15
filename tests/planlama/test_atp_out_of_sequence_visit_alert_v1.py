@@ -127,6 +127,23 @@ def _gps(lat, lon, ts, snap_id=1):
     }
 
 
+def _run_oos_arrived_only(geo_db):
+    """Two GPS confirmations at wrong stop — alert before departure."""
+    from datetime import datetime
+    from modules.planlama import arac_geofence_service as svc
+
+    con = sqlite3.connect(geo_db)
+    con.row_factory = sqlite3.Row
+    fx = _setup_fixture(con, '2026-09-14')
+    con.close()
+    pd = fx['plan_date']
+    for i, ts in enumerate(['2026-09-14 10:00:00', '2026-09-14 10:01:00'], start=1):
+        row = _gps(41.0101, 28.7201, ts, i)
+        dt = datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
+        svc.process_gps_snapshot_for_geofence(row, plan_date=pd, now=dt)
+    return fx
+
+
 def _run_oos_visit(geo_db):
     from datetime import datetime
     from modules.planlama import arac_geofence_service as svc
@@ -145,6 +162,29 @@ def _run_oos_visit(geo_db):
         dt = datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
         svc.process_gps_snapshot_for_geofence(row, plan_date=pd, now=dt)
     return fx
+
+
+def test_out_of_sequence_visit_alert_on_arrived_only(geo_db):
+    fx = _run_oos_arrived_only(geo_db)
+    from modules.planlama.arac_geofence_repo import list_out_of_sequence_visit_alerts_for_date
+
+    rows = list_out_of_sequence_visit_alerts_for_date(fx['plan_date'])
+    assert len(rows) == 1
+    assert rows[0]['expected_stop'] == 'Violet Etiket'
+    assert rows[0]['actual_stop'] == 'Beyazit Tekstil'
+    con = sqlite3.connect(geo_db)
+    n_visit_alert = 0
+    for r in con.execute(
+        "SELECT metadata_json FROM arac_plan_olay WHERE plan_id=? AND olay_turu='NOT'",
+        (fx['plan_id'],),
+    ):
+        m = json.loads(r[0] or '{}')
+        if m.get('geofence_kind') == 'OUT_OF_SEQUENCE_VISIT_ALERT':
+            n_visit_alert += 1
+    st_b = con.execute('SELECT durum FROM arac_gunluk_plan_is WHERE id=?', (fx['pi_beyazit'],)).fetchone()[0]
+    con.close()
+    assert n_visit_alert == 1
+    assert st_b == 'PLANLANDI'
 
 
 def test_out_of_sequence_visit_alert_created(geo_db):
@@ -167,6 +207,18 @@ def test_out_of_sequence_visit_alert_created(geo_db):
     assert alerts[0].get('acknowledged_at') is None
 
 
+def test_out_of_sequence_daily_alert_plate_is_plan_snapshot(geo_db):
+    fx = _run_oos_arrived_only(geo_db)
+    from modules.planlama.arac_today_operations_service import get_today_vehicle_operations
+
+    ops = get_today_vehicle_operations(fx['plan_date'], vehicle_id='TEST_R13_VEHICLE')
+    oos = [a for a in (ops.get('alerts') or []) if a.get('type') == 'OUT_OF_SEQUENCE_VISIT']
+    assert len(oos) == 1
+    assert oos[0]['plate'] == '34 R13 001'
+    assert oos[0]['vehicle_id'] == 'TEST_R13_VEHICLE'
+    assert 'Plaka' not in (oos[0].get('message') or '') or 'TEST_R13_VEHICLE' not in oos[0]['plate']
+
+
 def test_out_of_sequence_alert_list_and_sort(geo_db):
     fx = _run_oos_visit(geo_db)
     from modules.planlama.arac_geofence_repo import list_out_of_sequence_visit_alerts_for_date
@@ -180,6 +232,19 @@ def test_out_of_sequence_alert_list_and_sort(geo_db):
         {'type': 'MISSING_LOCATION', 'severity': 'info'},
     ])
     assert sorted_alerts[0]['type'] == 'OUT_OF_SEQUENCE_VISIT'
+
+
+def test_history_plan_detail_includes_oos_alerts(geo_db):
+    fx = _run_oos_arrived_only(geo_db)
+    from modules.planlama.arac_takip_repo import get_history_plan_detail
+
+    detail = get_history_plan_detail(fx['plan_id'])
+    assert detail.get('ok') is True
+    alerts = detail.get('out_of_sequence_alerts') or []
+    assert len(alerts) == 1
+    assert alerts[0]['expected_stop'] == 'Violet Etiket'
+    assert alerts[0]['actual_stop'] == 'Beyazit Tekstil'
+    assert alerts[0].get('olay_zamani')
 
 
 def test_out_of_sequence_alert_ack_dedupe(geo_db):

@@ -231,6 +231,24 @@ def acknowledge_geofence_event(event_id: int, *, acknowledged_by: str | None = N
         con.close()
 
 
+def _out_of_sequence_visit_alert_from_row(row: sqlite3.Row, meta: dict) -> dict:
+    return {
+        'event_id': int(row['id']),
+        'plan_id': row['plan_id'],
+        'plan_item_id': row['plan_is_id'],
+        'vehicle_id': row['arac_external_id'],
+        'plate': meta.get('plate'),
+        'expected_stop': meta.get('expected_stop'),
+        'actual_stop': meta.get('actual_stop'),
+        'expected_item_id': meta.get('expected_item_id'),
+        'actual_item_id': meta.get('actual_item_id'),
+        'result': meta.get('result') or 'ARRIVED',
+        'olay_zamani': row['olay_zamani'],
+        'message': row['mesaj'],
+        'acknowledged_at': meta.get('acknowledged_at'),
+    }
+
+
 def list_out_of_sequence_visit_alerts_for_date(plan_date: str) -> list[dict]:
     """R13: doğrulanmış sıra dışı ziyaret uyarıları (görülmemiş)."""
     if not geofence_tables_ready():
@@ -256,20 +274,42 @@ def list_out_of_sequence_visit_alerts_for_date(plan_date: str) -> list[dict]:
                 continue
             if meta.get('acknowledged_at'):
                 continue
-            out.append({
-                'event_id': int(row['id']),
-                'plan_id': row['plan_id'],
-                'plan_item_id': row['plan_is_id'],
-                'vehicle_id': row['arac_external_id'],
-                'plate': meta.get('plate'),
-                'expected_stop': meta.get('expected_stop'),
-                'actual_stop': meta.get('actual_stop'),
-                'expected_item_id': meta.get('expected_item_id'),
-                'actual_item_id': meta.get('actual_item_id'),
-                'result': meta.get('result') or 'TAMAMLANDI',
-                'olay_zamani': row['olay_zamani'],
-                'message': row['mesaj'],
-            })
+            out.append(_out_of_sequence_visit_alert_from_row(row, meta))
+        return out
+    finally:
+        con.close()
+
+
+def list_out_of_sequence_visit_alerts_for_plan(
+    plan_id: int,
+    *,
+    include_acknowledged: bool = True,
+) -> list[dict]:
+    """Geçmiş plan detayı — sıra dışı ziyaret uyarı kayıtları."""
+    if not geofence_tables_ready():
+        return []
+    con = get_conn()
+    con.row_factory = sqlite3.Row
+    try:
+        rows = con.execute(
+            """
+            SELECT * FROM arac_plan_olay
+            WHERE plan_id=? AND olay_turu='NOT'
+            ORDER BY olay_zamani ASC, id ASC
+            """,
+            (int(plan_id),),
+        ).fetchall()
+        out: list[dict] = []
+        for row in rows:
+            try:
+                meta = json.loads(row['metadata_json'] or '{}')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                meta = {}
+            if meta.get('geofence_kind') != OUT_OF_SEQUENCE_VISIT_ALERT_KIND:
+                continue
+            if not include_acknowledged and meta.get('acknowledged_at'):
+                continue
+            out.append(_out_of_sequence_visit_alert_from_row(row, meta))
         return out
     finally:
         con.close()

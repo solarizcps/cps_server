@@ -3008,6 +3008,14 @@ def get_history_plan_detail(plan_id: int) -> dict[str, Any]:
             'plan_tarihi': plan_d.get('plan_tarihi'),
         })
 
+        from modules.planlama.arac_geofence_repo import list_out_of_sequence_visit_alerts_for_plan
+
+        plate_snap = plan_d.get('arac_plaka_snapshot') or '—'
+        oos_alerts = list_out_of_sequence_visit_alerts_for_plan(int(plan_id))
+        for alert in oos_alerts:
+            if not alert.get('plate') or alert.get('plate') == alert.get('vehicle_id'):
+                alert['plate'] = plate_snap
+
         return {
             'ok': True,
             'plan': {
@@ -3035,6 +3043,7 @@ def get_history_plan_detail(plan_id: int) -> dict[str, Any]:
                 'total_km': route_km,
             },
             'items': items_out,
+            'out_of_sequence_alerts': oos_alerts,
         }
     finally:
         con.close()

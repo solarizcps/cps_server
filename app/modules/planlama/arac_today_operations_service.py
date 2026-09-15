@@ -647,6 +647,24 @@ def _collect_stop_overstay_alerts(
     return alerts
 
 
+def _resolve_out_of_sequence_alert_plate(oos: dict, vehicles: list[dict]) -> str:
+    """Günlük uyarı: metadata plate yoksa veya vehicle_id ise plan plakasını kullan."""
+    vid = str(oos.get('vehicle_id') or '')
+    raw = (oos.get('plate') or '').strip()
+    if raw and raw != vid:
+        return raw
+    pid = oos.get('plan_id')
+    for v in vehicles:
+        if str(v.get('arac_external_id') or '') != vid:
+            continue
+        if pid is not None and v.get('plan_id') is not None and int(v['plan_id']) != int(pid):
+            continue
+        snap = (v.get('plate') or v.get('arac_plaka_snapshot') or '').strip()
+        if snap:
+            return snap
+    return raw or vid or '—'
+
+
 def _filter_alerts_for_vehicle(alerts: list[dict], vehicle_id: str | None) -> list[dict]:
     if not vehicle_id:
         return alerts
@@ -767,7 +785,7 @@ def _build_alerts(
             con.close()
 
         for oos in list_out_of_sequence_visit_alerts_for_date(plan_date):
-            plate = oos.get('plate') or oos.get('vehicle_id') or '—'
+            plate = _resolve_out_of_sequence_alert_plate(oos, vehicles)
             expected = oos.get('expected_stop') or '—'
             actual = oos.get('actual_stop') or '—'
             when = oos.get('olay_zamani') or ''
