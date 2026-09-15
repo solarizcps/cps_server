@@ -1,6 +1,6 @@
 schema_version = 1
 module = "planlama.atp"
-version = "v1"
+version = "v1.14.0"
 phase_code = "ATP_WHATSAPP_MESSAGE_FINALIZE_V1"
 title = "WhatsApp plan mesaji duzeni — ACIL sira, Tahmini varis, sofor-haritasi linki yok"
 status = "ONAYLANDI"
