@@ -1,0 +1,150 @@
+schema_version = 1
+
+module = "planlama.atp"
+
+version = "v1.16.1"
+
+phase_code = "ATP_LIVE_VISIT_RECONCILIATION_V1"
+
+title = "Canlı ziyaret mutabakatı — DEPARTED_PENDING PLANLANDI split-brain"
+
+status = "ONAYLANDI"
+
+date = "2026-09-16"
+
+summary = "DEPARTED_PENDING + açık plan kalemi split-brain write-side reconcile ile TAMAMLANDI; atomik AUTO_TAMAMLANDI; GET salt okunur; KPI/next-stop/alert senkron; trafiksiz ETA etiketi."
+
+source_type = "commit"
+
+commit_sha = "c4e3779"
+
+worktree_fingerprint = "hotfix/atp-live-visit-reconciliation-v1@02e34423"
+
+approved_by = "Adem"
+
+verification_date = "2026-09-16"
+
+verification_evidence = "Adem final screen PASS (Rotada, Lcw TAMAMLANDI 11:02/11:09/7dk, KPI 1/10, DeFacto, Sorunlu 0); TEMP GET refresh write-count=0; pytest ATP suite"
+
+test_result = "491 test_atp* PASS (2 skip browser/hygiene); stabilization lock PASS (168 files); release validator PASS; git diff --check clean"
+
+db_write = false
+
+server_restart = true
+
+push_status = "PUSHED"
+
+deployment_status = "NOT_DEPLOYED"
+
+root_cause = "Terminal DEPARTED_PENDING + emit_departed kapısı AUTO_TAMAMLANDI/at completion atlıyor; KPI/next-stop yalnız durum okuyor; GET reconcile yazımı kabul edilemez."
+
+evidence_summary = "LCW 11:02 Varış · 11:09 Ayrılış · 7 dk + reconcile sonrası TAMAMLANDI 1/10 next DeFacto; VISIT_RESULT_PENDING kapalı"
+
+
+
+changes = [
+
+  "arac_geofence_service: write-side reconcile_departed_pending_completions; atomik TAMAMLANDI + AUTO_TAMAMLANDI; idempotent event.",
+
+  "arac_gps_poll_service: worker geofence pass poll başında + snapshot pass sonunda reconcile.",
+
+  "arac_today_operations_service: GET reconcile kaldırıldı; trafiksiz ETA honesty alanları.",
+
+  "planlama_arac_takip.js + template cache: trafiksiz ETA satırı.",
+
+  "tests: test_atp_live_visit_reconciliation_v1 (GET no-write, rollback, idempotency); GF18 isolated; T7 read-only SONUC_BEKLIYOR.",
+
+  "ATP stabilization manifest yeniden üretildi (168 dosya).",
+
+]
+
+
+
+changed_files = [
+
+  "app/modules/planlama/arac_geofence_service.py",
+
+  "app/modules/planlama/arac_gps_poll_service.py",
+
+  "app/modules/planlama/arac_today_operations_service.py",
+
+  "app/static/js/planlama_arac_takip.js",
+
+  "app/templates/planlama/arac_takip_plan.html",
+
+  "tests/planlama/test_atp_live_visit_reconciliation_v1.py",
+
+  "tests/planlama/test_atp_geofence_a2_v1.py",
+
+  "tests/planlama/test_atp_live_status_future_plan_v1.py",
+
+  "docs/atp-lock/atp_stabilization_manifest.sha256",
+
+  "docs/atp-lock/atp_inventory.json",
+
+  "changes/records/planlama.atp/ATP_LIVE_VISIT_RECONCILIATION_V1.toml",
+
+  "changes/fragments/planlama.atp.ATP_LIVE_VISIT_RECONCILIATION_V1.release",
+
+]
+
+
+
+locked_rules = [
+
+  "Geofence 2× inside / 2× outside onay eşiği değiştirilmez.",
+
+  "Cross-plan reorder, Google apply, WhatsApp, cancel/defer davranışları bu release dışında.",
+
+  "Adaptif GPS polling (30/60/120) NOT_IMPLEMENTED — ayrı takip.",
+
+  "Ulaşılamadı–tekrar ziyaret TAMAMLANDI sonrası BLOCKED — ayrı takip.",
+
+  "Production/canonical DB migration 192 zaten base zincirinde; bu release DB migration uygulamaz.",
+
+]
+
+
+
+tests = [
+
+  "tests/planlama/test_atp_live_visit_reconciliation_v1.py",
+
+  "tests/planlama/test_atp_geofence_a2_v1.py",
+
+  "tests/planlama/test_atp_live_status_future_plan_v1.py",
+
+  "tests/planlama/test_arac_manual_reorder_api.py",
+
+  "tests/planlama/test_atp_plan_change_cancel_r03_r09_v1.py",
+
+  "tests/planlama/test_google_route_options_service.py",
+
+  "tests/planlama/test_atp_whatsapp_api_v1.py",
+
+  "tests/tools/test_atp_stabilization_lock_v1.py",
+
+]
+
+
+
+known_issues = []
+
+
+
+next_steps = [
+
+  "Adem RDP deploy (hotfix branch → production worktree); GPS worker restart.",
+
+]
+
+
+
+follow_up_blocked = [
+
+  "ADAPTIVE_GPS_POLLING=NOT_IMPLEMENTED_SEPARATE_FOLLOWUP",
+
+  "UNREACHABLE_RETRY=BLOCKED_SEPARATE_FOLLOWUP",
+
+]
+

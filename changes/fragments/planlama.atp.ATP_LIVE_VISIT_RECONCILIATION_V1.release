@@ -1,0 +1,12 @@
+## v1.16.1 — ATP_LIVE_VISIT_RECONCILIATION_V1 (2026-09-16)
+
+**Canlı ziyaret mutabakatı (dar hotfix — ONAYLANDI)**
+
+- `DEPARTED_PENDING` + `PLANLANDI`/`BASLADI` split-brain yalnız **write-side** (GPS worker / geofence pass) reconcile ile `TAMAMLANDI`.
+- `AUTO_TAMAMLANDI` audit event **atomik** (CHECK hatasında status rollback); idempotent ikinci poll.
+- **GET today-operations yazmaz**; ekran refresh reconcile tetiklemez.
+- KPI, next-stop, `VISIT_RESULT_PENDING` visit kanıtı ile hizalanır.
+- Tahmini varış **trafiksiz** etiketlenir (canlı trafik iddiası yok).
+- Taban: `02e34423` (`release/atp-cross-plan-google-apply-final-v1`); migration **192** base’de mevcut.
+
+**Kapsam dışı (ayrı takip):** adaptif 30/60/120 GPS polling; Ulaşılamadı–tekrar ziyaret (TAMAMLANDI sonrası).
