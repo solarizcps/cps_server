@@ -245,7 +245,10 @@
             <div class="plan-rota-detail" id="atpPlanRotaDetail">
               {# Left: stop list #}
               <div>
-                <div style="font-size:12.5px;font-weight:700;color:#111827;margin-bottom:8px" id="atpStopListTitle">Sıralı Duraklar</div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                  <div style="font-size:12.5px;font-weight:700;color:#111827" id="atpStopListTitle">Sıralı Duraklar</div>
+                  <div id="atpManualReorderHeaderAction"></div>
+                </div>
                 <div id="atpStopListWrap">
                   <div class="atp-v2-empty">Henüz planlanmış durak yok.</div>
                 </div>
@@ -1034,7 +1037,13 @@
     </div>
   </div>
   <div id="atpPcPanelReorder" style="display:none">
-    <p id="atpPcReorderInfo" class="atp-pc-info">Saatler rota hesaplamasıyla atanır.</p>
+    <p id="atpPcReorderInfo" class="atp-pc-info" style="margin-bottom:10px">
+      Aynı araç ve aynı gün içinde iş sırasını değiştirebilirsiniz.
+      Sıralama değiştikten sonra rota ve tahmini saatler otomatik güncellenir.
+    </p>
+    <button type="button" class="btn btn-primary btn-sm" id="atpPcBtnOpenReorder">
+      Sırayı Düzenle
+    </button>
   </div>
   <div id="atpPcCancelNote" class="atp-pc-info-banner" style="display:none">
     Bu iş aktif plandan kaldırılacak; geçmiş kaydı korunacaktır. Silme yapılmaz.
@@ -1133,7 +1142,9 @@
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=18"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=11"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=9"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=101"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_manual_reorder.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_manual_reorder_ui.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=10"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=103"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}

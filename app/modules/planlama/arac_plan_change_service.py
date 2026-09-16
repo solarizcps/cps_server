@@ -585,7 +585,7 @@ def _apply_plan_job_change_locked(
             target_plan_id = _get_or_create_daily_plan_conn(
                 con, user_id, target_date, target_vid, plate, None, sofor, now,
             )
-            new_plan_is_id = _add_plan_item_conn(
+            new_plan_is_id, _defer_route_meta = _add_plan_item_conn(
                 con, user_id, target_plan_id, new_talep_id,
                 talep['istenen_saat'], None, now,
             )

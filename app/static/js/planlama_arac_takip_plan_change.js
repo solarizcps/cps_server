@@ -67,6 +67,33 @@
     showWarn('');
   }
 
+  function _openReorderPanel() {
+    /* Modalı kapat, plan route panelini aç ve Sırayı Düzenle modunu tetikle. */
+    var detail = _state.detail || {};
+    var vid = detail.arac_external_id;
+    closeModal();
+    /* 1) Aracı seç + planlama accordion'ını aç */
+    if (vid && window.selectAtpVehicle) {
+      window.selectAtpVehicle(String(vid));
+    } else {
+      var det = document.getElementById('atpPlanningSection');
+      if (det) det.open = true;
+    }
+    /* 2) Kısa gecikme sonrası Sırayı Düzenle butonunu tıkla (DOM güncellensin) */
+    setTimeout(function () {
+      var editBtn = document.getElementById('atpBtnManualReorderEdit');
+      if (editBtn && !editBtn.disabled) {
+        editBtn.click();
+      } else if (window.AtpManualReorderUI && window.AtpManualReorderUI.isEditMode &&
+                 !window.AtpManualReorderUI.isEditMode()) {
+        /* Fallback: doğrudan enterEditMode çağır */
+        if (window.AtpManualReorderUI.enterEditMode) {
+          window.AtpManualReorderUI.enterEditMode();
+        }
+      }
+    }, 350);
+  }
+
   function actionNeedsReason(action) {
     return action === 'cancel' || action === 'defer_next_day';
   }
@@ -104,7 +131,13 @@
   function updateSaveButtonState(action) {
     var saveBtn = qs('atpPcSaveBtn');
     if (!saveBtn || _state.isLocked) return;
-    saveBtn.disabled = false;
+    if (action === 'reorder_info') {
+      /* reorder_info için Kaydet butonu gizli — panel içi "Sırayı Düzenle" kullanılır */
+      saveBtn.style.display = 'none';
+    } else {
+      saveBtn.style.display = '';
+      saveBtn.disabled = false;
+    }
   }
 
   function populateSummary(d) {
@@ -130,7 +163,7 @@
       { v: 'bind_location', l: 'Konum Bağla/Düzelt', key: 'bind_location' },
       { v: 'defer_next_day', l: 'Sonraki Güne Aktar', key: 'defer_next_day' },
       { v: 'cancel', l: 'İptal Et (Plan Dışına Al)', key: 'cancel' },
-      { v: 'reorder_info', l: 'Saat/Sıra Değiştir (bilgi)', key: 'reorder_info' },
+      { v: 'reorder_info', l: 'Saat/Sıra Değiştir', key: 'reorder_info' },
     ];
     var cancelDisabledReason = allowed && allowed.cancel_disabled_reason;
     sel.innerHTML = opts.map(function (o) {
@@ -435,7 +468,7 @@
       return;
     }
     if (action === 'reorder_info') {
-      showWarn('Saatler rota hesaplamasıyla atanır. Sıra değişikliği rota panelinden uygulanır.');
+      _openReorderPanel();
       return;
     }
     if (!validate(action)) return;
@@ -537,6 +570,11 @@
     document.addEventListener('click', function (e) {
       if (e.target.closest('.atp-job-menu-btn') || e.target.closest('#atpJobMenuFloat')) return;
       if (window.closeAtpJobMenu) window.closeAtpJobMenu();
+      /* "Sırayı Düzenle" butonu panel içinde — event delegation */
+      if (e.target && e.target.id === 'atpPcBtnOpenReorder') {
+        e.preventDefault();
+        _openReorderPanel();
+      }
     });
   }
 

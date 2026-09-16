@@ -1,0 +1,68 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.15.0"
+phase_code = "ATP_PLAN_CHANGE_REORDER_FIX_V1"
+title = "Planı Değiştir: defer tuple fix + Saat/Sıra Değiştir akışı"
+status = "ONAYLANDI"
+date = "2026-09-16"
+summary = "Sonraki Güne Aktar tuple hatası düzeltildi (FIX-1); Saat/Sıra Değiştir (bilgi) pasif akışı, mevcut manuel sıralama paneline gerçek bağlantıya dönüştürüldü; AtpManualReorderUI + motor template'e dahil edildi; Dikkat Gerekenler aksiyonu korundu; Başka Araca Aktar kilitli kaldı."
+source_type = "commit"
+commit_sha = "e2d2d23"
+worktree_fingerprint = "hotfix/plan-degistir-forensic-v1@e2d2d23"
+approved_by = "Adem"
+verification_date = "2026-09-16"
+verification_evidence = "Laptop kullanici onay PASS; 127.0.0.1:8080 TEMP DB uzerinde modal + siralama edit modu + Siralamayı Uygula tam akis dogrulandı."
+test_result = "95/95 PASS (defer+cancel+alert+manual-reorder); TEMP DB reorder 6/6 PASS; browser API 9/9 PASS; git diff --check temiz; release validator PASS"
+db_write = false
+server_restart = false
+push_status = "PUSHED"
+deployment_status = "NOT_DEPLOYED"
+
+root_cause = "1) _add_plan_item_conn tuple dönüş tipinin defer_next_day'de tek değişkene atanması; sqlite3.ProgrammingError ile transaction rollback. 2) AtpManualReorderUI ve motor scriptleri template'e hiç dahil edilmemişti; reorder_info aksiyon submitte sadece showWarn ile sonlanıyordu."
+
+evidence_summary = "Browser: Planı Değiştir → Saat/Sıra Değiştir → Sırayı Düzenle tıkla → modal kapanır → accordion açılır → edit modu etkin (drag/ok ile sıra değiştirme) → Sıralamayı Uygula → route_state_invalidated=True. TEMP DB: id2→sira1 (önce sira2 iken)."
+
+changes = [
+  "FIX-1: defer_next_day – new_plan_is_id, _defer_route_meta = _add_plan_item_conn(...) tuple unpack düzeltildi.",
+  "Dikkat Gerekenler: _primary_plan_item_for_vehicle ile alert'ten Plani Degistir aksiyonu bağlandı.",
+  "reorder_info aksiyonu: '(bilgi)' kaldırıldı; Kaydet gizlendi; _openReorderPanel() eklendi.",
+  "atpPcPanelReorder: pasif metin yerine 'Sırayı Düzenle' butonu eklendi.",
+  "Template: atpManualReorderHeaderAction div eklendi; manual_reorder.js + manual_reorder_ui.js script'leri dahil edildi.",
+  "planlama_arac_takip.js: AtpManualReorderUI.init(deps) çağrısı ve renderStopList afterBaseRender hook eklendi.",
+  "deps.getMotor açık olarak window.ATP_MANUAL_REORDER'a bağlandı (motorReady closure fix).",
+]
+
+changed_files = [
+  "app/modules/planlama/arac_plan_change_service.py",
+  "app/modules/planlama/arac_today_operations_service.py",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_plan_change.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "tests/planlama/test_atp_defer_next_day_v1.py",
+  "changes/records/planlama.atp/ATP_PLAN_CHANGE_REORDER_FIX_V1.toml",
+  "changes/fragments/planlama.atp.ATP_PLAN_CHANGE_REORDER_FIX_V1.release",
+]
+
+locked_rules = [
+  "Transfer execution (Başka Araca Aktar) kapalı kalır; yeniden açmak için ayrı Adem onayı gerekir.",
+  "defer_next_day: _add_plan_item_conn dönüşü daima tuple unpack ile alınır.",
+  "AtpManualReorderUI motorunun template'deki sırası: motor.js önce, ui.js sonra, main.js en son.",
+  "reorder_info için hiçbir zaman backend POST atılmaz; yönlendirme saf frontend.",
+  "ACİL öncelik kuralı reorder context içinde lock_reason ile korunur.",
+]
+
+tests = [
+  "tests/planlama/test_atp_defer_next_day_v1.py (8 test)",
+  "tests/planlama/test_atp_plan_change_cancel_r03_r09_v1.py (16 test)",
+  "tests/planlama/test_atp_alert_plan_change_action_v1.py (3 test)",
+  "tests/planlama/test_arac_manual_reorder_api.py (68 test)",
+  "tools/validate_release_history.py PASS",
+]
+
+known_issues = []
+
+next_steps = [
+  "Production deploy ayrı faz; Adem talimatı beklenir.",
+]
+
+related_commits = []
