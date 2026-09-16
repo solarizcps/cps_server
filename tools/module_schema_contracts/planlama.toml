@@ -1,0 +1,300 @@
+# Planlama — Üretim Planı / Enjeksiyon schema contract
+# Metadata only — no DB data. Pilot baseline: ebb04ca
+
+module = "planlama_uretim"
+pilot_baseline = "ebb04ca8765fa2a2370bafff4b7056ec401866de"
+
+owner_files = [
+    "app/modules/planlama/uretim_plan_repo.py",
+    "app/modules/planlama/uretim_plan_routes.py",
+    "app/modules/planlama/uretim_plan_service.py",
+    "app/static/css/uretim_plan.css",
+    "app/static/js/uretim_plan.js",
+    "app/templates/planlama/uretim_plan.html",
+]
+
+critical_routes = [
+    "/planlama/uretim-plani",
+]
+
+read_tables = [
+    "uretim_model_plan",
+    "uretim_model_plan_enj_istasyon",
+    "enj_makine",
+    "enj_kalip",
+]
+
+write_tables = [
+    "uretim_model_plan",
+    "uretim_model_plan_enj_istasyon",
+]
+
+# Historical chain: 158 parent, 159 enj cols, 190 enj cols + child + backfill.
+# Runner V1 applies only migrations listed in runner_apply (modern signature).
+required_migrations = ["158", "159", "190"]
+runner_apply = ["190"]
+# Parity PASS requires these in schema_migrations when schema is complete.
+registry_required = ["190"]
+
+[[migrations.files]]
+version = "158"
+file = "app/migrations/158_uretim_model_plan.py"
+
+[[migrations.files]]
+version = "159"
+file = "app/migrations/159_uretim_plan_enj_kapasite.py"
+
+[[migrations.files]]
+version = "190"
+file = "app/migrations/190_uretim_model_plan_enj_istasyon.py"
+
+# --- uretim_model_plan (parent) ---
+
+[[tables]]
+name = "uretim_model_plan"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "sip_no"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "sip_harinx"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "mamul_skod"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "rkod"
+type = "INTEGER"
+not_null = true
+default = "0"
+
+[[tables.columns]]
+name = "model_adi"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "renk_adi"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "miktar"
+type = "REAL"
+not_null = false
+
+[[tables.columns]]
+name = "termin"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "plan_donemi"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "plan_baslangic"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "plan_bitis"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "oncelik"
+type = "INTEGER"
+not_null = true
+default = "3"
+
+[[tables.columns]]
+name = "plan_gerekce"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "plan_notu"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "aktif"
+type = "INTEGER"
+not_null = true
+default = "1"
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "created_by"
+type = "INTEGER"
+not_null = false
+
+[[tables.columns]]
+name = "updated_at"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "updated_by"
+type = "INTEGER"
+not_null = false
+
+# 18 enj_* columns (migration 159 / 190)
+[[tables.columns]]
+name = "enj_makine_id"
+type = "INTEGER"
+not_null = false
+
+[[tables.columns]]
+name = "enj_istasyon_no"
+type = "INTEGER"
+not_null = false
+
+[[tables.columns]]
+name = "enj_slot"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "enj_kalip_id"
+type = "INTEGER"
+not_null = false
+
+[[tables.columns]]
+name = "enj_kalip_kod"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "enj_aktif_goz"
+type = "INTEGER"
+not_null = false
+
+[[tables.columns]]
+name = "enj_kalip_basi_cift"
+type = "INTEGER"
+not_null = false
+
+[[tables.columns]]
+name = "enj_tur_cift"
+type = "INTEGER"
+not_null = false
+
+[[tables.columns]]
+name = "enj_gunluk_tur_plan"
+type = "INTEGER"
+not_null = false
+
+[[tables.columns]]
+name = "enj_gunluk_kapasite"
+type = "INTEGER"
+not_null = false
+
+[[tables.columns]]
+name = "enj_plan_baslangic"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "enj_plan_bitis"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "enj_tahmini_gun"
+type = "REAL"
+not_null = false
+
+[[tables.columns]]
+name = "enj_planlanacak_cift"
+type = "REAL"
+not_null = false
+
+[[tables.columns]]
+name = "enj_calisma_modu"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "enj_hafta_sonu_calisma"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "enj_hafta_sonu_vardiya"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "enj_kapasite_snapshot"
+type = "TEXT"
+not_null = false
+
+# --- child table ---
+
+[[tables]]
+name = "uretim_model_plan_enj_istasyon"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "plan_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "enj_makine_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "enj_slot"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "istasyon_no"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = true
+
+[[tables.foreign_keys]]
+table = "uretim_model_plan_enj_istasyon"
+column = "plan_id"
+references_table = "uretim_model_plan"
+references_column = "id"
+
+[[tables.unique_constraints]]
+table = "uretim_model_plan_enj_istasyon"
+columns = ["plan_id", "istasyon_no", "enj_slot"]
+
+[[tables.indexes]]
+name = "idx_ump_enj_ist_mak_slot"
+table = "uretim_model_plan_enj_istasyon"
+columns = ["enj_makine_id", "enj_slot", "istasyon_no"]

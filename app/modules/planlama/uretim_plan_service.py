@@ -2,8 +2,229 @@
 """Üretim Plan — Korgun read model (canonical: SipNo+SipHarinx+MamulSKOD+RKOD)."""
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
+
+
+class OrderLineQuantityError(ValueError):
+    """Sipariş kalemi miktar çözümlemesi başarısız."""
+
+
+class OrderLineNotFoundError(OrderLineQuantityError):
+    """Korgun önizlemede sipariş kalemi bulunamadı."""
+
+
+class OrderLineUnitMismatchError(OrderLineQuantityError):
+    """Sipariş birimi enjeksiyon plan çift birimiyle uyumsuz."""
+
+
+def _normalize_birim(birim: str | None) -> str:
+    b = (birim or 'CIFT').strip().upper()
+    return b.replace('İ', 'I').replace('Ç', 'C').replace('Ş', 'S').replace('Ğ', 'G').replace('Ü', 'U').replace('Ö', 'O')
+
+
+def _birim_cift_mi(birim: str | None) -> bool:
+    return _normalize_birim(birim) == 'CIFT'
+
+
+def parse_cift_quantity(value, *, field_label: str = 'Miktar') -> int:
+    """Pozitif tam sayı çift miktarı — NaN/Infinity ve ondalık reddedilir."""
+    if value is None or value == '':
+        raise ValueError(f'{field_label} boş olamaz.')
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        raise ValueError(f'{field_label} geçersiz.')
+    if isinstance(value, str) and value.strip().lower() in ('nan', 'infinity', '-infinity', 'inf', '-inf'):
+        raise ValueError(f'{field_label} geçersiz.')
+    try:
+        d = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError(f'{field_label} sayı olmalıdır.') from None
+    if not d.is_finite():
+        raise ValueError(f'{field_label} geçersiz.')
+    if d <= 0:
+        raise ValueError(f'{field_label} sıfırdan büyük olmalıdır.')
+    if d != d.to_integral_value():
+        raise ValueError(f'{field_label} tam sayı olmalıdır.')
+    return int(d)
+
+
+class CanonicalResolveError(ValueError):
+    """Canonical sipariş satırı çözümlenemedi — fail-closed."""
+
+
+def resolve_canonical_mamul_skod(sip_no, sip_harinx, mamul_skod_client, rkod=0) -> str:
+    """Korgun'dan canonical mamul_skod'u çöz; istemci değeriyle karşılaştır.
+
+    Args:
+        sip_no, sip_harinx, rkod: canonical sipariş anahtarı.
+        mamul_skod_client: istemcinin beyan ettiği değer (yalnız karşılaştırma için).
+
+    Returns:
+        Korgun'daki gerçek SKOD (mamul_skod).
+
+    Raises:
+        CanonicalResolveError: Korgun erişilemez, satır bulunamaz,
+                               veya istemci değeri canonical ile uyuşmuyor.
+    """
+    from modules.common import korgun as kk
+
+    try:
+        con = kk._baglan()
+    except Exception as exc:
+        raise CanonicalResolveError(
+            f'Korgun bağlantısı kurulamadı — kalıp listesi alınamıyor: {exc}'
+        ) from exc
+
+    try:
+        cur = con.cursor()
+        cur.execute(
+            'SELECT TOP 1 sh.SKOD FROM Siparis_Har sh '
+            'WHERE sh.SipNo = %s AND sh.SipHarinx = %s',
+            (int(sip_no), int(sip_harinx)),
+        )
+        row = cur.fetchone()
+    except Exception as exc:
+        raise CanonicalResolveError(
+            f'Korgun sorgusu başarısız: {exc}'
+        ) from exc
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+
+    if not row or not row[0]:
+        raise CanonicalResolveError(
+            f'Sipariş satırı bulunamadı: sip_no={sip_no}, sip_harinx={sip_harinx}'
+        )
+
+    canonical = str(row[0]).strip().upper()
+    client    = str(mamul_skod_client or '').strip().upper()
+
+    if client and client != canonical:
+        raise CanonicalResolveError(
+            f'İstemci mamul_skod ({mamul_skod_client!r}) Korgun canonical değeriyle '
+            f'uyuşmuyor ({row[0]!r}). Olası manipülasyon — istek reddedildi.'
+        )
+
+    return row[0].strip()   # orijinal case ile döndür
+
+
+def resolve_order_line_quantity(
+    sip_no,
+    sip_harinx,
+    mamul_skod,
+    rkod=0,
+) -> dict:
+    """Server-side sipariş kalemi toplam miktarı — Korgun önizleme kaynağı.
+
+    İstemci payload'ındaki miktar alanına güvenilmez; model_satir_by_canonical
+    ile _build_satir (M emir giren toplamı veya Siparis_Har.Miktar) kullanılır.
+    """
+    from modules.common import korgun as kk
+
+    con = kk._baglan()
+    try:
+        satir = model_satir_by_canonical(
+            con, int(sip_no), int(sip_harinx), mamul_skod, int(rkod or 0),
+        )
+    finally:
+        con.close()
+    if not satir:
+        raise OrderLineNotFoundError(
+            f'Sipariş kalemi bulunamadı: sip={sip_no}, harinx={sip_harinx}, '
+            f'model={mamul_skod}, rkod={rkod}'
+        )
+    birim = (satir.get('birim') or 'CIFT').strip()
+    if not _birim_cift_mi(birim):
+        raise OrderLineUnitMismatchError(
+            f'Sipariş birimi ({birim}) enjeksiyon plan çift birimiyle uyumsuz.'
+        )
+    total = parse_cift_quantity(satir.get('miktar'), field_label='Sipariş miktarı')
+    return {
+        'order_total_quantity': total,
+        'siparis_toplam_miktar': total,
+        'birim': birim,
+        'canonical_key': satir.get('canonical_key'),
+        'source': 'korgun_model_satir',
+    }
+
+
+def resolve_line_quantity_summary(
+    sip_no: int,
+    sip_harinx: int,
+    mamul_skod: str,
+    rkod: int = 0,
+    *,
+    view_only: bool = False,
+) -> dict:
+    """Sipariş kalemi miktar özeti — read-only, Remaining Quantity V1 alanları.
+
+    view_only=True (GET görüntüleme):
+        Çözülemeyen legacy planlar varsa hata fırlatmaz; quantity_calculable=False
+        ile partial sonuç döner. Create/update doğrulaması bu modda ÇAĞRILMAZ.
+
+    view_only=False (varsayılan, create/update guard):
+        Önceki FAIL-CLOSED davranışı — unresolved varsa OrderLineQuantityError.
+    """
+    from db import get_conn
+    from modules.planlama.uretim_plan_repo import _sum_already_planned
+
+    info = resolve_order_line_quantity(sip_no, sip_harinx, mamul_skod, rkod)
+    order_total = int(info['order_total_quantity'])
+    con = get_conn()
+    try:
+        already, unresolved = _sum_already_planned(
+            con, int(sip_no), int(sip_harinx), mamul_skod, int(rkod or 0),
+        )
+    finally:
+        con.close()
+
+    if unresolved:
+        if not view_only:
+            # Create/update: FAIL-CLOSED — mevcut davranış korunur
+            ids = ', '.join(f'#{i}' for i in unresolved[:5])
+            raise OrderLineQuantityError(
+                'Bu sipariş kaleminde miktarı çözümlenemeyen legacy plan(lar) var '
+                f'({ids}). Kalan miktar güvenli hesaplanamıyor.'
+            )
+        # Görüntüleme modunda: partial sonuç, quantity_calculable=False
+        warning_ids = ', '.join(f'#{i}' for i in unresolved[:5])
+        return {
+            'order_total_quantity': order_total,
+            'already_planned_quantity': already,
+            'remaining_quantity': None,
+            'remaining_after_save': None,
+            'siparis_toplam_miktar': order_total,
+            'planlanmis_miktar': already,
+            'kalan_miktar': None,
+            'birim': info.get('birim') or 'CIFT',
+            'source': info.get('source'),
+            'quantity_calculable': False,
+            'unresolved_plan_ids': unresolved,
+            'warning': (
+                f'Aktif eski plan {warning_ids} miktarı bilinmediği için '
+                'kesin kalan miktar hesaplanamıyor.'
+            ),
+        }
+
+    remaining = order_total - already
+    return {
+        'order_total_quantity': order_total,
+        'already_planned_quantity': already,
+        'remaining_quantity': remaining,
+        'remaining_after_save': None,
+        'siparis_toplam_miktar': order_total,
+        'planlanmis_miktar': already,
+        'kalan_miktar': remaining,
+        'birim': info.get('birim') or 'CIFT',
+        'source': info.get('source'),
+        'quantity_calculable': True,
+        'unresolved_plan_ids': [],
+        'warning': None,
+    }
 
 
 def _load_proses_adlari(cur, proses_kodlari):
@@ -551,6 +772,30 @@ def _resolve_asorti(cur, sip_no, sip_harinx, mamul_skod, rkod):
     if row and (row[0] or '').strip():
         return (row[0] or '').strip()
     return ''
+
+
+def resolve_asorti_for_plan_keys(plan_keys: list[tuple]) -> dict[tuple, str]:
+    """Sipariş kalemi anahtarları için asorti — Korgun read-only, batch."""
+    out: dict[tuple, str] = {}
+    if not plan_keys:
+        return out
+    try:
+        from modules.common import korgun as kk
+        con = kk._baglan()
+        try:
+            cur = con.cursor()
+            for sip_no, sip_harinx, mamul_skod, rkod in plan_keys:
+                key = (int(sip_no), int(sip_harinx or 0), str(mamul_skod), int(rkod or 0))
+                if key in out:
+                    continue
+                val = _resolve_asorti(cur, key[0], key[1], key[2], key[3])
+                if val:
+                    out[key] = val
+        finally:
+            con.close()
+    except Exception:
+        pass
+    return out
 
 
 def _build_satir(cur, sip_no, sip_harinx, mamul_skod, rkod, har_ctx, sip_meta,

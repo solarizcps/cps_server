@@ -3143,7 +3143,7 @@ def f951_operasyon_raporu_sayfa():
 @yetki_gerekli('planlama.operasyon_raporu', 'can_view')
 def planlama_kalip_gorunum():
     """Planlama için read-only kalıp görünümü. Yazma API'leri yonetim SuperAdmin korumasında."""
-    return render_template("yonetim/kalip_yonetimi.html")
+    return render_template("yonetim/kalip_yonetimi.html", kalip_read_only=True)
 
 
 

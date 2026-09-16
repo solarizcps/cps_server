@@ -90,17 +90,21 @@
   .ky-ekle-kaydet { background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
   .ky-ekle-kaydet:hover { background: #059669; }
   .ky-ekle-kaydet:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; }
+  .ky-read-only .ky-write-only { display: none !important; }
+  .ky-read-only input, .ky-read-only select, .ky-read-only textarea { pointer-events: none; background: #f9fafb; }
+  .ky-read-only .ky-upload-btn, .ky-read-only .ky-kaydet-btn, .ky-read-only .ky-pasif-btn,
+  .ky-read-only .ky-aciklama-toggle, .ky-read-only .ky-aktif { pointer-events: none; }
 </style>
 
-<div class="ky-container">
+<div class="ky-container{% if kalip_read_only %} ky-read-only{% endif %}">
   <div class="ky-header">
-    <h1>🎯 Kalıp Yönetimi · Master Data</h1>
+    <h1>🎯 Kalıp Yönetimi · Master Data{% if kalip_read_only %} <span style="font-size:14px;color:#92400e">(Salt Okunur)</span>{% endif %}</h1>
     <div class="ky-stats" id="ky-toplam">Yükleniyor...</div>
   </div>
 
-  <div class="ky-info">ℹ️ Görsel önerilen ölçü: <b>300×300px</b> (kare). Format: JPG/PNG/WEBP. Max boyut: 5MB.</div>
+  <div class="ky-info ky-write-only">ℹ️ Görsel önerilen ölçü: <b>300×300px</b> (kare). Format: JPG/PNG/WEBP. Max boyut: 5MB.</div>
 
-  <div class="ky-toolbar">
+  <div class="ky-toolbar ky-write-only">
     <input type="text" class="ky-search" id="ky-arama" placeholder="🔍 Kalıp kodu, model veya renk ara...">
     <select id="ky-filtre-tip">
       <option value="">Tüm Tipler</option>

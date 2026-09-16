@@ -1444,14 +1444,54 @@
         (a.event_id ? ' data-event-id="' + a.event_id + '"' : '') + '>' + btnLabel + '</button>' +
         '</div>';
     }
-    return '<div class="alert-row">' +
+    var planItemId = a.plan_item_id != null ? String(a.plan_item_id) : '';
+    var vid = a.vehicle_id != null ? String(a.vehicle_id) : '';
+    var dataAttrs = '';
+    if (planItemId) dataAttrs += ' data-plan-item="' + planItemId + '"';
+    if (vid) dataAttrs += ' data-vid="' + vid + '"';
+    if (a.action) dataAttrs += ' data-alert-action="' + String(a.action) + '"';
+    return '<div class="alert-row"' +
+      (a.type ? ' data-alert-type="' + String(a.type) + '"' : '') + '>' +
       '<div class="alert-icon">' + icon + '</div>' +
       '<div class="alert-body">' +
       '<div class="alert-firm">' + fmtVal(a.title || a.firm || a.message) + '</div>' +
       '<div class="alert-desc">' + fmtVal((a.title || a.firm) ? a.message : '') + '</div>' +
       '</div>' +
-      '<button class="btn ' + btnCls + ' btn-xs">' + btnLabel + '</button>' +
+      '<button type="button" class="btn ' + btnCls + ' btn-xs atp-alert-action-btn"' +
+      dataAttrs + '>' + btnLabel + '</button>' +
       '</div>';
+  }
+
+  function handleAlertActionClick(btn) {
+    if (!btn) return;
+    var planItemId = btn.getAttribute('data-plan-item');
+    var vid = btn.getAttribute('data-vid');
+    var action = (btn.getAttribute('data-alert-action') || '').toLowerCase();
+    var label = (btn.textContent || '').trim();
+    if (planItemId && window.AtpPlanChange && window.AtpPlanChange.openChange &&
+        (action === 'change_plan' || label === 'Planı Değiştir')) {
+      window.AtpPlanChange.openChange(planItemId);
+      return;
+    }
+    if (window.AtpPlanChange && window.AtpPlanChange.openView) {
+      window.AtpPlanChange.openView(planItemId || null, vid || null);
+      return;
+    }
+    if (vid && window.selectAtpVehicle) {
+      window.selectAtpVehicle(String(vid));
+    }
+  }
+
+  function bindAlertActionButtons(root) {
+    if (!root) return;
+    root.querySelectorAll('.atp-alert-action-btn').forEach(function (btn) {
+      if (btn.getAttribute('data-atp-alert-bound') === '1') return;
+      btn.setAttribute('data-atp-alert-bound', '1');
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        handleAlertActionClick(btn);
+      });
+    });
   }
 
   function acknowledgeOutOfSequenceAlert(eventId, rowEl) {
@@ -1539,6 +1579,8 @@
 
     body.innerHTML = listHtml;
 
+    bindAlertActionButtons(body);
+
     body.querySelectorAll('.atp-alert-ack-btn').forEach(function (btn) {
       btn.addEventListener('click', function (ev) {
         ev.preventDefault();
@@ -1556,9 +1598,11 @@
         var inner = body.querySelector('#atpAlertListInner');
         if (expanded) {
           if (inner) inner.innerHTML = alerts.map(makeAlertRow).join('');
+          bindAlertActionButtons(inner);
           toggleBtn.textContent = 'Daha Az Göster';
         } else {
           if (inner) inner.innerHTML = visible.map(makeAlertRow).join('');
+          bindAlertActionButtons(inner);
           toggleBtn.textContent = 'Tümünü Gör (' + total + ')';
         }
       });
@@ -1737,6 +1781,10 @@
     html += '<div class="factory-row" style="margin-top:4px"><span class="fl">🏭</span><span class="factory-label">Bitiş: Fabrika Dönüş — ' + base + '</span></div>';
     wrap.innerHTML = html;
     if (title) title.textContent = 'Sıralı Duraklar' + (plate ? ' — ' + plate : '');
+    /* Notify manual reorder UI so toolbar / edit button stays in sync */
+    if (window.AtpManualReorderUI && window.AtpManualReorderUI.afterBaseRender) {
+      window.AtpManualReorderUI.afterBaseRender(sorted, plate || '');
+    }
   }
 
   /* ─── Empty day: show/hide correct view ─── */
@@ -5639,6 +5687,50 @@
     document.addEventListener('click', function(e) {
       var btn = e.target.closest && e.target.closest('.atp-desired-time-btn');
       if (btn) { e.preventDefault(); _open(btn); }
+    });
+  }());
+
+  /* ─── Manual Reorder UI init (U3D) ─── */
+  (function () {
+    if (!window.AtpManualReorderUI) return;
+    window.AtpManualReorderUI.init({
+      getMotor: function () { return window.ATP_MANUAL_REORDER || null; },
+      getPlanId: function () {
+        var veh = findVehicleByExtId(_activeVehicleExtId);
+        if (veh && veh.plan_id != null && veh.plan_id !== '') return veh.plan_id;
+        /* fallback: scan items */
+        var items = (_activeVehicleExtId)
+          ? filterItemsForVehicle(_activeVehicleExtId, lastOpsData.items || [])
+          : [];
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].plan_id != null && items[i].plan_id !== '') return items[i].plan_id;
+        }
+        return null;
+      },
+      getVehicleId: function () { return _activeVehicleExtId || null; },
+      getPlanDate: function () {
+        return window.ATP_PLAN_DATE || (lastOpsData && lastOpsData.plan_date) || '';
+      },
+      getTasksForVehicle: function (vid) {
+        return filterItemsForVehicle(vid || _activeVehicleExtId, lastOpsData.items || []);
+      },
+      getBaseLocation: function () {
+        return (dashboard.base_location && dashboard.base_location.base_name) || 'Fabrika — Tuzla OSB';
+      },
+      loadOps: function () {
+        return new Promise(function (resolve) {
+          if (typeof loadOps === 'function') {
+            loadOps().then(resolve).catch(function () { resolve(false); });
+          } else {
+            resolve(false);
+          }
+        });
+      },
+      toast: toast,
+      fmtVal: fmtVal,
+      isActivePlanItem: isActivePlanItem,
+      safePlate: safePlate,
+      findVehicleByExtId: findVehicleByExtId,
     });
   }());
 

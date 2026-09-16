@@ -1,0 +1,45 @@
+# Ana Sayfa — schema contract
+# Metadata only. No DB data.
+
+module = "home"
+pilot_baseline = "cb593bd6794544a45bb7e8c42ef70c49ff6a041c"
+
+owner_files = [
+    "app/modules/home/home_routes.py",
+]
+
+critical_routes = [
+    "/",
+    "/anasayfa",
+]
+
+# Ana sayfa salt-okunur dashboard; birden fazla tablodan okur
+read_tables = [
+    "kullanici",
+    "uretim_model_plan",
+    "arac_gunluk_plan",
+]
+write_tables = []
+
+required_migrations = ["002", "158"]
+registry_required   = ["002", "158"]
+
+[[tables]]
+name = "kullanici"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "kullanici_adi"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "aktif"
+type = "INTEGER"
+not_null = true
+default = "1"

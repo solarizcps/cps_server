@@ -1,0 +1,88 @@
+# Saha / Tablet — schema contract
+# Metadata only. No DB data.
+# Not: Canonical DB'de dedicated saha/tablet tablosu bulunamadı.
+# Saha modülü operasyon_sinyal ve kullanici tablolarını okur.
+# Eksik dedicated tablo → PARITY_STATUS = PARTIAL (kanıtlı).
+
+module = "saha_tablet"
+pilot_baseline = "cb593bd6794544a45bb7e8c42ef70c49ff6a041c"
+
+owner_files = [
+    "app/modules/saha/",
+    "app/modules/canli_saha/",
+    "app/modules/uretim_giris/",
+]
+
+critical_routes = [
+    "/saha",
+    "/canli-saha",
+    "/uretim-giris",
+]
+
+read_tables = [
+    "operasyon_sinyal",
+    "kullanici",
+    "uretim_model_plan",
+]
+write_tables = [
+    "operasyon_sinyal",
+]
+
+# DEPLOY NOTE: Saha modülüne ait ayrı tablo tespit edilemedi.
+# Tablet-specific migration numarası canonical DB applied listesinde net değil.
+# Tahmin yapılmıyor; bu nedenle PARITY_STATUS = PARTIAL.
+required_migrations = []
+registry_required   = []
+
+parity_status = "PARTIAL"
+parity_note   = "No dedicated saha/tablet table found in canonical DB. Module reads shared tables only."
+
+[[tables]]
+name = "operasyon_sinyal"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "sinyal_tipi"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "seviye"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "mesaj"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "kaynak"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "durum"
+type = "TEXT"
+not_null = false
+default = "'AKTIF'"
+
+[[tables.columns]]
+name = "olusturma"
+type = "TEXT"
+not_null = false
+
+[[tables.indexes]]
+name = "idx_os_tipi_durum"
+table = "operasyon_sinyal"
+columns = ["sinyal_tipi", "durum"]
+
+[[tables.indexes]]
+name = "idx_os_emir"
+table = "operasyon_sinyal"
+columns = ["emir_no"]

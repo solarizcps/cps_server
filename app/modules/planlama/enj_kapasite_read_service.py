@@ -443,6 +443,51 @@ def build_kapasite_snapshot(
     }
 
 
+def build_side_physical_block(
+    con: sqlite3.Connection,
+    makine_id: int,
+    slot: str,
+    istasyon_sayisi: int,
+    *,
+    tarih: str | None = None,
+    vardiya: str | None = None,
+) -> dict:
+    """Tek taraf fiziksel istasyon durumu — makine detay/kart sayımı."""
+    slot = slot.upper()
+    rapor = _resolve_rapor(con, int(makine_id), tarih=tarih, vardiya=vardiya)
+    rapor_id = rapor['id'] if rapor else None
+    grid = _istasyon_grid(con, rapor_id, int(istasyon_sayisi))
+    counts = _slot_counts(grid, slot, int(istasyon_sayisi))
+    stations: list[dict] = []
+    for row in grid:
+        no = int(row['istasyon_no'])
+        cell = row.get(slot) or _empty_cell()
+        occupied = int(cell.get('aktif') or 0) == 1
+        durum = 'DOLU' if occupied else 'BOS'
+        stations.append({
+            'istasyon_no': no,
+            'slot': slot,
+            'durum': durum,
+            'kalip_kod': cell.get('kalip_kod') or cell.get('kalip'),
+            'kalip_id': cell.get('kalip_id'),
+            'renk': cell.get('renk'),
+        })
+    snap_tarih = rapor['tarih'] if rapor else None
+    snap_vardiya = rapor['vardiya'] if rapor else None
+    snapshot_at = None
+    if snap_tarih and snap_vardiya:
+        snapshot_at = f'{snap_tarih} {snap_vardiya}'
+    return {
+        'occupied_count': counts['dolu'],
+        'empty_count': counts['bos'],
+        'total_count': int(istasyon_sayisi),
+        'stations': stations,
+        'snapshot_tarih': snap_tarih,
+        'snapshot_vardiya': snap_vardiya,
+        'snapshot_at': snapshot_at,
+    }
+
+
 def get_machine_snapshot(
     con: sqlite3.Connection,
     makine_kod: str,

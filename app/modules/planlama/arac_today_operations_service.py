@@ -665,6 +665,29 @@ def _resolve_out_of_sequence_alert_plate(oos: dict, vehicles: list[dict]) -> str
     return raw or vid or '—'
 
 
+def _primary_plan_item_for_vehicle(items: list[dict], vehicle_id: str) -> int | None:
+    """First actionable plan row for alert → Planı Değiştir navigation."""
+    vid = str(vehicle_id or '')
+    if not vid:
+        return None
+    active = [
+        it for it in items
+        if str(it.get('arac_external_id') or '') == vid
+        and _is_active_plan_item(it)
+        and it.get('plan_item_id') is not None
+    ]
+    if not active:
+        return None
+
+    def _sort_key(it: dict) -> tuple:
+        st = (it.get('status') or '').upper()
+        pri = 0 if st == 'BASLADI' else 1
+        return (pri, it.get('sira') or 9999, int(it['plan_item_id']))
+
+    active.sort(key=_sort_key)
+    return int(active[0]['plan_item_id'])
+
+
 def _filter_alerts_for_vehicle(alerts: list[dict], vehicle_id: str | None) -> list[dict]:
     if not vehicle_id:
         return alerts
@@ -710,13 +733,17 @@ def _build_alerts(
                 'plan_id': v.get('plan_id'),
             })
         if _gps_stale(gps, now) and vid:
-            alerts.append({
+            stale_alert = {
                 'type': 'GPS_STALE',
                 'severity': 'warning',
                 'message': f"{v.get('plate') or v.get('arac_plaka_snapshot')} — GPS verisi eski",
                 'vehicle_id': vid,
                 'plan_id': v.get('plan_id'),
-            })
+            }
+            plan_item_id = _primary_plan_item_for_vehicle(items, vid)
+            if plan_item_id is not None:
+                stale_alert['plan_item_id'] = plan_item_id
+            alerts.append(stale_alert)
 
     for item in items:
         if not _is_active_plan_item(item):
@@ -755,6 +782,7 @@ def _build_alerts(
                         'severity': 'warning',
                         'message': f"{item.get('company_name')} — planlı saat geçti ({pt})",
                         'plan_item_id': item.get('plan_item_id'),
+                        'vehicle_id': item.get('arac_external_id'),
                     })
             except ValueError:
                 pass

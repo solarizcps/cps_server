@@ -920,9 +920,17 @@ from PIL import Image as _PIL_Image, UnidentifiedImageError as _PIL_Unidentified
 
 
 def _ky_db_path():
-    """CPS standart DB yolu - app/mock_data.db"""
-    base = _os_ky.path.dirname(_os_ky.path.dirname(_os_ky.path.dirname(_os_ky.path.abspath(__file__))))
-    return _os_ky.path.join(base, 'mock_data.db')
+    """CPS standart DB yolu — Config.MOCK_DB_PATH (CPS_MOCK_DB_PATH destekli)."""
+    return Config.MOCK_DB_PATH
+
+
+def _ky_schema_field_unavailable_response(field: str):
+    return _jsonify_ky({
+        'ok': False,
+        'hata': 'Bu alan mevcut Kalıp Master şemasında henüz etkin değil.',
+        'kod': 'SCHEMA_FIELD_UNAVAILABLE',
+        'alan': field,
+    }), 409
 
 
 def _ky_tam_sayi(body, alan, *, zorunlu=False, minimum=None, maksimum=None):
@@ -995,7 +1003,7 @@ def _ky_audit_guvenli(islem, kayit_id, aciklama):
 @yetki_gerekli('planlama.enjeksiyon.kalip', 'can_view')  # KALIP_FAZ_A: merkezi yetki sistemine alindi
 def ky_kalip_yonetimi_sayfa():
     """Kalip Yonetimi sayfasi (Master Data)."""
-    return render_template('yonetim/kalip_yonetimi.html')
+    return render_template('yonetim/kalip_yonetimi.html', kalip_read_only=False)
 
 
 @yonetim_bp.route('/api/kaliplar', methods=['GET'])
@@ -1003,16 +1011,11 @@ def ky_kalip_yonetimi_sayfa():
 def ky_api_kaliplar():
     """Tum kaliplar listesi (master data)."""
     try:
+        from modules.planlama.enj_schema_compat import ky_kaliplar_select_sql
+
         con = _sqlite3_ky.connect(_ky_db_path())
         cur = con.cursor()
-        cur.execute("""
-            SELECT id, kalip_kod, kalip_tipi, model_kod, model_ad, asorti,
-                   kalip_basi_cift, varsayilan_bagli_kalip, renk, gorsel_dosya, aktif,
-                   kapasite_cift, kalip_durumu, aciklama,
-                   cift_agirlik_gr, pisme_suresi_sn
-            FROM enj_kalip
-            ORDER BY aktif DESC, kalip_kod, model_kod, asorti
-        """)
+        cur.execute(ky_kaliplar_select_sql(con))
         rows = cur.fetchall()
         con.close()
         
@@ -1035,6 +1038,8 @@ def ky_api_kaliplar():
                 'aciklama': r[13],
                 'cift_agirlik_gr': r[14],
                 'pisme_suresi_sn': r[15],
+                'aktif_goz_sayisi': r[16],
+                'kapasite_onayli': bool(r[17]) if len(r) > 17 else False,
             })
         return _jsonify_ky({'ok': True, 'sayi': len(kayitlar), 'kayitlar': kayitlar})
     except Exception as e:
@@ -1046,6 +1051,7 @@ _KY_PATCH_WHITELIST = {
     'kalip_basi_cift', 'varsayilan_bagli_kalip', 'renk', 'gorsel_dosya', 'aktif',
     'kapasite_cift', 'kalip_durumu', 'aciklama',
     'cift_agirlik_gr', 'pisme_suresi_sn',
+    'aktif_goz_sayisi', 'kapasite_onayli',
 }
 
 _KY_KALIP_DURUMU_SECENEKLER = {'AKTIF', 'BAKIMDA', 'ARIZALI', 'PASIF'}
@@ -1062,8 +1068,18 @@ def ky_api_kalip_patch(kalip_id):
         if not guncel:
             return _jsonify_ky({'ok': False, 'hata': 'guncellenecek alan yok'}), 400
         istenen_alanlar = list(guncel.keys())
-        
-        # Validasyon
+
+        from modules.planlama.enj_schema_compat import reject_unavailable_kalip_patch_fields
+
+        con = _sqlite3_ky.connect(_ky_db_path())
+        cur = con.cursor()
+        blocked = reject_unavailable_kalip_patch_fields(con, guncel)
+        if blocked:
+            con.close()
+            con = None
+            return _ky_schema_field_unavailable_response(blocked)
+
+        # Validasyon — write öncesi
         try:
             if 'kalip_basi_cift' in guncel:
                 guncel['kalip_basi_cift'] = _ky_tam_sayi(
@@ -1077,14 +1093,20 @@ def ky_api_kalip_patch(kalip_id):
                 guncel['pisme_suresi_sn'] = _ky_tam_sayi(guncel, 'pisme_suresi_sn', minimum=1)
             if 'cift_agirlik_gr' in guncel:
                 guncel['cift_agirlik_gr'] = _ky_sonlu_sayi(guncel, 'cift_agirlik_gr')
+            if 'aktif_goz_sayisi' in guncel:
+                guncel['aktif_goz_sayisi'] = _ky_tam_sayi(guncel, 'aktif_goz_sayisi', minimum=1)
+            if 'kapasite_onayli' in guncel:
+                guncel['kapasite_onayli'] = 0 if guncel['kapasite_onayli'] in (0, '0', False) else 1
         except ValueError as exc:
+            con.close()
+            con = None
             return _jsonify_ky({'ok': False, 'hata': str(exc)}), 400
 
         if 'kalip_tipi' in guncel and guncel['kalip_tipi'] not in ('GOVDE', 'ATKI'):
+            con.close()
+            con = None
             return _jsonify_ky({'ok': False, 'hata': 'kalip_tipi GOVDE veya ATKI olmali'}), 400
-        
-        con = _sqlite3_ky.connect(_ky_db_path())
-        cur = con.cursor()
+
         cur.execute('SELECT id, kalip_kod, aktif, kalip_durumu FROM enj_kalip WHERE id = ?', (kalip_id,))
         eski = cur.fetchone()
         if not eski:

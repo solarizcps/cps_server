@@ -1,0 +1,110 @@
+# Auth / Giriş — schema contract
+# Metadata only. No DB data.
+
+module = "auth_giris"
+pilot_baseline = "cb593bd6794544a45bb7e8c42ef70c49ff6a041c"
+
+owner_files = [
+    "app/modules/personel_giris/auth_routes.py",
+]
+
+critical_routes = [
+    "/giris",
+    "/cikis",
+    "/giris/post",
+]
+
+read_tables  = ["kullanici", "rol", "permission_matrix"]
+write_tables = ["kullanici"]
+
+required_migrations = ["002", "006", "007", "009"]
+registry_required   = ["002", "006", "007", "009"]
+
+[[tables]]
+name = "kullanici"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "kullanici_adi"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "sifre_hash"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "rol_id"
+type = "INTEGER"
+not_null = false
+
+[[tables.columns]]
+name = "aktif"
+type = "INTEGER"
+not_null = true
+default = "1"
+
+[[tables.columns]]
+name = "ad"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "soyad"
+type = "TEXT"
+not_null = false
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = false
+
+[[tables]]
+name = "rol"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "ad"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "aciklama"
+type = "TEXT"
+not_null = false
+
+[[tables]]
+name = "permission_matrix"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "rol_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "modul"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "yetki_seviye"
+type = "INTEGER"
+not_null = true
+default = "0"

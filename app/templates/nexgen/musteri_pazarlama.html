@@ -1117,10 +1117,12 @@
         </div>
       </div>
       <div id="mp-siparis-adim-ozet" hidden>
-        <h3 class="mp-ozet-baslik">SİPARİŞ TALEBİ ÖZETİ</h3>
-        <div class="mp-ozet-kutu" id="mp-siparis-ozet-ic"></div>
-        <div class="mp-fld"><label for="mp-siparis-ozet-onay-notu">Onay notu (son)</label>
-          <textarea id="mp-siparis-ozet-onay-notu" rows="2"></textarea></div>
+        <div id="mp-siparis-ozet-scroll">
+          <h3 class="mp-ozet-baslik" style="margin:8px 0 6px;font-size:13px;font-weight:700;color:#1e293b;">SİPARİŞ TALEBİ ÖZETİ</h3>
+          <div class="mp-ozet-kutu" id="mp-siparis-ozet-ic"></div>
+          <div class="mp-fld" style="margin-top:8px;"><label for="mp-siparis-ozet-onay-notu">Onay notu (son)</label>
+            <textarea id="mp-siparis-ozet-onay-notu" rows="2"></textarea></div>
+        </div>
         <div class="mp-modal-footer">
           <button type="button" class="mp-btn mp-btn-outline" id="mp-siparis-ozet-geri">Geri Düzenle</button>
           <button type="button" class="mp-btn mp-btn-teal" id="mp-siparis-onay-gonder-btn">Merkezi Onaya Gönder</button>
@@ -2127,10 +2129,15 @@ label.mp-gor-seg-btn { margin: 0; }
 .mp-inp-sm { border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px 5px; font-size: 12px; width: 100%; box-sizing: border-box; }
 .mp-inp-sm:focus { outline: none; border-color: #006a8e; }
 
-/* Sipariş: geniş modal — overflow hidden, scroll yalnız .mp-st-scroll'da */
-.mp-modal-siparis { max-width: min(920px, 96vw); max-height: 88vh; }
+/* Sipariş: geniş modal — overflow hidden, scroll yalnız .mp-st-scroll ve özet adımında */
+.mp-modal-siparis { max-width: min(920px, 96vw); max-height: 88vh; max-height: min(88vh, calc(100dvh - 32px)); }
 .mp-modal-siparis .mp-modal-form { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 0; display: flex; flex-direction: column; }
 .mp-st-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 2px 8px; -webkit-overflow-scrolling: touch; }
+/* Sipariş özet adımı — Numune v2 pattern: scroll + sticky footer */
+.mp-modal-siparis #mp-siparis-adim-ozet { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.mp-modal-siparis #mp-siparis-ozet-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 10px 14px 8px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.mp-modal-siparis #mp-siparis-ozet-scroll:hover { scrollbar-color: #cbd5e1 transparent; }
+.mp-modal-siparis #mp-siparis-adim-ozet > .mp-modal-footer { flex: 0 0 auto; position: sticky; bottom: 0; background: #fff; padding: 8px 14px; margin: 0; border-top: 1px solid #e2e8f0; box-shadow: 0 -2px 8px rgba(15,23,42,.06); z-index: 2; }
 .mp-st-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 8px 10px 0; }
 .mp-st-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .mp-st-pad { padding: 8px 10px 0; }

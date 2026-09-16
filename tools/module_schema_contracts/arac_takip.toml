@@ -1,0 +1,250 @@
+# Araç Takip — schema contract
+# Metadata only. No DB data.
+
+module = "arac_takip"
+pilot_baseline = "cb593bd6794544a45mb7e8c42ef70c49ff6a041c"
+
+owner_files = [
+    "app/modules/planlama/arac_takip_routes.py",
+]
+
+critical_routes = [
+    "/planlama/arac-takip",
+    "/planlama/arac-takip/gunluk",
+]
+
+read_tables = [
+    "arac_gunluk_plan",
+    "arac_gunluk_plan_is",
+    "arac_is_talebi",
+    "arac_kayitli_yer",
+    "arac_gps_snapshot",
+    "arac_operasyon_ayar",
+]
+write_tables = [
+    "arac_gunluk_plan",
+    "arac_gunluk_plan_is",
+    "arac_is_talebi",
+    "arac_plan_is_degisim",
+]
+
+# Araç Takip migration'ları: canonical applied listesinde sayısal sıra dışı
+# birden fazla eşleşme var (nexgen_manifest, atp stabilizasyon chain).
+# Güvenli atama yapılıyor.
+required_migrations = []
+registry_required   = []
+
+[[tables]]
+name = "arac_gunluk_plan"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "plan_tarihi"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "arac_provider"
+type = "TEXT"
+not_null = true
+default = "'TURKCELL_FILOM'"
+
+[[tables.columns]]
+name = "arac_external_id"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "arac_plaka_snapshot"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "durum"
+type = "TEXT"
+not_null = true
+default = "'AKTIF'"
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "created_by"
+type = "INTEGER"
+not_null = true
+
+[[tables]]
+name = "arac_gunluk_plan_is"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "plan_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "is_talebi_id"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "sira"
+type = "INTEGER"
+not_null = true
+
+[[tables.columns]]
+name = "durum"
+type = "TEXT"
+not_null = true
+default = "'PLANLANDI'"
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = false
+
+[[tables]]
+name = "arac_is_talebi"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "talep_no"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "firma_adi"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "adres"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "durum"
+type = "TEXT"
+not_null = true
+default = "'BEKLIYOR'"
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = true
+
+[[tables.indexes]]
+name = "idx_arac_is_talebi_durum"
+table = "arac_is_talebi"
+columns = ["durum"]
+
+[[tables.indexes]]
+name = "idx_arac_is_talebi_tarih"
+table = "arac_is_talebi"
+columns = ["talep_tarihi"]
+
+[[tables]]
+name = "arac_kayitli_yer"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "firma_adi"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "adres"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "aktif"
+type = "INTEGER"
+not_null = true
+default = "1"
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = true
+
+[[tables]]
+name = "arac_gps_snapshot"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "arac_external_id"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "gps_timestamp"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "latitude"
+type = "REAL"
+not_null = true
+
+[[tables.columns]]
+name = "longitude"
+type = "REAL"
+not_null = true
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = true
+
+[[tables]]
+name = "arac_operasyon_ayar"
+
+[[tables.columns]]
+name = "id"
+type = "INTEGER"
+not_null = false
+primary_key = true
+
+[[tables.columns]]
+name = "base_name"
+type = "TEXT"
+not_null = true
+
+[[tables.columns]]
+name = "aktif"
+type = "INTEGER"
+not_null = true
+default = "1"
+
+[[tables.columns]]
+name = "created_at"
+type = "TEXT"
+not_null = true

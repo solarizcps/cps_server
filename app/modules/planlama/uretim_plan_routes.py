@@ -15,6 +15,10 @@ from modules.planlama.uretim_plan_service import (
     m_emirler_lazy,
     model_satir_by_canonical,
     proses_detay_lazy,
+    OrderLineNotFoundError,
+    OrderLineQuantityError,
+    OrderLineUnitMismatchError,
+    resolve_order_line_quantity,
     siparis_model_satirlari,
     stok_gorsel_yolu,
     y_emirler_lazy,
@@ -106,11 +110,31 @@ def api_plan_ekle():
     for k in required:
         if body.get(k) is None or body.get(k) == '':
             return jsonify({'ok': False, 'mesaj': f'Eksik alan: {k}'}), 400
+    order_total = None
+    if body.get('has_enjeksiyon'):
+        try:
+            order_total = resolve_order_line_quantity(
+                body['sip_no'], body['sip_harinx'],
+                body['mamul_skod'], body.get('rkod') or 0,
+            )['order_total_quantity']
+        except OrderLineNotFoundError as e:
+            return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+        except OrderLineUnitMismatchError as e:
+            return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+        except OrderLineQuantityError as e:
+            return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+
     try:
-        row = repo.plan_ekle(body, _uid())
+        row = repo.plan_ekle(body, _uid(), order_total=order_total)
     except ValueError as e:
         msg = str(e)
-        if 'zaten planlı' in msg or msg.startswith('CONFLICT'):
+        if (
+            'zaten planlı' in msg
+            or msg.startswith('CONFLICT')
+            or 'Kalan miktar' in msg
+            or 'Sipariş miktarı' in msg
+            or 'legacy plan' in msg
+        ):
             code = 409
             payload = {'ok': False, 'mesaj': msg, 'errors': [msg]}
             if msg.startswith('CONFLICT'):
@@ -169,12 +193,14 @@ def api_plan_ekle():
                 )
         finally:
             con.close()
+    qty_meta = (row or {}).pop('_quantity_meta', None) or {}
     return jsonify({
         'ok': True,
         'plan': row,
         'plan_id': row.get('id') if row else None,
         'calendar_ready': calendar_ready,
         'calendar_url': calendar_url,
+        **qty_meta,
     })
 
 
@@ -183,13 +209,37 @@ def api_plan_ekle():
 def api_plan_guncelle(plan_id):
     _plan_edit_required()
     body = request.get_json(silent=True) or {}
+    order_total = None
+    touches_enj = any(k in body for k in repo.ENJ_PAYLOAD_ANAHTARLARI)
+    if touches_enj or body.get('has_enjeksiyon'):
+        mevcut = repo.plan_get(plan_id)
+        if mevcut and (
+            body.get('has_enjeksiyon')
+            or mevcut.get('enj_makine_id')
+            or mevcut.get('enj_plan_baslangic')
+        ):
+            try:
+                order_total = resolve_order_line_quantity(
+                    mevcut['sip_no'], mevcut['sip_harinx'],
+                    mevcut['mamul_skod'], mevcut.get('rkod') or 0,
+                )['order_total_quantity']
+            except OrderLineNotFoundError as e:
+                return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+            except OrderLineUnitMismatchError as e:
+                return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+            except OrderLineQuantityError as e:
+                return jsonify({'ok': False, 'mesaj': str(e), 'errors': [str(e)]}), 400
+
     try:
-        row = repo.plan_guncelle(plan_id, body, _uid())
+        row = repo.plan_guncelle(plan_id, body, _uid(), order_total=order_total)
     except ValueError as e:
-        return jsonify({'ok': False, 'mesaj': str(e)}), 404
+        msg = str(e)
+        code = 409 if 'Kalan miktar' in msg or 'Sipariş miktarı' in msg or 'legacy plan' in msg else 404
+        return jsonify({'ok': False, 'mesaj': msg, 'errors': [msg]}), code
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
-    return jsonify({'ok': True, 'plan': row})
+    qty_meta = (row or {}).pop('_quantity_meta', None) or {}
+    return jsonify({'ok': True, 'plan': row, **qty_meta})
 
 
 @uretim_plan_bp.route('/api/plan/<int:plan_id>', methods=['DELETE'])
@@ -362,7 +412,42 @@ def api_enj_slot_durum():
 @uretim_plan_bp.route('/api/enj/kaliplar', methods=['GET'])
 @yetki_gerekli('planlama', 'can_view')
 def api_enj_kaliplar():
-    """Aktif kalıp master listesi — kalıp select için."""
+    """Aktif kalıp master listesi — Korgun canonical mamul_skod ile filtreli.
+
+    Zorunlu parametreler: sip_no, sip_harinx, mamul_skod, rkod
+    Canonical mamul_skod Korgun'dan çözülür; istemci değeriyle karşılaştırılır.
+    Uyuşmazlık, Korgun erişilemez → FAIL-CLOSED (fallback yok).
+    """
+    from modules.planlama.uretim_plan_service import (
+        resolve_canonical_mamul_skod, CanonicalResolveError,
+    )
+
+    sip_no    = request.args.get('sip_no',    type=int)
+    sip_har   = request.args.get('sip_harinx', type=int)
+    mamul_raw = (request.args.get('mamul_skod') or '').strip()
+    rkod      = request.args.get('rkod', type=int, default=0)
+
+    # 1. Zorunlu parametre kontrolü
+    if not sip_no or sip_har is None or not mamul_raw:
+        return jsonify({
+            'ok': False,
+            'mesaj': 'sip_no, sip_harinx ve mamul_skod zorunludur',
+        }), 400
+
+    # 2. Korgun canonical resolver — istemci değerine güvenmiyoruz
+    try:
+        canonical_skod = resolve_canonical_mamul_skod(sip_no, sip_har, mamul_raw, rkod)
+    except CanonicalResolveError as cre:
+        msg = str(cre)
+        if 'uyuşmuyor' in msg or 'manipülasyon' in msg.lower():
+            return jsonify({'ok': False, 'mesaj': msg}), 409
+        # Korgun erişilemez veya satır bulunamadı → fail-closed
+        return jsonify({'ok': False, 'mesaj': msg}), 503
+    except Exception as exc:
+        return jsonify({'ok': False, 'mesaj': f'Canonical çözümleme hatası: {exc!s:.200}'}), 503
+
+    # 3. Canonical model ile kalıp listesi — istemci değil Korgun SKOD'u
+    norm_skod = canonical_skod.strip().upper()
     con = get_conn()
     try:
         rows = con.execute("""
@@ -370,9 +455,132 @@ def api_enj_kaliplar():
                    kalip_basi_cift, kapasite_cift
             FROM enj_kalip
             WHERE aktif = 1
+              AND TRIM(UPPER(model_kod)) = ?
             ORDER BY kalip_kod
-        """).fetchall()
-        return jsonify({'ok': True, 'kaliplar': [dict(r) for r in rows]})
+        """, (norm_skod,)).fetchall()
+
+        kaliplar = [dict(r) for r in rows]
+        mesaj = None if kaliplar else (
+            'Bu model için tanımlı liste kalıbı bulunamadı. '
+            'Manuel Kalıp seçeneğini kullanabilirsiniz.'
+        )
+        return jsonify({
+            'ok': True,
+            'kaliplar': kaliplar,
+            'mesaj': mesaj,
+            'canonical_model': canonical_skod,   # bilgi amaçlı; frontend doğrulama için
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/kalip-serileri', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_kalip_serileri_read():
+    """Read-only aktif kalıp serileri — canonical model koduna göre."""
+    from modules.planlama.uretim_plan_service import (
+        resolve_canonical_mamul_skod, CanonicalResolveError,
+    )
+    from modules.planlama.enj_kalip_seri_service import read_series_for_model_with_meta
+    from modules.planlama.enj_schema_compat import SeriesSchemaIncompleteError
+
+    sip_no = request.args.get('sip_no', type=int)
+    sip_har = request.args.get('sip_harinx', type=int)
+    mamul_raw = (request.args.get('mamul_skod') or request.args.get('model_kod') or '').strip()
+    rkod = request.args.get('rkod', type=int, default=0)
+
+    if sip_no and sip_har is not None and mamul_raw:
+        try:
+            model_kod = resolve_canonical_mamul_skod(sip_no, sip_har, mamul_raw, rkod)
+        except CanonicalResolveError as cre:
+            msg = str(cre)
+            if 'uyuşmuyor' in msg or 'manipülasyon' in msg.lower():
+                return jsonify({'ok': False, 'mesaj': msg}), 409
+            return jsonify({'ok': False, 'mesaj': msg}), 503
+        except Exception as exc:
+            return jsonify({'ok': False, 'mesaj': f'Canonical çözümleme hatası: {exc!s:.200}'}), 503
+    elif mamul_raw:
+        model_kod = mamul_raw
+    else:
+        return jsonify({'ok': False, 'mesaj': 'model_kod veya sip_no+sip_harinx+mamul_skod zorunlu'}), 400
+
+    con = get_conn()
+    try:
+        payload = read_series_for_model_with_meta(con, model_kod)
+        return jsonify({
+            'ok': True,
+            'canonical_model': model_kod,
+            'seriler': payload['seriler'],
+            'schema_available': payload['schema_available'],
+        })
+    except SeriesSchemaIncompleteError:
+        return jsonify({
+            'ok': False,
+            'mesaj': 'Kalıp seri şeması eksik — migration tamamlanmamış.',
+            'kod': 'SERIES_SCHEMA_INCOMPLETE',
+        }), 409
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/kalip-seri/<int:seri_id>', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_kalip_seri_read(seri_id):
+    """Read-only seri detay — yalnız aktif seri/üyeler."""
+    from modules.planlama.enj_kalip_seri_service import get_seri_detail
+    from modules.planlama.enj_schema_compat import (
+        SeriesSchemaIncompleteError,
+        SeriesSchemaUnavailableError,
+    )
+
+    con = get_conn()
+    try:
+        detail = get_seri_detail(con, seri_id, aktif_uyeler_only=True)
+        if not detail or not detail.get('aktif'):
+            return jsonify({'ok': False, 'mesaj': 'Seri bulunamadı veya pasif'}), 404
+        uyeler = []
+        for u in detail.get('uyeler') or []:
+            uyeler.append({
+                'kalip_id': u['kalip_id'],
+                'kalip_kod': u['kalip_kod'],
+                'uye_rolu': u['uye_rolu'],
+                'beden_numara': u.get('beden_numara'),
+                'sira_no': u.get('sira_no'),
+                'kalip_basi_cift': u.get('kalip_basi_cift'),
+                'aktif_goz_sayisi': u.get('aktif_goz_sayisi'),
+                'varsayilan_fiziksel_adet': u.get('varsayilan_fiziksel_adet'),
+                'kapasite_onayli': bool(u.get('kapasite_onayli')),
+                'kalip_tipi': u.get('kalip_tipi'),
+                'asorti': u.get('asorti'),
+            })
+        return jsonify({
+            'ok': True,
+            'seri': {
+                'id': detail['id'],
+                'seri_kod': detail['seri_kod'],
+                'seri_ad': detail.get('seri_ad'),
+                'model_kod': detail['model_kod'],
+                'model_ad': detail.get('model_ad'),
+                'aktif': bool(detail.get('aktif')),
+            },
+            'uyeler': uyeler,
+        })
+    except SeriesSchemaUnavailableError:
+        return jsonify({
+            'ok': False,
+            'mesaj': 'Kalıp seri şeması mevcut değil.',
+            'kod': 'SERIES_SCHEMA_UNAVAILABLE',
+        }), 404
+    except SeriesSchemaIncompleteError:
+        return jsonify({
+            'ok': False,
+            'mesaj': 'Kalıp seri şeması eksik — migration tamamlanmamış.',
+            'kod': 'SERIES_SCHEMA_INCOMPLETE',
+        }), 409
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
     finally:
@@ -531,6 +739,83 @@ def api_enj_cakisma_kontrol():
             'cakisan_planlar': conflicts,
             'conflict_detail': detail,
         })
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/plan/kalem-miktar-ozet', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_plan_kalem_miktar_ozet():
+    """Sipariş kalemi toplam / planlanmış / kalan miktar — read-only passthrough.
+
+    Legacy planlar varsa (quantity_calculable=False):
+    - HTTP 200 döner (blocker değil)
+    - ok=True, quantity_calculable=False, remaining_quantity=null
+    - warning alanında açıklama mesajı
+    """
+    sip_no = request.args.get('sip_no', type=int)
+    sip_harinx = request.args.get('sip_harinx', type=int)
+    mamul_skod = (request.args.get('mamul_skod') or '').strip()
+    rkod = request.args.get('rkod', 0, type=int)
+    if not sip_no or not mamul_skod:
+        return jsonify({'ok': False, 'mesaj': 'sip_no ve mamul_skod gerekli'}), 400
+    try:
+        from modules.planlama.uretim_plan_service import (
+            resolve_line_quantity_summary,
+            OrderLineNotFoundError,
+            OrderLineUnitMismatchError,
+            OrderLineQuantityError,
+        )
+        summary = resolve_line_quantity_summary(
+            sip_no, int(sip_harinx or 0), mamul_skod, int(rkod or 0),
+            view_only=True,
+        )
+        return jsonify({'ok': True, **summary})
+    except OrderLineNotFoundError as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 404
+    except (OrderLineUnitMismatchError, OrderLineQuantityError) as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+
+
+@uretim_plan_bp.route('/api/plan/onceki', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_plan_onceki():
+    """Adım 3 — aynı sipariş/model/renk için önceki aktif planlar (read-only)."""
+    sip_no = request.args.get('sip_no', type=int)
+    sip_harinx = request.args.get('sip_harinx', 0, type=int)
+    mamul_skod = (request.args.get('mamul_skod') or '').strip()
+    rkod = request.args.get('rkod', 0, type=int)
+    tarih_bas = (request.args.get('tarih_bas') or '').strip()[:10]
+    tarih_bit = (request.args.get('tarih_bit') or '').strip()[:10]
+    if not sip_no or not mamul_skod:
+        return jsonify({'ok': False, 'mesaj': 'sip_no ve mamul_skod gerekli'}), 400
+    con = get_conn()
+    try:
+        repo._ensure_table(con)
+        rows = con.execute("""
+            SELECT id, plan_donemi, plan_baslangic, plan_bitis, aktif, oncelik
+              FROM uretim_model_plan
+             WHERE sip_no=? AND sip_harinx=? AND mamul_skod=? AND rkod=? AND aktif=1
+             ORDER BY plan_baslangic DESC
+             LIMIT 20
+        """, (int(sip_no), int(sip_harinx), mamul_skod, int(rkod))).fetchall()
+        planlar = []
+        for r in rows:
+            pb = (r['plan_baslangic'] or '')[:10]
+            pe = (r['plan_bitis'] or '')[:10]
+            planlar.append({
+                'id': r['id'],
+                'plan_donemi': r['plan_donemi'],
+                'plan_baslangic': pb,
+                'plan_bitis': pe,
+                'aktif': r['aktif'],
+                'oncelik': r['oncelik'],
+            })
+        return jsonify({'ok': True, 'planlar': planlar})
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
     finally:
@@ -755,6 +1040,138 @@ def api_enj_makine_plan_ozet():
             calisma_modu=calisma, hafta_sonu=hs, hs_vardiya=hs_v,
         )
         return jsonify({'ok': True, 'makineler': makineler, 'days': days})
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+def _parse_plan_dt_param(raw: str | None, field: str) -> datetime | None:
+    from modules.planlama.enj_kapasite_motor import _parse_dt
+    if not raw or not str(raw).strip():
+        return None
+    s = str(raw).strip()
+    try:
+        if len(s) <= 10:
+            return _parse_dt(s + ' 07:00:00')
+        return _parse_dt(s)
+    except ValueError as exc:
+        raise ValueError(f'Geçersiz {field} tarihi') from exc
+
+
+@uretim_plan_bp.route('/api/enj/makine-slot-ozet', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_makine_slot_ozet():
+    """Makine kartları — fiziksel/planlı sayım özeti (istasyon satırı yok)."""
+    plan_bas = (request.args.get('plan_baslangic') or request.args.get('anchor') or '').strip()
+    plan_bit = (request.args.get('plan_bitis') or '').strip()
+    secim_bas = (request.args.get('secim_baslangic') or '').strip()
+    secim_bit = (request.args.get('secim_bitis') or '').strip()
+    calisma = (request.args.get('calisma_modu') or 'GUNDUZ_GECE').upper()
+    hs = (request.args.get('hafta_sonu_calisma') or 'HAYIR').upper()
+    hs_v = request.args.get('hafta_sonu_vardiya')
+    if hs == 'HAYIR':
+        hs_v = None
+    con = get_conn()
+    try:
+        from modules.planlama.enj_plan_availability_service import build_makine_slot_ozet_all
+        makineler = build_makine_slot_ozet_all(
+            con,
+            plan_baslangic=plan_bas or None,
+            plan_bitis=plan_bit or None,
+            secim_baslangic=secim_bas or None,
+            secim_bitis=secim_bit or None,
+            calisma_modu=calisma,
+            hafta_sonu=hs,
+            hs_vardiya=hs_v,
+        )
+        return jsonify({'ok': True, 'makineler': makineler, 'anchor': {
+            'baslangic': plan_bas or None,
+            'bitis': plan_bit or None,
+        }})
+    except ValueError as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/makine-detay', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_makine_detay():
+    """Makine detay — fiziksel + planlı istasyon bilgisi (read-only)."""
+    makine_id = request.args.get('makine_id', type=int)
+    if not makine_id or makine_id < 1:
+        return jsonify({'ok': False, 'mesaj': 'Geçerli makine_id gerekli'}), 400
+
+    slot = (request.args.get('slot') or '').upper()
+    if slot and slot not in ('A', 'B'):
+        return jsonify({'ok': False, 'mesaj': 'slot yalnız A veya B olabilir'}), 400
+
+    plan_bas = (request.args.get('plan_baslangic') or request.args.get('anchor') or '').strip()
+    plan_bit = (request.args.get('plan_bitis') or '').strip()
+    secim_bas = (request.args.get('secim_baslangic') or '').strip()
+    secim_bit = (request.args.get('secim_bitis') or '').strip()
+    calisma = (request.args.get('calisma_modu') or 'GUNDUZ_GECE').upper()
+    hs = (request.args.get('hafta_sonu_calisma') or 'HAYIR').upper()
+    hs_v = request.args.get('hafta_sonu_vardiya')
+    if hs == 'HAYIR':
+        hs_v = None
+
+    for raw, lbl in ((plan_bas, 'plan_baslangic'), (plan_bit, 'plan_bitis'),
+                     (secim_bas, 'secim_baslangic'), (secim_bit, 'secim_bitis')):
+        if raw:
+            try:
+                _parse_plan_dt_param(raw, lbl)
+            except ValueError as e:
+                return jsonify({'ok': False, 'mesaj': str(e)}), 400
+
+    con = get_conn()
+    try:
+        from modules.planlama.enj_plan_availability_service import (
+            build_makine_detay,
+            _load_side_reservations,
+            _resolve_anchor_window,
+        )
+        from modules.planlama.uretim_plan_service import resolve_asorti_for_plan_keys
+
+        asorti_map = None
+        anchor_bas, anchor_bit = _resolve_anchor_window(plan_bas or None, plan_bit or None)
+        if anchor_bas and anchor_bit:
+            keys: set[tuple] = set()
+            for s in ('A', 'B'):
+                if slot and s != slot:
+                    continue
+                for r in _load_side_reservations(con, makine_id, s, anchor_bas, anchor_bit):
+                    keys.add((
+                        int(r['sip_no']),
+                        int(r.get('sip_harinx') or 0),
+                        str(r['mamul_skod']),
+                        int(r.get('rkod') or 0),
+                    ))
+            if keys:
+                asorti_map = resolve_asorti_for_plan_keys(list(keys))
+
+        det = build_makine_detay(
+            con, int(makine_id),
+            plan_baslangic=plan_bas or None,
+            plan_bitis=plan_bit or None,
+            secim_baslangic=secim_bas or None,
+            secim_bitis=secim_bit or None,
+            calisma_modu=calisma,
+            hafta_sonu=hs,
+            hs_vardiya=hs_v,
+            asorti_map=asorti_map,
+            include_stations=True,
+        )
+        if not det:
+            return jsonify({'ok': False, 'mesaj': 'Makine bulunamadı'}), 404
+        if slot:
+            det['sides'] = {slot: det['sides'][slot]}
+        return jsonify({'ok': True, **det})
+    except ValueError as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 400
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
     finally:
