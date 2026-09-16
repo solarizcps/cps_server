@@ -1,0 +1,72 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v1.16.0"
+phase_code = "ATP_CROSS_PLAN_GOOGLE_APPLY_FINAL_V1"
+title = "Cross-plan manuel sıra + Google apply snapshot readback (production dar release)"
+status = "ONAYLANDI"
+date = "2026-09-16"
+summary = "Aynı araç+gün içinde farklı plan_id işleri arasında manuel sıra değişimi; Bugünkü İşler listesinin seçili araç sırasıyla hizalanması; Sıralı Duraklar rozetlerinin birleşik 1..n olması; Google rota apply yanıtındaki persisted route_snapshot'ın istemciye alınması; apply sonrası ORS ile yanlış doğrulama yapılmaması; profile_only işleminde tüm aktif task_ids kullanımı; JS cache sürüm güncellemeleri."
+source_type = "commit"
+commit_sha = "a37865c"
+worktree_fingerprint = "release/atp-cross-plan-google-apply-final-v1@eeea763"
+approved_by = "Adem"
+verification_date = "2026-09-16"
+verification_evidence = "Adem gerçek ekran ATP akışı onayı; TEMP DB pytest 779 ATP-related PASS; WhatsApp browser 1/1 PASS; stabilization lock PASS; release validator PASS (post-lock)."
+test_result = "779 passed (ATP filter); test_route_apply_snapshot_readback_v1; test_google_route_options_ui profile/snapshot hooks; test_arac_manual_reorder_api; validate_atp_stabilization_lock PASS; git diff --check clean"
+db_write = false
+server_restart = false
+push_status = "PUSHED"
+deployment_status = "NOT_DEPLOYED"
+
+changes = [
+  "arac_takip_repo: vehicle+day kapsamında çoklu plan_id sıra listesi ve bulk reorder.",
+  "planlama_arac_takip.js: Bugünkü İşler ↔ motor sırası hizalama; birleşik durak rozetleri 1..n.",
+  "planlama_arac_takip_route.js: ingestGoogleApplyResponse + reloadAfterGoogleProfileApply.",
+  "planlama_arac_takip_route_explainer.js: getActiveRouteTaskIds; profile_only tüm aktif task_ids; ORS readback kaldırıldı.",
+  "arac_google_route_apply_service / arac_route_apply_service: apply yanıtına zengin route_snapshot.",
+  "Template cache: planlama_arac_takip.js v106, route.js v19, explainer v12.",
+  "tests: test_route_apply_snapshot_readback_v1 + google_route_options_ui readback hooks.",
+  "ATP stabilization manifest yeniden üretildi (167 dosya).",
+]
+
+changed_files = [
+  "app/modules/planlama/arac_google_route_apply_service.py",
+  "app/modules/planlama/arac_route_apply_service.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_route.js",
+  "app/static/js/planlama_arac_takip_route_explainer.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "docs/atp-lock/atp_inventory.json",
+  "docs/atp-lock/atp_stabilization_manifest.sha256",
+  "tests/planlama/test_google_route_options_ui.py",
+  "tests/planlama/test_route_apply_snapshot_readback_v1.py",
+  "changes/records/planlama.atp/ATP_CROSS_PLAN_GOOGLE_APPLY_FINAL_V1.toml",
+  "changes/fragments/planlama.atp.ATP_CROSS_PLAN_GOOGLE_APPLY_FINAL_V1.release",
+]
+
+locked_rules = [
+  "Production tabanı release/atp-final-pilot-20260916 (eeea763) üzerine dar ATP-only release; Genel Plan F2 / Finans / Üretim / NexGen dahil değildir.",
+  "Google apply sonrası doğrulama persisted route_snapshot readback ile yapılır; ORS fallback doğrulama kullanılmaz.",
+  "profile_only Google apply tüm aktif task_ids setini kullanır.",
+  "Manuel reorder API tek plan_id içi kuralı korur; cross-plan UI vehicle+day bulk reorder repo katmanında kalır.",
+  "Plan değiştir / defer / iptal / MOCK badge / WhatsApp / rota kararı davranışları eeea763 tabanında korunur.",
+]
+
+tests = [
+  "tests/planlama/test_route_apply_snapshot_readback_v1.py",
+  "tests/planlama/test_google_route_options_ui.py",
+  "tests/planlama/test_arac_manual_reorder_api.py",
+  "tests/planlama/test_atp_traffic_route_apply_contracts_r07_v1.py",
+  "tests/planlama/test_atp_whatsapp_browser_v1.py",
+  "tools/validate_atp_stabilization_lock.py",
+  "tools/validate_release_history.py",
+]
+
+known_issues = []
+
+next_steps = [
+  "Adem RDP deploy talimatı beklenir; bu faz push-only.",
+]
+
+related_commits = []

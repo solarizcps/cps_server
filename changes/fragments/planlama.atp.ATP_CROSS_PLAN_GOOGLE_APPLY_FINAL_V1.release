@@ -1,0 +1,10 @@
+## v1.16.0 — ATP_CROSS_PLAN_GOOGLE_APPLY_FINAL_V1 (2026-09-16)
+
+**Cross-plan manuel sıra + Google apply snapshot readback (dar production release)**
+
+- Aynı araç ve gün içinde farklı `plan_id` işleri arasında manuel sıra değişimi.
+- Bugünkü İşler listesi seçili araç sırasıyla hizalanır; Sıralı Duraklar rozetleri birleşik 1..n.
+- Google rota apply yanıtındaki persisted `route_snapshot` istemciye alınır; apply sonrası ORS ile yanlış doğrulama yapılmaz.
+- `profile_only` apply tüm aktif `task_ids` kullanır.
+- JS cache: `planlama_arac_takip.js` v106, `planlama_arac_takip_route.js` v19, explainer v12.
+- Taban: `eeea763` (release/atp-final-pilot-20260916 dar ATP release).
