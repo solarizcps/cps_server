@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 EXPLAINER = (ROOT / 'app' / 'static' / 'js' / 'planlama_arac_takip_route_explainer.js').read_text(encoding='utf-8')
 MAIN = (ROOT / 'app' / 'static' / 'js' / 'planlama_arac_takip.js').read_text(encoding='utf-8')
+ROUTE_JS = (ROOT / 'app' / 'static' / 'js' / 'planlama_arac_takip_route.js').read_text(encoding='utf-8')
 HTML = (ROOT / 'app' / 'templates' / 'planlama' / 'arac_takip_plan.html').read_text(encoding='utf-8')
 
 
@@ -392,6 +393,10 @@ def test_profile_v1_recommendation_formula():
 
 def test_profile_v1_readback_hooks():
     assert 'verifyGoogleProfileApplyReadback' in MAIN
+    assert 'verifyGoogleSnapshotMetrics' in MAIN
     assert 'reloadAfterGoogleProfileApply' in MAIN
+    assert 'ingestGoogleApplyResponse' in ROUTE_JS
     assert 'reloadAfterProfileApply' in EXPLAINER
     assert 'traffic-free' in MAIN or 'traffic-fast' in MAIN
+    assert 'Rota kaydedildi ancak ekran doğrulanması yenilenemedi' in EXPLAINER
+    assert 'getActiveRouteTaskIds' in EXPLAINER
