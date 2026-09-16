@@ -460,18 +460,25 @@ def test_gf17_restart_recovery(db_path, plan_is_ids, lat, lng) -> None:
 
 def test_gf18_auto_complete_after_verified_depart(db_path, plan_is_ids) -> None:
     print('GF18')
-    st = sqlite3.connect(db_path).execute(
-        'SELECT durum FROM arac_gunluk_plan_is WHERE id=?', (plan_is_ids[0],),
-    ).fetchone()[0]
-    n_auto = sqlite3.connect(db_path).execute(
-        "SELECT COUNT(*) FROM arac_plan_olay WHERE plan_is_id=? AND olay_turu='AUTO_TAMAMLANDI'",
-        (plan_is_ids[0],),
-    ).fetchone()[0]
-    # P0: verified ENTER+EXIT on shared track auto-completes the planned job.
-    if st == 'TAMAMLANDI' and n_auto >= 1:
-        ok('GF18')
-    else:
-        bad('GF18', f'st={st} auto_events={n_auto}')
+    # Isolated 2× inside + 2× outside — module-scoped db_path is mutated by GF01–GF17.
+    with temp_a2_db(stops=1) as (db2, _pid, pids, la, ln, _):
+        a_in, b_in = _m_offset(la, ln, 180)
+        a_out, b_out = _m_offset(la, ln, 320)
+        _process(db2, a_in, b_in, '2026-12-20 17:00:00')
+        _process(db2, a_in, b_in, '2026-12-20 17:01:00')
+        _process(db2, a_out, b_out, '2026-12-20 17:10:00')
+        _process(db2, a_out, b_out, '2026-12-20 17:11:00')
+        st = sqlite3.connect(db2).execute(
+            'SELECT durum FROM arac_gunluk_plan_is WHERE id=?', (pids[0],),
+        ).fetchone()[0]
+        n_auto = sqlite3.connect(db2).execute(
+            "SELECT COUNT(*) FROM arac_plan_olay WHERE plan_is_id=? AND olay_turu='AUTO_TAMAMLANDI'",
+            (pids[0],),
+        ).fetchone()[0]
+        if st == 'TAMAMLANDI' and n_auto == 1:
+            ok('GF18')
+        else:
+            bad('GF18', f'st={st} auto_events={n_auto}')
 
 
 def test_gf19_event_insert_rollback(db_path, plan_id, lat, lng) -> None:

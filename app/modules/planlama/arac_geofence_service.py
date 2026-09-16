@@ -192,6 +192,7 @@ def _auto_complete_task_conn(
         return  # idempotent
     if current not in ACTIVE_ITEM_STATUSES:
         return  # IPTAL/inactive — never auto-complete
+    already_audited = event_exists_conn(con, plan_is_id, EVENT_AUTO_COMPLETE)
     con.execute(
         'UPDATE arac_gunluk_plan_is SET durum=? WHERE id=?',
         ('TAMAMLANDI', plan_is_id),
@@ -200,28 +201,29 @@ def _auto_complete_task_conn(
         "UPDATE arac_plan_is_ziyaret_durum SET result_status='SONUC_BEKLIYOR', updated_at=? WHERE plan_is_id=?",
         (updated_at, plan_is_id),
     )
-    insert_geofence_event_conn(
-        con,
-        plan_id=plan_id,
-        plan_is_id=plan_is_id,
-        arac_external_id=vehicle_id,
-        olay_turu=EVENT_AUTO_COMPLETE,
-        mesaj='GPS hareketine göre rota görevi otomatik tamamlandı',
-        metadata={
-            'geofence_kind': AUTO_COMPLETE_KIND,
-            'arrived_at': visit.get('arrived_at'),
-            'departed_at': visit.get('departed_at'),
-            'dwell_seconds': visit.get('dwell_seconds'),
-            'gps_snapshot_id': gps_row.get('id'),
-            'plan_item_id': item.get('id'),
-            'actual_item_id': item.get('plan_item_id') or item.get('id'),
-            'expected_item_id': expected_item_id,
-            'out_of_sequence': is_out_of_sequence,
-            'p0_trigger': 'confirmed_enter_confirmed_exit',
-        },
-        olay_zamani=gps_row.get('gps_timestamp'),
-        created_at=updated_at,
-    )
+    if not already_audited:
+        insert_geofence_event_conn(
+            con,
+            plan_id=plan_id,
+            plan_is_id=plan_is_id,
+            arac_external_id=vehicle_id,
+            olay_turu=EVENT_AUTO_COMPLETE,
+            mesaj='GPS hareketine göre rota görevi otomatik tamamlandı',
+            metadata={
+                'geofence_kind': AUTO_COMPLETE_KIND,
+                'arrived_at': visit.get('arrived_at'),
+                'departed_at': visit.get('departed_at'),
+                'dwell_seconds': visit.get('dwell_seconds'),
+                'gps_snapshot_id': gps_row.get('id'),
+                'plan_item_id': item.get('id'),
+                'actual_item_id': item.get('plan_item_id') or item.get('id'),
+                'expected_item_id': expected_item_id,
+                'out_of_sequence': is_out_of_sequence,
+                'p0_trigger': 'confirmed_enter_confirmed_exit',
+            },
+            olay_zamani=gps_row.get('gps_timestamp'),
+            created_at=updated_at,
+        )
 
 
 def _stop_label(item: dict | None) -> str:
@@ -551,9 +553,11 @@ def _process_single_item_conn(
         'created_at': (visit or {}).get('created_at') or updated_at,
     })
 
-    # P0: DEPARTED_PENDING + emit_departed → otomatik TAMAMLANDI
+    # P0 + live reconciliation: DEPARTED_PENDING → TAMAMLANDI.
+    # emit_departed bir kerelik event kapısıdır; AUTO_TAMAMLANDI ondan bağımsızdır.
+    # Terminal DEPARTED_PENDING + PLANLANDI/BASLADI split-brain'i de iyileştirir.
     auto_completed = False
-    if new_state == STATE_DEPARTED_PENDING and emit_departed:
+    if new_state == STATE_DEPARTED_PENDING:
         updated_visit = get_visit_state_conn(con, plan_is_id)
         _auto_complete_task_conn(
             con,
@@ -574,7 +578,13 @@ def _process_single_item_conn(
                 if expected_item else None
             ),
         )
-        auto_completed = True
+        row_after = con.execute(
+            'SELECT durum FROM arac_gunluk_plan_is WHERE id=?', (plan_is_id,),
+        ).fetchone()
+        current_after = row_after['durum'] if row_after is not None and hasattr(row_after, '__getitem__') else (
+            row_after[0] if row_after else None
+        )
+        auto_completed = current_after == 'TAMAMLANDI'
 
     saved = get_visit_state_conn(con, plan_is_id)
     return {
@@ -584,6 +594,80 @@ def _process_single_item_conn(
         'out_of_sequence': is_out_of_sequence,
         'auto_completed': auto_completed,
     }
+
+
+def _list_unreconciled_departed_conn(
+    con,
+    *,
+    plan_date: str | None = None,
+    vehicle_id: str | None = None,
+) -> list[dict]:
+    """DEPARTED_PENDING visit + still-open plan item (PLANLANDI/BASLADI)."""
+    sql = """
+        SELECT z.plan_id, z.plan_is_id, z.arac_external_id,
+               z.arrived_at, z.departed_at, z.dwell_seconds, z.last_gps_snapshot_id,
+               i.durum
+        FROM arac_plan_is_ziyaret_durum z
+        JOIN arac_gunluk_plan_is i ON i.id = z.plan_is_id
+        JOIN arac_gunluk_plan p ON p.id = z.plan_id
+        WHERE z.state = ?
+          AND i.durum IN ('PLANLANDI', 'BASLADI')
+    """
+    params: list = [STATE_DEPARTED_PENDING]
+    if plan_date:
+        sql += ' AND p.plan_tarihi = ?'
+        params.append(plan_date)
+    if vehicle_id:
+        sql += ' AND z.arac_external_id = ?'
+        params.append(vehicle_id)
+    rows = con.execute(sql, params).fetchall()
+    out = []
+    for r in rows:
+        out.append(dict(r) if hasattr(r, 'keys') else {
+            'plan_id': r[0], 'plan_is_id': r[1], 'arac_external_id': r[2],
+            'arrived_at': r[3], 'departed_at': r[4], 'dwell_seconds': r[5],
+            'last_gps_snapshot_id': r[6], 'durum': r[7],
+        })
+    return out
+
+
+def reconcile_departed_pending_completions(
+    *,
+    plan_date: str | None = None,
+    vehicle_id: str | None = None,
+    now: datetime | None = None,
+) -> dict:
+    """Heal visit/status split-brain: confirmed depart must complete the plan item."""
+    if not geofence_tables_ready():
+        return {'ok': False, 'reconciled': 0, 'reason': 'geofence_tables_not_ready'}
+    now = now or datetime.now()
+    updated_at = now.strftime('%Y-%m-%d %H:%M:%S')
+    reconciled = 0
+    with geofence_write_transaction() as con:
+        rows = _list_unreconciled_departed_conn(
+            con, plan_date=plan_date, vehicle_id=vehicle_id,
+        )
+        for row in rows:
+            plan_is_id = int(row['plan_is_id'])
+            _auto_complete_task_conn(
+                con,
+                plan_id=int(row['plan_id']),
+                plan_is_id=plan_is_id,
+                vehicle_id=str(row.get('arac_external_id') or ''),
+                item={'id': plan_is_id, 'plan_item_id': plan_is_id},
+                visit={
+                    'arrived_at': row.get('arrived_at'),
+                    'departed_at': row.get('departed_at'),
+                    'dwell_seconds': row.get('dwell_seconds'),
+                },
+                gps_row={
+                    'id': row.get('last_gps_snapshot_id'),
+                    'gps_timestamp': row.get('departed_at') or updated_at,
+                },
+                updated_at=updated_at,
+            )
+            reconciled += 1
+    return {'ok': True, 'reconciled': reconciled}
 
 
 def process_gps_snapshot_for_geofence(
@@ -602,11 +686,16 @@ def process_gps_snapshot_for_geofence(
     if not geofence_tables_ready():
         return {'ok': False, 'reason': 'geofence_tables_not_ready'}
 
-    if _geofence_gps_unusable(gps_row, now):
-        return {'ok': True, 'skipped': True, 'reason': 'geofence_stale_gps'}
-
     vehicle_id = str(gps_row.get('arac_external_id') or '')
     pd = plan_date or (gps_row.get('gps_timestamp') or '')[:10]
+    if _geofence_gps_unusable(gps_row, now):
+        rec = reconcile_departed_pending_completions(
+            plan_date=pd or None,
+            vehicle_id=vehicle_id or None,
+            now=now,
+        )
+        return {'ok': True, 'skipped': True, 'reason': 'geofence_stale_gps', 'reconcile': rec}
+
     plan = get_active_plan_row(pd, vehicle_id) if pd and vehicle_id else None
     if not plan:
         return {'ok': True, 'skipped': True, 'reason': 'no_active_plan'}
@@ -614,7 +703,10 @@ def process_gps_snapshot_for_geofence(
     plan_id = int(plan['id'])
     items = _eligible_items(pd, vehicle_id)
     if not items:
-        return {'ok': True, 'processed': 0, 'plan_id': plan_id}
+        rec = reconcile_departed_pending_completions(
+            plan_date=pd, vehicle_id=vehicle_id, now=now,
+        )
+        return {'ok': True, 'processed': 0, 'plan_id': plan_id, 'reconcile': rec}
 
     # P0: expected_task referans için (artık işlemi kısıtlamaz)
     expected = _active_expected_task(items)
@@ -743,4 +835,10 @@ def process_new_snapshots_since(last_id: int = 0) -> dict:
             outcomes.append(process_gps_snapshot_for_geofence(row))
         except Exception as exc:
             outcomes.append({'ok': False, 'error': exc.__class__.__name__})
-    return {'processed': len(outcomes), 'last_id': max_id, 'results': outcomes}
+    rec = reconcile_departed_pending_completions()
+    return {
+        'processed': len(outcomes),
+        'last_id': max_id,
+        'results': outcomes,
+        'reconcile': rec,
+    }

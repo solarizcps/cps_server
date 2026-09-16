@@ -1038,6 +1038,13 @@ def get_today_vehicle_operations(
             'next_order_no': plan_v.get('next_order_no'),
             'next_display_order_no': plan_v.get('next_display_order_no'),
             'next_time': plan_v.get('next_time'),
+            'next_eta_time': (next_item or {}).get('tahmini_varis_saati') or (next_item or {}).get('eta_time'),
+            'eta_is_traffic_free': True,
+            'eta_honesty_note': (
+                'Tahmini varış trafiksizdir; canlı trafik dahil değildir.'
+                if ((next_item or {}).get('tahmini_varis_saati') or (next_item or {}).get('eta_time'))
+                else None
+            ),
             'vehicle_physical_status': vehicle_physical,
             'vehicle_physical_label': VEHICLE_PHYSICAL_LABELS.get(
                 vehicle_physical, VEHICLE_PHYSICAL_LABELS['BILINMIYOR'],

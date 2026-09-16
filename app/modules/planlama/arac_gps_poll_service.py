@@ -260,10 +260,17 @@ def poll_once(
 def _run_geofence_pass(since_id: int = 0) -> dict:
     try:
         from modules.planlama.arac_geofence_repo import geofence_tables_ready
-        from modules.planlama.arac_geofence_service import process_new_snapshots_since
+        from modules.planlama.arac_geofence_service import (
+            process_new_snapshots_since,
+            reconcile_departed_pending_completions,
+        )
         if not geofence_tables_ready():
             return {'skipped': True, 'reason': 'geofence_tables_not_ready'}
-        return process_new_snapshots_since(since_id)
+        startup_reconcile = reconcile_departed_pending_completions()
+        out = process_new_snapshots_since(since_id)
+        if isinstance(out, dict):
+            out['startup_reconcile'] = startup_reconcile
+        return out
     except Exception as exc:
         return {'ok': False, 'error': exc.__class__.__name__}
 

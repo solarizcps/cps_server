@@ -537,6 +537,12 @@
       } else if (nextLabel) {
         detailRows += '<div class="vcard-detail-row"><span class="icon">📅</span><span>Sıradaki: <strong>' +
           fmtVal(nextLabel) + '</strong></span></div>';
+        var etaFree = v.next_eta_time || '';
+        var etaNote = v.eta_honesty_note || '';
+        if (etaFree && etaNote) {
+          detailRows += '<div class="vcard-detail-row"><span class="icon">⏱</span><span>Tahmini (trafiksiz) ' +
+            fmtVal(fmtTime(etaFree) || etaFree) + '</span></div>';
+        }
       }
       if (deviating && v.deviation_m != null) {
         var km = (Number(v.deviation_m) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });

@@ -364,6 +364,7 @@ class TestAtpLiveStatusV1:
         _set_item_status(env['db'], pid, 'BASLADI')
         _set_visit(env['db'], pis, pid, 'DEPARTED_PENDING')
         v = _vehicle(env['db'], TODAY, moving=False)
+        # Read path must not write — open item stays until GPS worker reconciles.
         assert v['plan_trip_status'] == 'SONUC_BEKLIYOR'
 
     def test_t8_completed(self, env):
