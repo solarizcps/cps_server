@@ -1,0 +1,58 @@
+schema_version = 1
+module = "finans"
+version = "v1.0.0"
+phase_code = "FINANCE_MANAGEMENT_LABELS_V1"
+title = "Finans Yönetimi — onaylı sidebar ve sayfa etiket hizalaması"
+status = "ONAYLANDI"
+date = "2026-09-17"
+summary = """
+KAPI48/KAPI48A: Canonical dirty çalışma ağacında kalan onaylı görsel etiketler main candidate'a dar port edildi.
+Sidebar ve /finans/odeme-plani sayfa başlığı Finans Yönetimi olarak hizalandı.
+Main RM motoru, müşteri/tedarikçi listeleri, net = borc - alacak ve sıfır inline Korgün çağrısı değişmedi.
+Yalnız iki template dosyasında 5 satırlık etiket hunk'u; bütün dosya kopyası yok.
+Adem görsel onayı KAPI48A PASS (8080 candidate, PID 2000).
+"""
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "rescue/canonical-reconciliation-v1@KAPI48"
+verification_date = "2026-09-17"
+verification_evidence = "KAPI48A Adem görsel onay; finans 211 PASS 1 pre-existing FAIL; plan primary 306 PASS; ATP lock PASS"
+test_result = "211 PASS 1 FAIL pre-existing popup string; primary plan pack 306 PASS; ATP lock PASS"
+db_write = false
+server_restart = false
+push_status = "NOT_PUSHED"
+approved_by = "Adem — KAPI48A görsel onay Finans Yönetimi sidebar+H1"
+
+changes = [
+  "app/templates/base.html — sidebar sl Finans Yönetimi; link title Cari Hareketler",
+  "app/templates/finans/odeme_plani.html — title, breadcrumb, H1 Finans Yönetimi",
+]
+
+changed_files = [
+  "app/templates/base.html",
+  "app/templates/finans/odeme_plani.html",
+  "changes/records/finans/FINANCE_MANAGEMENT_LABELS_V1.toml",
+  "changes/fragments/finans.FINANCE_MANAGEMENT_LABELS_V1.release",
+]
+
+locked_rules = [
+  "Canonical C:\\Solariz_CPS_SERVER kaynak dosyalarına yazılmadı.",
+  "Canonical DB ve ProgramData RM değiştirilmedi.",
+  "Finans backend/RM/route/JS davranışı main kazanan olarak korundu.",
+  "Bütün canonical template kopyası yapılmadı.",
+]
+
+tests = [
+  "tests/finans/ — 211 PASS, 1 FAIL test_01_template_includes_v1_popup (KAPI47 öncesi pre-existing)",
+  "Production plan primary pack — 306 PASS (migration_190 hafta sonu 4 FAIL pre-existing)",
+  "validate_atp_stabilization_lock.py — PASS",
+  "git diff --check — PASS",
+]
+
+known_issues = [
+  "test_01_template_includes_v1_popup — MUSTERI/TEDARIKCI modal string beklentisi main/kazanan ile uyumsuz; üretim regresyonu değil",
+]
+
+next_steps = [
+  "KAPI49 single-root final cutover preflight",
+]
