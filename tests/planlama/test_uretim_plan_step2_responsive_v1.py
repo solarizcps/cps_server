@@ -40,15 +40,20 @@ def _col_block(html: str, col: str) -> str:
 
 
 def test_selection_dom_order(html):
-    """SELECTION_DOM_ORDER=PASS — V31: orta=tarih→istasyon→kalıp, sol=miktar, sağ=vardiya→tur→hs→hesap"""
+    """SELECTION_DOM_ORDER=PASS — 7O3E: orta=tarih→kalıp→seçili→fiziksel→istasyon, kapasite takvimde"""
     ids = _section_ids(html)
     idx_tarih = ids.index('upStep2SecTarih') if 'upStep2SecTarih' in ids else -1
     idx_ist   = ids.index('upStep2SecIstasyon') if 'upStep2SecIstasyon' in ids else -1
     idx_kalip = ids.index('upStep2SecKalip') if 'upStep2SecKalip' in ids else -1
+    idx_secili = ids.index('upStep2SecKalipSecili') if 'upStep2SecKalipSecili' in ids else -1
+    idx_fiz = ids.index('upStep2SecFizikselKalip') if 'upStep2SecFizikselKalip' in ids else -1
     assert idx_tarih >= 0, "upStep2SecTarih eksik"
     assert idx_ist >= 0,   "upStep2SecIstasyon eksik"
     assert idx_kalip >= 0, "upStep2SecKalip eksik"
-    assert idx_tarih < idx_ist < idx_kalip, "Orta kolon sırası: tarih < istasyon < kalip"
+    assert idx_secili >= 0, "upStep2SecKalipSecili eksik"
+    assert idx_fiz >= 0, "upStep2SecFizikselKalip eksik"
+    assert idx_tarih < idx_kalip < idx_secili < idx_fiz < idx_ist, \
+        "Orta kolon sırası: tarih < kalıp < seçili < fiziksel < istasyon"
     assert 'id="upStep2SecMiktar"' in html, "upStep2SecMiktar eksik"
     left = _col_block(html, 'left')
     assert 'upStep2SecMiktar' in left, "Miktar paneli sol kolonda olmalı"
@@ -70,9 +75,10 @@ def test_mold_count_readonly(html):
 
 
 def test_sticky_summary_and_footer(html, css):
-    """SUMMARY_VISIBLE / STICKY_FOOTER markup=PASS — V3: özet footer'da"""
-    assert 'upStep2KurulumBody' in html   # footer kompakt özet ID
-    assert 'upStep2FootKurulum' in html   # footer wrapper
+    """SUMMARY_VISIBLE / STICKY_FOOTER markup=PASS — 7O3E: özet üst başlıkta"""
+    assert 'upStep2HeadSummary' in html
+    assert 'upStep2HeadCompact' in html
+    assert 'upStep2HeadNext' in html
     assert 'up-create-foot' in html
     assert 'up-create-foot' in css
 
@@ -137,14 +143,11 @@ def test_responsive_css(css):
 
 
 def test_no_font_below_12px(css):
-    """NO_FONT_BELOW_12PX=PASS — step2 kolon sınıfları 12px altına düşmemeli"""
-    # Durum strip etiket/icon için 10-11px tolerans (10px icon nokta, 10px lbl)
-    # Kart side, özet ve input alanları 12px+
+    """NO_FONT_BELOW_12PX=PASS — step2/gantt/kalıp workspace görünür metin ≥12px (7O3D)."""
     step2_block = css.split('.up-step2-layout')[1].split('@media (max-width: 720px)')[0]
     bad = re.findall(r'font-size:\s*(\d+)px', step2_block)
-    # 10px → durum strip label/icon için kabul edilebilir minimum
-    tiny = [int(x) for x in bad if int(x) < 10]
-    assert not tiny, f'step2 font-size below 10px found: {tiny}'
+    tiny = [int(x) for x in bad if int(x) < 12]
+    assert not tiny, f'step2 visible font-size below 12px found: {tiny}'
 
 
 def _step2_layout_block(css: str) -> str:
@@ -199,13 +202,11 @@ def test_warning_text_not_vertical(css):
 
 
 def test_summary_first_viewport(html):
-    """SUMMARY_FIRST_VIEWPORT=PASS — V3: özet footer'da, footer panel'in en altında"""
-    # Yeni yapıda özet footer'da — upStep2FootKurulum, up-create-foot içinde
-    assert 'upStep2FootKurulum' in html
-    # Footer up-create-foot'tan sonra başlıyor
-    foot_idx = html.index('up-create-foot')
-    kurulum_idx = html.index('upStep2FootKurulum')
-    assert kurulum_idx > foot_idx
+    """SUMMARY_FIRST_VIEWPORT=PASS — 7O3E: kompakt özet modal başlığında"""
+    assert 'upStep2HeadSummary' in html
+    head_idx = html.index('up-modal-head-with-steps')
+    summary_idx = html.index('upStep2HeadSummary')
+    assert summary_idx > head_idx
 
 
 def test_machine_grid_compact(css):
@@ -321,30 +322,35 @@ def test_card_side_title_font_min_12(css):
 
 
 def test_cache_versions_equal(html):
-    """CACHE_VERSIONS=PASS — CSS ve JS aynı versiyon, v24"""
-    import re
+    """CACHE_VERSIONS=PASS — CSS ve JS aynı versiyon (7O3D bundle)."""
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
-    js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
-    assert css_v, "CSS version bulunamadı"
-    assert js_v,  "JS version bulunamadı"
-    assert css_v.group(1) == js_v.group(1), f"CSS/JS version eşleşmiyor: {css_v.group(1)} vs {js_v.group(1)}"
-    assert int(css_v.group(1)) >= 24, f"CSS version beklenen >=24, gerçek {css_v.group(1)}"
+    js_v = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
+    cap_v = re.search(r"uretim_plan_7o3_capacity\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
+    assert css_v and js_v and cap_v, "asset version query missing"
+    assert css_v.group(1) == js_v.group(1), f"CSS/JS mismatch: {css_v.group(1)} vs {js_v.group(1)}"
+    assert int(css_v.group(1)) >= 63, f"bundle version expected >=63, got {css_v.group(1)}"
+    assert html.count('uretim_plan.css') == 1 and html.count('uretim_plan.js') == 1
+    assert html.count('uretim_plan_7o3_capacity.js') == 1
 
 
-def test_accordion_html_structure(html):
-    """ACCORDION_HTML=PASS — accordion toggle button ve aria-expanded var"""
-    assert 'upEnjSonHaftaToggle' in html
-    assert 'aria-expanded="false"' in html
-    assert 'aria-controls="upEnjSonHaftaIcerik"' in html
+def test_capacity_panel_html_structure(html):
+    """CAPACITY_PANEL_HTML=PASS — R3 kapasite kartı takvim akordeonunda."""
+    assert 'id="upStep2SecKapasite"' in html
+    assert 'id="upEnjKapasitePanel"' in html
+    assert 'id="upKapasiteGunduz"' in html
+    assert 'id="upKapasiteGece"' in html
+    assert 'id="upTakvimAcc"' in html
+    assert 'id="upTakvimHesapUygula"' in html
+    assert 'Manuel değiştir' in html
+    assert 'upEnjSonHaftaToggle' not in html
 
 
-def test_accordion_content_hidden_default(html):
-    """ACCORDION_HIDDEN_DEFAULT=PASS — içerik başlangıçta hidden attribute ile kapalı"""
-    assert 'id="upEnjSonHaftaIcerik"' in html
-    idx = html.index('id="upEnjSonHaftaIcerik"')
-    # hidden attribute aynı açılış tag'inde olmalı (100 char pencere)
-    snippet = html[idx:idx+100]
-    assert 'hidden' in snippet, f"hidden bulunamadı: {snippet!r}"
+def test_capacity_detay_hidden_default(html):
+    """CAPACITY_DETAY_HIDDEN=PASS — geçmiş detay paneli varsayılan kapalı."""
+    for det_id in ('upKapasiteGunduzDetay', 'upKapasiteGeceDetay', 'upKapasiteGunduzManuel', 'upKapasiteGeceManuel'):
+        idx = html.index(f'id="{det_id}"')
+        snippet = html[idx:idx + 120]
+        assert 'hidden' in snippet, f"{det_id} should be hidden by default: {snippet!r}"
 
 
 def test_accordion_toggle_in_js(js):
@@ -380,17 +386,19 @@ def test_summary_row_grid_auto_1fr(css):
 
 
 def test_summary_fields_preserved(html):
-    """SUMMARY_FIELDS=PASS — Seçilen Kurulum footer'da mevcut"""
-    assert 'upStep2KurulumBody' in html
-    assert 'upStep2FootKurulum' in html
+    """SUMMARY_FIELDS=PASS — 7O3E kompakt özet alanları mevcut"""
+    assert 'upStep2HeadCompact' in html
+    assert 'upStep2HeadNext' in html
+    assert 'upEnjIstasyonGateHint' in html
 
 
 # ---- V3 LAYOUT REBUILD testler ----
 
 def test_footer_kurulum_left(html):
-    """FOOTER_KURULUM_LEFT=PASS — Footer solunda kompakt kurulum özeti var"""
-    assert 'up-create-foot-kurulum' in html
+    """FOOTER_KURULUM_LEFT=PASS — Footer yalnızca ince navigasyon çubuğu"""
     assert 'up-create-foot-nav' in html
+    assert 'upWizardBackBtn' in html
+    assert 'upWizardNextBtn' in html
 
 
 def test_no_big_summary_in_right_col(html):
@@ -410,10 +418,10 @@ def test_durum_strip_in_html(html):
 
 
 def test_manual_ref_2col_in_html(html):
-    """TUR_HIZ_2COL=PASS — V25: Gündüz+Gece hız kartları wrapper var"""
-    # V25: up-hiz-kart-grid veya V24: up-enj-manual-ref-2col
-    assert ('up-hiz-kart-grid' in html or 'up-enj-manual-ref-2col' in html), \
-        "Hız kartları 2-kolon wrapper HTML'de bulunamadı"
+    """TUR_HIZ_2COL=PASS — R3: Gündüz+Gece kapasite kartları yan yana grid."""
+    assert 'up-kapasite-grid' in html
+    assert html.count('up-kapasite-vardiya') >= 2
+    assert 'id="upKapasiteGunduz"' in html and 'id="upKapasiteGece"' in html
 
 
 def test_hs_bas_row_in_html(html):
@@ -421,22 +429,23 @@ def test_hs_bas_row_in_html(html):
     assert 'up-enj-hs-bas-row' in html
 
 
-def test_istasyon_before_kalip_in_html(html):
-    """ISTASYON_ORDER=PASS — İstasyon grid kalıp ayarlarından önce"""
+def test_kalip_before_istasyon_in_html(html):
+    """ISTASYON_ORDER=PASS — 7O3E: Kalıp ve seçili kart istasyonlardan önce"""
     idx_ist = html.index('upStep2SecIstasyon')
     idx_kal = html.index('upStep2SecKalip')
-    assert idx_ist < idx_kal, "İstasyon bölümü kalıptan önce olmalı"
+    idx_secili = html.index('upStep2SecKalipSecili')
+    assert idx_kal < idx_secili < idx_ist, "Kalıp bölümü istasyonlardan önce olmalı"
 
 
 def test_cache_v19_equal(html):
-    """CACHE_VERSIONS=PASS — CSS == JS version, her ikisi >=24"""
-    import re
+    """CACHE_VERSIONS=PASS — CSS == JS bundle, capacity modülü ayrı versiyon."""
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
-    js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
-    assert css_v, "CSS version bulunamadı"
-    assert js_v,  "JS version bulunamadı"
-    assert css_v.group(1) == js_v.group(1), f"CSS/JS version uyuşmuyor: {css_v.group(1)} vs {js_v.group(1)}"
-    assert int(css_v.group(1)) >= 24, f"CSS version beklenen >=24, bulundu {css_v.group(1)}"
+    js_v = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
+    cap_v = re.search(r"uretim_plan_7o3_capacity\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
+    assert css_v and js_v and cap_v
+    assert css_v.group(1) == js_v.group(1)
+    assert int(css_v.group(1)) >= 63
+    assert int(cap_v.group(1)) >= 10
 
 
 def test_durum_strip_css(css):
@@ -616,10 +625,13 @@ def test_side_cells_no_long_status_in_js(js):
 
 
 def test_mixed_side_status_in_js(js):
-    """MIXED_STATUS=PASS — A ve B farklıysa 'A: BOŞ · B: PLANLI' formatı var"""
-    assert "A: ' + dA.lbl + ' · B: " in js or "A: BOŞ · B:" in js or \
-           ("karisik" in js and "dA.lbl" in js), \
-        "Karışık A/B durum gösterimi JS'de eksik"
+    """MIXED_STATUS=PASS — A/B farklı dolulukta footer KISMI DOLU (R3 kart footer)."""
+    assert 'function enjMachineFooterStatus' in js
+    block = js.split('function enjMachineFooterStatus')[1].split('function enjCpsBarClass')[0]
+    assert 'KISMI DOLU' in block
+    assert 'TAM DOLU' in block
+    assert 'BOŞ' in block
+    assert 'function enjSideDurum' in js
 
 
 def test_bottom_safe_space_css(css):
@@ -726,12 +738,13 @@ def test_responsive_no_horizontal_overflow(css):
 
 
 def test_v28_cache_version(html):
-    """V32_CACHE=PASS — cache version v32"""
+    """7O3E_CACHE=PASS — CSS/JS bundle v63, capacity modül v10."""
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
-    js_v  = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
-    assert css_v and js_v, "version bulunamadı"
-    assert css_v.group(1) == '32', f"CSS version beklenen 32, gerçek {css_v.group(1)}"
-    assert js_v.group(1) == '32', f"JS version beklenen 32, gerçek {js_v.group(1)}"
+    js_v = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
+    cap_v = re.search(r"uretim_plan_7o3_capacity\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
+    assert css_v and js_v and cap_v
+    assert css_v.group(1) == js_v.group(1) == '63'
+    assert cap_v.group(1) == '10'
 
 
 def test_selected_product_card_in_left_col(html):

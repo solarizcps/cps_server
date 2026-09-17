@@ -508,6 +508,41 @@ def _check_conflicts(
     return conflicts
 
 
+def weekend_new_plan_start_error(
+    plan_bas: datetime,
+    hafta_sonu_calisma: str,
+) -> str | None:
+    """Kural A: hafta_sonu=HAYIR iken yeni plan başlangıcı — shift override ile aşılamaz."""
+    if hafta_sonu_calisma == 'EVET':
+        return None
+    wd = plan_bas.weekday()
+    if wd == 6:
+        return 'Hafta sonu kapalı; Pazar günü yeni vardiya başlatılamaz.'
+    if wd == 5:
+        if plan_bas.hour * 60 + plan_bas.minute < 7 * 60:
+            return (
+                'Hafta sonu kapalı; Cumartesi 07:00 öncesi yeni plan başlangıcı kabul edilmez. '
+                'Bu aralık yalnızca Cuma gece vardiyasının devamıdır.'
+            )
+        return 'Hafta sonu kapalı; Cumartesi günü yeni vardiya başlatılamaz.'
+    return None
+
+
+def _validate_weekend_new_plan_start_request(
+    plan_bas: datetime,
+    hafta_sonu: str,
+) -> dict | None:
+    err = weekend_new_plan_start_error(plan_bas, hafta_sonu)
+    if err:
+        return {
+            'ok': False,
+            'hata': err,
+            'weekend_start_blocked': True,
+            'baslangic_gecersiz': True,
+        }
+    return None
+
+
 def _is_vardiya_boundary(
     dt: datetime,
     calisma_modu: str,
@@ -521,6 +556,89 @@ def _is_vardiya_boundary(
     if not _mode_allows_vardiya(calisma_modu, vd, hafta_sonu, hs_vardiya, win_bas):
         return False
     return dt == win_bas
+
+
+def normalize_shift_start_time(dt: datetime) -> str:
+    """Seçilen başlangıç — saniye normalize, sessiz yuvarlama yok."""
+    return dt.replace(second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def shift_start_override_required(
+    dt: datetime,
+    calisma_modu: str,
+    hafta_sonu: str,
+    hs_vardiya: str | None,
+) -> bool:
+    """07:00 / 17:00 vardiya sınırı dışında başlangıç — manuel onay gerekir."""
+    if weekend_new_plan_start_error(dt, hafta_sonu):
+        return False
+    dt = dt.replace(second=0, microsecond=0)
+    vd = _vardiya_for_dt(dt)
+    win_bas, _ = _shift_window(dt, vd)
+    if not _mode_allows_vardiya(calisma_modu, vd, hafta_sonu, hs_vardiya, win_bas):
+        return False
+    return dt != win_bas
+
+
+def suggested_shift_start_boundary(
+    dt: datetime,
+    calisma_modu: str,
+    hafta_sonu: str,
+    hs_vardiya: str | None,
+) -> datetime:
+    """Önerilen standart vardiya başlangıcı (07:00 veya 17:00)."""
+    return _snap_to_vardiya_boundary(dt, calisma_modu, hafta_sonu, hs_vardiya)
+
+
+def _coerce_shift_override_bool(value) -> bool:
+    if value is True or value == 1:
+        return True
+    if isinstance(value, str):
+        return value.strip().lower() in ('1', 'true', 'yes', 'evet')
+    return False
+
+
+def _validate_shift_start_override_request(
+    plan_bas: datetime,
+    payload: dict,
+    *,
+    calisma_modu: str,
+    hafta_sonu: str,
+    hs_vardiya: str | None,
+) -> dict | None:
+    """Vardiya dışı başlangıç — onay yoksa kontrollü FAIL; onay varsa doğrula."""
+    if not shift_start_override_required(plan_bas, calisma_modu, hafta_sonu, hs_vardiya):
+        return None
+
+    onerilen = suggested_shift_start_boundary(
+        plan_bas, calisma_modu, hafta_sonu, hs_vardiya,
+    )
+    confirmed = _coerce_shift_override_bool(payload.get('shift_start_override_confirmed'))
+    override_time = payload.get('shift_start_override_time')
+    expected = normalize_shift_start_time(plan_bas)
+
+    if not confirmed:
+        return {
+            'ok': False,
+            'shift_start_override_required': True,
+            'baslangic_gecersiz': True,
+            'hata': (
+                'Seçilen başlangıç saati standart vardiya başlangıcı değil (07:00 / 17:00). '
+                'Bu saatle devam etmek için manuel onay gerekli.'
+            ),
+            'shift_start_selected': expected,
+            'shift_start_selected_gosterim': plan_bas.strftime('%d.%m.%Y %H:%M'),
+            'onerilen_baslangic': onerilen.strftime('%Y-%m-%d %H:%M:%S'),
+            'onerilen_baslangic_gosterim': onerilen.strftime('%d.%m.%Y %H:%M'),
+        }
+
+    got = str(override_time or '').strip().replace('T', ' ')[:19]
+    if got[:16] != expected[:16]:
+        return {
+            'ok': False,
+            'hata': 'Vardiya dışı başlangıç onayı seçilen saat ile eşleşmiyor.',
+        }
+    return None
 
 
 def _snap_to_vardiya_boundary(
@@ -567,6 +685,19 @@ def find_first_available_start(
             haric_plan_id=haric_plan_id,
         )
         if not conflicts:
+            vd = _vardiya_for_dt(cur)
+            win_bas, win_bit = _shift_window(cur, vd)
+            if (
+                win_bas <= cur < win_bit
+                and _mode_allows_vardiya(calisma_modu, vd, hafta_sonu, hs_vardiya, win_bas)
+            ):
+                bc = _check_conflicts(
+                    con, makine_id, slot.upper(), istasyonlar,
+                    win_bas, win_bas + timedelta(minutes=1),
+                    haric_plan_id=haric_plan_id,
+                )
+                if not bc:
+                    return win_bas
             return _snap_to_vardiya_boundary(
                 cur, calisma_modu, hafta_sonu, hs_vardiya,
             )
@@ -583,6 +714,39 @@ def find_first_available_start(
         )
         probe_end = cur + timedelta(minutes=1)
     raise RuntimeError('Ilk uygun baslangic bulunamadi (takvim asimi)')
+
+
+def _advance_working_minutes(
+    cur: datetime,
+    minutes: float,
+    calisma_modu: str,
+    hafta_sonu: str,
+    hs_vardiya: str | None,
+) -> datetime:
+    """Kalıp bağlama — yalnız çalışan vardiya dakikalarında ilerler (PHASE_7O3)."""
+    remaining = float(minutes or 0)
+    if remaining <= 0:
+        return cur
+    probe = cur
+    for _ in range(5000):
+        if remaining <= 1e-9:
+            return probe
+        probe = _advance_to_next_slot(probe, calisma_modu, hafta_sonu, hs_vardiya)
+        vd = _vardiya_for_dt(probe)
+        win_bas, win_bit = _shift_window(probe, vd)
+        if probe < win_bas:
+            probe = win_bas
+        avail_min = (win_bit - probe).total_seconds() / 60.0
+        if avail_min <= 0:
+            probe = win_bit + timedelta(minutes=1)
+            continue
+        use = min(remaining, avail_min)
+        probe = probe + timedelta(minutes=use)
+        remaining -= use
+        if remaining <= 1e-9:
+            return probe
+        probe = win_bit + timedelta(minutes=1)
+    raise RuntimeError('Setup dakika tuketimi tamamlanamadi')
 
 
 def _advance_to_next_slot(
@@ -882,20 +1046,22 @@ def hesapla_kapasite(
     teorik_cikan = gerekli_tur * tur_basi_cift
     fazla_cift = int(teorik_cikan - uretilecek) if teorik_cikan > uretilecek else 0
 
-    if not _is_vardiya_boundary(plan_bas, calisma_modu, hafta_sonu, hs_vardiya):
-        onerilen = _snap_to_vardiya_boundary(
-            plan_bas, calisma_modu, hafta_sonu, hs_vardiya,
-        )
-        return {
-            'ok': False,
-            'baslangic_gecersiz': True,
-            'hata': (
-                'Seçilen saat geçerli vardiya başlangıcı değil. '
-                'Gündüz planları 07:00, gece planları 17:00\'de başlamalı.'
-            ),
-            'onerilen_baslangic': onerilen.strftime('%Y-%m-%d %H:%M:%S'),
-            'onerilen_baslangic_gosterim': onerilen.strftime('%d.%m.%Y %H:%M'),
-        }
+    weekend_err = _validate_weekend_new_plan_start_request(plan_bas, hafta_sonu)
+    if weekend_err:
+        return weekend_err
+
+    override_err = _validate_shift_start_override_request(
+        plan_bas, payload,
+        calisma_modu=calisma_modu,
+        hafta_sonu=hafta_sonu,
+        hs_vardiya=hs_vardiya,
+    )
+    if override_err:
+        return override_err
+
+    shift_override_active = shift_start_override_required(
+        plan_bas, calisma_modu, hafta_sonu, hs_vardiya,
+    )
 
     refs_all = _speed_references(con, makine_id, makine_kod, ref_days=ref_days)
     refs_slot = [r for r in refs_all if r.get('slot') == taraf]
@@ -959,9 +1125,22 @@ def hesapla_kapasite(
                 'gece_reference': ref_gece,
             }
 
+    try:
+        setup_dakika = float(payload.get('setup_dakika') or payload.get('kalip_baglama_dakika') or 0)
+    except (TypeError, ValueError):
+        setup_dakika = 0.0
+    if setup_dakika < 0:
+        setup_dakika = 0.0
+
+    uretim_bas = plan_bas
+    if setup_dakika > 0:
+        uretim_bas = _advance_working_minutes(
+            plan_bas, setup_dakika, calisma_modu, hafta_sonu, hs_vardiya,
+        )
+
     remaining_tur = int(gerekli_tur)
     sim = simule_takvim_tam_tur(
-        plan_bas, remaining_tur,
+        uretim_bas, remaining_tur,
         calisma_modu=calisma_modu,
         hafta_sonu=hafta_sonu,
         hs_vardiya=hs_vardiya,
@@ -1006,8 +1185,16 @@ def hesapla_kapasite(
         plan_bas, gerekli_tur, ref_gece, hafta_sonu,
     )
 
+    audit_override = {}
+    if shift_override_active:
+        audit_override = {
+            'shift_start_override_confirmed': True,
+            'shift_start_override_time': normalize_shift_start_time(plan_bas),
+        }
+
     return {
         'ok': True,
+        **audit_override,
         'gerekli_toplam_cift': int(uretilecek) if uretilecek == int(uretilecek) else uretilecek,
         'kalip_adedi': kalip_adedi,
         'goz_per_kalip': goz_per_kalip,
@@ -1034,6 +1221,9 @@ def hesapla_kapasite(
         'tahmini_vardiya_sayisi': len(breakdown),
         'tahmini_calisma_saati': round(tahmini_calisma_saati, 2),
         'plan_baslangic': plan_bas.strftime('%Y-%m-%d %H:%M:%S'),
+        'uretim_baslangic': uretim_bas.strftime('%Y-%m-%d %H:%M:%S'),
+        'setup_dakika': round(setup_dakika, 2),
+        'setup_time_rule': 'WORKING_MINUTES_ONLY',
         'tahmini_bitis': end_dt.strftime('%Y-%m-%d %H:%M:%S'),
         'hafta_sonu_atlanan_saat': round(weekend_skipped_hours, 2),
         'weekend_crossing': weekend_crossing,

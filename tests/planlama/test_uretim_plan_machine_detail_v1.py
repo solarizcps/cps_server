@@ -450,7 +450,8 @@ def test_js_source_contracts():
     assert 'enjYukleSlotOzet' in js
     assert '/api/enj/makine-detay' in js
     assert 'aria-label' in js
-    assert 'up-enj-makine-detay-btn' in js
+    # V25 card UI: up-mcard-detay-btn; legacy step2: up-enj-makine-detay-btn (parity with step2 responsive)
+    assert ('up-mcard-detay-btn' in js or 'up-enj-makine-detay-btn' in js)
     assert 'method: \'POST\'' not in js[js.find('enjOpenMakineDetay'):js.find('enjBindMakineDetayModal')]
 
 

@@ -1,0 +1,88 @@
+schema_version = 1
+module = "planlama.other"
+version = "v1.1.0"
+phase_code = "PRODUCTION_PLAN_ACTIVE_MOLDS_INTEGRATION_V1"
+title = "Üretim Plan ENJ + Aktif Kalıplar entegrasyonu ve Operasyon Raporu DB path düzeltmesi"
+status = "ONAYLANDI"
+date = "2026-09-17"
+summary = "Üretim Planı ENJ enjeksiyon kapasite motoru, guard'lar ve test fixture güncellemeleri; Aktif Kalıplar (mold library) blueprint entegrasyonu; Operasyon Raporu _f951_db_path Config.MOCK_DB_PATH hizalaması; Manuel Kalıp input/state senkronizasyon düzeltmesi; migration 198/199/200 production-safe; ATP lock touchpoint güncellendi."
+source_type = "commit"
+commit_sha = "c49693b"
+test_result = "258 PASS / 0 FAIL — full planlama primary pack"
+db_write = false
+server_restart = true
+push_status = "NOT_PUSHED"
+approved_by = "Adem"
+changes = [
+  "enj_kapasite_motor.py: hafta sonu ve vardiya override validasyon; CanonicalResolveError guard'lar.",
+  "uretim_plan_repo.py: plan ekle/güncelle synthetic order guard; mold_library_uuid alanları.",
+  "Added required Enjeksiyon kurulum adapter companion module.",
+  "uretim_plan_routes.py: aktif_kaliplar_bp varlık kontrolü; library-kaliplar API; Manuel Kalıp modu.",
+  "routes.py (_f951_db_path): Config.MOCK_DB_PATH hizalaması (Operasyon Raporu HTTP 500 düzeltmesi).",
+  "app.py: aktif_kaliplar_bp import + register_blueprint.",
+  "Aktif Kalıplar: aktif_kaliplar_routes.py, mold_library_db.py, mold_library_normalize.py, mold_library_plan_selection.py, mold_library_product_mapping.py.",
+  "Aktif Kalıplar UI: aktif_kaliplar.html, aktif_kaliplar.css, aktif_kaliplar.js.",
+  "Görsel resolver: PHASE3_ASSETS_DIR + MOLD_LIBRARY_IMAGE_DIR env override; path traversal güvenliği.",
+  "Migration 198 (mold_library preview schema), 199 (uretim_model_plan columns), 200 (product_mapping) — demo seed içermiyor.",
+  "uretim_plan.js Manuel Kalıp input event'inde enjUpdateKalipSeciliCards + enjUpdateFizikselKalipDisplay eklendi.",
+  "uretim_plan.css/html: Üretim Planı winner UI bileşenleri.",
+  "ATP lock touchpoint güncellendi (app.py L38-73, Aktif Kalıplar blueprint registration).",
+  "Test: remaining_quantity fixture weekday (ENJ_BAS 2028-01-03); test_aktif_kaliplar_blueprint_v1.py; test_operasyon_report_f951_db_path_v1.py.",
+]
+changed_files = [
+  "app/app.py",
+  "app/modules/planlama/enj_kapasite_motor.py",
+  "app/modules/planlama/routes.py",
+  "app/modules/planlama/uretim_plan_repo.py",
+  "app/modules/planlama/enj_kurulum_adapter.py",
+  "app/modules/planlama/uretim_plan_routes.py",
+  "app/modules/planlama/aktif_kaliplar_routes.py",
+  "app/modules/planlama/mold_library_db.py",
+  "app/modules/planlama/mold_library_normalize.py",
+  "app/modules/planlama/mold_library_plan_selection.py",
+  "app/modules/planlama/mold_library_product_mapping.py",
+  "app/migrations/198_mold_library_preview.py",
+  "app/migrations/199_uretim_model_plan_mold_library.py",
+  "app/migrations/200_mold_library_product_mapping.py",
+  "app/static/css/uretim_plan.css",
+  "app/static/css/aktif_kaliplar.css",
+  "app/static/js/uretim_plan.js",
+  "app/static/js/aktif_kaliplar.js",
+  "app/templates/planlama/uretim_plan.html",
+  "app/templates/planlama/aktif_kaliplar.html",
+  "docs/atp-lock/atp_inventory.json",
+  "docs/atp-lock/atp_stabilization_manifest.sha256",
+  "docs/atp-lock/atp_touchpoints.sha256",
+  "tests/planlama/test_uretim_plan_machine_detail_v1.py",
+  "tests/planlama/test_uretim_plan_phase2a_date_station_state_v1.py",
+  "tests/planlama/test_uretim_plan_remaining_quantity_v1.py",
+  "tests/planlama/test_uretim_plan_step2_responsive_v1.py",
+  "tests/planlama/test_aktif_kaliplar_blueprint_v1.py",
+  "tests/planlama/test_operasyon_report_f951_db_path_v1.py",
+]
+locked_rules = [
+  "Canonical DB değiştirilmedi.",
+  "ProgramData RM değiştirilmedi.",
+  "Finance/ATP/OET/Genel Plan dosyaları bu kapsamda değil.",
+  "base.html global sidebar değiştirilmedi.",
+  "Demo seed production migration içinde yok.",
+  "CRP-81315-RL için sahte mapping oluşturulmadı.",
+  "196/197 migration numaraları (çakışmalı) commit dışı bırakıldı; production 198/199 kullanılır.",
+]
+tests = [
+  "258 PASS / 0 FAIL — planlama primary pack",
+  "remaining_quantity 24/24 PASS",
+  "update_enj_validation PASS",
+  "enj_istasyon_persistence PASS",
+  "Aktif Kalıplar blueprint PASS",
+  "Operasyon Raporu DB path PASS",
+  "ATP lock PASS",
+]
+known_issues = [
+  "196/197 mold migration dosyaları untracked olarak kalmaktadır; production deploy 198/199 kullanmalıdır.",
+  "CRP-81315-RL için gerçek enj_kalip master kaydı yok; Manuel Kalıp fallback aktif.",
+  "Operasyon Raporu laptop ortamında veri doğruluğu canlı fabrika girişiyle doğrulanacak.",
+]
+next_steps = [
+  "KAPI_42C_PUSH_PR_MERGE_AWAITING_ADEM_APPROVAL",
+]
