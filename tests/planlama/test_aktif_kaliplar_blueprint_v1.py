@@ -76,7 +76,7 @@ def aktif_kaliplar_db(monkeypatch):
     con0.commit()
     con0.close()
     import importlib
-    mig = importlib.import_module('migrations.196_mold_library_preview')
+    mig = importlib.import_module('migrations.198_mold_library_preview')
     mig.run(path)
     con = sqlite3.connect(path)
     con.execute(
