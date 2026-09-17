@@ -44,11 +44,23 @@ def _plan_edit_required():
 @uretim_plan_bp.route('/', methods=['GET'])
 @yetki_gerekli('planlama', 'can_view')
 def uretim_plan_sayfa():
+    from flask import current_app
+    # Optional: aktif_kaliplar_bp — entegrasyon repo'sunda kayıtlı olmayabilir.
+    # Blueprint eksikse BuildError fırlatmak yerine pasif link gösterilir.
+    _ak_endpoint = 'aktif_kaliplar_bp.aktif_kaliplar'
+    aktif_kaliplar_url = None
+    if _ak_endpoint in current_app.view_functions:
+        try:
+            from flask import url_for as _url_for
+            aktif_kaliplar_url = _url_for(_ak_endpoint)
+        except Exception:
+            aktif_kaliplar_url = None
     return render_template(
         'planlama/uretim_plan.html',
         gerekce_secenekleri=repo.GEREKCE_SECENEKLERI,
         plan_donemleri=repo.PLAN_DONEMLERI,
         can_edit=yetki_var('planlama', 'can_update') or yetki_var('planlama', 'can_create'),
+        aktif_kaliplar_url=aktif_kaliplar_url,
     )
 
 
@@ -405,6 +417,118 @@ def api_enj_slot_durum():
         return jsonify({'ok': True, 'durum': d['durum'], 'veri': d})
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/plan-config', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_plan_config():
+    from modules.planlama.mold_library_plan_selection import MOLD_LIBRARY_PLAN_SELECTION_ENABLED
+    return jsonify({
+        'ok': True,
+        'library_plan_selection_enabled': MOLD_LIBRARY_PLAN_SELECTION_ENABLED,
+        'plan_source_legacy': 'enj_kalip',
+        'plan_source_library': 'ACTIVE_MOLDS_LIBRARY',
+        'poli_plan_active': False,
+    })
+
+
+@uretim_plan_bp.route('/api/enj/library-kaliplar', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_library_kaliplar():
+    """Aktif Kalıplar kütüphanesi — guarded plan selection list."""
+    from modules.planlama.mold_library_plan_selection import (
+        MOLD_LIBRARY_PLAN_SELECTION_ENABLED, list_for_plan, count_static_selectable,
+    )
+    from modules.planlama.uretim_plan_service import (
+        resolve_canonical_mamul_skod, CanonicalResolveError, _resolve_asorti,
+    )
+
+    if not MOLD_LIBRARY_PLAN_SELECTION_ENABLED:
+        return jsonify({'ok': False, 'mesaj': 'Library plan seçimi kapalı'}), 403
+
+    sip_no = request.args.get('sip_no', type=int)
+    sip_har = request.args.get('sip_harinx', type=int)
+    mamul_raw = (request.args.get('mamul_skod') or '').strip()
+    rkod = request.args.get('rkod', type=int, default=0)
+
+    if not sip_no or sip_har is None or not mamul_raw:
+        return jsonify({'ok': False, 'mesaj': 'sip_no, sip_harinx ve mamul_skod zorunludur'}), 400
+
+    try:
+        canonical_skod = resolve_canonical_mamul_skod(sip_no, sip_har, mamul_raw, rkod)
+    except CanonicalResolveError as cre:
+        msg = str(cre)
+        code = 409 if ('uyuşmuyor' in msg or 'manipülasyon' in msg.lower()) else 503
+        return jsonify({'ok': False, 'mesaj': msg}), code
+    except Exception as exc:
+        return jsonify({'ok': False, 'mesaj': f'Canonical çözümleme hatası: {exc!s:.200}'}), 503
+
+    order_asorti = ''
+    con = get_conn()
+    try:
+        try:
+            from modules.common import korgun as kk
+            kcon = kk._baglan()
+            try:
+                cur = kcon.cursor()
+                order_asorti = _resolve_asorti(cur, sip_no, sip_har, mamul_raw, rkod) or ''
+            finally:
+                kcon.close()
+        except Exception:
+            order_asorti = ''
+        payload = list_for_plan(con, canonical_skod, order_asorti or None)
+        static = count_static_selectable(con)
+        payload['ok'] = True
+        payload['canonical_model'] = canonical_skod
+        payload['order_model_code'] = canonical_skod
+        payload['order_asorti'] = order_asorti or None
+        payload['order_size_detail_available'] = payload.get('order_size_detail_available', False)
+        payload['static_gate_counts'] = static['counts']
+        payload['output_pair_conflict_queue'] = static['output_pair_conflicts']
+        return jsonify(payload)
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/product-mold-mapping', methods=['POST'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_product_mold_mapping():
+    """PHASE_7L: Explicit user-approved product↔mold mapping (no auto alias)."""
+    from modules.planlama.mold_library_product_mapping import create_mapping
+
+    body = request.get_json(silent=True) or {}
+    order_model = (body.get('order_model_code') or '').strip()
+    lib_uuid = (body.get('mold_library_uuid') or '').strip()
+    relation_type = (body.get('relation_type') or 'MANUAL_APPROVED').strip()
+    product_variant = (body.get('product_variant') or '').strip()
+    reason = (body.get('approval_reason') or body.get('reason') or '').strip() or None
+    if not order_model or not lib_uuid:
+        return jsonify({'ok': False, 'mesaj': 'order_model_code ve mold_library_uuid zorunludur'}), 400
+    actor = _uid() or 'unknown'
+    con = get_conn()
+    try:
+        con.execute('BEGIN IMMEDIATE')
+        row = create_mapping(
+            con,
+            order_model_code=order_model,
+            mold_library_uuid=lib_uuid,
+            relation_type=relation_type,
+            product_variant=product_variant,
+            approved_by=actor,
+            approval_reason=reason,
+        )
+        con.commit()
+        return jsonify({'ok': True, 'mapping': row})
+    except Exception as exc:
+        try:
+            con.rollback()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'mesaj': str(exc)[:200]}), 400
     finally:
         con.close()
 
@@ -927,6 +1051,42 @@ def api_enj_ilk_uygun():
         con.close()
 
 
+@uretim_plan_bp.route('/api/enj/kapasite-oneri', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_kapasite_oneri():
+    """7/30/90 gün kapasite önerisi — onay gerektirir, otomatik kesinleşmez."""
+    makine_id = request.args.get('makine_id', type=int)
+    slot = (request.args.get('slot') or request.args.get('taraf') or '').upper()
+    if not makine_id or slot not in ('A', 'B'):
+        return jsonify({'ok': False, 'mesaj': 'makine_id ve slot (A/B) zorunlu'}), 400
+    con = get_conn()
+    try:
+        from modules.planlama.enj_kapasite_oneri_service import build_kapasite_oneri
+        payload = build_kapasite_oneri(con, makine_id, slot)
+        return jsonify(payload)
+    except ValueError as exc:
+        return jsonify({'ok': False, 'mesaj': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'ok': False, 'mesaj': str(exc)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/makine-hiz-gosterim', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_makine_hiz_gosterim():
+    """Makine/vardiya/slot hız gösterimi — DISPLAY ONLY (kapasite motoru etkilenmez)."""
+    con = get_conn()
+    try:
+        from modules.planlama.enj_makine_hiz_display_service import build_makine_hiz_gosterim
+        payload = build_makine_hiz_gosterim(con)
+        return jsonify({'ok': True, **payload})
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
 @uretim_plan_bp.route('/api/enj/son-hafta-hiz', methods=['GET'])
 @yetki_gerekli('planlama', 'can_view')
 def api_enj_son_hafta_hiz():
@@ -1075,6 +1235,7 @@ def api_enj_makine_slot_ozet():
     con = get_conn()
     try:
         from modules.planlama.enj_plan_availability_service import build_makine_slot_ozet_all
+        from modules.planlama.enj_doluluk_takvim_service import enrich_makine_kart_cps_ozet
         makineler = build_makine_slot_ozet_all(
             con,
             plan_baslangic=plan_bas or None,
@@ -1085,10 +1246,76 @@ def api_enj_makine_slot_ozet():
             hafta_sonu=hs,
             hs_vardiya=hs_v,
         )
-        return jsonify({'ok': True, 'makineler': makineler, 'anchor': {
-            'baslangic': plan_bas or None,
-            'bitis': plan_bit or None,
-        }})
+        makineler = enrich_makine_kart_cps_ozet(
+            con, makineler,
+            calisma_modu=calisma,
+            hafta_sonu=hs,
+            hs_vardiya=hs_v,
+        )
+        return jsonify({
+            'ok': True,
+            'occupancy_source': 'CPS_ONLY',
+            'first_selectable_source': 'CPS_SHIFT_BOS',
+            'makineler': makineler,
+            'anchor': {
+                'baslangic': plan_bas or None,
+                'bitis': plan_bit or None,
+            },
+        })
+    except ValueError as e:
+        return jsonify({'ok': False, 'mesaj': str(e)}), 400
+    except Exception as e:
+        return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
+    finally:
+        con.close()
+
+
+@uretim_plan_bp.route('/api/enj/makine-doluluk-takvim', methods=['GET'])
+@yetki_gerekli('planlama', 'can_view')
+def api_enj_makine_doluluk_takvim():
+    """PHASE_7O1 — CPS-only makine A/B vardiya doluluk takvimi (READ-only)."""
+    makine_id = request.args.get('makine_id', type=int)
+    if not makine_id or makine_id < 1:
+        return jsonify({'ok': False, 'mesaj': 'Geçerli makine_id gerekli'}), 400
+
+    anchor_raw = (request.args.get('anchor') or '').strip()
+    num_days = request.args.get('num_days', type=int) or 7
+    num_days = max(1, min(int(num_days), 21))
+    secim_bas = (request.args.get('secim_baslangic') or '').strip() or None
+    secim_slot = (request.args.get('secim_slot') or '').strip().upper() or None
+    if secim_slot and secim_slot not in ('A', 'B'):
+        return jsonify({'ok': False, 'mesaj': 'secim_slot yalnız A veya B olabilir'}), 400
+
+    anchor_date = None
+    if anchor_raw:
+        try:
+            anchor_date = datetime.strptime(anchor_raw[:10], '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'ok': False, 'mesaj': 'Geçersiz anchor tarihi'}), 400
+
+    calisma = (request.args.get('calisma_modu') or 'GUNDUZ_GECE').upper()
+    hs = (request.args.get('hafta_sonu_calisma') or 'HAYIR').upper()
+    hs_v = request.args.get('hafta_sonu_vardiya')
+    if hs == 'HAYIR':
+        hs_v = None
+
+    con = get_conn()
+    try:
+        from modules.planlama.enj_doluluk_takvim_service import build_makine_doluluk_takvim
+        data = build_makine_doluluk_takvim(
+            con,
+            int(makine_id),
+            anchor=anchor_date,
+            num_days=num_days,
+            secim_baslangic=secim_bas,
+            secim_slot=secim_slot,
+            calisma_modu=calisma,
+            hafta_sonu=hs,
+            hs_vardiya=hs_v,
+        )
+        if not data.get('ok'):
+            return jsonify({'ok': False, 'mesaj': data.get('hata', 'Takvim oluşturulamadı')}), 404
+        return jsonify(data)
     except ValueError as e:
         return jsonify({'ok': False, 'mesaj': str(e)}), 400
     except Exception as e:
@@ -1192,11 +1419,38 @@ def api_enj_istasyon_plan_durum():
     con = get_conn()
     try:
         from modules.planlama.enj_plan_availability_service import build_istasyon_plan_durum
+        from modules.planlama.enj_doluluk_takvim_service import build_unified_side_occupancy
+        mk = con.execute(
+            'SELECT istasyon_sayisi FROM enj_makine WHERE id=?', (int(makine_id),),
+        ).fetchone()
+        n = int(mk['istasyon_sayisi'] or 8) if mk else 8
         rows = build_istasyon_plan_durum(
             con, int(makine_id), slot, istasyonlar, str(at_dt),
             haric_plan_id=body.get('haric_plan_id'),
+            istasyon_sayisi=n,
         )
-        return jsonify({'ok': True, 'istasyonlar': rows})
+        from modules.planlama.enj_kapasite_motor import _parse_dt
+        from modules.planlama.enj_doluluk_takvim_service import build_side_physical_advisory
+        unified = {}
+        advisory = {}
+        try:
+            ref = _parse_dt(str(at_dt))
+            unified = build_unified_side_occupancy(
+                con, int(makine_id), slot, n, ref,
+            )
+            advisory = build_side_physical_advisory(
+                con, int(makine_id), slot, n, ref,
+            )
+        except ValueError:
+            pass
+        return jsonify({
+            'ok': True,
+            'istasyonlar': rows,
+            'unified_busy_count': unified.get('dolu_istasyon'),
+            'dogrulanmali_count': unified.get('dogrulanmali_istasyon_sayisi', 0),
+            'physical_advisory': advisory,
+            'occupancy_source': unified.get('occupancy_source', 'CPS_UNIFIED'),
+        })
     except Exception as e:
         return jsonify({'ok': False, 'mesaj': str(e)[:200]}), 500
     finally:

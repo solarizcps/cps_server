@@ -3032,10 +3032,16 @@ from modules.planlama.hesap import (
 
 def _f951_db_path():
 
-    """CPS standart DB yolu (enjeksiyon ile ayni pattern)"""
+    """CPS standart DB yolu (enjeksiyon ile ayni pattern — Config.MOCK_DB_PATH)."""
 
+    try:
+        from config import Config
+        p = getattr(Config, 'MOCK_DB_PATH', None)
+        if p:
+            return p
+    except Exception:
+        pass
     base = _f951_os.path.dirname(_f951_os.path.dirname(_f951_os.path.dirname(_f951_os.path.abspath(__file__))))
-
     return _f951_os.path.join(base, "mock_data.db")
 
 

@@ -2,10 +2,13 @@
 """Üretim Plan — CPS SQLite plan kayıtları."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import date, datetime, timedelta
 
 from db import get_conn
+from modules.planlama.enj_kurulum_adapter import resolve_plan_kurulumlar
+from modules.planlama.uretim_plan_service import parse_cift_quantity
 
 PLAN_DONEMLERI = ('bu_hafta', 'gelecek_hafta', 'bu_ay', '3_ay', 'gecmis')
 GEREKCE_SECENEKLERI = (
@@ -87,6 +90,64 @@ def donem_aralik(donem: str, ref: date | None = None) -> tuple[date | None, date
     return None, None
 
 
+def donem_for_date(td: date, ref: date | None = None) -> str:
+    """Verilen plan başlangıç tarihi için önerilen plan_donemi kodu."""
+    ref = ref or date.today()
+    for donem in PLAN_DONEMLERI:
+        if donem == 'gecmis':
+            continue
+        start, end = donem_aralik(donem, ref)
+        if start is None:
+            continue
+        if end is None:
+            if td >= start:
+                return donem
+        elif start <= td <= end:
+            return donem
+    return '3_ay'
+
+
+def check_plan_duplicate(
+    con: sqlite3.Connection,
+    sip_no,
+    sip_harinx,
+    mamul_skod,
+    rkod,
+    donem: str,
+    *,
+    exclude_plan_id: int | None = None,
+) -> dict:
+    """Aynı sipariş+kalem+model+renk+dönem için aktif plan var mı."""
+    args_tail = (
+        int(sip_no), int(sip_harinx or 0),
+        mamul_skod, int(rkod or 0), donem,
+    )
+    if exclude_plan_id is not None:
+        row = con.execute(
+            """
+            SELECT id FROM uretim_model_plan
+             WHERE aktif=1 AND id<>? AND sip_no=? AND sip_harinx=? AND mamul_skod=? AND rkod=? AND plan_donemi=?
+            """,
+            (int(exclude_plan_id), *args_tail),
+        ).fetchone()
+    else:
+        row = con.execute(
+            """
+            SELECT id FROM uretim_model_plan
+             WHERE aktif=1 AND sip_no=? AND sip_harinx=? AND mamul_skod=? AND rkod=? AND plan_donemi=?
+            """,
+            args_tail,
+        ).fetchone()
+    if row:
+        pid = row['id'] if hasattr(row, 'keys') else row[0]
+        return {
+            'dolu': True,
+            'mesaj': 'Bu model+renk bu plan döneminde zaten planlı',
+            'plan_id': pid,
+        }
+    return {'dolu': False}
+
+
 def _overlap(plan_bas, plan_bit, d_start, d_end) -> bool:
     if not plan_bas and not plan_bit:
         return True
@@ -147,6 +208,7 @@ def plan_get(plan_id: int) -> dict | None:
             plan['enj_istasyonlar'] = _plan_istasyonlar(
                 con, plan['id'], plan.get('enj_istasyon_no')
             )
+            plan['enj_kurulumlar'] = resolve_plan_kurulumlar(con, plan['id'], plan)
         return plan
     finally:
         con.close()
@@ -160,6 +222,10 @@ ENJ_ALANLARI = (
     'enj_tahmini_gun', 'enj_planlanacak_cift',
     'enj_calisma_modu', 'enj_hafta_sonu_calisma', 'enj_hafta_sonu_vardiya',
     'enj_kapasite_snapshot',
+)
+
+LIBRARY_PLAN_ALANLARI = (
+    'mold_library_uuid', 'mold_library_snapshot_json', 'mold_source',
 )
 
 ENJ_ISTASYON_TABLO = 'uretim_model_plan_enj_istasyon'
@@ -249,9 +315,55 @@ def _sync_enj_istasyonlar(con, plan_id, makine_id, slot, istasyonlar) -> None:
     )
 
 
-ENJ_PAYLOAD_ANAHTARLARI = frozenset(ENJ_ALANLARI) | {
-    'enj_istasyonlar', 'enj_kalip_adedi', 'has_enjeksiyon',
+ENJ_PAYLOAD_ANAHTARLARI = frozenset(ENJ_ALANLARI) | frozenset(LIBRARY_PLAN_ALANLARI) | {
+    'enj_istasyonlar', 'enj_kalip_adedi', 'has_enjeksiyon', 'kalip_mode',
 }
+
+
+def _plan_table_columns(con: sqlite3.Connection) -> set[str]:
+    return {r[1] for r in con.execute('PRAGMA table_info(uretim_model_plan)').fetchall()}
+
+
+def _is_library_plan_payload(payload: dict) -> bool:
+    return (payload.get('mold_source') or '').upper() == 'LIBRARY' or bool(
+        (payload.get('mold_library_uuid') or '').strip()
+    )
+
+
+def _library_vals(payload: dict, snapshot: dict | None = None) -> dict:
+    snap = snapshot
+    if snap is None:
+        raw = payload.get('mold_library_snapshot_json')
+        if isinstance(raw, str) and raw.strip():
+            try:
+                snap = json.loads(raw)
+            except json.JSONDecodeError:
+                snap = None
+        elif isinstance(raw, dict):
+            snap = raw
+    out = {
+        'mold_library_uuid': (payload.get('mold_library_uuid') or '').strip() or None,
+        'mold_library_snapshot_json': json.dumps(snap, ensure_ascii=False) if snap else None,
+        'mold_source': 'LIBRARY' if _is_library_plan_payload(payload) else None,
+    }
+    if not _is_library_plan_payload(payload):
+        return {k: None for k in LIBRARY_PLAN_ALANLARI}
+    return out
+
+
+def _payload_kalip_mode(payload: dict) -> str:
+    """Kalıp seçim modu: liste (master ID) veya manuel (kod only).
+
+    kalip_mode açıkça verilmezse: enj_kalip_id yok + enj_kalip_kod var → manuel.
+    """
+    mode = (payload.get('kalip_mode') or '').lower().strip()
+    if mode == 'manuel':
+        return 'manuel'
+    if mode == 'liste':
+        return 'liste'
+    if not payload.get('enj_kalip_id') and (payload.get('enj_kalip_kod') or '').strip():
+        return 'manuel'
+    return 'liste'
 
 
 def _enj_payload_dokunuldu(payload: dict) -> bool:
@@ -288,6 +400,180 @@ def _plan_istasyonlar(con, plan_id, enj_istasyon_no) -> list[int]:
     return _normalize_istasyon_list(enj_istasyon_no)
 
 
+def _resolve_canonical_skod_for_guard(
+    payload: dict,
+    mevcut: dict | None,
+    *,
+    strict: bool = False,
+) -> str | None:
+    """Save guard için canonical mamul_skod'u Korgun'dan çöz.
+
+    Yeni plan  → payload sip_no+sip_harinx+rkod kullanılır.
+    Mevcut plan → DB kaydındaki sip_no+sip_harinx+rkod kullanılır
+                  (istemci payload'ı sipariş anahtarını değiştiremez).
+
+    Dönüş değerleri:
+      - str  : Korgun'dan çözülen canonical mamul_skod.
+      - None : Korgun'da sipariş satırı bulunamadı veya bağlantı yok;
+               kalıp model eşleşme kontrolü atlanır (fail-open for missing orders).
+               NOT: Manipülasyon/uyuşmazlık sinyali varsa bu yol izlenmez.
+
+    strict=True ise bulunamama durumu da ValueError fırlatır (library guard gibi
+    zorunlu canonical çözümleme gerektiren yollar için).
+    """
+    from modules.planlama.uretim_plan_service import (
+        resolve_canonical_mamul_skod, CanonicalResolveError,
+    )
+
+    if mevcut is not None:
+        # Update: canonical anahtarı DB'den — istemci değiştiremez
+        sip_no  = mevcut.get('sip_no')
+        sip_har = mevcut.get('sip_harinx')
+        rkod    = mevcut.get('rkod', 0)
+        client_skod = mevcut.get('mamul_skod', '')   # DB değeri = doğru
+        # Update'te sipariş kimliği değiştirilemez
+        if (payload.get('sip_no') and int(payload['sip_no']) != int(sip_no or 0)) or \
+           (payload.get('mamul_skod') and
+            payload['mamul_skod'].strip().upper() != (client_skod or '').strip().upper()):
+            raise ValueError(
+                'Plan güncellemede sipariş veya model değiştirilemez. '
+                'Yeni plan oluşturun.'
+            )
+    else:
+        # Yeni plan
+        sip_no  = payload.get('sip_no')
+        sip_har = payload.get('sip_harinx')
+        rkod    = payload.get('rkod', 0)
+        client_skod = payload.get('mamul_skod', '')
+
+    if not sip_no or sip_har is None:
+        return None  # zorunlu anahtar yoksa zaten başka validation yakalar
+
+    try:
+        return resolve_canonical_mamul_skod(sip_no, sip_har, client_skod, rkod)
+    except CanonicalResolveError as exc:
+        msg = str(exc)
+        # Güvenlik-kritik sinyaller: her zaman engelle.
+        if 'uyuşmuyor' in msg or 'manipülasyon' in msg.lower():
+            raise ValueError(msg) from exc
+        # Sipariş Korgun'da bulunamadı veya Korgun erişilemez:
+        # strict modda hata fırlat, normal modda None döndür (guard atla).
+        if strict:
+            raise ValueError(msg) from exc
+        return None
+
+
+def _validate_enj_kalip_model_match(con: sqlite3.Connection, payload: dict,
+                                     mevcut: dict | None = None) -> None:
+    """Kalıp-model eşleşmesini Korgun canonical kaynağıyla doğrula.
+
+    Mod ayrımı:
+      - kalip_mode='manuel' ve kalip_id YOK  → manuel akış, liste guard atlanır.
+      - kalip_mode='liste' (veya belirtilmemiş) ve kalip_id YOK → BLOCKED
+        (liste modunda kalıp seçimi zorunlu).
+      - kalip_mode='manuel' ve kalip_id VAR → BLOCKED (mod çelişkisi).
+      - kalip_mode='liste' ve kalip_id VAR → canonical model eşleşmesi zorunlu.
+
+    Update'te kalıp değişmiyorsa geriye uyumluluk için atlanır.
+    Canonical Korgun erişilemezse fail-closed.
+    """
+    kalip_mode = _payload_kalip_mode(payload)
+    kalip_id   = payload.get('enj_kalip_id')
+
+    # has_enjeksiyon False ise kalıp validasyonu geçersiz
+    if not payload.get('has_enjeksiyon'):
+        return
+
+    if kalip_mode == 'manuel':
+        # Manuel mod: kalip_id olmamalı
+        if kalip_id:
+            raise ValueError(
+                'Manuel kalıp modunda liste kalıp ID\'si (enj_kalip_id) gönderilemez. '
+                'Liste guard bypass girişimi reddedildi.'
+            )
+        # Manuel kalıp kodu zorunlu
+        kalip_kod_manuel = (payload.get('enj_kalip_kod') or '').strip()
+        if not kalip_kod_manuel:
+            raise ValueError('Manuel kalıp modunda enj_kalip_kod boş olamaz.')
+        return  # Manuel mod doğrulaması geçti
+
+    # Library plan — ayrı doğrulama
+    if _is_library_plan_payload(payload):
+        if mevcut is not None:
+            mevcut_uuid = (mevcut.get('mold_library_uuid') or '').strip()
+            pay_uuid = (payload.get('mold_library_uuid') or mevcut_uuid or '').strip()
+            if (mevcut.get('mold_source') or '').upper() == 'LIBRARY' and mevcut_uuid:
+                if not (payload.get('mold_library_uuid') or '').strip() or pay_uuid == mevcut_uuid:
+                    payload.setdefault('mold_library_uuid', mevcut_uuid)
+                    payload.setdefault('mold_source', 'LIBRARY')
+                    if mevcut.get('enj_kalip_id') and not payload.get('enj_kalip_id'):
+                        payload['enj_kalip_id'] = mevcut['enj_kalip_id']
+                    return
+        canonical_skod = _resolve_canonical_skod_for_guard(payload, mevcut)
+        order_asorti = (payload.get('order_asorti') or payload.get('asorti') or '').strip() or None
+        from modules.planlama.mold_library_plan_selection import validate_library_plan_save
+        snap = validate_library_plan_save(
+            con, payload, order_model_code=canonical_skod or '', order_asorti=order_asorti,
+        )
+        payload['_library_snapshot_validated'] = snap
+        leg = snap.get('legacy_enj_kalip_id')
+        if leg:
+            if kalip_id and int(kalip_id) != int(leg):
+                raise ValueError('Library kalıp legacy id uyuşmuyor.')
+            if not kalip_id:
+                payload['enj_kalip_id'] = int(leg)
+        elif kalip_id:
+            raise ValueError('Legacy eşleşmesi olmayan library kalıbında enj_kalip_id gönderilemez.')
+        return
+
+    # Liste modu (varsayılan — legacy master)
+    if not kalip_id:
+        raise ValueError(
+            'Liste kalıp modunda enj_kalip_id zorunludur. '
+            'Manuel kalıp için kalip_mode=manuel kullanın.'
+        )
+
+    # Update: sipariş/model değişikliği koruması — kalıp skip'inden ÖNCE
+    if mevcut is not None:
+        db_skod    = (mevcut.get('mamul_skod') or '').strip().upper()
+        pay_skod   = (payload.get('mamul_skod') or '').strip().upper()
+        if pay_skod and db_skod and pay_skod != db_skod:
+            raise ValueError(
+                'Plan güncellemede sipariş modeli değiştirilemez. '
+                'Yeni plan oluşturun.'
+            )
+
+    # Update: kalıp değişmiyorsa geriye uyumluluk (model kontrolü geçtikten sonra)
+    if mevcut is not None:
+        mevcut_kid = mevcut.get('enj_kalip_id')
+        if mevcut_kid and int(mevcut_kid) == int(kalip_id):
+            return  # kalıp aynı kaldı — eski kayıt bozulmasın
+
+    # Canonical mamul_skod: Korgun'dan çöz (istemci beyanına güvenmiyoruz)
+    canonical_skod = _resolve_canonical_skod_for_guard(payload, mevcut)
+    if not canonical_skod:
+        # Canonical çözülemedi ama sip_no da yoksa — diğer validation yakalar
+        return
+
+    # Kalıp master'dan model_kod oku
+    kalip_row = con.execute(
+        'SELECT model_kod, aktif FROM enj_kalip WHERE id=?', (int(kalip_id),)
+    ).fetchone()
+    if not kalip_row:
+        raise ValueError(f'Seçilen kalıp (id={kalip_id}) sistemde bulunamadı.')
+    if not kalip_row['aktif']:
+        raise ValueError(f'Seçilen kalıp (id={kalip_id}) pasif durumdadır.')
+
+    kalip_model = (kalip_row['model_kod'] or '').strip().upper()
+    canon_upper = canonical_skod.strip().upper()
+
+    if kalip_model and kalip_model != canon_upper:
+        raise ValueError(
+            f'Seçilen kalıp sipariş modeliyle uyumlu değil. '
+            f'Kalıp modeli: {kalip_model}, Sipariş (Korgun canonical): {canonical_skod}.'
+        )
+
+
 def _validate_enj_required(payload: dict) -> None:
     """has_enjeksiyon=True ürünlerde enjeksiyon rezervasyon alanlarının zorunlu kontrolü.
 
@@ -296,14 +582,30 @@ def _validate_enj_required(payload: dict) -> None:
     """
     if not payload.get('has_enjeksiyon'):
         return
+    kalip_mode = _payload_kalip_mode(payload)
     required_enj = {
         'enj_makine_id': 'Enjeksiyon makine seçimi',
         'enj_slot': 'Enjeksiyon taraf (A/B)',
-        'enj_kalip_id': 'Enjeksiyon kalıp',
         'enj_plan_baslangic': 'Enjeksiyon başlangıç tarihi',
         'enj_plan_bitis': 'Enjeksiyon bitiş tarihi',
     }
-    missing = [lbl for k, lbl in required_enj.items() if not payload.get(k)]
+    if kalip_mode == 'manuel':
+        if not (payload.get('enj_kalip_kod') or '').strip():
+            required_enj['enj_kalip_kod'] = 'Enjeksiyon kalıp'
+    elif _is_library_plan_payload(payload):
+        if not (payload.get('mold_library_uuid') or '').strip():
+            required_enj['mold_library_uuid'] = 'Aktif Kalıplar kaydı'
+    else:
+        required_enj['enj_kalip_id'] = 'Enjeksiyon kalıp'
+    missing = []
+    for k, lbl in required_enj.items():
+        val = payload.get(k)
+        if k == 'enj_kalip_kod':
+            empty = not (val or '').strip() if isinstance(val, str) else not val
+        else:
+            empty = not val
+        if empty:
+            missing.append(lbl)
     if missing:
         raise ValueError('Enjeksiyonlu plan için eksik: ' + ', '.join(missing))
 
@@ -322,6 +624,82 @@ def _validate_enj_required(payload: dict) -> None:
             f'Seçilen istasyon sayısı ({len(enj_ist_list)}) kalıp adedinden ({kalip_adedi}) az. '
             'Lütfen tüm istasyonların planlama döneminde uygun olduğunu doğrulayın.'
         )
+
+def _parse_kapasite_snapshot(raw) -> dict:
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw) if raw else {}
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _shift_start_override_confirmed(payload: dict) -> tuple[bool, str | None]:
+    snap = _parse_kapasite_snapshot(payload.get('enj_kapasite_snapshot'))
+    confirmed = payload.get('shift_start_override_confirmed')
+    if confirmed is None:
+        confirmed = snap.get('shift_start_override_confirmed')
+    override_time = payload.get('shift_start_override_time')
+    if override_time is None:
+        override_time = snap.get('shift_start_override_time')
+    ok = confirmed in (True, 1, '1', 'true', 'True')
+    return ok, override_time
+
+
+def _validate_shift_start_override_save(payload: dict, mevcut: dict | None = None) -> None:
+    """Vardiya dışı enjeksiyon başlangıcı — snapshot/onay bayrağı zorunlu."""
+    if not payload.get('has_enjeksiyon'):
+        return
+    bas_str = payload.get('enj_plan_baslangic')
+    if not bas_str:
+        return
+
+    from modules.planlama.enj_kapasite_motor import (
+        _parse_dt,
+        normalize_shift_start_time,
+        shift_start_override_required,
+        weekend_new_plan_start_error,
+    )
+
+    calisma_modu = (payload.get('enj_calisma_modu') or 'GUNDUZ_GECE').upper()
+    hafta_sonu = (payload.get('enj_hafta_sonu_calisma') or 'HAYIR').upper()
+    hs_vardiya = payload.get('enj_hafta_sonu_vardiya')
+    if hs_vardiya:
+        hs_vardiya = str(hs_vardiya).upper()
+
+    try:
+        plan_bas = _parse_dt(bas_str)
+    except ValueError:
+        return
+
+    werr = weekend_new_plan_start_error(plan_bas, hafta_sonu)
+    if werr:
+        raise ValueError(werr)
+
+    if not shift_start_override_required(plan_bas, calisma_modu, hafta_sonu, hs_vardiya):
+        return
+
+    if mevcut:
+        old_bas = mevcut.get('enj_plan_baslangic') or ''
+        if str(old_bas)[:16] == str(bas_str)[:16]:
+            return
+
+    confirmed, override_time = _shift_start_override_confirmed(payload)
+    if not confirmed:
+        raise ValueError(
+            'Seçilen enjeksiyon başlangıç saati standart vardiya başlangıcı değil (07:00 / 17:00). '
+            'Devam etmek için manuel onay gerekli.'
+        )
+
+    expected = normalize_shift_start_time(plan_bas)
+    got = str(override_time or '').strip().replace('T', ' ')[:19]
+    if got[:16] != expected[:16]:
+        raise ValueError(
+            'Vardiya dışı başlangıç onayı seçilen saat ile eşleşmiyor.'
+        )
+
 
 def _validate_general_after_enj(payload: dict) -> None:
     """Genel plan başlangıcı enjeksiyon bitişinden önce olamaz."""
@@ -435,23 +813,196 @@ def _validate_enj_istasyon_availability(con, payload: dict,
         )
 
 
-def plan_ekle(payload: dict, user_id: int) -> dict:
+def _planned_qty_from_row(row: dict) -> int | None:
+    """Aktif plandan güvenilir planlanan çift miktarını çöz.
+
+    Öncelik: enj_planlanacak_cift → enj_kapasite_snapshot.planlanacak_cift.
+    Çözülemezse None (legacy belirsizlik).
+    """
+    raw = row.get('enj_planlanacak_cift')
+    if raw is not None and raw != '':
+        try:
+            return parse_cift_quantity(raw, field_label='Planlanacak çift')
+        except ValueError:
+            pass
+
+    snap_raw = row.get('enj_kapasite_snapshot')
+    if snap_raw:
+        try:
+            snap = json.loads(snap_raw) if isinstance(snap_raw, str) else snap_raw
+            if isinstance(snap, dict) and snap.get('planlanacak_cift') is not None:
+                return parse_cift_quantity(
+                    snap['planlanacak_cift'], field_label='Planlanacak çift',
+                )
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    return None
+
+
+def _sum_already_planned(
+    con: sqlite3.Connection,
+    sip_no: int,
+    sip_harinx: int,
+    mamul_skod: str,
+    rkod: int,
+    *,
+    exclude_plan_id: int | None = None,
+) -> tuple[int, list[int]]:
+    """Aynı kanonik sipariş kalemi için aktif planların planlanan çift toplamı."""
+    sql = """
+        SELECT id, enj_planlanacak_cift, enj_kapasite_snapshot
+          FROM uretim_model_plan
+         WHERE aktif = 1
+           AND sip_no = ? AND sip_harinx = ? AND mamul_skod = ? AND rkod = ?
+    """
+    params: list = [int(sip_no), int(sip_harinx), mamul_skod, int(rkod or 0)]
+    if exclude_plan_id is not None:
+        sql += ' AND id <> ?'
+        params.append(int(exclude_plan_id))
+
+    already = 0
+    unresolved: list[int] = []
+    for row in con.execute(sql, params).fetchall():
+        d = dict(row)
+        pq = _planned_qty_from_row(d)
+        if pq is None:
+            unresolved.append(int(d['id']))
+        else:
+            already += pq
+    return already, unresolved
+
+
+def _quantity_error_message(
+    *,
+    remaining: int,
+    requested: int,
+    order_total: int,
+) -> str:
+    if requested > order_total:
+        return f'Sipariş miktarı {order_total} çift. {requested} çift planlanamaz.'
+    return f'Kalan miktar {remaining} çift. {requested} çift planlanamaz.'
+
+
+def _validate_enj_plan_quantity(
+    con: sqlite3.Connection,
+    payload: dict,
+    order_total: int,
+    *,
+    exclude_plan_id: int | None = None,
+) -> dict:
+    """Enjeksiyonlu plan create/update — kalan miktar guard.
+
+    order_total: server-side doğrulanmış sipariş kalemi toplamı (çift).
+    """
+    if not payload.get('has_enjeksiyon'):
+        return {}
+
+    requested = parse_cift_quantity(
+        payload.get('enj_planlanacak_cift'),
+        field_label='Planlanacak çift',
+    )
+    order_total_int = parse_cift_quantity(order_total, field_label='Sipariş miktarı')
+
+    already, unresolved = _sum_already_planned(
+        con,
+        int(payload['sip_no']),
+        int(payload['sip_harinx']),
+        payload['mamul_skod'],
+        int(payload.get('rkod') or 0),
+        exclude_plan_id=exclude_plan_id,
+    )
+    if unresolved:
+        ids = ', '.join(f'#{i}' for i in unresolved[:5])
+        raise ValueError(
+            'Bu sipariş kaleminde miktarı çözümlenemeyen legacy plan(lar) var '
+            f'({ids}). Kalan miktar güvenli hesaplanamıyor; plan kaydı yapılamaz.'
+        )
+
+    remaining = order_total_int - already
+    if requested > order_total_int:
+        raise ValueError(_quantity_error_message(
+            remaining=remaining, requested=requested, order_total=order_total_int,
+        ))
+    if requested > remaining:
+        raise ValueError(_quantity_error_message(
+            remaining=remaining, requested=requested, order_total=order_total_int,
+        ))
+
+    remaining_after = remaining - requested
+    return {
+        'order_total_quantity': order_total_int,
+        'already_planned_quantity': already,
+        'remaining_quantity': remaining,
+        'requested_quantity': requested,
+        'remaining_after_save': remaining_after,
+        'siparis_toplam_miktar': order_total_int,
+        'planlanmis_miktar': already,
+        'kalan_miktar': remaining,
+        'talep_miktar': requested,
+        'kayit_sonrasi_kalan': remaining_after,
+    }
+
+
+def _resolve_order_total_for_payload(payload: dict, order_total: int | None) -> int | None:
+    """Sipariş kalemi toplam miktarını çöz.
+
+    order_total verilmişse doğrudan kullan.
+    Korgun erişilemez veya sipariş satırı bulunamazsa None döndür
+    (mevcut planlar ve test sözleşmesi için miktar guard atlanır).
+    Manipülasyon/uyuşmazlık hatalarını ilet.
+    """
+    if order_total is not None:
+        return parse_cift_quantity(order_total, field_label='Sipariş miktarı')
+    from modules.planlama.uretim_plan_service import (
+        resolve_order_line_quantity,
+        OrderLineNotFoundError,
+        OrderLineUnitMismatchError,
+        OrderLineQuantityError,
+    )
+    try:
+        info = resolve_order_line_quantity(
+            payload['sip_no'],
+            payload['sip_harinx'],
+            payload['mamul_skod'],
+            payload.get('rkod') or 0,
+        )
+        return int(info['order_total_quantity'])
+    except OrderLineNotFoundError:
+        # Sipariş Korgun'da yok — miktar guard atla (base uyumluluğu).
+        return None
+    except (OrderLineUnitMismatchError, OrderLineQuantityError) as exc:
+        # Birim veya miktar hatası — ilet (manipülasyon/veri bütünlüğü).
+        raise ValueError(str(exc)) from exc
+
+
+def plan_ekle(payload: dict, user_id: int, *, order_total: int | None = None) -> dict:
     con = get_conn()
     try:
         _ensure_table(con)
-        dup = con.execute("""
-            SELECT id FROM uretim_model_plan
-             WHERE aktif=1 AND sip_no=? AND sip_harinx=? AND mamul_skod=? AND rkod=? AND plan_donemi=?
-        """, (
-            int(payload['sip_no']), int(payload['sip_harinx']),
-            payload['mamul_skod'], int(payload.get('rkod') or 0),
+        dup = check_plan_duplicate(
+            con,
+            payload['sip_no'], payload['sip_harinx'],
+            payload['mamul_skod'], payload.get('rkod') or 0,
             payload['plan_donemi'],
-        )).fetchone()
-        if dup:
-            raise ValueError('Bu model+renk bu plan döneminde zaten planlı')
+        )
+        if dup.get('dolu'):
+            raise ValueError(dup.get('mesaj') or 'Bu model+renk bu plan döneminde zaten planlı')
 
         # ENJ validation: enjeksiyonlu üründe rezervasyon alanları zorunlu
         _validate_enj_required(payload)
+        if payload.get('has_enjeksiyon'):
+            _validate_shift_start_override_save(payload, mevcut=None)
+
+        # MOLD GUARD: liste modunda kalıp modeli canonical mamul_skod ile eşleşmeli
+        _validate_enj_kalip_model_match(con, payload, mevcut=None)
+
+        qty_meta: dict = {}
+        if payload.get('has_enjeksiyon'):
+            ot = _resolve_order_total_for_payload(payload, order_total)
+            # ot=None: sipariş Korgun'da bulunamadı — miktar guard atla (base uyumluluğu)
+            if ot is not None:
+                qty_meta = _validate_enj_plan_quantity(con, payload, ot)
+
         # Genel plan başlangıcı enjeksiyon bitişinden önce olamaz
         _validate_general_after_enj(payload)
 
@@ -461,8 +1012,13 @@ def plan_ekle(payload: dict, user_id: int) -> dict:
 
         istasyonlar = _payload_istasyonlar(payload)
         enj = _enj_vals(payload)
-        enj_cols = ', '.join(enj.keys())
-        enj_ph = ', '.join(['?'] * len(enj))
+        lib_snap = payload.pop('_library_snapshot_validated', None)
+        lib = _library_vals(payload, lib_snap) if set(LIBRARY_PLAN_ALANLARI).issubset(_plan_table_columns(con)) else {}
+        if _is_library_plan_payload(payload) and not lib.get('mold_library_uuid'):
+            raise ValueError('Library plan kolonları migration 193 gerektirir.')
+        all_extra = {**enj, **{k: lib.get(k) for k in LIBRARY_PLAN_ALANLARI if k in lib}}
+        extra_cols = ', '.join(all_extra.keys())
+        extra_ph = ', '.join(['?'] * len(all_extra))
 
         cur = con.execute(f"""
             INSERT INTO uretim_model_plan (
@@ -471,8 +1027,8 @@ def plan_ekle(payload: dict, user_id: int) -> dict:
                 plan_donemi, plan_baslangic, plan_bitis,
                 oncelik, plan_gerekce, plan_notu,
                 aktif, created_by,
-                {enj_cols}
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,{enj_ph})
+                {extra_cols}
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,{extra_ph})
         """, (
             int(payload['sip_no']), int(payload['sip_harinx']),
             payload['mamul_skod'], int(payload.get('rkod') or 0),
@@ -483,14 +1039,17 @@ def plan_ekle(payload: dict, user_id: int) -> dict:
             int(payload.get('oncelik') or 3),
             payload.get('plan_gerekce'), payload.get('plan_notu'),
             int(user_id),
-            *enj.values(),
+            *all_extra.values(),
         ))
         _sync_enj_istasyonlar(
             con, cur.lastrowid, enj.get('enj_makine_id'),
             enj.get('enj_slot'), istasyonlar,
         )
         con.commit()
-        return plan_get(cur.lastrowid)
+        out = plan_get(cur.lastrowid)
+        if qty_meta:
+            out['_quantity_meta'] = qty_meta
+        return out
     except Exception:
         con.rollback()
         raise
@@ -498,7 +1057,13 @@ def plan_ekle(payload: dict, user_id: int) -> dict:
         con.close()
 
 
-def plan_guncelle(plan_id: int, payload: dict, user_id: int) -> dict:
+def plan_guncelle(
+    plan_id: int,
+    payload: dict,
+    user_id: int,
+    *,
+    order_total: int | None = None,
+) -> dict:
     con = get_conn()
     try:
         _ensure_table(con)
@@ -507,27 +1072,37 @@ def plan_guncelle(plan_id: int, payload: dict, user_id: int) -> dict:
             raise ValueError('Plan bulunamadı')
 
         donem = payload.get('plan_donemi', mevcut['plan_donemi'])
-        dup = con.execute("""
-            SELECT id FROM uretim_model_plan
-             WHERE aktif=1 AND id<>? AND sip_no=? AND sip_harinx=? AND mamul_skod=? AND rkod=? AND plan_donemi=?
-        """, (
-            int(plan_id), mevcut['sip_no'], mevcut['sip_harinx'],
+        dup = check_plan_duplicate(
+            con,
+            mevcut['sip_no'], mevcut['sip_harinx'],
             mevcut['mamul_skod'], mevcut['rkod'], donem,
-        )).fetchone()
-        if dup:
-            raise ValueError('Bu model+renk bu plan döneminde zaten planlı')
+            exclude_plan_id=int(plan_id),
+        )
+        if dup.get('dolu'):
+            raise ValueError(dup.get('mesaj') or 'Bu model+renk bu plan döneminde zaten planlı')
 
         birlesik = _enj_update_payload(payload, mevcut)
         # Genel plan başlangıcı genel bir alan; enjeksiyon alanlarına
         # dokunulmasa da enjeksiyon bitişinin önüne çekilemez.
         _validate_general_after_enj(birlesik)
 
+        qty_meta: dict = {}
         enj = None
         istasyonlar = None
         if _enj_payload_dokunuldu(payload):
             # plan_ekle ile aynı iş kuralları
             _validate_enj_required(birlesik)
             if birlesik.get('has_enjeksiyon'):
+                _validate_shift_start_override_save(birlesik, mevcut=mevcut)
+            # MOLD GUARD: kalıp değiştiriliyorsa model eşleşmesi zorunlu
+            _validate_enj_kalip_model_match(con, birlesik, mevcut=mevcut)
+            if birlesik.get('has_enjeksiyon'):
+                ot = _resolve_order_total_for_payload(birlesik, order_total)
+                # ot=None: sipariş Korgun'da bulunamadı — miktar guard atla (base uyumluluğu)
+                if ot is not None:
+                    qty_meta = _validate_enj_plan_quantity(
+                        con, birlesik, ot, exclude_plan_id=int(plan_id),
+                    )
                 _validate_enj_istasyon_availability(
                     con, birlesik, haric_plan_id=int(plan_id)
                 )
@@ -546,11 +1121,36 @@ def plan_guncelle(plan_id: int, payload: dict, user_id: int) -> dict:
             payload.get('plan_gerekce', mevcut.get('plan_gerekce')),
             payload.get('plan_notu', mevcut.get('plan_notu')),
         ]
+        lib_updates: dict = {}
+        if enj is not None and set(LIBRARY_PLAN_ALANLARI).issubset(_plan_table_columns(con)):
+            if _is_library_plan_payload(birlesik):
+                mevcut_uuid = (mevcut.get('mold_library_uuid') or '').strip()
+                new_uuid = (birlesik.get('mold_library_uuid') or '').strip() or mevcut_uuid
+                lib_snap = birlesik.pop('_library_snapshot_validated', None)
+                if mevcut_uuid and new_uuid == mevcut_uuid and not lib_snap:
+                    lib_updates = {
+                        'mold_library_uuid': mevcut_uuid,
+                        'mold_library_snapshot_json': mevcut.get('mold_library_snapshot_json'),
+                        'mold_source': mevcut.get('mold_source') or 'LIBRARY',
+                    }
+                else:
+                    lib_updates = _library_vals(birlesik, lib_snap)
+            elif (mevcut.get('mold_source') or '').upper() == 'LIBRARY':
+                if not any(k in payload for k in ('mold_library_uuid', 'mold_source', 'enj_kalip_id')):
+                    lib_updates = {
+                        'mold_library_uuid': mevcut.get('mold_library_uuid'),
+                        'mold_library_snapshot_json': mevcut.get('mold_library_snapshot_json'),
+                        'mold_source': mevcut.get('mold_source'),
+                    }
+
         if enj is not None:
             # Enjeksiyona dokunulmadıysa kolonlar UPDATE'e hiç girmez;
             # aksi halde mevcut rezervasyon NULL'a düşerdi.
             set_parcalari += [f'{k}=?' for k in enj]
             args += list(enj.values())
+        if lib_updates:
+            set_parcalari += [f'{k}=?' for k in lib_updates]
+            args += list(lib_updates.values())
 
         con.execute(f"""
             UPDATE uretim_model_plan SET
@@ -565,7 +1165,10 @@ def plan_guncelle(plan_id: int, payload: dict, user_id: int) -> dict:
                 enj.get('enj_slot'), istasyonlar,
             )
         con.commit()
-        return plan_get(plan_id)
+        out = plan_get(plan_id)
+        if qty_meta:
+            out['_quantity_meta'] = qty_meta
+        return out
     except Exception:
         con.rollback()
         raise

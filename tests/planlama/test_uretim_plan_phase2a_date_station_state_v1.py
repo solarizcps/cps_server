@@ -36,20 +36,24 @@ def _station_handler_block(js_src: str) -> str:
     return js_src[idx:idx + 3500]
 
 
-def test_section_order_station_before_mold_unlock(js):
-    """TEST1 contract — istasyon bölümü kalıp seçimi olmadan açılır."""
+def test_section_order_kalip_before_istasyon_gate(js):
+    """TEST1 contract — 7O3E: kalıp önce; istasyon kalıp+fiziksel limit sonrası açılır."""
     block = _section_block(js)
-    assert 'upStep2SecIstasyon: !!(e.makineId && e.slot && hasBas)' in block
     assert 'upStep2SecKalip: !!(e.makineId && e.slot && hasBas)' in block
-    assert 'enjKalipSecili()' not in block.split('upStep2SecIstasyon')[1].split('upStep2SecKalip')[0]
+    assert 'upStep2SecKalipSecili: kalipOk' in block
+    assert 'upStep2SecFizikselKalip: kalipOk && fizOk' in block
+    assert 'istasyonOpen = !!(e.makineId && e.slot && hasBas && kalipOk && fizOk)' in block
+    assert 'upStep2SecIstasyon: istasyonOpen' in block
 
 
 def test_station_handler_preserves_date(js):
-    """TEST2/3 contract — istasyon change baslangicManuel sıfırlamaz."""
+    """TEST2/3 contract — istasyon toggle baslangicManuel sıfırlamaz (7O3B enjTryToggleIstasyon)."""
     block = _station_handler_block(js)
     assert 'baslangicManuel = false' not in block
     assert 'enjFetchIlkUygun(false)' not in block
-    assert 'enjValidateSelectedStationsAtDate' in block
+    toggle = js.split('function enjTryToggleIstasyon')[1].split('function enjHesaplaRequirements')[0]
+    assert 'enjValidateSelectedStationsAtDate' in toggle
+    assert 'baslangicManuel = false' not in toggle
 
 
 def test_fetch_ilk_uygun_does_not_clear_date_input(js):
@@ -92,10 +96,13 @@ def test_design_lock_css_unchanged():
 
 
 def test_cache_v32(html):
+    """7O3E bundle — CSS/JS v63, capacity modül ayrı."""
     css_v = re.search(r"uretim_plan\.css['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
     js_v = re.search(r"uretim_plan\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
-    assert css_v and js_v
-    assert css_v.group(1) == js_v.group(1) == '32'
+    cap_v = re.search(r"uretim_plan_7o3_capacity\.js['\"]?\s*\)\s*\}\}\?v=(\d+)", html)
+    assert css_v and js_v and cap_v
+    assert css_v.group(1) == js_v.group(1) == '63'
+    assert cap_v.group(1) == '10'
 
 
 def test_node_behavior_simulation():

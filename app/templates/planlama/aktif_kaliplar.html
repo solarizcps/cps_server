@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% set active = 'planlama' %}
+{% block title %}Aktif Kalıplar · Planlama · Solariz CPS{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/aktif_kaliplar.css') }}?v=9">
+{% endblock %}
+
+{% block content %}
+<div class="ak-wrap" id="akRoot">
+
+  <!-- PAGE HEADER + KOMPAKT EVA/POLİ -->
+  <div class="ak-header">
+    <div class="ak-header-left">
+      <h1 class="ak-title">Aktif Kalıplar</h1>
+      <p class="ak-subtitle">EVA ve gelecekte Poli kalıplarını model, seri ve üretim bilgileriyle yönetin.</p>
+    </div>
+    <div class="ak-header-mid">
+      <div class="ak-mat-pills">
+        <button type="button" class="ak-mat-pill active" id="akSegEva">
+          EVA <span class="ak-mat-count" id="akSegEvaCount">—</span>
+        </button>
+        <button type="button" class="ak-mat-pill" id="akSegPoli">
+          Poli <span class="ak-mat-note">Hazırlanıyor</span>
+        </button>
+      </div>
+    </div>
+    <div class="ak-header-actions">
+      <a href="{{ url_for('uretim_plan_bp.uretim_plan_sayfa') }}" class="ak-btn ak-btn-outline" style="text-decoration:none;">&#8592; Üretim Planına Dön</a>
+      <button class="ak-btn ak-btn-ghost" disabled title="Read-only preview">&#9998;&nbsp;Excel Önizleme</button>
+      <button class="ak-btn ak-btn-primary" id="akYeniKalipBtn">+ Yeni Kalıp</button>
+    </div>
+  </div>
+
+  <!-- KPI ROW -->
+  <div class="ak-kpi-row" id="akKpiRow"></div>
+
+  <!-- EVA PANEL -->
+  <div id="akEvaPanel">
+    <!-- FILTER BAR -->
+    <div class="ak-filter-bar">
+      <input type="search" id="akFSearch" placeholder="🔍  Model veya kalıp kodu ara" />
+      <select id="akFDurum"><option value="">Durum: Tümü</option></select>
+      <select id="akFTip"><option value="">Ürün Ailesi: Tümü</option></select>
+      <input type="text" id="akFNumara" placeholder="Numara (22-30)" style="width:130px" />
+      <label class="ak-chk"><input type="checkbox" id="akFGorsel"> Görseli Olanlar</label>
+      <button class="ak-btn ak-btn-ghost ak-btn-sm" id="akFClear">✕ Temizle</button>
+    </div>
+
+    <!-- CONTENT GRID -->
+    <div class="ak-content-grid">
+      <!-- TABLE -->
+      <div class="ak-tbl-card">
+        <table class="ak-tbl">
+          <thead>
+            <tr>
+              <th style="width:64px">Görsel</th>
+              <th>Model Kodu</th>
+              <th>Enjeksiyon Kalıp Kodu</th>
+              <th>Ürün Tipi</th>
+              <th>Asorti / Numara</th>
+              <th>Çevrim Başına Çıkış</th>
+              <th>Bir Çift Ürün Gramajı (g)</th>
+              <th>Malzeme</th>
+              <th>Durum</th>
+              <th style="width:68px">Detay</th>
+            </tr>
+          </thead>
+          <tbody id="akTblBody"></tbody>
+        </table>
+        <div class="ak-tbl-foot">
+          <span id="akTblSummary"></span>
+          <div class="ak-pagination" id="akPagination"></div>
+        </div>
+      </div>
+
+      <!-- DETAIL PANEL -->
+      <div class="ak-detail" id="akDetailPanel">
+        <div class="ak-detail-head">
+          <span class="ak-detail-title">Kalıp Detayı</span>
+          <button class="ak-close" id="akDetailClose" aria-label="Kapat">×</button>
+        </div>
+        <div class="ak-detail-body" id="akDetailBody">
+          <div style="color:var(--ak-muted);font-size:12px;padding:24px 0;text-align:center;">Listeden bir kalıp seçin</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POLİ PANEL -->
+  <div class="ak-poli-panel" id="akPoliPanel">
+    <div class="ak-poli-empty">
+      <div class="ak-poli-ico">⏳</div>
+      <h2>Poli Kalıpları Hazırlanıyor</h2>
+      <p>Poli malzeme grubu henüz aktif değil.<br>Bu alanda sahte veya örnek kayıt gösterilmez.</p>
+    </div>
+  </div>
+
+</div><!-- /ak-wrap -->
+
+<div class="ak-backdrop" id="akBackdrop"></div>
+
+<!-- ═══ YENİ KALIP DRAWER ═══════════════════════════════════════════════════ -->
+<div class="ak-drawer-backdrop" id="akDrawerBackdrop"></div>
+<div class="ak-drawer" id="akDrawer" role="dialog" aria-modal="true" aria-labelledby="akDrawerTitle">
+  <div class="ak-drawer-head">
+    <span class="ak-drawer-title" id="akDrawerTitle">Yeni Kalıp Ekle</span>
+    <button class="ak-close" id="akDrawerClose" aria-label="Kapat">×</button>
+  </div>
+
+  <div class="ak-drawer-scroll" id="akDrawerScroll">
+  <div class="ak-drawer-pending-notice ak-drawer-info-notice">
+    <span>ℹ️</span>
+    <span>Kayıtlar gerçek preview veritabanına yazılır. Kaydedilen kalıp, plan kriterlerini sağlıyorsa Plan Oluştur ekranında seçilebilir.</span>
+  </div>
+
+  <div class="ak-drawer-body" id="akDrawerBody">
+    <form id="akNewMoldForm" novalidate autocomplete="off">
+
+      <!-- MALZEME GRUBU -->
+      <div class="ak-form-section">
+        <div class="ak-form-row ak-form-row-full">
+          <label class="ak-label">Malzeme Grubu <span class="ak-req">*</span></label>
+          <div class="ak-radio-group">
+            <label class="ak-radio-lbl">
+              <input type="radio" name="material_group" value="EVA" checked> EVA
+            </label>
+            <label class="ak-radio-lbl">
+              <input type="radio" name="material_group" value="POLI"> Poli
+            </label>
+          </div>
+          <div class="ak-poli-warn ak-hidden" id="akPoliWarn">
+            ⚠️ Poli planlama bağlantısı henüz aktif değildir. Kayıt yalnız Kalıp Kütüphanesine eklenecektir.
+          </div>
+        </div>
+      </div>
+
+      <!-- ANA BİLGİLER -->
+      <div class="ak-form-section">
+        <div class="ak-form-section-title">Temel Bilgiler</div>
+        <div class="ak-form-grid">
+          <div class="ak-form-field">
+            <label class="ak-label">Model Kodu <span class="ak-req">*</span></label>
+            <input type="text" name="model_kod" id="akFModel" class="ak-input" placeholder="örn: CRP-8100" maxlength="50">
+            <div class="ak-field-err" id="akErrModel"></div>
+          </div>
+          <div class="ak-form-field">
+            <label class="ak-label">Enjeksiyon Kalıp Kodu <span class="ak-req">*</span></label>
+            <input type="text" name="visible_mold_code" id="akFMoldCode" class="ak-input" placeholder="örn: TR-23B16" maxlength="60">
+            <div class="ak-field-err" id="akErrMoldCode"></div>
+            <div class="ak-field-hint" id="akMoldCodeHint"></div>
+          </div>
+          <div class="ak-form-field">
+            <label class="ak-label">Ana Ürün Ailesi <span class="ak-req">*</span></label>
+            <select name="product_family" id="akFFamily" class="ak-input"></select>
+            <div class="ak-field-err" id="akErrFamily"></div>
+          </div>
+          <div class="ak-form-field">
+            <label class="ak-label">Ürün Alt Tipi / Varyant</label>
+            <input type="text" name="product_variant" id="akFVariant" class="ak-input" placeholder="örn: Yazılı, Garson (boş = ana tip)" maxlength="80">
+            <div class="ak-field-hint">Boş bırakılırsa ana aile etiketi kullanılır</div>
+          </div>
+          <div class="ak-form-field">
+            <label class="ak-label">Durum <span class="ak-req">*</span></label>
+            <select name="durum" id="akFDurumNew" class="ak-input">
+              <option value="AKTIF">Aktif</option>
+              <option value="NUMUNE">Numune</option>
+              <option value="PASIF">Pasif</option>
+            </select>
+          </div>
+          <div class="ak-form-field">
+            <label class="ak-label">Asorti Başlangıç <span class="ak-req">*</span></label>
+            <input type="number" name="asorti_bas" id="akFAsBas" class="ak-input" placeholder="22" min="10" max="50">
+            <div class="ak-field-err" id="akErrAsBas"></div>
+          </div>
+          <div class="ak-form-field">
+            <label class="ak-label">Asorti Bitiş <span class="ak-req">*</span></label>
+            <input type="number" name="asorti_bit" id="akFAsBit" class="ak-input" placeholder="30" min="10" max="60">
+            <div class="ak-field-err" id="akErrAsBit"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEKNİK BİLGİLER -->
+      <div class="ak-form-section">
+        <div class="ak-form-section-title">Teknik Bilgiler</div>
+        <div class="ak-form-grid">
+          <div class="ak-form-field">
+            <label class="ak-label">Çevrim Başına Çıkış (çift) <span class="ak-req">*</span></label>
+            <select name="cift_miktari" id="akFCift" class="ak-input">
+              <option value="">Seçiniz</option>
+              <option value="1">1 çift</option>
+              <option value="2">2 çift</option>
+              <option value="3">3 çift</option>
+              <option value="4">4 çift</option>
+            </select>
+            <div class="ak-field-err" id="akErrCift"></div>
+          </div>
+          <div class="ak-form-field">
+            <label class="ak-label">Bir Çift Ürün Gramajı (g)</label>
+            <input type="number" name="gramaj_gr" id="akFGramaj" class="ak-input" placeholder="340" min="50" max="2000" step="1">
+            <div class="ak-field-hint">Boş bırakılırsa "Gramaj doğrulanmalı" olarak kaydedilir.</div>
+            <div class="ak-field-err" id="akErrGramaj"></div>
+          </div>
+          <div class="ak-form-field">
+            <label class="ak-label">Gramaj Referans Numarası</label>
+            <input type="text" name="gramaj_ref_numara" id="akFRefNo" class="ak-input" placeholder="örn: 27/28" maxlength="20">
+          </div>
+          <div class="ak-form-field">
+            <label class="ak-label">Pişme Süresi (sn)</label>
+            <input type="number" name="pisirme_suresi_sn" id="akFPisirme" class="ak-input" placeholder="330" step="1" min="1" max="9999">
+            <div class="ak-field-hint">Boş bırakılırsa "Pişme süresi doğrulanmalı" olarak kaydedilir.</div>
+            <div class="ak-field-err" id="akErrPisirme"></div>
+          </div>
+          <div class="ak-form-field">
+            <label class="ak-label">Ayrı Atkı Kalıbı</label>
+            <select name="separate_upper_mold" id="akFAtki" class="ak-input">
+              <option value="">Bilinmiyor</option>
+              <option value="1">Evet</option>
+              <option value="0">Hayır</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOT -->
+      <div class="ak-form-section">
+        <div class="ak-form-field ak-form-row-full">
+          <label class="ak-label">Not</label>
+          <textarea name="not" id="akFNot" class="ak-input ak-textarea" rows="2" maxlength="500" placeholder="Teknik not veya açıklama"></textarea>
+        </div>
+      </div>
+
+      <!-- SERİ & KALIP ADEDİ -->
+      <div class="ak-form-section" id="akSeriesSection">
+        <div class="ak-form-section-title">Seri &amp; Kalıp Adedi</div>
+        <div id="akSeriesRows"></div>
+        <button type="button" class="ak-btn ak-btn-ghost ak-btn-sm" id="akAddSeriesRow" style="margin-top:6px;">+ Seri Satırı Ekle</button>
+      </div>
+
+      <!-- GÖRSEL -->
+      <div class="ak-form-section">
+        <div class="ak-form-section-title">Görsel (İsteğe Bağlı)</div>
+        <div class="ak-form-field">
+          <label class="ak-label">Kalıp Görseli</label>
+          <input type="file" name="gorsel" id="akFImage" class="ak-input-file"
+                 accept=".jpg,.jpeg,.png,.webp">
+          <div class="ak-field-hint">JPG, PNG veya WebP · En fazla 5 MB · Dosya seçilmezse kayıt devam eder</div>
+          <div class="ak-field-err" id="akErrImage"></div>
+          <div id="akImagePreview" class="ak-img-preview ak-hidden"></div>
+        </div>
+      </div>
+
+    </form>
+  </div><!-- /drawer-body -->
+  <div class="ak-form-missing-summary" id="akFormMissingSummary"></div>
+  </div><!-- /drawer-scroll -->
+
+  <div class="ak-drawer-foot ak-drawer-foot-sticky">
+    <button type="button" class="ak-btn ak-btn-ghost" id="akDrawerCancel">İptal</button>
+    <button type="button" class="ak-btn ak-btn-outline" id="akDraftSave">Taslak Kaydet</button>
+    <button type="button" class="ak-btn ak-btn-primary" id="akMoldSave">Kalıbı Kaydet</button>
+  </div>
+</div><!-- /ak-drawer -->
+
+<!-- ═══ DÜZENLE DRAWER ═════════════════════════════════════════════════════ -->
+<div class="ak-drawer-backdrop" id="akEditBackdrop"></div>
+<div class="ak-drawer" id="akEditDrawer" role="dialog" aria-modal="true" aria-labelledby="akEditDrawerTitle">
+  <div class="ak-drawer-head">
+    <span class="ak-drawer-title" id="akEditDrawerTitle">Kalıp Düzenle</span>
+    <button class="ak-close" id="akEditDrawerClose" aria-label="Kapat">×</button>
+  </div>
+  <div class="ak-drawer-scroll" id="akEditDrawerScroll">
+  <div class="ak-drawer-pending-notice ak-drawer-info-notice">
+    <span>ℹ️</span>
+    <span>Düzenleme gerçek preview veritabanına yazılır ve audit kaydı oluşturulur.</span>
+  </div>
+  <div class="ak-drawer-body" id="akEditDrawerBody">
+    <form id="akEditForm" novalidate autocomplete="off">
+      <input type="hidden" id="akEditSourceSeq" name="source_seq">
+
+      <div class="ak-form-section">
+        <div class="ak-form-section-title">A. Ürün Bilgileri</div>
+        <div class="ak-form-grid">
+          <div class="ak-form-field ak-form-row-full">
+            <label class="ak-label">Malzeme Grubu</label>
+            <div class="ak-radio-group">
+              <label class="ak-radio-lbl"><input type="radio" name="edit_material_group" value="EVA" checked> EVA</label>
+              <label class="ak-radio-lbl"><input type="radio" name="edit_material_group" value="POLI"> Poli</label>
+            </div>
+            <div class="ak-poli-warn ak-hidden" id="akEditPoliWarn">⚠️ Poli planlama bağlantısı henüz aktif değildir.</div>
+          </div>
+          <div class="ak-form-field"><label class="ak-label">Model Kodu <span class="ak-req">*</span></label><input type="text" id="akEditModel" class="ak-input" maxlength="50"></div>
+          <div class="ak-form-field"><label class="ak-label">Enjeksiyon Kalıp Kodu <span class="ak-req">*</span></label><input type="text" id="akEditMoldCode" class="ak-input" maxlength="60"></div>
+          <div class="ak-form-field"><label class="ak-label">Ana Ürün Ailesi <span class="ak-req">*</span></label><select id="akEditFamily" class="ak-input"></select></div>
+          <div class="ak-form-field"><label class="ak-label">Ürün Alt Tipi / Varyant</label><input type="text" id="akEditVariant" class="ak-input" maxlength="80" placeholder="örn: Yazılı, Garson"></div>
+          <div class="ak-form-field"><label class="ak-label">Kalıp Durumu <span class="ak-req">*</span></label>
+            <select id="akEditDurum" class="ak-input"><option value="AKTIF">Aktif</option><option value="NUMUNE">Numune</option><option value="PASIF">Pasif</option><option value="TASLAK">Taslak</option></select>
+          </div>
+          <div class="ak-form-field"><label class="ak-label">Çevrim Başına Çıkış (çift) <span class="ak-req">*</span></label>
+            <select id="akEditCift" class="ak-input"><option value="1">1 çift</option><option value="2">2 çift</option><option value="3">3 çift</option><option value="4">4 çift</option></select>
+          </div>
+          <div class="ak-form-field"><label class="ak-label">Bir Çift Ürün Gramajı (g)</label><input type="number" id="akEditGramaj" class="ak-input" min="50" max="2000" step="1" placeholder="340"></div>
+          <div class="ak-form-field"><label class="ak-label">Gramaj Referans Numarası</label><input type="text" id="akEditRefNo" class="ak-input" maxlength="20" placeholder="örn: 27/28"></div>
+          <div class="ak-form-field"><label class="ak-label">Pişme Süresi (sn)</label><input type="number" id="akEditPisirme" class="ak-input" step="1" min="1" max="9999" placeholder="330"></div>
+          <div class="ak-form-field"><label class="ak-label">Ayrı Atkı Kalıbı</label>
+            <select id="akEditAtki" class="ak-input"><option value="">Bilinmiyor</option><option value="1">Evet</option><option value="0">Hayır</option></select>
+          </div>
+          <div class="ak-form-field ak-form-row-full"><label class="ak-label">Not</label><textarea id="akEditNot" class="ak-input ak-textarea" rows="2" maxlength="500"></textarea></div>
+        </div>
+      </div>
+
+      <div class="ak-form-section">
+        <div class="ak-form-section-title">B. Asorti, Seri ve Kalıp Adedi</div>
+        <div class="ak-form-grid">
+          <div class="ak-form-field"><label class="ak-label">Asorti Başlangıç <span class="ak-req">*</span></label><input type="number" id="akEditAsBas" class="ak-input" min="10" max="50"></div>
+          <div class="ak-form-field"><label class="ak-label">Asorti Bitiş <span class="ak-req">*</span></label><input type="number" id="akEditAsBit" class="ak-input" min="10" max="60"></div>
+        </div>
+        <div id="akEditSeriesRows" style="margin-top:10px;"></div>
+        <button type="button" class="ak-btn ak-btn-ghost ak-btn-sm" id="akEditAddSeriesRow" style="margin-top:6px;">+ Seri Satırı Ekle</button>
+      </div>
+
+      <div class="ak-form-section">
+        <div class="ak-form-section-title">C. Kalıp Görseli</div>
+        <div id="akEditCurrentImage" class="ak-img-preview ak-hidden" style="margin-bottom:8px;"></div>
+        <div class="ak-form-field">
+          <label class="ak-label">Görsel Ekle / Değiştir</label>
+          <input type="file" id="akEditImage" class="ak-input-file" accept=".jpg,.jpeg,.png,.webp">
+          <div class="ak-field-hint">JPG, PNG veya WebP · En fazla 5 MB</div>
+          <div class="ak-field-err" id="akEditErrImage"></div>
+          <div id="akEditImagePreview" class="ak-img-preview ak-hidden"></div>
+        </div>
+        <button type="button" class="ak-btn ak-btn-ghost ak-btn-sm" id="akEditRemoveImage" style="margin-top:6px;">Görseli Kaldır</button>
+      </div>
+
+      <div class="ak-form-field">
+        <label class="ak-label">Değişiklik Gerekçesi</label>
+        <input type="text" id="akEditReason" class="ak-input" placeholder="örn: Ürün tipi düzeltmesi" maxlength="200">
+      </div>
+    </form>
+  </div>
+  </div><!-- /edit-drawer-scroll -->
+  <div class="ak-drawer-foot ak-drawer-foot-sticky" style="justify-content:space-between;">
+    <button type="button" class="ak-btn ak-btn-ghost ak-btn-sm" id="akEditArchive" style="color:#b45309;">Arşivle</button>
+    <div style="display:flex;gap:8px;">
+      <button type="button" class="ak-btn ak-btn-ghost" id="akEditCancel">İptal</button>
+      <button type="button" class="ak-btn ak-btn-primary" id="akEditSave">Değişiklikleri Kaydet</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Fixture endpoint'ten yükle, sonra aktif_kaliplar.js'i başlat
+(function(){
+  fetch("{{ url_for('aktif_kaliplar_bp.aktif_kaliplar_fixture') }}")
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      window.AK_FIXTURE = data;
+      // JS dosyası zaten yüklüdür; init fonksiyonunu tetikle
+      if (typeof window.akInit === 'function') { window.akInit(); }
+    })
+    .catch(function(e){ console.error('AK fixture load error:', e); });
+})();
+</script>
+<script src="{{ url_for('static', filename='js/aktif_kaliplar.js') }}?v=9"></script>
+{% endblock %}
