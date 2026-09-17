@@ -1,0 +1,3 @@
+Online E-Ticaret V2 live read-only operations dashboard integrated.
+Samet PR #5 (d3bcbb1): order_poll, async enrichment, Acik Siparisler default scope, acil_24h KPI/pill parity.
+19 regression tests PASS. Adem visual approval confirmed. API_WRITE_ENABLED=false.
