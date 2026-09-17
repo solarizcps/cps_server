@@ -16,7 +16,7 @@ HTTP 500 düzeltmesi (21f1814): display_bakiye float DTO + minimal UI alanları.
 Canonical production DB'ye tablo veya veri eklenmedi.
 """
 source_type = "commit"
-commit_sha = "21f1814ccf53ba2d9dcbc8e3f33d18404e2d09f7"
+commit_sha = "9cad176a35a0bc0522a26833fed0afbbe0c0953f"
 worktree_fingerprint = "release/finans-odeme-plani-payable-read-model-v1"
 verification_date = "2026-09-07"
 verification_evidence = "pytest 36 pass 0 fail — temp SQLite, Flask route HTTP 200, no canonical DB write"
