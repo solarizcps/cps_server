@@ -182,26 +182,28 @@ def bootstrap_schema(conn: sqlite3.Connection) -> None:
                 f"mevcut={stored}. Eski read-model silinip yeniden oluşturulabilir."
             )
 
-    # rm_refresh_control — PAYABLE satırı yoksa seed et
-    exists = conn.execute(
-        "SELECT 1 FROM rm_refresh_control WHERE direction='PAYABLE'"
-    ).fetchone()
-    if not exists:
-        conn.execute(
-            """INSERT INTO rm_refresh_control(direction, state)
-               VALUES('PAYABLE', 'IDLE')"""
-        )
-        conn.commit()
+    # rm_refresh_control — PAYABLE + RECEIVABLE satırları yoksa seed et
+    for _dir in ("PAYABLE", "RECEIVABLE"):
+        exists = conn.execute(
+            "SELECT 1 FROM rm_refresh_control WHERE direction=?", (_dir,)
+        ).fetchone()
+        if not exists:
+            conn.execute(
+                "INSERT INTO rm_refresh_control(direction, state) VALUES(?, 'IDLE')",
+                (_dir,),
+            )
+    conn.commit()
 
-    # rm_pointer — PAYABLE satırı yoksa seed et
-    exists_ptr = conn.execute(
-        "SELECT 1 FROM rm_pointer WHERE direction='PAYABLE'"
-    ).fetchone()
-    if not exists_ptr:
-        conn.execute(
-            "INSERT INTO rm_pointer(direction) VALUES('PAYABLE')"
-        )
-        conn.commit()
+    # rm_pointer — PAYABLE + RECEIVABLE satırları yoksa seed et
+    for _dir in ("PAYABLE", "RECEIVABLE"):
+        exists_ptr = conn.execute(
+            "SELECT 1 FROM rm_pointer WHERE direction=?", (_dir,)
+        ).fetchone()
+        if not exists_ptr:
+            conn.execute(
+                "INSERT INTO rm_pointer(direction) VALUES(?)", (_dir,)
+            )
+    conn.commit()
 
 
 def verify_schema_version(conn: sqlite3.Connection) -> None:

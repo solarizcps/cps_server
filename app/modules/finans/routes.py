@@ -1621,7 +1621,7 @@ def finans_odeme_plani():
             # qf chip → bakiye_f sunucu filtresi dönüşümü
             # Template'de hızlı filtreler ?qf=acik_borc|alacakli|sifir_bakiye gönderir;
             # fh_bakiye kolon filtresiyle birleşince fh_bakiye öncelik alır.
-            _qf = (cari_filters.get('qf') or 'tumu').strip()
+            _qf = (cari_filters.get('qf') or '').strip()
             _fh_bakiye = (cari_filters.get('fh_bakiye') or '').strip()
             _QF_TO_BAKIYE = {
                 'acik_borc': 'acik_borc',
@@ -1631,12 +1631,27 @@ def finans_odeme_plani():
                 'aktif_takip': 'aktif_takip',
                 'hareketli': 'hareketli',
                 'hareketsiz': 'hareketsiz',
+                'tumu': None,   # Tüm Cariler → filtre yok
             }
-            _bakiye_f = _fh_bakiye or _QF_TO_BAKIYE.get(_qf) or None
+            if _qf == 'tumu':
+                # Tüm Cariler: filtre uygulanmaz
+                _bakiye_f = None
+            elif _qf in _QF_TO_BAKIYE:
+                _bakiye_f = _fh_bakiye or _QF_TO_BAKIYE.get(_qf)
+            elif _fh_bakiye:
+                _bakiye_f = _fh_bakiye
+            else:
+                # Parametre yok → varsayılan Hareketli
+                _bakiye_f = 'hareketli'
+            # Tedarikçi PB filtresi — ted_pb URL parametresi
+            _ted_pb_raw = request.args.get('ted_pb', '').strip().upper()
+            _PB_NORMALIZE_TED = {'TL': 'TRY', 'TRY': 'TRY', 'US': 'USD', 'USD': 'USD', 'EU': 'EUR', 'EUR': 'EUR'}
+            _ted_pb_f = _PB_NORMALIZE_TED.get(_ted_pb_raw) if _ted_pb_raw else None
             _rm_data = read_payable_snapshot(
                 location=sirket or None,
                 bakiye_f=_bakiye_f,
                 tedarikci_q=cari_filters.get('fh_tedarikci') or None,
+                para_birimi=_ted_pb_f,
                 page=_page,
                 page_size=_page_size,
             )
@@ -1717,6 +1732,7 @@ def finans_odeme_plani():
                 {'code': 'YN001', 'label': 'NexGen'},
                 {'code': 'YP001', 'label': 'Pera AŞ'},
             ],
+            '_ted_pb': _ted_pb_raw,
             'perf': {'kg_fn_scan_count': 0, 'layer2_locations': [], 'html_row_count': len(_rm_data.get('cari_rows', []))},
             'karar_layer2_ms': None,
             'karar_query_count': 0,
@@ -1764,14 +1780,55 @@ def finans_odeme_plani():
                 if not _arama_rows:
                     _tab_empty = {'tab': 'arama', 'mesaj': 'Henüz iletişim kaydı yok.'}
             elif _active_sekme == 'yukumlulukler':
-                # [CUSTOMER_SCOPE_NOT_IMPLEMENTED]
-                # Müşteri Carileri (satış/tahsilat) veri modeli henüz uygulanmadı.
-                # Tedarikçi snapshot verisi müşteri gibi gösterilmez.
-                _tab_empty = {
-                    'tab': 'yukumlulukler',
-                    'mesaj': 'Müşteri Carileri (tahsilat modülü) yakında aktif olacak.',
-                    'customer_scope': False,
-                }
+                # [RECEIVABLE_RM_V1] — RECEIVABLE snapshot'tan gerçek müşteri verileri
+                try:
+                    try:
+                        from modules.finans.read_model.rm_receivable_reader import read_receivable_snapshot
+                        from modules.finans.read_model.rm_config import get_rm_path
+                    except ImportError:
+                        from app.modules.finans.read_model.rm_receivable_reader import read_receivable_snapshot
+                        from app.modules.finans.read_model.rm_config import get_rm_path
+
+                    _rm_path = get_rm_path()
+                    _musteri_q = request.args.get('musteri_q', '').strip() or None
+                    _pb_raw = request.args.get('pb', '').strip().upper()
+                    # TL/TRY/US/USD/EU/EUR normalizasyonu
+                    _PB_NORMALIZE = {'TL': 'TRY', 'TRY': 'TRY', 'US': 'USD', 'USD': 'USD', 'EU': 'EUR', 'EUR': 'EUR'}
+                    _pb_f = _PB_NORMALIZE.get(_pb_raw) if _pb_raw else None
+                    _bakiye_f = request.args.get('bakiye_f', '').strip() or None
+                    # Varsayılan görünüm: hareketli (belirtilmemişse)
+                    # bakiye_f='tumu' → tüm cari evreni (filtre yok)
+                    if _bakiye_f == 'tumu':
+                        _bakiye_f = None
+                    elif not _bakiye_f:
+                        _bakiye_f = 'hareketli'
+                    _page_r = int(request.args.get('sayfa', 1))
+                    _per_page_r = int(request.args.get('per_page', 25))
+
+                    _recv_data = read_receivable_snapshot(
+                        rm_path=_rm_path,
+                        location=sirket if sirket else None,
+                        para_birimi=_pb_f,
+                        bakiye_f=_bakiye_f,
+                        musteri_q=_musteri_q,
+                        page=_page_r,
+                        per_page=_per_page_r,
+                        mf_bakiye=request.args.get('mf_bakiye', '').strip() or None,
+                        mf_durum=request.args.get('mf_durum', '').strip() or None,
+                        mf_tahsilat=request.args.get('mf_tahsilat', '').strip() or None,
+                        mf_satis=request.args.get('mf_satis', '').strip() or None,
+                        mf_cek=request.args.get('mf_cek', '').strip() or None,
+                        mf_takip=request.args.get('mf_takip', '').strip() or None,
+                        mf_sort=request.args.get('mf_sort', '').strip() or None,
+                    )
+                    _tab_receivable = _recv_data
+                except Exception as _recv_err:
+                    _tab_receivable = {
+                        'rows': [], 'pagination': {}, 'kpis': {},
+                        'snapshot_status': 'error',
+                        'error': str(_recv_err)[:200],
+                        'customer_scope_implemented': True,
+                    }
             else:
                 # anlasmalar, odendi — şimdilik boş (veri CPS local DB'ye taşınmamış)
                 _tab_empty = {
@@ -1815,6 +1872,7 @@ def finans_odeme_plani():
                 'soz_rows': _soz_rows,
                 'arama_rows': _arama_rows,
                 'tab_empty': _tab_empty,
+                'tab_receivable': locals().get('_tab_receivable', None),
                 'total_kayit': len(_table_rows) or len(_soz_rows) or len(_arama_rows),
                 'total_kalan_by_pb': {},
                 'pagination': {
@@ -2233,3 +2291,297 @@ def finans_tedarikci_ayar_deactivate():
     except Exception as exc:
         return jsonify(ok=False, error=str(exc)), 500
 # [TEDARIKCI_AYAR_FAZ6D SON]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [PAYABLE_POPUP_V1 BAS] — Tedarikçi cari hareketleri endpoint (unified modal)
+# ─────────────────────────────────────────────────────────────────────────────
+@finans_bp.route('/cariler/tedarikci/<company>/<path:cari_kod>/hareketler')
+def tedarikci_cari_hareketler(company: str, cari_kod: str):
+    """
+    Tedarikçi cari hareketleri — unified popup için direction-safe endpoint.
+    Scope: 320.* PAYABLE.
+    Format: rows[] (to_hareket_dict uyumlu) + filtered_totals.
+    """
+    from flask import request, jsonify, session
+    from decimal import Decimal
+
+    if not session.get('kullanici'):
+        return jsonify(ok=False, error='Oturum gerekli'), 401
+
+    if not cari_kod.startswith('320.'):
+        return jsonify(ok=False, error='Geçersiz cari kodu — yalnız tedarikçi (320.*) carileri'), 400
+
+    try:
+        try:
+            from modules.finans.services.cari_hareket_ledger_service import build_cari_hareket_ledger
+            from modules.finans.services.korgun_finance_adapter import COMPANY_LOCATIONS
+        except ImportError:
+            from app.modules.finans.services.cari_hareket_ledger_service import build_cari_hareket_ledger
+            from app.modules.finans.services.korgun_finance_adapter import COMPANY_LOCATIONS
+
+        location = company.upper()
+        if location not in COMPANY_LOCATIONS:
+            return jsonify(ok=False, error='Geçersiz şirket kodu'), 400
+
+        ledger = build_cari_hareket_ledger(location, cari_kod)
+        if not ledger.get('ok'):
+            return jsonify(ok=False, error=ledger.get('error', 'Hata')), 500
+
+        rows = ledger.get('hareketler', [])
+
+        # Tarih filtresi (opsiyonel — PAYABLE ledger servis katmanında desteklenmiyor,
+        # bu endpoint frontend lazy-load için tüm hareketi döner)
+        filtered_borc = sum(Decimal(str(r.get('borc') or 0)) for r in rows)
+        filtered_alacak = sum(Decimal(str(r.get('alacak') or 0)) for r in rows)
+        filtered_net = filtered_borc - filtered_alacak
+
+        # Cursor tabanlı lazy-load
+        try:
+            batch_size = min(int(request.args.get('batch_size', 100)), 200)
+        except (ValueError, TypeError):
+            batch_size = 100
+
+        cursor_key = request.args.get('cursor_key', '').strip() or None
+        total = len(rows)
+
+        # cursor_key → offset
+        offset = 0
+        if cursor_key:
+            for i, r in enumerate(rows):
+                k = (r.get('tarih') or '') + '|' + (r.get('belge_no') or '')
+                if k == cursor_key:
+                    offset = i + 1
+                    break
+
+        batch = rows[offset: offset + batch_size]
+        next_cursor = None
+        if offset + batch_size < total and batch:
+            last = batch[-1]
+            next_cursor = (last.get('tarih') or '') + '|' + (last.get('belge_no') or '')
+
+        # Live bakiye — resmî kaynak yalnız kg_fn
+        live_bal = ledger.get('live_balance') or {}
+        canon_bal = ledger.get('fn_net', ledger.get('canonical_balance'))
+
+        return jsonify(
+            ok=True,
+            rows=batch,
+            next_cursor=next_cursor,
+            filtered_totals={
+                'borc': str(filtered_borc),
+                'alacak': str(filtered_alacak),
+                'net': str(filtered_net),
+                'filtered_count': total,
+                'displayed_count': len(batch),
+            },
+            current_balance={
+                'amount': str(canon_bal if canon_bal is not None else live_bal.get('balance', 0)),
+                'currency': ledger.get('para_birimi') or live_bal.get('para_birimi', 'TRY'),
+                'authority': 'kg_fn',
+            },
+            canonical_balance_source='kg_fn',
+            movement_ledger_role='informational',
+            fn_borc=ledger.get('fn_borc'),
+            fn_alacak=ledger.get('fn_alacak'),
+            fn_net=ledger.get('fn_net'),
+            har_borc=ledger.get('har_borc'),
+            har_alacak=ledger.get('har_alacak'),
+            har_net=ledger.get('har_net'),
+            delta_borc=ledger.get('delta_borc'),
+            delta_alacak=ledger.get('delta_alacak'),
+            delta_net=ledger.get('delta_net', ledger.get('parity_delta')),
+            parity_ok=ledger.get('parity_ok'),
+            parity_note=ledger.get('parity_note'),
+            parity_blocked_classes=ledger.get('parity_blocked_classes') or [],
+            query_ms=ledger.get('query_ms', 0),
+        )
+    except Exception as exc:
+        import logging as _logging
+        _logging.exception('tedarikci_cari_hareketler error: %s', exc)
+        return jsonify(ok=False, error=str(exc)[:200]), 500
+
+
+@finans_bp.route('/cariler/tedarikci/<company>/<path:cari_kod>/ozet')
+def tedarikci_cari_ozet(company: str, cari_kod: str):
+    """Tedarikçi detay modalı üst özet — resmî kg_fn + açıklayıcı mutabakat."""
+    from flask import jsonify, request, session
+
+    if not session.get('kullanici'):
+        return jsonify(ok=False, error='Oturum gerekli'), 401
+    if not cari_kod.startswith('320.'):
+        return jsonify(ok=False, error='Geçersiz cari kodu — yalnız tedarikçi (320.*) carileri'), 400
+
+    try:
+        try:
+            from modules.finans.services.cari_hareket_popup_service import get_supplier_summary
+            from modules.finans.services.korgun_finance_adapter import COMPANY_LOCATIONS
+        except ImportError:
+            from app.modules.finans.services.cari_hareket_popup_service import get_supplier_summary
+            from app.modules.finans.services.korgun_finance_adapter import COMPANY_LOCATIONS
+
+        location = company.upper()
+        if location not in COMPANY_LOCATIONS:
+            return jsonify(ok=False, error='Geçersiz şirket kodu'), 400
+        pb = (request.args.get('pb') or 'TRY').strip().upper()
+        summary = get_supplier_summary(location, cari_kod, pb)
+        payload = dict(summary)
+        payload['ok'] = True
+        return jsonify(payload)
+    except Exception as exc:
+        import logging as _logging
+        _logging.exception('tedarikci_cari_ozet error: %s', exc)
+        return jsonify(ok=False, error=str(exc)[:200]), 500
+
+
+# [PAYABLE_POPUP_V1 SON]
+
+# [RECEIVABLE_CORE_V1 BAS] — Müşteri cari hareketleri endpoint (lazy Korgün)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@finans_bp.route('/cariler/musteri/<company>/<path:cari_kod>/hareketler')
+def musteri_cari_hareketler(company: str, cari_kod: str):
+    """
+    Müşteri cari hareketleri — lazy Korgün sorgusu.
+    Ana sayfa snapshot bağımsız çalışır.
+    Parametreler:
+      pb: TRY / USD / EUR (opsiyonel)
+      kaynak: FATURA / CFIS (opsiyonel, yoksa ikisi birlikte)
+      sayfa: sayfa no (varsayılan 1)
+      per_page: sayfa başına kayıt (varsayılan 50)
+      tarih_bas: YYYY-MM-DD (opsiyonel)
+      tarih_bit: YYYY-MM-DD (opsiyonel)
+      metin: belge/açıklama arama (opsiyonel)
+      hareket_turu: SATIS_FATURASI / IADE_FATURASI / TAHSILAT / CEK / DUZELTME (opsiyonel)
+      cursor_key: lazy-load cursor (opsiyonel, format: tarih|belge_no)
+      batch_size: cursor batch boyutu (varsayılan 100, maks 200)
+    """
+    from flask import request, jsonify, session
+
+    if not session.get('kullanici'):
+        return jsonify(ok=False, error='Oturum gerekli'), 401
+
+    pb = (request.args.get('pb', '').strip().upper() or None)
+    kaynak = request.args.get('kaynak', '').strip().upper() or None
+    tarih_bas = request.args.get('tarih_bas', '').strip() or None
+    tarih_bit = request.args.get('tarih_bit', '').strip() or None
+    metin = request.args.get('metin', '').strip() or None
+    hareket_turu = request.args.get('hareket_turu', '').strip().upper() or None
+    cursor_key = request.args.get('cursor_key', '').strip() or None
+    try:
+        page = int(request.args.get('sayfa', 1))
+        per_page = min(int(request.args.get('per_page', 50)), 200)
+        batch_size = min(int(request.args.get('batch_size', 100)), 200)
+    except (ValueError, TypeError):
+        page, per_page, batch_size = 1, 50, 100
+
+    # Güvenlik: cari_kod 120.* olmalı
+    if not cari_kod.startswith('120.'):
+        return jsonify(ok=False, error='Geçersiz cari kodu — yalnız müşteri (120.*) carileri'), 400
+
+    try:
+        try:
+            from modules.finans.services.musteri_hareket_service import get_customer_movements
+        except ImportError:
+            from app.modules.finans.services.musteri_hareket_service import get_customer_movements
+
+        data = get_customer_movements(
+            cari_kod=cari_kod,
+            location=company,
+            para_birimi=pb,
+            kaynak_filter=kaynak,
+            hareket_turu=hareket_turu,
+            tarih_bas=tarih_bas,
+            tarih_bit=tarih_bit,
+            metin=metin,
+            cursor_key=cursor_key,
+            batch_size=batch_size,
+            page=page,
+            per_page=per_page,
+        )
+        return jsonify(ok=True, **data)
+    except Exception as exc:
+        import logging as _logging
+        _logging.exception("musturi_cari_hareketler error: %s", exc)
+        return jsonify(ok=False, error=str(exc)[:200]), 500
+
+
+@finans_bp.route('/cariler/musteri/<company>/<path:cari_kod>/ozet')
+def musteri_cari_ozet(company: str, cari_kod: str):
+    """
+    Cari detay modalı üst özet — lazy Korgün sorgusu.
+    """
+    from flask import request, jsonify, session
+
+    if not session.get('kullanici'):
+        return jsonify(ok=False, error='Oturum gerekli'), 401
+
+    pb = request.args.get('pb', 'TRY').strip().upper()
+
+    if not cari_kod.startswith('120.'):
+        return jsonify(ok=False, error='Geçersiz cari kodu'), 400
+
+    try:
+        try:
+            from modules.finans.services.musteri_hareket_service import get_customer_summary
+        except ImportError:
+            from app.modules.finans.services.musteri_hareket_service import get_customer_summary
+
+        summary = get_customer_summary(cari_kod, company, pb)
+        payload = dict(summary)
+        payload['ok'] = True
+        return jsonify(payload)
+    except Exception as exc:
+        import logging as _logging
+        _logging.exception("musteri_cari_ozet error: %s", exc)
+        return jsonify(ok=False, error=str(exc)[:200]), 500
+
+# [CARI_AYAR_V1 BAS] — Direction-safe cari çalışma ayarları
+
+@finans_bp.route('/cariler/<direction>/<company>/<path:cari_kod>/ayar', methods=['GET'])
+def cari_ayar_get(direction: str, company: str, cari_kod: str):
+    from flask import request, jsonify, session
+    if not session.get('kullanici'):
+        return jsonify(ok=False, error='Oturum gerekli'), 401
+    direction = direction.upper()
+    try:
+        try:
+            from modules.finans.services.cari_ayar_service import get_ayar, compute_average_payment_days, compute_system_suggestion_calisma_sekli, compute_system_suggestion_odeme_yontemi
+        except ImportError:
+            from app.modules.finans.services.cari_ayar_service import get_ayar, compute_average_payment_days, compute_system_suggestion_calisma_sekli, compute_system_suggestion_odeme_yontemi
+        ayar = get_ayar(direction, company, cari_kod)
+        avg = compute_average_payment_days(direction, company, cari_kod)
+        sys_cs = compute_system_suggestion_calisma_sekli(direction, company, cari_kod)
+        sys_oy = compute_system_suggestion_odeme_yontemi(direction, company, cari_kod)
+        return jsonify(ok=True, ayar=ayar, ortalama_gun=avg,
+                       sistem_oneri_calisma_sekli=sys_cs,
+                       sistem_oneri_odeme_yontemi=sys_oy)
+    except Exception as exc:
+        import logging as _logging
+        _logging.exception('cari_ayar_get error: %s', exc)
+        return jsonify(ok=False, error=str(exc)[:200]), 500
+
+
+@finans_bp.route('/cariler/<direction>/<company>/<path:cari_kod>/ayar', methods=['POST'])
+def cari_ayar_save(direction: str, company: str, cari_kod: str):
+    from flask import request, jsonify, session
+    if not session.get('kullanici'):
+        return jsonify(ok=False, error='Oturum gerekli'), 401
+    direction = direction.upper()
+    kullanici = session.get('kullanici_ad') or session.get('kullanici') or 'sistem'
+    try:
+        payload = request.get_json(force=True) or {}
+        try:
+            from modules.finans.services.cari_ayar_service import save_ayar
+        except ImportError:
+            from app.modules.finans.services.cari_ayar_service import save_ayar
+        result = save_ayar(direction, company, cari_kod, payload, updated_by=kullanici)
+        return jsonify(ok=True, ayar=result, message='Kaydedildi')
+    except Exception as exc:
+        import logging as _logging
+        _logging.exception('cari_ayar_save error: %s', exc)
+        return jsonify(ok=False, error=str(exc)[:200]), 500
+
+# [CARI_AYAR_V1 SON]
+
+# [RECEIVABLE_CORE_V1 SON]

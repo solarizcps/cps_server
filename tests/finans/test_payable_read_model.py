@@ -57,11 +57,18 @@ class MockDTO:
     cari_adi: str
     para_birimi: str
     bakiye: float
+    borc: float = 0.0
+    alacak: float = 0.0
     canonical_key: str = ""
 
     def __post_init__(self):
         if not self.canonical_key:
             self.canonical_key = f"{self.location}:{self.cari_kod}:{self.para_birimi}"
+        if self.borc == 0.0 and self.alacak == 0.0:
+            if self.bakiye >= 0:
+                self.alacak = self.bakiye
+            else:
+                self.borc = abs(self.bakiye)
 
 
 def _make_balances(n: int = 5) -> List[MockDTO]:
@@ -1056,13 +1063,39 @@ class TestRowContractV2:
             def _fake_enrichment(locs, ckods):
                 return {}, {}, {}
 
+            def _fake_batch_resolve(rows):
+                out = {}
+                for loc, ck, pb in rows:
+                    dto = next(
+                        (b for b in balances
+                         if b.location == loc and b.cari_kod == ck and b.para_birimi == pb),
+                        None,
+                    )
+                    if dto is None:
+                        continue
+                    out[f"{loc}:{ck}:{pb}"] = {
+                        "status": "single",
+                        "canonical_location": loc,
+                        "mirror_location": None,
+                        "mirror_mechanism": None,
+                        "mirror_document_confirmed": False,
+                        "borc": str(dto.borc),
+                        "alacak": str(dto.alacak),
+                        "net": str(dto.bakiye),
+                    }
+                return out
+
             with patch("modules.finans.read_model.rm_refresh._fetch_layer2",
                        side_effect=_fake_layer2):
                 with patch("modules.finans.read_model.rm_refresh._fetch_takip",
                            side_effect=_fake_takip):
                     with patch("modules.finans.read_model.rm_refresh._fetch_enrichment",
                                side_effect=_fake_enrichment):
-                        return run_refresh(db_path=db_path)
+                        with patch(
+                            "modules.finans.read_model.rm_balance_resolver.batch_resolve_canonical_supplier_balances",
+                            side_effect=_fake_batch_resolve,
+                        ):
+                            return run_refresh(db_path=db_path)
 
     def test_debt_row_has_nonzero_bakiye(self, bootstrapped_db):
         """Açık borç satırında display_bakiye > 0."""

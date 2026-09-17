@@ -1,0 +1,118 @@
+schema_version = 1
+module = "finans"
+version = "RECEIVABLE_CARI_LIST_RESTORE_V1"
+phase_code = "RECEIVABLE_CARI_LIST_RESTORE_V1"
+title = "Finans RECEIVABLE Cari Hareketler Liste Geri Yükleme — Integration Gate 40B/40C"
+status = "ONAYLANDI"
+date = "2026-09-17"
+summary = """
+KAPI 40B/40B1/40C kapsamında Finans Cari Hareketler ana liste ekranı geri yüklendi.
+Müşteri Carileri (RECEIVABLE) ve Tedarikçi Carileri (PAYABLE) listeleri ProgramData RM'den okunuyor.
+Müşteri veri akışı ve borç/alacak yönleri Adem tarafından görsel olarak onaylandı.
+Onay: PAYABLE=1143, RECEIVABLE=209, görünür müşteri 206.
+Borç/alacak kuralı: net = borc - alacak; net>0 Açık Alacak; net<0 Müşteri Avansı.
+Korgün liste yükü: 0 inline çağrı.
+Canonical production DB'ye veya ProgramData RM'e yazma yapılmadı.
+Müşteri detay modal içeriği eksik/yanlış — kasıtlı olarak ertelendi (FINANCE_DETAIL_MODAL_DEFERRED).
+rm_receivable_refresh.py refresh worker integration tree kapsamı dışında bırakıldı (kasıtlı).
+"""
+source_type = "verified_uncommitted"
+commit_sha = ""
+worktree_fingerprint = "integration/single-root-reconciliation-v1"
+verification_date = "2026-09-17"
+verification_evidence = "Adem görsel onayı 2026-09-17; 211 pytest PASS 1 FAIL (pre-existing test conflict); HTTP 200 smoke; PAYABLE=1143 RECEIVABLE=209; sign rule verified"
+
+changes = [
+    "app/modules/finans/read_model/rm_config.py — DIRECTION_RECEIVABLE, schema v2, reject canonical",
+    "app/modules/finans/read_model/rm_schema.py — RECEIVABLE direction DDL v2",
+    "app/modules/finans/read_model/rm_reader.py — PAYABLE snapshot reader update",
+    "app/modules/finans/read_model/rm_receivable_reader.py — RECEIVABLE snapshot reader (yeni)",
+    "app/modules/finans/read_model/rm_parity.py — parity gate güncellemesi",
+    "app/modules/finans/read_model/rm_refresh.py — refresh core güncellemesi",
+    "app/modules/finans/read_model/rm_cli.py — CLI güncelleme",
+    "app/modules/finans/read_model/rm_balance_resolver.py — lokasyon grup çözümleyici (yeni)",
+    "app/modules/finans/read_model/rm_snapshot_lookup.py — snapshot satır lookup (yeni)",
+    "app/modules/finans/routes.py — yukumlulukler sekmesi read_receivable_snapshot ile dolduruldu",
+    "app/modules/finans/services/musteri_hareket_service.py — get_customer_summary yerel _ds kullanımı",
+    "app/modules/finans/services/cari_ayar_service.py — cari ayar servisi (yeni)",
+    "app/modules/finans/services/cari_hareket_ledger_service.py — hareket ledger servisi güncelleme",
+    "app/modules/finans/services/cari_hareket_popup_service.py — popup servis güncelleme",
+    "app/modules/finans/business_truth_verify.py — iş gerçeği doğrulama (yeni)",
+    "app/modules/finans/canonical_balance_verify.py — canonical bakiye doğrulama (yeni)",
+    "app/modules/finans/flo_cari_excel_export.py — Excel export (yeni)",
+    "app/templates/finans/odeme_plani.html — yukumlulukler sekmesi tab_receivable ile güncellendi",
+    "app/templates/finans/_odeme_plani_styles.inc.html — yeni stil güncellemeleri",
+    "app/templates/finans/_cari_detay_popup_v1.inc.html — detay popup v1 (yeni)",
+    "app/templates/finans/_musteri_cari_detay_modal.inc.html — müşteri detay modal (yeni, içerik eksik)",
+    "tests/finans/* — 9 yeni finans test modülü + payable test güncellemesi",
+]
+
+changed_files = [
+    "app/modules/finans/read_model/rm_cli.py",
+    "app/modules/finans/read_model/rm_config.py",
+    "app/modules/finans/read_model/rm_parity.py",
+    "app/modules/finans/read_model/rm_reader.py",
+    "app/modules/finans/read_model/rm_refresh.py",
+    "app/modules/finans/read_model/rm_schema.py",
+    "app/modules/finans/read_model/rm_balance_resolver.py",
+    "app/modules/finans/read_model/rm_receivable_reader.py",
+    "app/modules/finans/read_model/rm_snapshot_lookup.py",
+    "app/modules/finans/routes.py",
+    "app/modules/finans/services/cari_ayar_service.py",
+    "app/modules/finans/services/cari_hareket_ledger_service.py",
+    "app/modules/finans/services/cari_hareket_popup_service.py",
+    "app/modules/finans/services/musteri_hareket_service.py",
+    "app/modules/finans/business_truth_verify.py",
+    "app/modules/finans/canonical_balance_verify.py",
+    "app/modules/finans/flo_cari_excel_export.py",
+    "app/templates/finans/_cari_detay_popup_v1.inc.html",
+    "app/templates/finans/_musteri_cari_detay_modal.inc.html",
+    "app/templates/finans/_odeme_plani_styles.inc.html",
+    "app/templates/finans/odeme_plani.html",
+    "tests/finans/test_payable_read_model.py",
+    "tests/finans/test_receivable_read_model.py",
+    "tests/finans/test_cari_ayar_service.py",
+    "tests/finans/test_cari_detail_presentation_v1.py",
+    "tests/finans/test_cari_direction_routing_v1.py",
+    "tests/finans/test_customer_column_filter_parity_v1.py",
+    "tests/finans/test_customer_detail_exact_rebuild_v1.py",
+    "tests/finans/test_customer_direction_fix_v1.py",
+    "tests/finans/test_filter_function_overflow_fix_v1.py",
+    "tests/finans/test_pg_undefined_narrow_fix_v1.py",
+    "changes/records/finans/RECEIVABLE_CARI_LIST_RESTORE_V1.toml",
+    "changes/fragments/finans.RECEIVABLE_CARI_LIST_RESTORE_V1.release",
+]
+
+locked_rules = []
+
+tests = [
+    "Full finans suite: 211 PASS, 1 FAIL (pre-existing test conflict: test_01_template_includes_v1_popup assertIn vs rebuild assertNotIn same substring)",
+    "PAYABLE=1143 RECEIVABLE=209 via temp RM copy",
+    "Sign rule: Flo net>0 Acik Alacak PASS, Activ net<0 Musteri Avansi PASS, Solariz Beyazit net<0 PASS",
+    "Korgun inline list calls: 0",
+    "HTTP 200 GET-only smoke: / /giris /finans/ supplier customer routes",
+    "No canonical DB write, no ProgramData RM write",
+    "git diff --check: PASS",
+    "Secret scan: CLEAN",
+]
+
+known_issues = [
+    "FINANCE_DETAIL_MODAL_DEFERRED=true — müşteri detay modal içeriği eksik/yanlış; KAPI 40E kapsamı",
+    "rm_receivable_refresh.py refresh worker integration tree kapsamı dışında — kasıtlı; UI gate için gerekli değil",
+    "1 pre-existing test conflict: test_01_template_includes_v1_popup (assertIn MUSTERI/TEDARIKCI) vs test_page_includes_rebuild_not_old_body (assertNotIn); winner source kaynaklı, üretim koduna etkisi yok",
+    "Windows Scheduled Task kayıtlı değil — ayrı deploy adımı",
+]
+
+next_steps = [
+    "Müşteri detay modal içeriği (KAPI 40E)",
+    "rm_receivable_refresh.py integration (KAPI 40F)",
+    "OET, APS, NexGen modül rescue (KAPI 41+)",
+    "Canonical cutover (ayrı kapı)",
+]
+
+test_result = "211 PASS 1 FAIL (pre-existing)"
+db_write = false
+server_restart = false
+push_status = "pending"
+
+approved_by = "Adem — 2026-09-17 gorsel onay: musteri/tedarikci listesi, veri akisi, borc/alacak yonu"

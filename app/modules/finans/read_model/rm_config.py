@@ -16,8 +16,9 @@ from pathlib import Path
 
 # ─── Sabitler ────────────────────────────────────────────────────────────────
 
-SCHEMA_VERSION: int = 2  # V2: row enrichment alanları (fa_*, son_*, aktif_takip, karar, vade)
+SCHEMA_VERSION: int = 2  # V2: row enrichment alanları + RECEIVABLE direction
 DIRECTION_PAYABLE: str = "PAYABLE"
+DIRECTION_RECEIVABLE: str = "RECEIVABLE"
 
 # Production default path — repo dışı, git-ignored, yeniden üretilebilir.
 _PRODUCTION_DEFAULT = r"C:\ProgramData\Solariz\runtime\finans\odeme_plani_rm.sqlite"
