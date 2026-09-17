@@ -31,6 +31,7 @@ from modules.online_eticaret.excel_export import (
 from modules.online_eticaret.order_poll import (
     check_order_updates,
     get_order_poll_interval_seconds,
+    get_poll_store_snapshots,
     get_snapshot_cursor,
     seed_snapshot_from_items,
 )
@@ -661,10 +662,16 @@ def order_updates():
             'backoff_seconds': get_order_poll_interval_seconds(),
             'secrets_logged': False,
         })
-    # 'open' ve 'today' her ikisi de açık sipariş snapshot'ı kullanır
+    # KAPI-2 FIX: aktif date_filter snapshot ile aynı kapsam.
+    # Önceki kod DATE_FILTER_TODAY hardcoded gönderiyordu; open filtresi yüklenince
+    # today snapshot ile karşılaştırılıyordu → sahte 'removed' listesi.
+    if raw_days == 'today':
+        active_filter = DATE_FILTER_TODAY
+    else:
+        active_filter = DATE_FILTER_OPEN   # 'open' ve bilinmeyen → open kapsamı
     since = (request.args.get('since') or '').strip() or None
     result = check_order_updates(
-        DATE_FILTER_TODAY,
+        active_filter,
         since,
         lambda orders, store_name, model_map: orders_to_rows(
             orders, store_name, model_map, int(time.time() * 1000)
@@ -674,6 +681,18 @@ def order_updates():
     )
     payload = dict(result)
     payload['secrets_logged'] = False
+    # KAPI-2 FIX: poll sonucu taze snapshot ürettiyse order cache'i güncelle
+    # → aynı verinin hemen ardından yeniden çekilmesini önler.
+    if payload.get('ok') and not payload.get('busy') and not payload.get('error'):
+        snap = get_poll_store_snapshots()
+        if snap:
+            ts = time.time()
+            for sn_store, sn_data in snap.items():
+                cache_key = _order_cache_key(sn_store, active_filter)
+                existing = _ORDER_CACHE.get(cache_key)
+                # Yalnız cache yoksa veya poll verisi daha yeniyse güncelle
+                if not existing or ts - existing[0] > 30:
+                    _ORDER_CACHE[cache_key] = (ts, sn_data['orders'], sn_data['model_map'], sn_data['image_map'])
     return jsonify(payload)
 
 
@@ -707,130 +726,143 @@ def index():
     flags = _template_flags()
     date_filter      = _parse_date_filter(request)
     force_refresh    = request.args.get('refresh') == '1'
-    now_ms           = int(time.time() * 1000)
-    start_ms, end_ms = _ms_aralik_for_filter(date_filter)
-    _PAGE_METRICS['date_filter'] = date_filter
-    hatalar          = []
-    magaza_orders    = {}
-    magaza_maps      = {}
-    image_map_global = {}
-    rows_by_store    = {}
-
-    for store_name, (orders, model_map, image_map, hata) in _fetch_magazalar_parallel(
-        start_ms, end_ms, date_filter, force_refresh=force_refresh
-    ).items():
-        if hata:
-            hatalar.append(hata)
+    from modules.online_eticaret.order_poll import (
+        end_scope_live_fetch,
+        try_begin_scope_live_fetch,
+    )
+    scope_live_acquired = False
+    if force_refresh:
+        if try_begin_scope_live_fetch(date_filter):
+            scope_live_acquired = True
         else:
-            magaza_orders[store_name] = orders
-            magaza_maps[store_name]   = model_map
-            image_map_global.update(image_map)
+            force_refresh = False
+    try:
+        now_ms           = int(time.time() * 1000)
+        start_ms, end_ms = _ms_aralik_for_filter(date_filter)
+        _PAGE_METRICS['date_filter'] = date_filter
+        hatalar          = []
+        magaza_orders    = {}
+        magaza_maps      = {}
+        image_map_global = {}
+        rows_by_store    = {}
 
-    # Created/Picking dedupe koruması
-    magaza_orders = _dedupe_orders_by_package(magaza_orders)
+        for store_name, (orders, model_map, image_map, hata) in _fetch_magazalar_parallel(
+            start_ms, end_ms, date_filter, force_refresh=force_refresh
+        ).items():
+            if hata:
+                hatalar.append(hata)
+            else:
+                magaza_orders[store_name] = orders
+                magaza_maps[store_name]   = model_map
+                image_map_global.update(image_map)
 
-    cache_yasi_sn = _cache_age_seconds(date_filter)
+        # Created/Picking dedupe koruması
+        magaza_orders = _dedupe_orders_by_package(magaza_orders)
 
-    if not magaza_orders:
+        cache_yasi_sn = _cache_age_seconds(date_filter)
+
+        if not magaza_orders:
+            html = render_template(
+                'online_eticaret/index.html',
+                api_hata=True,
+                hata_mesajlari=hatalar,
+                kpi={}, magaza={},
+                dagitim=MOCK_DAGITIM, siparisler=[],
+                operasyon=MOCK_OPERASYON,
+                operasyon_listesi=[],
+                date_filter=date_filter,
+                date_filter_label=_date_filter_label(date_filter),
+                cache_yasi_sn=cache_yasi_sn,
+                **flags,
+            )
+            _finalize_page_metrics(html, row_count=0, package_count=0)
+            return html
+
+        kpi          = {'toplam_siparis': 0, 'urun_adedi': 0,
+                        'geciken': 0, 'acil_24h': 0,
+                        'esleme_eksik': 0, 'paketlenen': 0,
+                        'yeni': 0, 'yeni_qty': 0,
+                        'isleme_alinan': 0, 'isleme_alinan_qty': 0}
+        magaza_stats = {}
+        tum_rows     = []
+
+        for store_name, orders in magaza_orders.items():
+            mmap  = magaza_maps.get(store_name, {})
+            stats = dashboard_stats(orders, mmap, now_ms)
+            rows  = orders_to_rows(orders, store_name, mmap, now_ms)
+
+            kpi['toplam_siparis'] += stats['total_orders']
+            kpi['urun_adedi']     += stats['total_qty']
+            kpi['geciken']        += stats['delayed_orders']
+            kpi['acil_24h']       += stats['urgent']
+            kpi['yeni']           += stats['created_orders']
+            kpi['yeni_qty']       += stats['created_qty']
+            kpi['isleme_alinan']  += stats['picking_orders']
+            kpi['isleme_alinan_qty'] += stats['picking_qty']
+
+            magaza_stats[store_name] = {
+                'siparis': stats['total_orders'],
+                'adet':    stats['total_qty'],
+                'geciken': stats['delayed_orders'],
+            }
+            rows_by_store[store_name] = rows
+            tum_rows.extend(rows)
+
+        def _siralama_key(row):
+            g = str(row[_IDX_GECIKME] or '')
+            if g.startswith('GECİKTİ'): return 0
+            if g.startswith('Kalan:'):  return 1
+            return 2
+
+        tum_rows.sort(key=_siralama_key)
+        siparisler        = _rows_to_siparis(tum_rows)
+        pkg_date_ms = {}
+        for orders in magaza_orders.values():
+            pkg_date_ms.update(pkg_order_date_map(orders))
+        operasyon_listesi = _build_operasyon_listesi(rows_by_store, image_map_global, pkg_date_ms)
+        paketler          = _group_paketler(operasyon_listesi)
+        seed_snapshot_from_items(date_filter, operasyon_listesi)
+
+        now_tr = datetime.now(TZ_TURKEY)
+        _tr_months = (
+            'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+            'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
+        )
+        _tr_days = ('Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar')
+        server_now_display = now_tr.strftime('%d.%m.%Y %H:%M')
+        today_summary_label = (
+            f'{now_tr.day} {_tr_months[now_tr.month - 1]} {now_tr.year}, '
+            f'{_tr_days[now_tr.weekday()]}'
+        )
         html = render_template(
             'online_eticaret/index.html',
-            api_hata=True,
+            api_hata=bool(hatalar),
             hata_mesajlari=hatalar,
-            kpi={}, magaza={},
-            dagitim=MOCK_DAGITIM, siparisler=[],
+            kpi=kpi,
+            magaza=magaza_stats,
+            dagitim=MOCK_DAGITIM,
+            siparisler=siparisler,
             operasyon=MOCK_OPERASYON,
-            operasyon_listesi=[],
+            operasyon_listesi=operasyon_listesi,
+            paketler=paketler,
             date_filter=date_filter,
             date_filter_label=_date_filter_label(date_filter),
             cache_yasi_sn=cache_yasi_sn,
+            server_now_display=server_now_display,
+            today_summary_label=today_summary_label,
+            poll_cursor=get_snapshot_cursor() if date_filter in (DATE_FILTER_TODAY, DATE_FILTER_OPEN) else '',
+            poll_interval_seconds=get_order_poll_interval_seconds(),
             **flags,
         )
-        _finalize_page_metrics(html, row_count=0, package_count=0)
+        _finalize_page_metrics(
+            html,
+            row_count=len(operasyon_listesi),
+            package_count=len(paketler),
+        )
         return html
-
-    kpi          = {'toplam_siparis': 0, 'urun_adedi': 0,
-                    'geciken': 0, 'acil_24h': 0,
-                    'esleme_eksik': 0, 'paketlenen': 0,
-                    'yeni': 0, 'yeni_qty': 0,
-                    'isleme_alinan': 0, 'isleme_alinan_qty': 0}
-    magaza_stats = {}
-    tum_rows     = []
-
-    for store_name, orders in magaza_orders.items():
-        mmap  = magaza_maps.get(store_name, {})
-        stats = dashboard_stats(orders, mmap, now_ms)
-        rows  = orders_to_rows(orders, store_name, mmap, now_ms)
-
-        kpi['toplam_siparis'] += stats['total_orders']
-        kpi['urun_adedi']     += stats['total_qty']
-        kpi['geciken']        += stats['delayed_orders']
-        kpi['acil_24h']       += stats['urgent']
-        kpi['yeni']           += stats['created_orders']
-        kpi['yeni_qty']       += stats['created_qty']
-        kpi['isleme_alinan']  += stats['picking_orders']
-        kpi['isleme_alinan_qty'] += stats['picking_qty']
-
-        magaza_stats[store_name] = {
-            'siparis': stats['total_orders'],
-            'adet':    stats['total_qty'],
-            'geciken': stats['delayed_orders'],
-        }
-        rows_by_store[store_name] = rows
-        tum_rows.extend(rows)
-
-    def _siralama_key(row):
-        g = str(row[_IDX_GECIKME] or '')
-        if g.startswith('GECİKTİ'): return 0
-        if g.startswith('Kalan:'):  return 1
-        return 2
-
-    tum_rows.sort(key=_siralama_key)
-    siparisler        = _rows_to_siparis(tum_rows)
-    pkg_date_ms = {}
-    for orders in magaza_orders.values():
-        pkg_date_ms.update(pkg_order_date_map(orders))
-    operasyon_listesi = _build_operasyon_listesi(rows_by_store, image_map_global, pkg_date_ms)
-    paketler          = _group_paketler(operasyon_listesi)
-    if date_filter == DATE_FILTER_OPEN:
-        seed_snapshot_from_items(DATE_FILTER_TODAY, operasyon_listesi)
-
-    now_tr = datetime.now(TZ_TURKEY)
-    _tr_months = (
-        'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-        'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
-    )
-    _tr_days = ('Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar')
-    server_now_display = now_tr.strftime('%d.%m.%Y %H:%M')
-    today_summary_label = (
-        f'{now_tr.day} {_tr_months[now_tr.month - 1]} {now_tr.year}, '
-        f'{_tr_days[now_tr.weekday()]}'
-    )
-    html = render_template(
-        'online_eticaret/index.html',
-        api_hata=bool(hatalar),
-        hata_mesajlari=hatalar,
-        kpi=kpi,
-        magaza=magaza_stats,
-        dagitim=MOCK_DAGITIM,
-        siparisler=siparisler,
-        operasyon=MOCK_OPERASYON,
-        operasyon_listesi=operasyon_listesi,
-        paketler=paketler,
-        date_filter=date_filter,
-        date_filter_label=_date_filter_label(date_filter),
-        cache_yasi_sn=cache_yasi_sn,
-        server_now_display=server_now_display,
-        today_summary_label=today_summary_label,
-        poll_cursor=get_snapshot_cursor() if date_filter == DATE_FILTER_TODAY else '',
-        poll_interval_seconds=get_order_poll_interval_seconds(),
-        **flags,
-    )
-    _finalize_page_metrics(
-        html,
-        row_count=len(operasyon_listesi),
-        package_count=len(paketler),
-    )
-    return html
+    finally:
+        if scope_live_acquired:
+            end_scope_live_fetch(date_filter)
 
 
 # ── Mobil Route ────────────────────────────────────────────────────────────
