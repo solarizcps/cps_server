@@ -3,291 +3,274 @@
 
 {% block head %}
 <style>
-/* ── Online E-Ticaret FAZ2-A ── */
+/* ── Online E-Ticaret ana içerik (scoped) ── */
+.oet-wrap { padding:14px 18px 20px; max-width:100%; overflow-x:hidden; }
+.oet-wrap * { box-sizing:border-box; }
 
-/* ── Operasyon Listesi bölümü ── */
-.oet-oplist          { margin-top:20px; }
-.oet-oplist-head     { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:14px; }
-.oet-oplist-head h3  { font-size:15px; font-weight:800; color:var(--text); margin:0; }
-.oet-oplist-toolbar  { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+/* Başlık */
+.oet-header {
+  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:16px 20px;
+  align-items:center; margin-bottom:18px; padding-bottom:2px; position:relative; z-index:1;
+}
+.oet-title { font-size:20px; font-weight:800; color:var(--text); line-height:1.25; min-width:0; }
+.oet-title small { display:block; font-size:12px; font-weight:500; color:var(--text3); margin-top:4px; }
+.oet-header-right {
+  display:flex; align-items:center; gap:12px; flex-wrap:nowrap; justify-self:end; flex-shrink:0;
+}
+.oet-system-status { display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:700; color:#15803d; }
+.oet-system-status.warn { color:#b45309; }
+.oet-system-status.err { color:#b91c1c; }
+.oet-status-dot { width:8px; height:8px; border-radius:50%; background:#22c55e; flex-shrink:0; }
+.oet-system-status.warn .oet-status-dot { background:#f59e0b; }
+.oet-system-status.err .oet-status-dot { background:#ef4444; }
+.oet-last-update { font-size:11px; color:var(--text3); white-space:nowrap; }
+.btn-yenile { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; background:#f5b82e; color:#1c1917; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; transition:.15s; text-decoration:none; }
+.btn-yenile:hover { background:#f6c343; }
 
-/* Filtre butonları */
-.oet-fl-group  { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-.oet-fl        { padding:5px 12px; border:1px solid var(--border); border-radius:20px; font-size:12px; font-weight:600; background:var(--bg3); color:var(--text2); cursor:pointer; transition:.14s; display:inline-flex; align-items:center; gap:5px; }
-.oet-fl:hover  { border-color:var(--accent); color:var(--accent); }
-.oet-fl.active { background:var(--accent); border-color:var(--accent); color:#fff; }
-.oet-fl.geciken.active  { background:#dc2626; border-color:#dc2626; }
-.oet-fl.geciken:not(.active):hover { border-color:#dc2626; color:#dc2626; }
-.oet-fl.bugun.active    { background:#b45309; border-color:#b45309; }
-.oet-fl.bugun:not(.active):hover   { border-color:#b45309; color:#b45309; }
-.oet-fl-cnt    { background:rgba(255,255,255,.25); border-radius:8px; padding:0 5px; font-size:11px; min-width:18px; text-align:center; }
-.oet-fl:not(.active) .oet-fl-cnt { background:var(--border); color:var(--text2); }
-
-/* Arama */
-.oet-search-box { position:relative; }
-.oet-search-box svg { position:absolute; left:9px; top:50%; transform:translateY(-50%); color:var(--text3); pointer-events:none; }
-.oet-search     { border:1px solid var(--border); border-radius:6px; padding:6px 10px 6px 30px; font-size:12px; background:var(--bg3); color:var(--text); outline:none; width:220px; }
-.oet-search:focus { border-color:var(--accent); }
-
-/* Tablo sarmalayıcı — sabit yükseklik, iç scroll */
-.oet-tbl-wrap   { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
-.oet-tbl-scroll { overflow-x:auto; overflow-y:auto; max-height:640px; }
-.oet-tbl-scroll::-webkit-scrollbar       { width:6px; height:6px; }
-.oet-tbl-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
-
-/* Tablo — width:100% + table-layout:fixed → container'a tam yayılır, yatay scroll olmaz */
-.oet-tbl        { width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed; }
-.oet-tbl thead th { position:sticky; top:0; z-index:2; background:var(--bg2); padding:7px 10px; text-align:left; font-size:12px; font-weight:600; font-family:inherit; letter-spacing:0; text-transform:none; color:var(--text2); border-bottom:1px solid var(--border); white-space:nowrap; overflow:hidden; }
-.oet-tbl tbody tr { border-bottom:1px solid var(--border); transition:background .1s; }
-.oet-tbl tbody tr:hover { background:var(--bg2); }
-.oet-tbl tbody td { padding:8px 10px; vertical-align:middle; color:var(--text); height:110px; }
-/* Kolon ayraç çizgisi — sadece header'da, satırlarda yok */
-.oet-tbl thead th + th { border-left:1px solid rgba(0,0,0,.06); }
-
-/* Sütun genişlikleri — sabit kolonlar toplamı ~970px, ürün adı kalan alanı alır */
-.oet-col-ac   { width:20px;  text-align:center; }
-.oet-col-img  { width:96px;  text-align:center; }
-.oet-col-no   { width:95px;  font-family:monospace; font-size:11px; overflow:hidden; }
-.oet-col-mag  { width:70px;  }
-.oet-col-urun { min-width:120px; overflow:hidden; }
-.oet-col-mdl  { width:105px; font-size:11px; overflow:hidden; }
-.oet-col-renk { width:80px;  overflow:hidden; }
-.oet-col-bed  { width:50px;  text-align:center; }
-.oet-col-adt  { width:46px;  text-align:center; font-weight:700; }
-.oet-col-bkd  { width:90px;  font-size:10px; font-family:monospace; overflow:hidden; }
-.oet-col-krg  { width:88px;  font-size:11px; overflow:hidden; }
-.oet-col-kln  { width:90px;  font-size:11px; }
-.oet-col-dur  { width:80px;  }
-.oet-col-aks  { width:82px;  }
-
-/* Ürün adı iki satır + ellipsis */
-.oet-urun-txt { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4; }
-
-/* Ürün görseli — 90×90 */
-.oet-thumb-wrap { width:90px; height:90px; border-radius:8px; overflow:hidden; background:#fff; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; margin:0 auto; flex-shrink:0; }
-.oet-thumb-wrap img { width:90px; height:90px; object-fit:contain; display:block; }
-.oet-thumb-ph   { font-size:26px; color:var(--text3); }
-
-/* Durum badge */
-.oet-badge    { display:inline-flex; align-items:center; padding:3px 8px; border-radius:10px; font-size:10px; font-weight:700; white-space:nowrap; }
-
-/* Aciliyet göstergesi */
-.oet-ac-dot   { width:8px; height:8px; border-radius:50%; display:inline-block; }
-
-/* Aksiyon butonları — pasif */
-.oet-act-btn  { display:block; width:100%; padding:6px 4px; border-radius:4px; font-size:11px; font-weight:700; border:1px solid var(--border); background:var(--bg3); color:var(--text2); cursor:not-allowed; opacity:.65; margin-bottom:4px; text-align:center; }
-.oet-act-btn:last-child { margin-bottom:0; }
-
-/* Mağaza chip */
-.oet-mag-sol { display:inline-block; background:#dbeafe; color:#1e40af; border-radius:4px; padding:3px 6px; font-size:10px; font-weight:700; white-space:nowrap; }
-.oet-mag-ep  { display:inline-block; background:#fce7f3; color:#9d174d; border-radius:4px; padding:3px 6px; font-size:10px; font-weight:700; white-space:nowrap; }
-
-/* Pagination */
-.oet-pager      { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-top:1px solid var(--border); background:var(--bg2); }
-.oet-pager-info { font-size:11px; color:var(--text3); }
-.oet-pager-btns { display:flex; align-items:center; gap:4px; }
-.oet-pg         { padding:4px 10px; border:1px solid var(--border); border-radius:5px; font-size:12px; font-weight:600; background:var(--bg3); color:var(--text2); cursor:pointer; transition:.12s; min-width:32px; text-align:center; }
-.oet-pg:hover   { border-color:var(--accent); color:var(--accent); }
-.oet-pg.active  { background:var(--accent); border-color:var(--accent); color:#fff; cursor:default; }
-.oet-pg.dots    { border:none; background:none; cursor:default; color:var(--text3); }
-.oet-pg:disabled{ opacity:.4; cursor:not-allowed; }
-
-/* Boş durum */
-.oet-tbl-empty  { text-align:center; padding:40px; color:var(--text3); font-size:13px; }
-
-/* ── Online E-Ticaret FAZ1-C ── */
-.oet-alert      { border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; display:flex; align-items:flex-start; gap:10px; font-size:13px; }
-.oet-alert.warn { background:#fef3c7; border:1px solid #fcd34d; color:#92400e; }
-.oet-alert.err  { background:#fee2e2; border:1px solid #fca5a5; color:#991b1b; }
-.oet-alert-ico  { font-size:16px; flex-shrink:0; margin-top:1px; }
-.oet-alert ul   { margin:4px 0 0 16px; padding:0; }
-.oet-alert li   { margin-bottom:2px; }
-.oet-wrap        { padding:20px 24px; max-width:1400px; margin:0 auto; }
-.oet-topbar      { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
-.oet-title       { font-size:20px; font-weight:800; color:var(--text); line-height:1.2; }
-.oet-title small { display:block; font-size:12px; font-weight:400; color:var(--text3); margin-top:3px; letter-spacing:.2px; }
-.oet-mock-badge  { font-size:10px; font-weight:700; background:#fef3c7; color:#92400e; border:1px solid #fcd34d; border-radius:4px; padding:2px 8px; letter-spacing:1px; }
-
-/* Filtre çubuğu */
-.oet-filters    { display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; margin-bottom:20px; }
-.oet-filters label { font-size:11px; color:var(--text3); font-weight:600; letter-spacing:.5px; }
-.oet-filters select, .oet-filters input { border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; background:var(--bg3); color:var(--text); outline:none; }
-.oet-filters select:focus, .oet-filters input:focus { border-color:var(--accent); }
-.oet-fgroup     { display:flex; flex-direction:column; gap:4px; }
-.oet-sep        { width:1px; height:32px; background:var(--border); margin:0 4px; }
-.btn-yenile     { display:flex; align-items:center; gap:6px; padding:8px 16px; background:var(--accent); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; transition:.15s; }
-.btn-yenile:hover { background:var(--accent2); }
+/* Filtre kartı */
+.oet-filter-card {
+  display:grid; grid-template-columns:repeat(3,minmax(120px,160px)) minmax(240px,1fr);
+  gap:12px 14px; align-items:end; background:#fff; border:1px solid var(--border);
+  border-radius:10px; padding:14px 16px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.04);
+  position:relative; z-index:0; overflow:visible; clear:both;
+}
+.oet-fgroup { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.oet-fgroup label { font-size:10px; color:var(--text3); font-weight:700; letter-spacing:.3px; text-transform:uppercase; }
+.oet-fgroup select { width:100%; border:1px solid var(--border); border-radius:8px; padding:7px 10px; font-size:13px; background:var(--bg3); color:var(--text); outline:none; }
+.oet-fgroup select:focus { border-color:#f5b82e; }
+.oet-search-wrap { grid-column:4; min-width:0; position:relative; isolation:isolate; }
+.oet-search-wrap .oet-search-ico {
+  position:absolute; left:14px; top:50%; transform:translateY(-50%);
+  width:16px; height:16px; display:block;
+  color:var(--text3); pointer-events:none; z-index:2; line-height:0;
+}
+.oet-search-wrap .oet-search-ico svg { width:16px; height:16px; display:block; flex-shrink:0; }
+.oet-search-wrap input.oet-search-input {
+  width:100%; display:block; border:1px solid var(--border); border-radius:8px;
+  padding:8px 34px 8px 42px; font-size:13px; background:var(--bg3); color:var(--text);
+  outline:none; position:relative; z-index:1; height:36px; box-sizing:border-box;
+  -webkit-appearance:none; appearance:none;
+  background-image:none;
+}
+.oet-search-wrap input.oet-search-input::-webkit-search-decoration,
+.oet-search-wrap input.oet-search-input::-webkit-search-cancel-button,
+.oet-search-wrap input.oet-search-input::-webkit-search-results-button,
+.oet-search-wrap input.oet-search-input::-webkit-search-results-decoration { -webkit-appearance:none; appearance:none; display:none; }
+.oet-search-wrap input.oet-search-input::-ms-clear { display:none; width:0; height:0; }
+.oet-search-wrap input.oet-search-input:focus { border-color:#f5b82e; box-shadow:0 0 0 1px #f5b82e; }
+.oet-search-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%); border:none; background:transparent; color:var(--text3); font-size:18px; line-height:1; cursor:pointer; padding:0 4px; display:none; z-index:2; }
+.oet-search-clear.show { display:block; }
 
 /* KPI kartları */
-.oet-kpi-row    { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
-.oet-kpi        { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow-sm); }
-.oet-kpi-val    { font-size:28px; font-weight:800; color:var(--text); line-height:1.1; }
-.oet-kpi-lbl    { font-size:11px; color:var(--text3); margin-top:4px; font-weight:500; }
-.oet-kpi-ico    { font-size:20px; margin-bottom:6px; }
-.oet-kpi.warn   { border-left:3px solid var(--red); }
-.oet-kpi.warn .oet-kpi-val { color:var(--red); }
-.oet-kpi.caution { border-left:3px solid #b45309; }
-.oet-kpi.caution .oet-kpi-val { color:#b45309; }
-.oet-kpi.ok     { border-left:3px solid var(--green); }
-.oet-kpi.ok .oet-kpi-val { color:var(--green); }
+.oet-kpi-row { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.oet-kpi { background:#fff; border:1px solid var(--border); border-radius:10px; padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,.04); border-top:3px solid transparent; display:flex; align-items:center; gap:12px; min-height:72px; }
+.oet-kpi-ico-wrap { width:28px; height:28px; display:flex; align-items:center; justify-content:center; flex-shrink:0; line-height:0; }
+.oet-kpi-svg { width:26px; height:26px; display:block; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.oet-kpi-body { min-width:0; flex:1; }
+.oet-kpi-val { font-size:22px; font-weight:800; color:var(--text); line-height:1; }
+.oet-kpi-lbl { font-size:11px; color:var(--text3); margin-top:3px; font-weight:600; }
+.oet-kpi.kpi-green { border-top-color:#22c55e; }
+.oet-kpi.kpi-green .oet-kpi-ico-wrap { color:#22c55e; }
+.oet-kpi.kpi-orange { border-top-color:#f5b82e; }
+.oet-kpi.kpi-orange .oet-kpi-ico-wrap { color:#d97706; }
+.oet-kpi.kpi-red { border-top-color:#ef4444; }
+.oet-kpi.kpi-red .oet-kpi-ico-wrap { color:#dc2626; }
+.oet-kpi.kpi-blue { border-top-color:#3b82f6; }
+.oet-kpi.kpi-blue .oet-kpi-ico-wrap { color:#2563eb; }
+.oet-kpi.kpi-purple { border-top-color:#8b5cf6; }
+.oet-kpi.kpi-purple .oet-kpi-ico-wrap { color:#7c3aed; }
 
-/* İşlem kartları */
-.oet-action-row  { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px; }
-.oet-action-card { background:var(--bg2); border:2px solid var(--border); border-radius:var(--radius); padding:22px 20px 18px; display:flex; flex-direction:column; align-items:flex-start; gap:10px; cursor:pointer; transition:.18s; box-shadow:var(--shadow-sm); position:relative; overflow:hidden; }
-.oet-action-card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:3px; background:transparent; transition:.18s; }
-.oet-action-card.blue::after  { background:#3b82f6; }
-.oet-action-card.orange::after{ background:var(--accent); }
-.oet-action-card.green::after { background:#16a34a; }
-.oet-action-card:hover { border-color:currentColor; box-shadow:var(--shadow-md); transform:translateY(-2px); }
-.oet-action-card.blue:hover   { border-color:#3b82f6; }
-.oet-action-card.orange:hover { border-color:var(--accent); }
-.oet-action-card.green:hover  { border-color:#16a34a; }
-.oet-action-top  { display:flex; align-items:center; gap:12px; width:100%; }
-.oet-action-ico  { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; }
-.oet-action-ico.blue   { background:#dbeafe; }
-.oet-action-ico.orange { background:#ffedd5; }
-.oet-action-ico.green  { background:#dcfce7; }
-.oet-action-text h4   { font-size:15px; font-weight:800; color:var(--text); margin-bottom:2px; }
-.oet-action-text p    { font-size:11px; color:var(--text3); }
-.oet-action-btn  { display:inline-flex; align-items:center; gap:6px; margin-top:4px; padding:8px 16px; border:none; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; transition:.15s; letter-spacing:.3px; }
-.oet-action-btn.blue   { background:#3b82f6; color:#fff; }
-.oet-action-btn.blue:hover   { background:#2563eb; }
-.oet-action-btn.orange { background:var(--accent); color:#fff; }
-.oet-action-btn.orange:hover { background:var(--accent2); }
-.oet-action-btn.green  { background:#16a34a; color:#fff; }
-.oet-action-btn.green:hover  { background:#15803d; }
+/* Ana düzen */
+.oet-dashboard { display:block; min-width:0; max-width:100%; }
+.oet-dashboard-main { min-width:0; max-width:100%; display:flex; flex-direction:column; gap:14px; overflow:hidden; }
 
-/* Operasyon kutusu */
-.oet-ops-card    { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); overflow:hidden; }
-.oet-ops-head    { padding:12px 16px; border-bottom:1px solid var(--border); font-size:13px; font-weight:700; color:var(--text); background:var(--bg3); display:flex; align-items:center; gap:7px; }
-.oet-ops-row     { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border); font-size:12px; }
-.oet-ops-row:last-child { border-bottom:none; }
-.oet-ops-lbl     { color:var(--text3); font-weight:500; }
-.oet-ops-val     { font-weight:700; color:var(--text); font-size:13px; }
-.oet-ops-mono    { font-family:monospace; font-size:12px; background:var(--bg3); padding:2px 8px; border-radius:4px; border:1px solid var(--border); }
+/* Operasyon kartları */
+.oet-op-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.oet-op-card { background:#fff; border:1px solid var(--border); border-radius:10px; padding:14px 16px; box-shadow:0 1px 3px rgba(0,0,0,.04); display:flex; flex-direction:column; gap:8px; min-height:148px; }
+.oet-op-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.oet-op-card-left { display:flex; align-items:flex-start; gap:10px; min-width:0; }
+.oet-op-step { width:28px; height:28px; border-radius:50%; background:#fef3c7; color:#92400e; font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; border:2px solid #f5b82e; }
+.oet-op-card.green .oet-op-step { background:#dcfce7; border-color:#22c55e; color:#166534; }
+.oet-op-card h4 { font-size:14px; font-weight:800; color:var(--text); margin:0 0 2px; }
+.oet-op-card p { font-size:11px; color:var(--text3); margin:0; line-height:1.35; }
+.oet-op-card-ico { font-size:28px; opacity:.85; flex-shrink:0; }
+.oet-op-card-count { font-size:28px; font-weight:800; color:var(--text); line-height:1; }
+.oet-op-progress { height:4px; background:#f1f5f9; border-radius:4px; overflow:hidden; }
+.oet-op-progress > span { display:block; height:100%; background:#f5b82e; border-radius:4px; transition:width .2s; }
+.oet-op-card.green .oet-op-progress > span { background:#22c55e; }
+.oet-op-card-btn { width:100%; padding:9px 12px; border:none; border-radius:8px; font-size:12px; font-weight:700; cursor:not-allowed; opacity:.7; margin-top:auto; }
+.oet-op-card-btn.gold { background:#f5b82e; color:#1c1917; }
+.oet-op-card-btn.green { background:#22c55e; color:#fff; }
 
-/* Ana içerik ızgarası */
-.oet-main       { display:grid; grid-template-columns:1fr 260px; gap:16px; align-items:start; }
+/* Operasyon listesi */
+.oet-oplist { background:#fff; border:1px solid var(--border); border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,.04); overflow:hidden; min-width:0; max-width:100%; }
+.oet-oplist-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:12px 14px; border-bottom:1px solid var(--border); min-height:48px; }
+.oet-oplist-head h3 { font-size:14px; font-weight:800; margin:0; display:flex; align-items:center; gap:8px; }
+.oet-fl-group { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.oet-fl { padding:5px 12px; border:1px solid var(--border); border-radius:20px; font-size:12px; font-weight:600; background:var(--bg3); color:var(--text2); cursor:pointer; transition:.14s; display:inline-flex; align-items:center; gap:5px; }
+.oet-fl:hover { border-color:#f5b82e; color:#b45309; }
+.oet-fl.active { background:#f5b82e; border-color:#f5b82e; color:#1c1917; }
+.oet-fl-cnt { background:rgba(0,0,0,.08); border-radius:8px; padding:0 5px; font-size:11px; min-width:18px; text-align:center; }
+.oet-fl.active .oet-fl-cnt { background:rgba(0,0,0,.12); }
 
-/* Sipariş tablosu */
-.oet-card       { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); }
-.oet-card-head  { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border); }
-.oet-card-head h3 { font-size:14px; font-weight:700; color:var(--text); }
-.oet-card .oet-tbl        { width:100%; border-collapse:collapse; font-size:13px; }
-.oet-card .oet-tbl th     { padding:9px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--text3); letter-spacing:.4px; text-transform:uppercase; background:var(--bg3); border-bottom:1px solid var(--border); }
-.oet-card .oet-tbl td     { padding:10px 14px; border-bottom:1px solid var(--border); color:var(--text2); vertical-align:middle; }
-.oet-card .oet-tbl tr:last-child td { border-bottom:none; }
-.oet-card .oet-tbl tr:hover td { background:var(--bg3); }
-.oet-card .oet-tbl .no    { font-weight:600; color:var(--text); font-family:monospace; font-size:12px; }
-.oet-card .oet-tbl .gecik { color:var(--red); font-weight:700; }
-/* Paket gruplama satırları */
-.oet-tbl .pkg-hdr td  { background:#fef9ec; border-bottom:none; border-top:2px solid #f5b82e; padding:7px 14px; }
-.oet-tbl .pkg-hdr .pkg-info { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.oet-tbl .pkg-hdr .pkg-no   { font-family:monospace; font-weight:700; font-size:13px; color:#1c1917; }
-.oet-tbl .pkg-hdr .pkg-badge { background:#f5b82e; color:#1c1917; font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; letter-spacing:.3px; }
-.oet-tbl .pkg-hdr .pkg-kalem { font-size:11px; color:#78716c; }
-.oet-tbl .pkg-item td { background:#fffdf5; padding:8px 14px; }
-.oet-tbl .pkg-item td:first-child { border-left:3px solid #f5b82e; }
-.oet-tbl .pkg-item-sira { font-size:10px; font-weight:600; color:#a8a29e; font-family:monospace; white-space:nowrap; }
-.oet-tbl .pkg-last td { border-bottom:2px solid #f5b82e !important; }
+/* Tablo */
+.oet-tbl-wrap { border-top:1px solid var(--border); overflow:hidden; max-width:100%; }
+.oet-tbl-scroll { overflow-x:hidden; overflow-y:auto; max-height:480px; max-width:100%; -webkit-overflow-scrolling:touch; }
+.oet-tbl { width:100%; border-collapse:separate; border-spacing:0; font-size:12px; table-layout:fixed; min-width:0; }
+.oet-tbl thead th {
+  position:sticky; top:0; z-index:2; background:#f8fafc; padding:12px 10px;
+  text-align:center; font-size:14px; font-weight:500; color:#334155; letter-spacing:normal;
+  text-transform:none; font-family:inherit;
+  border-bottom:1px solid var(--border); white-space:nowrap; overflow:visible;
+  text-overflow:clip; vertical-align:middle; line-height:1.35; height:46px;
+}
+.oet-tbl thead th + th { border-left:1px solid rgba(15,23,42,.12); }
+.oet-tbl tbody tr { border-bottom:1px solid var(--border); transition:background .1s; }
+.oet-tbl tbody tr:hover { background:#fafafa; }
+.oet-tbl tbody td { padding:6px 10px; vertical-align:middle; color:var(--text); overflow:hidden; }
+.oet-col-sel { width:2.4%; text-align:center; }
+.oet-col-exp { width:2.4%; text-align:center; }
+.oet-col-no { width:9%; font-family:monospace; font-size:11px; }
+.oet-col-date { width:8%; font-size:11px; }
+.oet-col-mag { width:6%; }
+.oet-col-urun { width:14%; min-width:0; }
+.oet-col-mdl { width:9%; font-size:11px; }
+.oet-col-renk { width:5%; }
+.oet-col-bed { width:5%; text-align:center; }
+.oet-col-adt { width:3.5%; text-align:center; font-weight:700; }
+.oet-col-bkd { width:7%; font-size:10px; font-family:monospace; }
+.oet-col-krg { width:6%; font-size:11px; }
+.oet-col-kln { width:7.5%; font-size:11px; }
+.oet-kln-cell { display:flex; flex-direction:column; align-items:flex-start; line-height:1.3; gap:1px; }
+.oet-kln-status, .oet-kln-value { display:block; white-space:nowrap; }
+.oet-col-dur { width:7%; }
+.oet-tbl tbody td.oet-col-dur { text-align:center; overflow:visible; }
+.oet-tbl tbody td.oet-col-dur .oet-badge { max-width:100%; }
+.oet-col-aks { width:6.5%; min-width:0; }
 
-/* Durum badge */
-.durum-badge    { display:inline-block; padding:3px 9px; border-radius:12px; font-size:10px; font-weight:700; letter-spacing:.5px; white-space:nowrap; }
+.oet-urun-cell { display:flex; align-items:center; gap:8px; min-width:0; }
+.oet-urun-txt { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.35; min-width:0; }
+.oet-thumb-wrap { width:56px; height:56px; border-radius:6px; overflow:hidden; background:#fff; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.oet-thumb-wrap img { width:56px; height:56px; object-fit:contain; display:block; }
+.oet-thumb-ph { font-size:20px; color:var(--text3); }
+.oet-date-cell { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+.oet-exp-btn { width:24px; height:24px; border:1px solid var(--border); border-radius:6px; background:#fff; color:var(--text2); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; font-size:11px; padding:0; transition:.12s; }
+.oet-exp-btn:hover { border-color:#f5b82e; color:#b45309; }
+.oet-exp-btn[aria-expanded="true"] { transform:rotate(90deg); }
+.oet-exp-spacer { width:24px; height:24px; display:inline-block; }
 
-/* Sağ panel */
-.oet-right      { display:flex; flex-direction:column; gap:12px; }
+.oet-pkg-hdr td { background:#fffbeb; }
+.oet-pkg-badge { display:inline-block; background:#f5b82e; color:#1c1917; font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; white-space:nowrap; }
+.oet-pkg-sub td { background:#fffdf5; }
+.oet-pkg-sub td:first-child { border-left:3px solid #f5b82e; }
+.oet-pkg-sub-last td { border-bottom:2px solid #f5b82e; }
 
-/* Mağaza durumu */
-.oet-magaza-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-sm); overflow:hidden; }
-.oet-magaza-head { padding:12px 16px; border-bottom:1px solid var(--border); font-size:13px; font-weight:700; color:var(--text); background:var(--bg3); }
-.oet-magaza-row  { padding:12px 16px; border-bottom:1px solid var(--border); }
-.oet-magaza-row:last-child { border-bottom:none; }
-.oet-magaza-name { font-size:13px; font-weight:700; color:var(--text); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
-.oet-m-dot       { width:8px; height:8px; border-radius:50%; display:inline-block; }
-.oet-m-stats     { display:flex; gap:12px; }
-.oet-m-stat      { display:flex; flex-direction:column; }
-.oet-m-stat-val  { font-size:16px; font-weight:800; color:var(--text); }
-.oet-m-stat-lbl  { font-size:10px; color:var(--text3); }
-.oet-m-stat.warn .oet-m-stat-val { color:var(--red); }
+.oet-badge { display:inline-flex; align-items:center; justify-content:center; text-align:center; vertical-align:middle; white-space:nowrap; box-sizing:border-box; height:22px; line-height:1; padding:0 10px; border-radius:10px; font-size:10px; font-weight:700; }
+.oet-mag-sol { display:inline-block; background:#dbeafe; color:#1e40af; border-radius:4px; padding:3px 6px; font-size:10px; font-weight:700; }
+.oet-mag-ep { display:inline-block; background:#fce7f3; color:#9d174d; border-radius:4px; padding:3px 6px; font-size:10px; font-weight:700; }
+.oet-act-group { display:flex; flex-direction:column; gap:3px; min-width:76px; }
+.oet-act-btn { display:block; width:100%; padding:5px 4px; border-radius:6px; font-size:10px; font-weight:600; border:1px solid var(--border); background:var(--bg3); color:var(--text2); cursor:not-allowed; opacity:.65; text-align:center; white-space:nowrap; }
+.oet-act-btn.sevk { background:#dcfce7; border-color:#86efac; color:#166534; }
+.oet-row-check { width:15px; height:15px; cursor:not-allowed; }
 
-/* Durum dağılımı */
-.oet-dag-row     { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; border-bottom:1px solid var(--border); font-size:12px; }
-.oet-dag-row:last-child { border-bottom:none; }
-.oet-dag-label   { display:flex; align-items:center; gap:8px; color:var(--text2); font-weight:500; }
-.oet-dag-dot     { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-.oet-dag-val     { font-weight:700; color:var(--text); }
+.oet-pager { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-top:1px solid var(--border); background:#f8fafc; }
+.oet-pager-info { font-size:11px; color:var(--text3); }
+.oet-pager-btns { display:flex; align-items:center; gap:4px; }
+.oet-pg { padding:4px 10px; border:1px solid var(--border); border-radius:6px; font-size:12px; font-weight:600; background:#fff; color:var(--text2); cursor:pointer; min-width:32px; text-align:center; }
+.oet-pg:hover { border-color:#f5b82e; color:#b45309; }
+.oet-pg.active { background:#f5b82e; border-color:#f5b82e; color:#1c1917; }
+.oet-pg.dots { border:none; background:none; cursor:default; }
+.oet-tbl-empty { text-align:center; padding:40px; color:var(--text3); font-size:13px; }
 
+.oet-alert { border-radius:10px; padding:12px 16px; margin-bottom:14px; display:flex; align-items:flex-start; gap:10px; font-size:13px; }
+.oet-alert.warn { background:#fef3c7; border:1px solid #fcd34d; color:#92400e; }
+.oet-alert.err { background:#fee2e2; border:1px solid #fca5a5; color:#991b1b; }
+.oet-poll-toast { position:fixed; right:18px; bottom:18px; z-index:1200; background:#1e3a8a; color:#fff; padding:10px 14px; border-radius:8px; font-size:12px; font-weight:700; box-shadow:0 8px 24px rgba(0,0,0,.18); opacity:0; transform:translateY(8px); pointer-events:none; transition:.2s ease; }
+.oet-poll-toast.show { opacity:1; transform:translateY(0); pointer-events:auto; }
+.oet-toast-btn { display:inline-block; margin-left:8px; padding:3px 8px; background:#f5b82e; color:#1c1917; border:none; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; transition:.15s; }
+.oet-toast-btn:hover { background:#f6c343; }
+
+.oet-cf-hdr { cursor:pointer; user-select:none; position:relative; white-space:nowrap; overflow:visible; text-align:center; }
+.oet-tbl thead th .oet-th-inner { display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; max-width:calc(100% - 4px); padding:0 2px; box-sizing:border-box; }
+.oet-th-inner .oet-cf-arr { margin-left:0; }
+.oet-tbl thead th.oet-col-bed.oet-cf-hdr { overflow:visible; }
+.oet-cf-hdr:hover { background:rgba(245,184,46,.08); }
+.oet-cf-hdr.cf-active { color:#b45309; }
+.oet-tbl thead th.oet-col-mdl.oet-cf-hdr { overflow:visible; }
+.oet-cf-label { display:inline; }
+.oet-cf-arr { font-size:9px; opacity:.7; margin-left:5px; vertical-align:middle; display:inline-block; flex-shrink:0; color:#64748b; line-height:1; position:relative; z-index:1; }
+.oet-cf-drop { display:none; position:fixed; min-width:140px; background:#fff; border:1px solid var(--border); border-radius:6px; box-shadow:0 4px 14px rgba(0,0,0,.15); z-index:9999; max-height:240px; overflow-y:auto; }
+.oet-cf-drop.open { display:block; }
+.oet-cf-item { padding:5px 10px; font-size:11px; cursor:pointer; white-space:nowrap; }
+.oet-cf-item:hover { background:var(--bg3); }
+.oet-cf-item.selected { color:#b45309; font-weight:700; }
+
+@media (max-width:1400px) {
+  .oet-filter-card { grid-template-columns:repeat(3,minmax(110px,1fr)); }
+  .oet-search-wrap { grid-column:1 / -1; }
+}
 @media (max-width:900px) {
-  .oet-main       { grid-template-columns:1fr; }
-  .oet-action-row { grid-template-columns:1fr; }
+  .oet-tbl-scroll { overflow-x:auto; }
 }
-
-/* ── Kolon Filtreleri (header dropdown) ── */
-.oet-cf-hdr                     { cursor:pointer; user-select:none; position:relative; }
-.oet-cf-hdr:hover               { background:rgba(234,179,8,.08); }
-.oet-cf-hdr.cf-active           { color:var(--accent); }
-.oet-cf-arr                     { font-size:8px; opacity:.5; margin-left:3px; }
-.oet-cf-hdr.cf-active .oet-cf-arr { opacity:1; }
-.oet-cf-drop {
-  display:none; position:fixed; min-width:140px;
-  background:var(--bg); border:1px solid var(--border); border-radius:4px;
-  box-shadow:0 4px 14px rgba(0,0,0,.22); z-index:9999;
-  max-height:240px; overflow-y:auto;
+@media (max-width:1200px) {
+  .oet-header { grid-template-columns:1fr; }
+  .oet-header-right { justify-self:start; flex-wrap:wrap; }
+  .oet-title { font-size:18px; }
 }
-.oet-cf-drop.open               { display:block; }
-.oet-cf-item                    { padding:5px 10px; font-size:11px; cursor:pointer; white-space:nowrap; }
-.oet-cf-item:hover              { background:var(--bg3); }
-.oet-cf-item.selected           { color:var(--accent); font-weight:700; }
+@media (max-width:1100px) {
+  .oet-kpi-row { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .oet-op-cards { grid-template-columns:1fr; }
+}
+@media (max-width:768px) {
+  .oet-kpi-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="oet-wrap">
 
-  <!-- Hata / Uyarı Banner -->
   {% if api_hata and not kpi %}
   <div class="oet-alert err">
-    <span class="oet-alert-ico">⛔</span>
+    <span>⛔</span>
     <div>
       <strong>API Bağlantı Hatası</strong> — Trendyol'dan veri alınamadı.
-      {% if hata_mesajlari %}
-      <ul>{% for h in hata_mesajlari %}<li>{{ h }}</li>{% endfor %}</ul>
-      {% endif %}
+      {% if hata_mesajlari %}<ul>{% for h in hata_mesajlari %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
     </div>
   </div>
   {% elif api_hata and kpi %}
   <div class="oet-alert warn">
-    <span class="oet-alert-ico">⚠️</span>
+    <span>⚠️</span>
     <div>
       <strong>Kısmi bağlantı sorunu</strong> — Bazı mağazalar yüklenemedi.
-      {% if hata_mesajlari %}
-      <ul>{% for h in hata_mesajlari %}<li>{{ h }}</li>{% endfor %}</ul>
-      {% endif %}
+      {% if hata_mesajlari %}<ul>{% for h in hata_mesajlari %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
     </div>
   </div>
   {% endif %}
 
-  <!-- Başlık -->
-  <div class="oet-topbar">
-    <div>
-      <div class="oet-title">
-        Online E-Ticaret Depo Operasyonu
-        <small>Solariz &amp; Epona Sipariş Yönetimi</small>
-      </div>
+  <div class="oet-header">
+    <div class="oet-title">
+      Online E-Ticaret Depo Operasyonu
+      <small>Solariz &amp; Epona Sipariş Yönetimi</small>
     </div>
-    <span class="oet-mock-badge" style="background:#dcfce7;color:#15803d;border-color:#86efac;">FAZ2-A • CANLI</span>
+    <div class="oet-header-right">
+      <div id="oet-system-status" class="oet-system-status{% if api_hata and not kpi %} err{% elif api_hata %} warn{% endif %}">
+        <span class="oet-status-dot"></span>
+        <span id="oet-system-status-text">{% if api_hata and not kpi %}Bağlantı Hatası{% elif api_hata %}Kısmi Bağlantı{% else %}Sistem Aktif{% endif %}</span>
+      </div>
+      <span class="oet-last-update">Son güncelleme: <span id="oet-last-update">{{ server_now_display|default('—') }}</span></span>
+      <a href="?days={{ date_filter|default('today') }}&refresh=1{% if request.args.get('force') == 'desktop' %}&force=desktop{% endif %}" class="btn-yenile" title="Yenile">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        Yenile
+      </a>
+    </div>
   </div>
 
-  <!-- Filtreler -->
-  <div class="oet-filters">
+  <div class="oet-filter-card">
     <div class="oet-fgroup">
       <label>Depo / Planlama</label>
-      <select id="oet-depo">
-        <option>ANA DEPO</option>
-        <option>Warehouse</option>
-      </select>
+      <select id="oet-depo" disabled title="Bu fazda sabit: ANA DEPO"><option>ANA DEPO</option></select>
     </div>
-    <div class="oet-sep"></div>
     <div class="oet-fgroup">
       <label>Mağaza</label>
       <select id="oet-magaza">
@@ -296,241 +279,277 @@
         <option>Epona</option>
       </select>
     </div>
-    <div class="oet-sep"></div>
     <div class="oet-fgroup">
-      <label>Tarih</label>
-      <select id="oet-tarih">
-        <option>Bugün</option>
-        <option>3 Gün</option>
-        <option>7 Gün</option>
+      <label>Kapsam</label>
+      <select id="oet-tarih" title="Sipariş kapsam filtresi">
+        <option value="open" {% if date_filter|default('open') == 'open' %}selected{% endif %}>Açık Siparişler</option>
+        <option value="today" {% if date_filter|default('open') == 'today' %}selected{% endif %}>Bugün</option>
+        <option value="7d" {% if date_filter|default('open') == '7d' %}selected{% endif %}>7 Gün</option>
       </select>
     </div>
-    <div style="margin-left:auto;display:flex;align-items:center;gap:10px;">
-      {% if cache_yasi_sn is not none %}
-        <span style="font-size:11px;color:#888;">
-          Veri: {{ cache_yasi_sn }}sn önce
-        </span>
-      {% endif %}
-      <a href="?refresh=1" class="btn-yenile" style="text-decoration:none;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-        Yenile
-      </a>
+    <div class="oet-search-wrap">
+      <span class="oet-search-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+      <input type="text" class="oet-search-input" id="oet-search" placeholder="Sipariş No / Barkod / Ürün ara…" autocomplete="off" inputmode="search">
+      <button type="button" class="oet-search-clear" id="oet-search-clear" title="Temizle" aria-label="Aramayı temizle">&times;</button>
     </div>
   </div>
 
-  <!-- KPI Kartları -->
   <div class="oet-kpi-row">
-    <div class="oet-kpi ok">
-      <div class="oet-kpi-ico">🧾</div>
-      <div class="oet-kpi-val">{{ kpi.toplam_siparis }}</div>
-      <div class="oet-kpi-lbl">Toplam Sipariş</div>
+    <div class="oet-kpi kpi-green">
+      <div class="oet-kpi-ico-wrap" aria-hidden="true"><svg class="oet-kpi-svg" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></div>
+      <div class="oet-kpi-body"><div class="oet-kpi-val" id="kpi-toplam">{{ kpi.toplam_siparis|default(0) }}</div><div class="oet-kpi-lbl">Toplam Sipariş</div></div>
     </div>
-    <div class="oet-kpi ok">
-      <div class="oet-kpi-ico">📦</div>
-      <div class="oet-kpi-val">{{ kpi.urun_adedi }}</div>
-      <div class="oet-kpi-lbl">Ürün Adedi</div>
+    <div class="oet-kpi kpi-orange">
+      <div class="oet-kpi-ico-wrap" aria-hidden="true"><svg class="oet-kpi-svg" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>
+      <div class="oet-kpi-body"><div class="oet-kpi-val" id="kpi-urun">{{ kpi.urun_adedi|default(0) }}</div><div class="oet-kpi-lbl">Ürün Adedi</div></div>
     </div>
-    <div class="oet-kpi warn">
-      <div class="oet-kpi-ico">⚠️</div>
-      <div class="oet-kpi-val">{{ kpi.geciken }}</div>
-      <div class="oet-kpi-lbl">Geciken</div>
+    <div class="oet-kpi kpi-red">
+      <div class="oet-kpi-ico-wrap" aria-hidden="true"><svg class="oet-kpi-svg" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+      <div class="oet-kpi-body"><div class="oet-kpi-val" id="kpi-geciken">{{ kpi.geciken|default(0) }}</div><div class="oet-kpi-lbl">Geciken</div></div>
     </div>
-    <div class="oet-kpi caution">
-      <div class="oet-kpi-ico">⏱️</div>
-      <div class="oet-kpi-val">{{ kpi.bugun_cikacak }}</div>
-      <div class="oet-kpi-lbl">Bugün Çıkacak</div>
+    <div class="oet-kpi kpi-purple">
+      <div class="oet-kpi-ico-wrap" aria-hidden="true"><svg class="oet-kpi-svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+      <div class="oet-kpi-body"><div class="oet-kpi-val" id="kpi-bugun">{{ kpi.acil_24h|default(0) }}</div><div class="oet-kpi-lbl">24 Saat İçinde</div></div>
     </div>
-    <div class="oet-kpi caution">
-      <div class="oet-kpi-ico">🔗</div>
-      <div class="oet-kpi-val">{{ kpi.esleme_eksik }}</div>
-      <div class="oet-kpi-lbl">Eşleşme Eksik</div>
+    <div class="oet-kpi kpi-blue">
+      <div class="oet-kpi-ico-wrap" aria-hidden="true"><svg class="oet-kpi-svg" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+      <div class="oet-kpi-body"><div class="oet-kpi-val" id="kpi-esleme">{{ kpi.esleme_eksik|default(0) }}</div><div class="oet-kpi-lbl">Eşleşme Eksik</div></div>
     </div>
-    <div class="oet-kpi ok">
-      <div class="oet-kpi-ico">📫</div>
-      <div class="oet-kpi-val">{{ kpi.paketlenen }}</div>
-      <div class="oet-kpi-lbl">Paketlenen</div>
+    <div class="oet-kpi kpi-green">
+      <div class="oet-kpi-ico-wrap" aria-hidden="true"><svg class="oet-kpi-svg" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
+      <div class="oet-kpi-body"><div class="oet-kpi-val" id="kpi-paket">{{ kpi.paketlenen|default(0) }}</div><div class="oet-kpi-lbl">Paketlenen</div></div>
     </div>
   </div>
 
-  <!-- İşlem Kartları -->
-  <div class="oet-action-row">
-    <div class="oet-action-card blue">
-      <div class="oet-action-top">
-        <div class="oet-action-ico blue">📋</div>
-        <div class="oet-action-text">
-          <h4>Sipariş Topla</h4>
-          <p>Siparişlere göre depodan topla</p>
+  <div class="oet-dashboard">
+    <div class="oet-dashboard-main">
+      <div class="oet-op-cards">
+        <div class="oet-op-card">
+          <div class="oet-op-card-top">
+            <div class="oet-op-card-left">
+              <span class="oet-op-step">1</span>
+              <div><h4>Sipariş Topla</h4><p>Bekleyen sipariş paketleri</p></div>
+            </div>
+            <span class="oet-op-card-ico">📋</span>
+          </div>
+          <div class="oet-op-card-count" id="op-siparis">{{ kpi.toplam_siparis|default(0) }}</div>
+          <div class="oet-op-progress"><span id="op-siparis-bar" style="width:0%"></span></div>
+          <button type="button" class="oet-op-card-btn gold" disabled>Listeyi Aç</button>
+        </div>
+        <div class="oet-op-card">
+          <div class="oet-op-card-top">
+            <div class="oet-op-card-left">
+              <span class="oet-op-step">2</span>
+              <div><h4>Ürün Topla</h4><p>Toplanacak ürün kalemleri</p></div>
+            </div>
+            <span class="oet-op-card-ico">📦</span>
+          </div>
+          <div class="oet-op-card-count" id="op-urun">{{ kpi.urun_adedi|default(0) }}</div>
+          <div class="oet-op-progress"><span id="op-urun-bar" style="width:0%"></span></div>
+          <button type="button" class="oet-op-card-btn gold" disabled>Listeyi Aç</button>
+        </div>
+        <div class="oet-op-card green">
+          <div class="oet-op-card-top">
+            <div class="oet-op-card-left">
+              <span class="oet-op-step">3</span>
+              <div><h4>Sevk Et</h4><p>Sevke hazır paketler</p></div>
+            </div>
+            <span class="oet-op-card-ico">🚚</span>
+          </div>
+          <div class="oet-op-card-count" id="op-sevk">{{ kpi.paketlenen|default(0) }}</div>
+          <div class="oet-op-progress"><span id="op-sevk-bar" style="width:0%"></span></div>
+          <button type="button" class="oet-op-card-btn green" disabled>Sevke Başla</button>
         </div>
       </div>
-      <button class="oet-action-btn blue">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-        Listeyi Aç
-      </button>
-    </div>
-    <div class="oet-action-card orange">
-      <div class="oet-action-top">
-        <div class="oet-action-ico orange">👟</div>
-        <div class="oet-action-text">
-          <h4>Ürün Topla</h4>
-          <p>Ürün bazlı toplu toplama listesi</p>
+
+      <div class="oet-oplist">
+        <div class="oet-oplist-head">
+          <h3>📋 Sipariş Operasyon Listesi</h3>
+          <div class="oet-fl-group">
+            <button class="oet-fl active" data-filter="all">Tümü <span class="oet-fl-cnt" id="cnt-all">0</span> <small style="font-size:9px;font-weight:500;opacity:0.7">paket</small></button>
+            <button class="oet-fl" data-filter="Solariz">Solariz <span class="oet-fl-cnt" id="cnt-sol">0</span> <small style="font-size:9px;font-weight:500;opacity:0.7">paket</small></button>
+            <button class="oet-fl" data-filter="Epona">Epona <span class="oet-fl-cnt" id="cnt-ep">0</span> <small style="font-size:9px;font-weight:500;opacity:0.7">paket</small></button>
+            <span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>
+            <button class="oet-fl" data-filter="TOPLANIYOR">İşleme Alınan <span class="oet-fl-cnt" id="cnt-toplaniyor">0</span> <small style="font-size:9px;font-weight:500;opacity:0.7">ürün</small></button>
+            <span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>
+            <button class="oet-fl" data-filter="GECİKTİ">Geciken <span class="oet-fl-cnt" id="cnt-geciken">0</span> <small style="font-size:9px;font-weight:500;opacity:0.7">paket</small></button>
+            <button class="oet-fl" data-filter="ACIL24H">24 Saat İçinde <span class="oet-fl-cnt" id="cnt-bugun">0</span> <small style="font-size:9px;font-weight:500;opacity:0.7">paket</small></button>
+          </div>
+        </div>
+        <div class="oet-tbl-wrap">
+          <div class="oet-tbl-scroll">
+            <table class="oet-tbl">
+              <colgroup>
+                <col class="oet-col-sel"><col class="oet-col-exp"><col class="oet-col-no"><col class="oet-col-date">
+                <col class="oet-col-mag"><col class="oet-col-urun"><col class="oet-col-mdl"><col class="oet-col-renk">
+                <col class="oet-col-bed"><col class="oet-col-adt"><col class="oet-col-bkd"><col class="oet-col-krg">
+                <col class="oet-col-kln"><col class="oet-col-dur"><col class="oet-col-aks">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th class="oet-col-sel"></th>
+                  <th class="oet-col-exp"></th>
+                  <th class="oet-col-no">Sipariş No</th>
+                  <th class="oet-col-date">Sipariş Tarihi</th>
+                  <th class="oet-col-mag oet-cf-hdr" data-cf="mag"><span class="oet-th-inner"><span class="oet-cf-label">Mağaza</span><span class="oet-cf-arr">▼</span></span><div class="oet-cf-drop" id="drop-mag"></div></th>
+                  <th class="oet-col-urun">Ürün Adı</th>
+                  <th class="oet-col-mdl oet-cf-hdr" data-cf="mdl"><span class="oet-th-inner"><span class="oet-cf-label">Model / Varyant</span><span class="oet-cf-arr">▼</span></span><div class="oet-cf-drop" id="drop-mdl"></div></th>
+                  <th class="oet-col-renk oet-cf-hdr" data-cf="renk"><span class="oet-th-inner">Renk<span class="oet-cf-arr">▼</span></span><div class="oet-cf-drop" id="drop-renk"></div></th>
+                  <th class="oet-col-bed oet-cf-hdr" data-cf="bed"><span class="oet-th-inner"><span class="oet-cf-label">Beden</span><span class="oet-cf-arr">▼</span></span><div class="oet-cf-drop" id="drop-bed"></div></th>
+                  <th class="oet-col-adt">Adet</th>
+                  <th class="oet-col-bkd">Barkod</th>
+                  <th class="oet-col-krg oet-cf-hdr" data-cf="krg"><span class="oet-th-inner">Kargo<span class="oet-cf-arr">▼</span></span><div class="oet-cf-drop" id="drop-krg"></div></th>
+                  <th class="oet-col-kln">Kalan Süre</th>
+                  <th class="oet-col-dur oet-cf-hdr" data-cf="dur"><span class="oet-th-inner">Durum<span class="oet-cf-arr">▼</span></span><div class="oet-cf-drop" id="drop-dur"></div></th>
+                  <th class="oet-col-aks">İşlem</th>
+                </tr>
+              </thead>
+              <tbody id="oet-tbody">
+                <tr><td colspan="15" class="oet-tbl-empty">Veriler yükleniyor…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="oet-pager">
+            <span class="oet-pager-info" id="oet-pager-info"></span>
+            <div class="oet-pager-btns" id="oet-pager-btns"></div>
+          </div>
         </div>
       </div>
-      <button class="oet-action-btn orange">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-        Listeyi Aç
-      </button>
-    </div>
-    <div class="oet-action-card green">
-      <div class="oet-action-top">
-        <div class="oet-action-ico green">🚚</div>
-        <div class="oet-action-text">
-          <h4>Sevk Et</h4>
-          <p>Paketlendi → Trendyol'a teslim</p>
-        </div>
-      </div>
-      <button class="oet-action-btn green">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-        Sevke Başla
-      </button>
     </div>
   </div>
+</div>
+<div id="oet-poll-toast" class="oet-poll-toast" aria-live="polite">Yeni sipariş geldi</div>
 
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- FAZ2-A: Sipariş Operasyon Listesi                                   -->
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <div class="oet-oplist">
-
-    <!-- Başlık + araçlar -->
-    <div class="oet-oplist-head">
-      <h3>Sipariş Operasyon Listesi</h3>
-      <div class="oet-oplist-toolbar">
-
-        <!-- Filtre butonları -->
-        <div class="oet-fl-group">
-          <button class="oet-fl active" data-filter="all">
-            Tümü <span class="oet-fl-cnt" id="cnt-all">0</span>
-          </button>
-          <button class="oet-fl" data-filter="Solariz">
-            Solariz <span class="oet-fl-cnt" id="cnt-sol">0</span>
-          </button>
-          <button class="oet-fl" data-filter="Epona">
-            Epona <span class="oet-fl-cnt" id="cnt-ep">0</span>
-          </button>
-          <button class="oet-fl geciken" data-filter="geciken">
-            Geciken <span class="oet-fl-cnt" id="cnt-gec">0</span>
-          </button>
-          <button class="oet-fl bugun" data-filter="bugun">
-            Bugün Çıkacak <span class="oet-fl-cnt" id="cnt-bug">0</span>
-          </button>
-        </div>
-
-        <!-- Arama -->
-        <div class="oet-search-box">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" class="oet-search" id="oet-search"
-                 placeholder="Sipariş No / Barkod / Ürün adı…">
-        </div>
-
-      </div>
-    </div>
-
-    <!-- Tablo -->
-    <div class="oet-tbl-wrap">
-      <div class="oet-tbl-scroll">
-        <table class="oet-tbl">
-          <thead>
-            <tr>
-              <th class="oet-col-ac"  title="Aciliyet"></th>
-              <th class="oet-col-img"></th>
-              <th class="oet-col-no">Sipariş No</th>
-              <th class="oet-col-mag oet-cf-hdr" data-cf="mag">Mağaza <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-mag"></div></th>
-              <th class="oet-col-urun">Ürün Adı</th>
-              <th class="oet-col-mdl oet-cf-hdr" data-cf="mdl">Model <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-mdl"></div></th>
-              <th class="oet-col-renk oet-cf-hdr" data-cf="renk">Renk <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-renk"></div></th>
-              <th class="oet-col-bed oet-cf-hdr" data-cf="bed">Beden <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-bed"></div></th>
-              <th class="oet-col-adt">Adet</th>
-              <th class="oet-col-bkd">Barkod</th>
-              <th class="oet-col-krg oet-cf-hdr" data-cf="krg">Kargo <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-krg"></div></th>
-              <th class="oet-col-kln">Kalan Süre</th>
-              <th class="oet-col-dur oet-cf-hdr" data-cf="dur">Durum <span class="oet-cf-arr">▼</span><div class="oet-cf-drop" id="drop-dur"></div></th>
-              <th class="oet-col-aks">İşlem</th>
-          </thead>
-          <tbody id="oet-tbody">
-            <tr><td colspan="14" class="oet-tbl-empty">Veriler yükleniyor…</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Pagination -->
-      <div class="oet-pager">
-        <span class="oet-pager-info" id="oet-pager-info"></span>
-        <div class="oet-pager-btns" id="oet-pager-btns"></div>
-      </div>
-    </div>
-
-  </div><!-- /oet-oplist -->
-
-</div><!-- /oet-wrap -->
-
-<!-- ── FAZ2-A: Operasyon Listesi JS ─────────────────────────────────── -->
 <script>
 (function () {
   'use strict';
 
-  /* ── Veri ── */
-  const ALL_ROWS = {{ operasyon_listesi | tojson }};
+  const ALL_ROWS_INIT = {{ operasyon_listesi | tojson }};
+  let ALL_ROWS = ALL_ROWS_INIT.slice();
   const PAGE_SIZE = 50;
+  const COL_COUNT = 15;
+  const tFront = performance.now();
 
   let activeFilter = 'all';
-  let searchQ      = '';
-  let currentPage  = 1;
-  let filtered     = [];
-
-  /* ── Kolon filtre durumu ── */
+  let searchQ = '';
+  let currentPage = 1;
+  let filtered = [];
+  const expandedPkgs = {};
   const colFilters = { mag:'', mdl:'', renk:'', bed:'', krg:'', dur:'' };
 
-  /* ── Yardımcılar ── */
+  const KPI = {
+    toplam: {{ kpi.toplam_siparis|default(0) }},
+    urun: {{ kpi.urun_adedi|default(0) }},
+    geciken: {{ kpi.geciken|default(0) }},
+    acil24h: {{ kpi.acil_24h|default(0) }},
+    esleme: {{ kpi.esleme_eksik|default(0) }},
+    paket: {{ kpi.paketlenen|default(0) }}
+  };
+
   function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
   function magChip(m) {
     if (m === 'Solariz') return '<span class="oet-mag-sol">Solariz</span>';
-    if (m === 'Epona')   return '<span class="oet-mag-ep">Epona</span>';
+    if (m === 'Epona') return '<span class="oet-mag-ep">Epona</span>';
     return '<span>' + esc(m) + '</span>';
-  }
-  function acDot(a) {
-    const c = a === 0 ? '#dc2626' : a === 1 ? '#b45309' : a === 2 ? '#3b82f6' : '#9ca3af';
-    const t = a === 0 ? 'Gecikmiş' : a === 1 ? 'Bugün çıkacak' : a === 2 ? 'Yakın' : 'Normal';
-    return '<span class="oet-ac-dot" style="background:' + c + '" title="' + t + '"></span>';
   }
   function thumbHtml(url, urun) {
     if (url) {
-      return '<div class="oet-thumb-wrap"><img src="' + esc(url) + '" alt="' + esc(urun).slice(0,30) + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<span class=oet-thumb-ph>📦</span>\'"></div>';
+      return '<div class="oet-thumb-wrap"><img src="' + esc(url) + '" alt="" loading="lazy" onerror="this.parentNode.innerHTML=\'<span class=oet-thumb-ph>📦</span>\'"></div>';
     }
     return '<div class="oet-thumb-wrap"><span class="oet-thumb-ph">📦</span></div>';
   }
+  function urunCell(r) {
+    return '<div class="oet-urun-cell">' + thumbHtml(r.gorsel, r.urun) +
+      '<div class="oet-urun-txt" title="' + esc(r.urun) + '">' + esc(r.urun) + '</div></div>';
+  }
+  function formatSiparisTarihiDisplay(r) {
+    var d = String(r.siparis_tarihi || '').trim();
+    if (!d || d === '—') return '—';
+    if (d.indexOf('Bugün') === 0) return 'Bugün';
+    var comma = d.indexOf(', ');
+    if (comma > 0) return d.slice(0, comma);
+    return d;
+  }
+  function dateCell(r) {
+    var d = formatSiparisTarihiDisplay(r);
+    return '<span class="oet-date-cell" title="' + esc(d) + '"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ' + esc(d) + '</span>';
+  }
+  function parseKalanDisplay(kalan) {
+    var s = String(kalan || '').trim();
+    if (!s || s === '—') return { status: '—', value: '' };
+    if (s.indexOf('GECİKTİ') === 0) {
+      return { status: 'GECİKTİ', value: s.replace(/^GECİKTİ\s*/, '') };
+    }
+    if (s.indexOf('Kalan:') === 0) {
+      return { status: 'Kalan', value: s.replace(/^Kalan:\s*/, '') };
+    }
+    return { status: s, value: '' };
+  }
+  function kalanCell(kalan, color) {
+    var p = parseKalanDisplay(kalan);
+    var style = color ? ' style="color:' + esc(color) + '"' : '';
+    if (!p.value) {
+      return '<div class="oet-kln-cell"' + style + '><span class="oet-kln-status">' + esc(p.status) + '</span></div>';
+    }
+    return '<div class="oet-kln-cell"' + style + '>' +
+      '<span class="oet-kln-status">' + esc(p.status) + '</span>' +
+      '<span class="oet-kln-value">' + esc(p.value) + '</span></div>';
+  }
+  function noCell(r) {
+    return '<div style="line-height:1.35">' +
+      '<div style="font-weight:700">' + esc(r.pkg_id || r.no) + '</div>' +
+      '<div style="font-size:10px;color:#a8a29e">Sip: ' + esc(r.no) + '</div></div>';
+  }
+  var ACTION_TOOLTIP = 'Bu işlem entegrasyon aşamasında açılacaktır.';
+  function actionBtns() {
+    return '<div class="oet-act-group">' +
+      '<button type="button" class="oet-act-btn" disabled title="' + ACTION_TOOLTIP + '">Topla</button>' +
+      '<button type="button" class="oet-act-btn" disabled title="' + ACTION_TOOLTIP + '">Yazdır</button>' +
+      '<button type="button" class="oet-act-btn sevk" disabled title="' + ACTION_TOOLTIP + '">Sevk</button>' +
+    '</div>';
+  }
+  function pkgExpandKey(pkg) {
+    return String(pkg.magaza || '') + '|' + String(pkg.pkg_id || pkg.no || '');
+  }
+  function isPkgExpanded(pkg) {
+    var k = pkgExpandKey(pkg);
+    if (expandedPkgs[k] === undefined) return true;
+    return !!expandedPkgs[k];
+  }
+  function expBtn(pkg, expanded) {
+    var k = esc(pkgExpandKey(pkg));
+    return '<button type="button" class="oet-exp-btn" data-pkg-key="' + k + '" aria-expanded="' + (expanded ? 'true' : 'false') + '" aria-label="Paketi aç veya kapat">▶</button>';
+  }
+  function expSpacer() {
+    return '<span class="oet-exp-spacer" aria-hidden="true"></span>';
+  }
+  function selBox() {
+    return '<input type="checkbox" class="oet-row-check" disabled aria-label="Seç">';
+  }
 
-  /* ── Filtre + arama ── */
   function applyFilter() {
-    const q = searchQ.toLowerCase().trim();
+    var q = searchQ.toLowerCase().trim();
     filtered = ALL_ROWS.filter(function(r) {
-      // pill filtresi (üst bar)
+      // Mağaza filtreleri
       if (activeFilter === 'Solariz' && r.magaza !== 'Solariz') return false;
-      if (activeFilter === 'Epona'   && r.magaza !== 'Epona')   return false;
-      if (activeFilter === 'geciken' && r.aciliyet !== 0)        return false;
-      if (activeFilter === 'bugun'   && r.aciliyet !== 1)        return false;
-      // kolon filtreleri
-      if (colFilters.mag  && r.magaza    !== colFilters.mag)    return false;
-      if (colFilters.mdl  && r.model     !== colFilters.mdl)    return false;
-      if (colFilters.renk && r.renk_urun !== colFilters.renk)   return false;
-      if (colFilters.bed  && r.beden     !== colFilters.bed)    return false;
-      if (colFilters.krg  && r.kargo     !== colFilters.krg)    return false;
-      if (colFilters.dur  && r.durum     !== colFilters.dur)    return false;
-      // arama
+      if (activeFilter === 'Epona' && r.magaza !== 'Epona') return false;
+      // Status filtreleri
+      if (activeFilter === 'TOPLANIYOR' && r.durum !== 'TOPLANIYOR') return false;
+      // Aciliyet filtreleri
+      if (activeFilter === 'GECİKTİ' && (!r.kalan || r.kalan.indexOf('GECİKTİ') !== 0)) return false;
+      if (activeFilter === 'ACIL24H' && r.aciliyet !== 1) return false;
+      // Kolon filtreleri
+      if (colFilters.mag && r.magaza !== colFilters.mag) return false;
+      if (colFilters.mdl && r.model !== colFilters.mdl) return false;
+      if (colFilters.renk && r.renk_urun !== colFilters.renk) return false;
+      if (colFilters.bed && r.beden !== colFilters.bed) return false;
+      if (colFilters.krg && r.kargo !== colFilters.krg) return false;
+      if (colFilters.dur && r.durum !== colFilters.dur) return false;
       if (q) {
-        const hay = [r.pkg_id, r.no, r.barkod, r.kargo_barkod, r.urun, r.model]
-          .map(function(v){ return String(v || '').trim(); })
-          .join(' ').toLowerCase();
+        var hay = [r.pkg_id, r.no, r.barkod, r.kargo_barkod, r.urun, r.model, r.siparis_tarihi]
+          .map(function(v){ return String(v || '').trim(); }).join(' ').toLowerCase();
         if (hay.indexOf(q) === -1) return false;
       }
       return true;
@@ -539,91 +558,21 @@
     render();
   }
 
-  /* ── Kolon filtre dropdown dolumu ── */
-  function populateColFilters() {
-    function uniq(field) {
-      const seen = {};
-      ALL_ROWS.forEach(function(r) { if (r[field]) seen[r[field]] = 1; });
-      return Object.keys(seen).sort();
-    }
-
-    const defs = [
-      { id:'drop-mag',  key:'mag',  field:'magaza' },
-      { id:'drop-mdl',  key:'mdl',  field:'model' },
-      { id:'drop-renk', key:'renk', field:'renk_urun' },
-      { id:'drop-bed',  key:'bed',  field:'beden' },
-      { id:'drop-krg',  key:'krg',  field:'kargo' },
-      { id:'drop-dur',  key:'dur',  field:'durum' },
-    ];
-
-    defs.forEach(function(def) {
-      const drop = document.getElementById(def.id);
-      if (!drop) return;
-      const vals = uniq(def.field);
-      const items = [{ val:'', label:'Tümü' }].concat(vals.map(function(v) {
-        return { val: v, label: def.labelFn ? def.labelFn(v) : v };
-      }));
-      drop.innerHTML = items.map(function(item) {
-        const sel = item.val === '' ? ' selected' : '';
-        return '<div class="oet-cf-item' + sel + '" data-val="' + esc(item.val) + '">' + esc(item.label) + '</div>';
-      }).join('');
-
-      drop.querySelectorAll('.oet-cf-item').forEach(function(el) {
-        el.addEventListener('click', function(e) {
-          e.stopPropagation();
-          colFilters[def.key] = this.dataset.val;
-          drop.querySelectorAll('.oet-cf-item').forEach(function(x){ x.classList.remove('selected'); });
-          this.classList.add('selected');
-          const hdr = drop.closest('.oet-cf-hdr');
-          if (hdr) hdr.classList.toggle('cf-active', !!this.dataset.val);
-          drop.classList.remove('open');
-          applyFilter();
-        });
-      });
-    });
-
-    /* Başlık tıklama → dropdown aç/kapat — position:fixed ile scroll container dışına taşır */
-    function closeAllDrops() {
-      document.querySelectorAll('.oet-cf-drop.open').forEach(function(d){ d.classList.remove('open'); });
-    }
-    document.querySelectorAll('.oet-cf-hdr').forEach(function(hdr) {
-      hdr.addEventListener('click', function(e) {
-        if (e.target.closest('.oet-cf-drop')) return;
-        const drop = this.querySelector('.oet-cf-drop');
-        if (!drop) return;
-        const wasOpen = drop.classList.contains('open');
-        closeAllDrops();
-        if (!wasOpen) {
-          const rect = this.getBoundingClientRect();
-          const dropW = 140;
-          let left = rect.left;
-          if (left + dropW > window.innerWidth) left = rect.right - dropW;
-          drop.style.top  = rect.bottom + 'px';
-          drop.style.left = Math.max(0, left) + 'px';
-          drop.classList.add('open');
-        }
-        e.stopPropagation();
-      });
-    });
-
-    /* Dışarı tık veya scroll → kapat */
-    document.addEventListener('click', closeAllDrops);
-    var _scrollEl = document.querySelector('.oet-tbl-scroll');
-    if (_scrollEl) _scrollEl.addEventListener('scroll', closeAllDrops);
-    window.addEventListener('scroll', closeAllDrops);
+  function packageGroupKey(r) {
+    return String(r.magaza || '') + '|' + String(r.pkg_id || r.no || '');
   }
 
-  /* ── Paket ID bazında gruplama (shipmentPackageId) ── */
   function groupByNo(rows) {
     var map = {}, order = [];
     rows.forEach(function(r) {
-      var key = r.pkg_id || r.no;   // pkg_id primer, fallback no
+      var key = packageGroupKey(r);
       if (!map[key]) {
         var pkg = {
           pkg_id: r.pkg_id, no: r.no, magaza: r.magaza,
           aciliyet: r.aciliyet, kalan: r.kalan,
           durum: r.durum, durum_renk: r.durum_renk,
-          kargo: r.kargo, items: []
+          kargo: r.kargo, siparis_tarihi: r.siparis_tarihi,
+          siparis_tarihi_ms: r.siparis_tarihi_ms, items: []
         };
         map[key] = pkg;
         order.push(pkg);
@@ -633,155 +582,334 @@
         p.aciliyet = r.aciliyet; p.kalan = r.kalan;
         p.durum = r.durum; p.durum_renk = r.durum_renk;
       }
+      if (!p.siparis_tarihi_ms && r.siparis_tarihi_ms) {
+        p.siparis_tarihi = r.siparis_tarihi;
+        p.siparis_tarihi_ms = r.siparis_tarihi_ms;
+      }
       p.items.push(r);
     });
-    order.forEach(function(p){ p.kalem = p.items.length; });
+    order.forEach(function(p) {
+      p.kalem = p.items.length;
+      p.items.sort(function(a, b) {
+        var ba = String(a.barkod || '');
+        var bb = String(b.barkod || '');
+        if (ba !== bb) return ba < bb ? -1 : 1;
+        return String(a.urun || '').localeCompare(String(b.urun || ''));
+      });
+    });
     return order;
   }
 
-  /* Sipariş No hücre içeriği: Paket ID (primer) + Sipariş No (referans) */
-  function noCell(r) {
-    return '<div style="line-height:1.3">' +
-      '<div style="font-family:monospace;font-weight:700;font-size:12px;color:#1c1917">' + esc(r.pkg_id || r.no) + '</div>' +
-      '<div style="font-size:10px;color:#a8a29e">Sip: ' + esc(r.no) + '</div>' +
-    '</div>';
+  function paginatePackages(packages, page, pageSize) {
+    var start = (page - 1) * pageSize;
+    if (start >= packages.length) return [];
+    return packages.slice(start, start + pageSize);
   }
 
-  /* Tek kalemli sipariş satırı */
   function singleRow(r) {
-    return '<tr>' +
-      '<td class="oet-col-ac">' + acDot(r.aciliyet) + '</td>' +
-      '<td class="oet-col-img">' + thumbHtml(r.gorsel, r.urun) + '</td>' +
+    return '<tr data-pkg-key="' + esc(pkgExpandKey({magaza:r.magaza,pkg_id:r.pkg_id,no:r.no})) + '">' +
+      '<td class="oet-col-sel">' + selBox() + '</td>' +
+      '<td class="oet-col-exp">' + expSpacer() + '</td>' +
       '<td class="oet-col-no">' + noCell(r) + '</td>' +
+      '<td class="oet-col-date">' + dateCell(r) + '</td>' +
       '<td class="oet-col-mag">' + magChip(r.magaza) + '</td>' +
-      '<td class="oet-col-urun"><div class="oet-urun-txt" title="' + esc(r.urun) + '">' + esc(r.urun) + '</div></td>' +
+      '<td class="oet-col-urun">' + urunCell(r) + '</td>' +
       '<td class="oet-col-mdl">' + esc(r.model) + '</td>' +
       '<td class="oet-col-renk">' + esc(r.renk_urun) + '</td>' +
       '<td class="oet-col-bed">' + esc(r.beden) + '</td>' +
       '<td class="oet-col-adt">' + esc(r.adet) + '</td>' +
       '<td class="oet-col-bkd">' + esc(r.barkod) + '</td>' +
       '<td class="oet-col-krg">' + esc(r.kargo) + '</td>' +
-      '<td class="oet-col-kln" style="color:' + esc(r.durum_renk) + ';font-size:11px">' + esc(r.kalan) + '</td>' +
+      '<td class="oet-col-kln">' + kalanCell(r.kalan, r.durum_renk) + '</td>' +
       '<td class="oet-col-dur"><span class="oet-badge" style="background:' + esc(r.durum_renk) + '20;color:' + esc(r.durum_renk) + '">' + esc(r.durum) + '</span></td>' +
-      '<td class="oet-col-aks">' +
-        '<button class="oet-act-btn" disabled>Topla</button>' +
-        '<button class="oet-act-btn" disabled>Yazdır</button>' +
-        '<button class="oet-act-btn" disabled>Sevk</button>' +
-      '</td></tr>';
+      '<td class="oet-col-aks">' + actionBtns() + '</td></tr>';
   }
 
-  /* Çok kalemli paket bloğu: header + alt satırlar */
+  function packageSubRow(pkg, r, i) {
+    var last = i === pkg.items.length - 1;
+    return '<tr class="oet-pkg-sub' + (last ? ' oet-pkg-sub-last' : '') + '" data-pkg-key="' + esc(pkgExpandKey(pkg)) + '" data-row-role="pkg-child">' +
+      '<td class="oet-col-sel"></td><td class="oet-col-exp"></td>' +
+      '<td class="oet-col-no" style="font-size:10px;color:#a8a29e">' + (i + 1) + '/' + pkg.kalem + '</td>' +
+      '<td class="oet-col-date"></td><td class="oet-col-mag"></td>' +
+      '<td class="oet-col-urun">' + urunCell(r) + '</td>' +
+      '<td class="oet-col-mdl">' + esc(r.model) + '</td>' +
+      '<td class="oet-col-renk">' + esc(r.renk_urun) + '</td>' +
+      '<td class="oet-col-bed">' + esc(r.beden) + '</td>' +
+      '<td class="oet-col-adt">' + esc(r.adet) + '</td>' +
+      '<td class="oet-col-bkd">' + esc(r.barkod) + '</td>' +
+      '<td class="oet-col-krg">' + esc(r.kargo) + '</td>' +
+      '<td class="oet-col-kln"></td>' +
+      '<td class="oet-col-dur"><span class="oet-badge" style="background:' + esc(r.durum_renk) + '20;color:' + esc(r.durum_renk) + '">' + esc(r.durum) + '</span></td>' +
+      '<td class="oet-col-aks"></td></tr>';
+  }
+
   function packageBlock(pkg) {
-    var firstR = pkg.items[0];
-    var hdr = '<tr class="pkg-hdr">' +
-      '<td class="oet-col-ac">' + acDot(pkg.aciliyet) + '</td>' +
-      '<td colspan="12"><div class="pkg-info">' +
-        '<span class="pkg-badge">' + pkg.kalem + ' ürünlü paket</span>' +
-        '<span class="pkg-no">Paket: ' + esc(pkg.pkg_id || pkg.no) + '</span>' +
-        '<span style="font-size:11px;color:#78716c">Sip: ' + esc(pkg.no) + '</span>' +
-        magChip(pkg.magaza) +
-        (firstR && firstR.kargo_barkod ? '<span style="font-size:10px;font-family:monospace;color:#a8a29e">Kargo: ' + esc(firstR.kargo_barkod) + '</span>' : '') +
-        '<span style="font-size:11px;color:' + esc(pkg.durum_renk) + '">' + esc(pkg.kalan) + '</span>' +
-      '</div></td>' +
-      '<td class="oet-col-aks">' +
-        '<button class="oet-act-btn" disabled>Topla</button>' +
-        '<button class="oet-act-btn" disabled>Yazdır</button>' +
-        '<button class="oet-act-btn" disabled>Sevk</button>' +
-      '</td></tr>';
-
-    var rows = pkg.items.map(function(r, i) {
-      var isLast = (i === pkg.items.length - 1);
-      return '<tr class="pkg-item' + (isLast ? ' pkg-last' : '') + '">' +
-        '<td class="oet-col-ac"></td>' +
-        '<td class="oet-col-img">' + thumbHtml(r.gorsel, r.urun) + '</td>' +
-        '<td class="oet-col-no pkg-item-sira">' + (i+1) + '/' + pkg.kalem + '</td>' +
-        '<td class="oet-col-mag"></td>' +
-        '<td class="oet-col-urun"><div class="oet-urun-txt" title="' + esc(r.urun) + '">' + esc(r.urun) + '</div></td>' +
-        '<td class="oet-col-mdl">' + esc(r.model) + '</td>' +
-        '<td class="oet-col-renk">' + esc(r.renk_urun) + '</td>' +
-        '<td class="oet-col-bed">' + esc(r.beden) + '</td>' +
-        '<td class="oet-col-adt">' + esc(r.adet) + '</td>' +
-        '<td class="oet-col-bkd">' + esc(r.barkod) + '</td>' +
-        '<td class="oet-col-krg">' + esc(r.kargo) + '</td>' +
-        '<td class="oet-col-kln"></td>' +
-        '<td class="oet-col-dur"><span class="oet-badge" style="background:' + esc(r.durum_renk) + '20;color:' + esc(r.durum_renk) + '">' + esc(r.durum) + '</span></td>' +
-        '<td class="oet-col-aks"></td>' +
-      '</tr>';
-    });
-    return hdr + rows.join('');
-  }
-
-  /* ── Tablo render (paket bazlı) ── */
-  function render() {
-    const packages  = groupByNo(filtered);
-    const start     = (currentPage - 1) * PAGE_SIZE;
-    const end       = start + PAGE_SIZE;
-    const slicePkgs = packages.slice(start, end);
-    const tbody     = document.getElementById('oet-tbody');
-
-    if (slicePkgs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="14" class="oet-tbl-empty">Kayıt bulunamadı</td></tr>';
+    var expanded = isPkgExpanded(pkg);
+    var parts = [];
+    // Paket header: ilk ürün özeti + kalem sayısı
+    var firstItem = (pkg.items && pkg.items.length > 0) ? pkg.items[0] : null;
+    var urunOzet = '';
+    if (firstItem) {
+      var urunKisa = String(firstItem.urun || '').substring(0, 32);
+      if (firstItem.urun && firstItem.urun.length > 32) urunKisa += '…';
+      var extra = pkg.kalem > 1 ? ' <span style="color:#a8a29e;font-size:10px">+' + (pkg.kalem - 1) + ' ürün daha</span>' : '';
+      urunOzet = '<span style="font-size:12px">' + esc(urunKisa) + extra + '</span>';
     } else {
-      tbody.innerHTML = slicePkgs.map(function(pkg) {
-        return pkg.kalem === 1 ? singleRow(pkg.items[0]) : packageBlock(pkg);
-      }).join('');
+      urunOzet = '<span class="oet-pkg-badge">' + pkg.kalem + ' ürünlü paket</span>';
     }
-
-    renderPager(packages.length);
-    updatePagerInfo(start, end, packages.length);
+    var mdlOzet = firstItem ? esc(String(firstItem.model || '').substring(0, 18)) : '';
+    var renkOzet = firstItem ? esc(firstItem.renk_urun || '') : '';
+    var bedOzet = firstItem ? esc(firstItem.beden || '') : '';
+    var adtOzet = firstItem ? esc(firstItem.adet || '') : '';
+    parts.push('<tr class="oet-pkg-hdr" data-pkg-key="' + esc(pkgExpandKey(pkg)) + '" data-row-role="pkg-header">' +
+      '<td class="oet-col-sel">' + selBox() + '</td>' +
+      '<td class="oet-col-exp">' + expBtn(pkg, expanded) + '</td>' +
+      '<td class="oet-col-no"><div style="font-weight:700">' + esc(pkg.pkg_id || pkg.no) + '</div>' +
+        '<div style="font-size:10px;color:#a8a29e">Sip: ' + esc(pkg.no) + '</div></td>' +
+      '<td class="oet-col-date">' + dateCell(pkg) + '</td>' +
+      '<td class="oet-col-mag">' + magChip(pkg.magaza) + '</td>' +
+      '<td class="oet-col-urun">' + urunOzet + '</td>' +
+      '<td class="oet-col-mdl" style="font-size:11px;color:#78716c">' + mdlOzet + '</td>' +
+      '<td class="oet-col-renk" style="font-size:11px;color:#78716c">' + renkOzet + '</td>' +
+      '<td class="oet-col-bed" style="font-size:11px;color:#78716c">' + bedOzet + '</td>' +
+      '<td class="oet-col-adt" style="font-size:11px;color:#78716c">' + adtOzet + '</td>' +
+      '<td class="oet-col-bkd"></td><td class="oet-col-krg">' + esc(pkg.kargo) + '</td>' +
+      '<td class="oet-col-kln">' + kalanCell(pkg.kalan, pkg.durum_renk) + '</td>' +
+      '<td class="oet-col-dur"><span class="oet-badge" style="background:' + esc(pkg.durum_renk) + '20;color:' + esc(pkg.durum_renk) + '">' + esc(pkg.durum) + '</span></td>' +
+      '<td class="oet-col-aks">' + actionBtns() + '</td></tr>');
+    if (expanded) {
+      pkg.items.forEach(function(r, i) {
+        parts.push(packageSubRow(pkg, r, i));
+      });
+    }
+    return parts.join('');
   }
 
-  /* ── Pagination ── */
+  function renderPackageRows(pkg) {
+    if (!pkg || !pkg.items || !pkg.items.length) return '';
+    if (pkg.kalem === 1) return singleRow(pkg.items[0]);
+    return packageBlock(pkg);
+  }
+
+  function render() {
+    var packages = groupByNo(filtered);
+    var start = (currentPage - 1) * PAGE_SIZE;
+    var slicePkgs = paginatePackages(packages, currentPage, PAGE_SIZE);
+    var tbody = document.getElementById('oet-tbody');
+    if (!slicePkgs.length) {
+      tbody.innerHTML = '<tr><td colspan="' + COL_COUNT + '" class="oet-tbl-empty">Kayıt bulunamadı</td></tr>';
+    } else {
+      tbody.innerHTML = slicePkgs.map(renderPackageRows).join('');
+    }
+    renderPager(packages.length);
+    updatePagerInfo(start, start + slicePkgs.length, packages.length);
+    bindExpandHandlers();
+  }
+
+  function bindExpandHandlers() {
+    document.querySelectorAll('.oet-exp-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var key = this.getAttribute('data-pkg-key');
+        expandedPkgs[key] = this.getAttribute('aria-expanded') !== 'true';
+        render();
+      });
+      btn.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          this.click();
+        }
+      });
+    });
+  }
+
   function renderPager(totalPkgs) {
-    const totalPages = Math.ceil(totalPkgs / PAGE_SIZE);
-    const btns = document.getElementById('oet-pager-btns');
+    var totalPages = Math.ceil(totalPkgs / PAGE_SIZE);
+    var btns = document.getElementById('oet-pager-btns');
     if (totalPages <= 1) { btns.innerHTML = ''; return; }
-
-    const pages = buildPageRange(currentPage, totalPages);
-    btns.innerHTML = pages.map(function(p) {
-      if (p === '...') return '<span class="oet-pg dots">…</span>';
-      const active = p === currentPage ? ' active' : '';
-      return '<button class="oet-pg' + active + '" data-page="' + p + '">' + p + '</button>';
-    }).join('');
-
+    var pages = buildPageRange(currentPage, totalPages);
+    var html = '';
+    if (currentPage > 1) html += '<button class="oet-pg" data-page="' + (currentPage - 1) + '">‹</button>';
+    pages.forEach(function(p) {
+      if (p === '...') html += '<span class="oet-pg dots">…</span>';
+      else html += '<button class="oet-pg' + (p === currentPage ? ' active' : '') + '" data-page="' + p + '">' + p + '</button>';
+    });
+    if (currentPage < totalPages) html += '<button class="oet-pg" data-page="' + (currentPage + 1) + '">›</button>';
+    btns.innerHTML = html;
     btns.querySelectorAll('[data-page]').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        currentPage = parseInt(this.dataset.page);
+        currentPage = parseInt(this.dataset.page, 10);
         render();
-        document.querySelector('.oet-tbl-scroll').scrollTop = 0;
+        var sc = document.querySelector('.oet-tbl-scroll');
+        if (sc) sc.scrollTop = 0;
       });
     });
   }
 
   function buildPageRange(cur, total) {
     if (total <= 7) return Array.from({length: total}, function(_, i){ return i + 1; });
-    const pages = [];
-    pages.push(1);
+    var pages = [1];
     if (cur > 3) pages.push('...');
-    for (let p = Math.max(2, cur - 1); p <= Math.min(total - 1, cur + 1); p++) pages.push(p);
+    for (var p = Math.max(2, cur - 1); p <= Math.min(total - 1, cur + 1); p++) pages.push(p);
     if (cur < total - 2) pages.push('...');
     pages.push(total);
     return pages;
   }
 
   function updatePagerInfo(start, end, totalPkgs) {
-    const info = document.getElementById('oet-pager-info');
-    info.textContent = totalPkgs > 0
+    document.getElementById('oet-pager-info').textContent = totalPkgs > 0
       ? (start + 1) + '–' + Math.min(end, totalPkgs) + ' / ' + totalPkgs + ' paket'
       : '0 paket';
   }
 
-  /* ── Sayaçlar ── */
   function updateCounts() {
     function cnt(fn) { return ALL_ROWS.filter(fn).length; }
-    document.getElementById('cnt-all').textContent = ALL_ROWS.length;
-    document.getElementById('cnt-sol').textContent = cnt(function(r){ return r.magaza === 'Solariz'; });
-    document.getElementById('cnt-ep') .textContent = cnt(function(r){ return r.magaza === 'Epona'; });
-    document.getElementById('cnt-gec').textContent = cnt(function(r){ return r.aciliyet === 0; });
-    document.getElementById('cnt-bug').textContent = cnt(function(r){ return r.aciliyet === 1; });
+    function cntPackages(fn) {
+      var seen = {};
+      ALL_ROWS.filter(fn).forEach(function(r) {
+        var key = packageKey(r);
+        seen[key] = 1;
+      });
+      return Object.keys(seen).length;
+    }
+    function sumQty(fn) {
+      return ALL_ROWS.filter(fn).reduce(function(sum, r) {
+        return sum + (parseInt(r.adet) || 0);
+      }, 0);
+    }
+
+    // Paket sayıları (mağaza filtreleri)
+    document.getElementById('cnt-all').textContent = cntPackages(function(){ return true; });
+    document.getElementById('cnt-sol').textContent = cntPackages(function(r){ return r.magaza === 'Solariz'; });
+    document.getElementById('cnt-ep').textContent = cntPackages(function(r){ return r.magaza === 'Epona'; });
+
+    // Quantity sayıları (status filtreleri)
+    document.getElementById('cnt-toplaniyor').textContent = sumQty(function(r){ return r.durum === 'TOPLANIYOR'; });
+
+    // Paket sayıları (aciliyet filtreleri)
+    document.getElementById('cnt-geciken').textContent = cntPackages(function(r){ return r.kalan && r.kalan.indexOf('GECİKTİ') === 0; });
+    document.getElementById('cnt-bugun').textContent = cntPackages(function(r){ return r.aciliyet === 1; });
   }
 
-  /* ── Event listeners ── */
+  function updateKPICards() {
+    // Recalculate KPIs from ALL_ROWS (package-based counts and quantity sums)
+    var uniquePackages = {};
+    var totalQty = 0;
+    ALL_ROWS.forEach(function(r) {
+      var key = packageKey(r);
+      uniquePackages[key] = 1;
+      totalQty += (parseInt(r.adet) || 0);
+    });
+    var totalPackages = Object.keys(uniquePackages).length;
+
+    // Update upper KPI cards
+    var kpiTotal = document.getElementById('kpi-toplam');
+    var kpiUrun = document.getElementById('kpi-urun');
+    if (kpiTotal) kpiTotal.textContent = totalPackages;
+    if (kpiUrun) kpiUrun.textContent = totalQty;
+
+    // Update operation cards
+    var opSiparis = document.getElementById('op-siparis');
+    var opUrun = document.getElementById('op-urun');
+    if (opSiparis) opSiparis.textContent = totalPackages;
+    if (opUrun) opUrun.textContent = totalQty;
+
+    // Update progress bars (if needed)
+    var bar = document.getElementById('op-sevk-bar');
+    if (bar) {
+      var total = Math.max(totalPackages, 1);
+      // Assuming KPI.paket represents sevk count; this remains static from initial KPI
+      var pct = Math.min(100, Math.round((KPI.paket / total) * 100));
+      bar.style.width = pct + '%';
+    }
+  }
+
+  function updateProgressBars() {
+    var total = Math.max(KPI.toplam, 1);
+    var pct = Math.min(100, Math.round((KPI.paket / total) * 100));
+    var bar = document.getElementById('op-sevk-bar');
+    if (bar) bar.style.width = pct + '%';
+  }
+
+  function setSystemStatus(ok, partial) {
+    var wrap = document.getElementById('oet-system-status');
+    var text = document.getElementById('oet-system-status-text');
+    if (!wrap || !text) return;
+    wrap.classList.remove('warn', 'err');
+    if (!ok) { wrap.classList.add('err'); text.textContent = 'Bağlantı Hatası'; }
+    else if (partial) { wrap.classList.add('warn'); text.textContent = 'Kısmi Bağlantı'; }
+    else { text.textContent = 'Sistem Aktif'; }
+  }
+
+  function touchLastUpdate() {
+    var el = document.getElementById('oet-last-update');
+    if (!el) return;
+    var now = new Date();
+    var pad = function(n) { return n < 10 ? '0' + n : String(n); };
+    el.textContent = pad(now.getDate()) + '.' + pad(now.getMonth() + 1) + '.' + now.getFullYear() + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+  }
+
+  function populateColFilters() {
+    function uniq(field) {
+      var seen = {};
+      ALL_ROWS.forEach(function(r) { if (r[field]) seen[r[field]] = 1; });
+      return Object.keys(seen).sort();
+    }
+    var defs = [
+      { id:'drop-mag', key:'mag', field:'magaza' },
+      { id:'drop-mdl', key:'mdl', field:'model' },
+      { id:'drop-renk', key:'renk', field:'renk_urun' },
+      { id:'drop-bed', key:'bed', field:'beden' },
+      { id:'drop-krg', key:'krg', field:'kargo' },
+      { id:'drop-dur', key:'dur', field:'durum' }
+    ];
+    defs.forEach(function(def) {
+      var drop = document.getElementById(def.id);
+      if (!drop) return;
+      var vals = uniq(def.field);
+      var items = [{ val:'', label:'Tümü' }].concat(vals.map(function(v) { return { val:v, label:v }; }));
+      drop.innerHTML = items.map(function(item) {
+        var sel = item.val === colFilters[def.key] ? ' selected' : '';
+        return '<div class="oet-cf-item' + sel + '" data-val="' + esc(item.val) + '">' + esc(item.label) + '</div>';
+      }).join('');
+      drop.querySelectorAll('.oet-cf-item').forEach(function(el) {
+        el.addEventListener('click', function(e) {
+          e.stopPropagation();
+          colFilters[def.key] = this.dataset.val;
+          drop.querySelectorAll('.oet-cf-item').forEach(function(x){ x.classList.remove('selected'); });
+          this.classList.add('selected');
+          var hdr = drop.closest('.oet-cf-hdr');
+          if (hdr) hdr.classList.toggle('cf-active', !!this.dataset.val);
+          drop.classList.remove('open');
+          applyFilter();
+        });
+      });
+    });
+
+    function closeAllDrops() {
+      document.querySelectorAll('.oet-cf-drop.open').forEach(function(d){ d.classList.remove('open'); });
+    }
+    document.querySelectorAll('.oet-cf-hdr').forEach(function(hdr) {
+      hdr.addEventListener('click', function(e) {
+        if (e.target.closest('.oet-cf-drop')) return;
+        var drop = this.querySelector('.oet-cf-drop');
+        if (!drop) return;
+        var wasOpen = drop.classList.contains('open');
+        closeAllDrops();
+        if (!wasOpen) {
+          var rect = this.getBoundingClientRect();
+          drop.style.top = rect.bottom + 'px';
+          drop.style.left = Math.max(0, rect.left) + 'px';
+          drop.classList.add('open');
+        }
+        e.stopPropagation();
+      });
+    });
+    document.addEventListener('click', closeAllDrops);
+    var scrollEl = document.querySelector('.oet-tbl-scroll');
+    if (scrollEl) scrollEl.addEventListener('scroll', closeAllDrops);
+  }
+
   document.querySelectorAll('.oet-fl').forEach(function(btn) {
     btn.addEventListener('click', function() {
       document.querySelectorAll('.oet-fl').forEach(function(b){ b.classList.remove('active'); });
@@ -791,16 +919,303 @@
     });
   });
 
-  document.getElementById('oet-search').addEventListener('input', function() {
-    searchQ = this.value;
-    applyFilter();
+  var searchInput = document.getElementById('oet-search');
+  var searchClear = document.getElementById('oet-search-clear');
+  function syncSearchClear() {
+    if (!searchClear) return;
+    searchClear.classList.toggle('show', !!searchQ);
+  }
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      searchQ = this.value;
+      syncSearchClear();
+      applyFilter();
+    });
+  }
+  if (searchClear) {
+    searchClear.addEventListener('click', function() {
+      searchQ = '';
+      if (searchInput) searchInput.value = '';
+      syncSearchClear();
+      applyFilter();
+    });
+  }
+
+  var tarihSelect = document.getElementById('oet-tarih');
+  if (tarihSelect) {
+    tarihSelect.addEventListener('change', function() {
+      var url = new URL(window.location.href);
+      url.searchParams.set('days', this.value || 'today');
+      url.searchParams.delete('refresh');
+      window.location.href = url.pathname + url.search;
+    });
+  }
+  var magazaSelect = document.getElementById('oet-magaza');
+  if (magazaSelect) {
+    magazaSelect.addEventListener('change', function() {
+      var val = this.value || 'all';
+      activeFilter = val;
+      document.querySelectorAll('.oet-fl').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.filter === val);
+      });
+      applyFilter();
+    });
+  }
+
+  const ENRICH_MAX_POLLS = 5;
+  const ENRICH_INTERVAL_MS = 2000;
+  let enrichPollCount = 0;
+  let enrichTimer = null;
+
+  function collectBarcodes() {
+    var seen = {}, list = [];
+    ALL_ROWS.forEach(function(r) {
+      var code = String(r.barkod || '').trim();
+      if (code && !seen[code]) { seen[code] = 1; list.push(code); }
+    });
+    return list;
+  }
+  function applyEnrichment(items) {
+    if (!items) return false;
+    var changed = false;
+    ALL_ROWS.forEach(function(r) {
+      var hit = items[r.barkod];
+      if (!hit) return;
+      if (hit.model && hit.model !== r.model) { r.model = hit.model; changed = true; }
+      if (hit.image && hit.image !== r.gorsel) { r.gorsel = hit.image; changed = true; }
+    });
+    if (changed) { populateColFilters(); applyFilter(); }
+    return changed;
+  }
+  function pollEnrichment() {
+    if (document.hidden || enrichPollCount >= ENRICH_MAX_POLLS) return;
+    var barcodes = collectBarcodes();
+    if (!barcodes.length) return;
+    enrichPollCount += 1;
+    fetch('/online-eticaret/api/product-enrichment?barcodes=' + encodeURIComponent(barcodes.join(',')), { credentials:'same-origin', method:'GET' })
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        if (data && data.items) applyEnrichment(data.items);
+        if (data && !data.ready && enrichPollCount < ENRICH_MAX_POLLS && !document.hidden) {
+          enrichTimer = setTimeout(pollEnrichment, ENRICH_INTERVAL_MS);
+        }
+      }).catch(function(){});
+  }
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) { if (enrichTimer) clearTimeout(enrichTimer); return; }
+    if (enrichPollCount < ENRICH_MAX_POLLS) pollEnrichment();
   });
 
-  /* ── İlk yükleme ── */
-  updateCounts();
-  populateColFilters();
-  applyFilter();
+  const POLL_DATE_FILTER = '{{ date_filter|default("today") }}';
+  const POLL_INTERVAL_MS = {{ poll_interval_seconds|default(30) }} * 1000;
+  const POLL_INITIAL_DELAY_MS = POLL_INTERVAL_MS;
+  let pollTimer = null;
+  let pollInFlight = false;
+  let pollCursor = '{{ poll_cursor|default("") }}';
+  let pollBackoffMs = POLL_INTERVAL_MS;
+  let pollVisibilityKick = false;
+  const knownPackageKeys = {};
 
+  function packageKey(row) {
+    return String(row.magaza || '') + '|' + String(row.pkg_id || row.no || '');
+  }
+  function indexKnownPackages() {
+    Object.keys(knownPackageKeys).forEach(function(k) { delete knownPackageKeys[k]; });
+    ALL_ROWS.forEach(function(r) { knownPackageKeys[packageKey(r)] = 1; });
+  }
+  function showPollToast(count, outsideFilter) {
+    if (!count) return;
+    var el = document.getElementById('oet-poll-toast');
+    if (!el) return;
+    if (outsideFilter) {
+      el.innerHTML = 'Yeni sipariş geldi (' + count + ') — mevcut filtre dışında <button type="button" class="oet-toast-btn" id="oet-toast-show-all">Tümünü Göster</button>';
+      var showAllBtn = document.getElementById('oet-toast-show-all');
+      if (showAllBtn) {
+        showAllBtn.addEventListener('click', function() {
+          activeFilter = 'all';
+          document.querySelectorAll('.oet-fl').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.filter === 'all');
+          });
+          var magazaSelect = document.getElementById('oet-magaza');
+          if (magazaSelect) magazaSelect.value = 'all';
+          applyFilter();
+          el.classList.remove('show');
+        });
+      }
+    } else {
+      el.textContent = 'Yeni sipariş geldi (' + count + ')';
+    }
+    el.classList.add('show');
+    setTimeout(function() { el.classList.remove('show'); }, 4000);
+  }
+  function enrichRowsFromCache(items) {
+    if (!items || !items.length) return;
+    var barcodes = items.map(function(r) { return r.barkod; }).filter(Boolean);
+    if (!barcodes.length) return;
+    fetch('/online-eticaret/api/product-enrichment?barcodes=' + encodeURIComponent(barcodes.join(',')), { credentials:'same-origin', method:'GET' })
+      .then(function(r){ return r.json(); })
+      .then(function(data) { if (data && data.items) applyEnrichment(data.items); })
+      .catch(function(){});
+  }
+  function removePackageRows(key) {
+    ALL_ROWS = ALL_ROWS.filter(function(r) { return packageKey(r) !== key; });
+  }
+  function upsertPackageRows(items) {
+    if (!items || !items.length) return;
+    var key = packageKey(items[0]);
+    removePackageRows(key);
+    items.forEach(function(item) { ALL_ROWS.push(item); });
+    knownPackageKeys[key] = 1;
+  }
+  function packageMatchesCurrentFilter(packageItems) {
+    // Check if at least one row of the package matches the current active filter
+    if (!packageItems || !packageItems.length) return false;
+    var firstRow = packageItems[0];
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'Solariz') return firstRow.magaza === 'Solariz';
+    if (activeFilter === 'Epona') return firstRow.magaza === 'Epona';
+    if (activeFilter === 'TOPLANIYOR') return firstRow.durum === 'TOPLANIYOR';
+    if (activeFilter === 'GECİKTİ') return firstRow.kalan && firstRow.kalan.indexOf('GECİKTİ') === 0;
+    if (activeFilter === 'BUGÜN') return firstRow.kalan && firstRow.kalan.toLowerCase().indexOf('bugün') !== -1;
+    return true; // fallback
+  }
+  function applyOrderUpdates(data) {
+    if (!data || data.busy) return false;
+    var changed = false;
+    var enrichBatch = [];
+
+    // 1. REMOVED PACKAGES — remove all rows atomically per package
+    (data.removed_package_keys || []).forEach(function(key) {
+      removePackageRows(key);
+      delete knownPackageKeys[key];
+      changed = true;
+    });
+
+    // 2. UPDATED PACKAGES — group by package key, replace atomically
+    var updatedByKey = {};
+    (data.updated_packages || []).forEach(function(item) {
+      var key = packageKey(item);
+      if (!updatedByKey[key]) updatedByKey[key] = [];
+      updatedByKey[key].push(item);
+    });
+    Object.keys(updatedByKey).forEach(function(key) {
+      upsertPackageRows(updatedByKey[key]);
+      enrichBatch = enrichBatch.concat(updatedByKey[key]);
+      changed = true;
+    });
+
+    // 3. NEW PACKAGES — group by package key, add atomically (no partial multi-line packages)
+    var newByKey = {};
+    (data.new_packages || []).forEach(function(item) {
+      var key = packageKey(item);
+      if (!newByKey[key]) newByKey[key] = [];
+      newByKey[key].push(item);
+    });
+    var actuallyAddedPackageCount = 0;
+    var anyAddedOutsideFilter = false;
+    Object.keys(newByKey).forEach(function(key) {
+      // Only add if the package is not already known (prevents duplicate)
+      if (knownPackageKeys[key]) return;
+      // Add ALL rows of this package atomically
+      newByKey[key].forEach(function(item) { ALL_ROWS.push(item); });
+      knownPackageKeys[key] = 1;
+      enrichBatch = enrichBatch.concat(newByKey[key]);
+      actuallyAddedPackageCount += 1;
+      changed = true;
+      // Check if this package is outside the current filter
+      if (!packageMatchesCurrentFilter(newByKey[key])) {
+        anyAddedOutsideFilter = true;
+      }
+    });
+
+    if (!changed) return false;
+
+    // Sort by aciliyet (newest/most urgent first)
+    ALL_ROWS.sort(function(a, b) { return a.aciliyet - b.aciliyet; });
+
+    // Update all counters and KPIs
+    updateCounts();
+    updateKPICards();
+    populateColFilters();
+    applyFilter();
+
+    // Show toast with actual added count and filter-outside notification
+    showPollToast(actuallyAddedPackageCount, anyAddedOutsideFilter);
+
+    enrichRowsFromCache(enrichBatch);
+    setSystemStatus(true, false);
+    touchLastUpdate();
+    return true;
+  }
+  function scheduleOrderPoll(delayMs) {
+    if (POLL_DATE_FILTER !== 'today') return;
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(runOrderPoll, delayMs);
+  }
+  function runOrderPoll() {
+    if (POLL_DATE_FILTER !== 'today' || document.hidden) { pollTimer = null; return; }
+    if (pollInFlight) { scheduleOrderPoll(pollBackoffMs); return; }
+    pollInFlight = true;
+    var url = '/online-eticaret/api/order-updates?days=today';
+    if (pollCursor) url += '&since=' + encodeURIComponent(pollCursor);
+    fetch(url, { credentials:'same-origin', method:'GET' })
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        if (data && data.ok && !data.busy) {
+          if (data.cursor) pollCursor = data.cursor;
+          if (data.error) {
+            pollBackoffMs = (data.backoff_seconds || 60) * 1000;
+            setSystemStatus(false, false);
+          } else {
+            pollBackoffMs = (data.backoff_seconds || POLL_INTERVAL_MS / 1000) * 1000;
+            applyOrderUpdates(data);
+            setSystemStatus(true, false);
+            touchLastUpdate();
+          }
+        } else if (data && data.busy) {
+          pollBackoffMs = (data.retry_after_seconds || 5) * 1000;
+        }
+      })
+      .catch(function() {
+        pollBackoffMs = Math.min(pollBackoffMs * 2, 300000);
+        setSystemStatus(false, false);
+      })
+      .finally(function() {
+        pollInFlight = false;
+        if (!document.hidden) scheduleOrderPoll(pollBackoffMs);
+      });
+  }
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
+      pollVisibilityKick = false;
+      return;
+    }
+    if (!pollVisibilityKick && !pollInFlight) {
+      pollVisibilityKick = true;
+      runOrderPoll();
+    }
+  });
+
+  updateCounts();
+  updateKPICards();
+  populateColFilters();
+  updateProgressBars();
+  applyFilter();
+  indexKnownPackages();
+  pollEnrichment();
+  if (POLL_DATE_FILTER === 'today') scheduleOrderPoll(POLL_INITIAL_DELAY_MS);
+
+  window.__OET_ENRICH__ = { max_polls: ENRICH_MAX_POLLS, interval_ms: ENRICH_INTERVAL_MS };
+  window.__OET_POLL__ = { interval_ms: POLL_INTERVAL_MS, initial_delay_ms: POLL_INITIAL_DELAY_MS, date_filter: POLL_DATE_FILTER };
+  window.__OET_PERF__ = { render_ms: Math.round(performance.now() - tFront), row_count: ALL_ROWS.length, page_size: PAGE_SIZE };
+  try {
+    fetch('/dev/performance/client', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
+      body: JSON.stringify({ render_ms: window.__OET_PERF__.render_ms, row_count: ALL_ROWS.length, json_chars: JSON.stringify(ALL_ROWS).length })
+    }).catch(function(){});
+  } catch (err) {}
 })();
 </script>
 {% endblock %}

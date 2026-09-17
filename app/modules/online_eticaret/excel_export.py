@@ -18,6 +18,7 @@ from openpyxl.utils import get_column_letter
 
 HEADERS = [
     "Mağaza",
+    "Trendyol Status",
     "Gecikme Durumu",
     "Sipariş Tarihi",
     "Teslimat Son Tarihi",
@@ -51,6 +52,7 @@ SUMMARY_HEADERS = [
 ]
 
 # Boyama için kolon indeksleri
+_TRENDYOL_STATUS_COL = HEADERS.index("Trendyol Status")
 _DELAY_COL = HEADERS.index("Gecikme Durumu")
 _SUM_STATUS_COL = SUMMARY_HEADERS.index("En Acil Durum")
 _SUM_DELAYED_COL = SUMMARY_HEADERS.index("Gecikmeli Sipariş")
@@ -119,10 +121,16 @@ def _model_code_from_name(name, size):
 
 
 def _model_code(line, model_map):
-    """Önce ürün API'sinden (barkod->productMainId), bulunamazsa ad'dan çıkarır."""
+    """Önce ürün API'sinden (barkod->productMainId), bulunamazsa sipariş satırı, sonra ad."""
     barcode = str(line.get("barcode") or "")
     if model_map and barcode in model_map:
         return model_map[barcode]
+    main_id = str(line.get("productMainId") or "").strip()
+    if main_id:
+        return main_id
+    merchant_sku = str(line.get("merchantSku") or "").strip()
+    if merchant_sku:
+        return merchant_sku
     return _model_code_from_name(line.get("productName"), line.get("productSize"))
 
 
@@ -153,6 +161,20 @@ def _fmt_dt(ms):
     except (TypeError, ValueError):
         return ""
     return datetime.fromtimestamp(ms / 1000).strftime("%d.%m.%Y %H:%M")
+
+
+def pkg_order_date_map(orders):
+    """Paket id -> orderDate ms (Trendyol API)."""
+    mapping = {}
+    for order in orders or []:
+        pkg_id = str(order.get('id') or '').strip()
+        if not pkg_id:
+            continue
+        try:
+            mapping[pkg_id] = int(order.get('orderDate'))
+        except (TypeError, ValueError):
+            continue
+    return mapping
 
 
 def _human_dur(ms):
@@ -188,6 +210,7 @@ def orders_to_rows(orders, store_name="", model_map=None, now_ms=None):
     """Sipariş paketlerini düz satır listesine çevirir (her ürün ayrı satır).
 
     Siparişler kargo son tarihine göre artan sıralanır (en acil en üstte).
+    Trendyol status bilgisi korunur.
     """
     if now_ms is None:
         now_ms = int(time.time() * 1000)
@@ -202,6 +225,7 @@ def orders_to_rows(orders, store_name="", model_map=None, now_ms=None):
         order_date = _fmt_dt(order.get("orderDate"))
         deadline = _fmt_dt(order.get("agreedDeliveryDate"))
         delay_str, _ = _delay_text(_deadline_ms(order), now_ms)
+        trendyol_status = str(order.get("status") or "").strip()
 
         for line in order.get("lines") or []:
             model = _model_code(line, model_map)
@@ -210,6 +234,7 @@ def orders_to_rows(orders, store_name="", model_map=None, now_ms=None):
             rows.append(
                 [
                     store_name,
+                    trendyol_status,
                     delay_str,
                     order_date,
                     deadline,
@@ -282,25 +307,43 @@ def summary_rows(orders, model_map=None, now_ms=None):
 
 
 def dashboard_stats(orders, model_map=None, now_ms=None):
-    """Panel için özet istatistikleri hesaplar."""
+    """Panel için özet istatistikleri hesaplar.
+
+    total_orders = benzersiz paket sayısı (unique shipmentPackageId)
+    total_qty = quantity toplamı
+    total_lines = satır sayısı
+    """
     if now_ms is None:
         now_ms = int(time.time() * 1000)
     day = 24 * 60 * 60 * 1000
 
     stats = {
-        "total_orders": len(orders),
+        "total_orders": 0,  # benzersiz paket sayısı
         "total_lines": 0,
         "total_qty": 0,
         "delayed_orders": 0,
-        "urgent": 0,       # 24 saatten az kalan
+        "urgent": 0,       # 24 saatten az kalan (acil_24h KPI kaynağı)
         "soon": 0,         # 1-3 gün kalan
         "later": 0,        # 3+ gün kalan
         "no_deadline": 0,  # tarih bilgisi yok
         "cargo": {},       # firma -> {orders, qty, delayed}
+        # Trendyol operasyon kuyruk sayıları
+        "created_orders": 0,   # YENİ (Created) paket sayısı
+        "created_qty": 0,
+        "picking_orders": 0,   # İŞLEME ALINAN (Picking) paket sayısı
+        "picking_qty": 0,
     }
     variants = set()
 
+    # Unique package sayısı için set
+    unique_packages = set()
+
     for order in orders:
+        pkg_id = str(order.get("id") or "").strip()
+        if pkg_id:
+            unique_packages.add(pkg_id)
+
+        pkg_status = str(order.get("status") or "").strip()
         d_ms = _deadline_ms(order)
         is_delayed = d_ms != _NO_DEADLINE and d_ms < now_ms
         if is_delayed:
@@ -315,6 +358,15 @@ def dashboard_stats(orders, model_map=None, now_ms=None):
                 stats["soon"] += 1
             else:
                 stats["later"] += 1
+
+        # Operasyon kuyruk sayıları
+        pkg_qty = sum(_qty(l) for l in (order.get("lines") or []))
+        if pkg_status == "Created":
+            stats["created_orders"] += 1
+            stats["created_qty"] += pkg_qty
+        elif pkg_status == "Picking":
+            stats["picking_orders"] += 1
+            stats["picking_qty"] += pkg_qty
 
         cname = (order.get("cargoProviderName") or "—").strip() or "—"
         c = stats["cargo"].setdefault(cname, {"orders": 0, "qty": 0, "delayed": 0})
@@ -335,6 +387,7 @@ def dashboard_stats(orders, model_map=None, now_ms=None):
                 )
             )
 
+    stats["total_orders"] = len(unique_packages)
     stats["variants"] = len(variants)
     return stats
 

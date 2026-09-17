@@ -87,6 +87,7 @@ modules = [
     "server",
     "test.infra",
     "cps.release.history",
+    "online_eticaret",
 ]
 
 [fragment]
