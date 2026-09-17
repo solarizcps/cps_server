@@ -1,0 +1,67 @@
+schema_version = 1
+module         = "online_eticaret"
+version        = "2.0.0"
+phase_code     = "OET_V2_LIVE_READONLY_V1"
+title          = "Online E-Ticaret V2 — Live Read-Only Operations Dashboard"
+status         = "ONAYLANDI"
+date           = "2026-09-17"
+
+# KAPI 5 cözümü: source_type="verified_uncommitted", commit_sha boş.
+# Kaynak değişiklik seti (laptop CPS commit) ayrı alanda tutuluyor.
+# Bu komit içinde kendi nihai SHA'sını yazmak mümkün değildir.
+source_type    = "verified_uncommitted"
+commit_sha     = ""
+approved_by    = "Adem"
+worktree_fingerprint = "oet-v2-live-readonly-v2"
+verification_date    = "2026-09-17"
+verification_evidence = "Adem visual approval on laptop CPS http://127.0.0.1:8080/online-eticaret/; 19 regression tests PASS; Solariz 123 pkgs + Epona 49 pkgs live GET verified; WRITE_ENDPOINT_COUNT=0; source_changeset=c6eb63aae24c87d1c0451bebd534b857f4eb90ac"
+
+summary = """
+Samet PR #5 (samet-e-ticaret-ui-performance-v1, d3bcbb1) laptop CPS entegrasyonu
+ve Trendyol operasyon kuyruk parite düzeltmesi. Yalnız GET; API_WRITE_ENABLED=false.
+Adem görsel onayı tamamlandı.
+"""
+
+changes = [
+  "order_poll.py eklendi: in-memory snapshot, GET-only polling endpoint",
+  "routes.py: paralel mağaza fetch, today/7d/open filtresi, acil_24h KPI, _order_cache_key fix",
+  "trendyol_client.py: 429 retry, timeout, per-seller product cache, background enrichment",
+  "excel_export.py: Trendyol Status kolonu, created/picking kuyruk sayıları, pkg_order_date_map",
+  "index.html: Açık Siparişler dropdown, ACIL24H pill, paket header ilk ürün özeti",
+  "mobil.html: date_filter desteği, flags template context",
+]
+
+changed_files = [
+  "app/modules/online_eticaret/excel_export.py",
+  "app/modules/online_eticaret/order_poll.py",
+  "app/modules/online_eticaret/routes.py",
+  "app/modules/online_eticaret/trendyol_client.py",
+  "app/templates/online_eticaret/index.html",
+  "app/templates/online_eticaret/mobil.html",
+  "dev_tests/test_oet_parity_v2.py",
+]
+
+locked_rules = []
+
+tests = [
+  "19 parity regression tests PASS (test_oet_parity_v2.py)",
+  "Flask smoke: /, /online-eticaret/, /grafik/ — HTTP 200",
+  "WRITE_ENDPOINT_COUNT=0",
+  "NON_GET_TRENDYOL=0",
+  "Solariz 123 pkgs / Epona 49 pkgs live GET verified",
+]
+
+known_issues = [
+  "MOCK rozeti base.html DB_MODE=='mock' kaynakli — CPS SQLite modundan geliyor, API_MODE ile ilgisiz",
+  "Browser console errors otomatik olculemedi",
+]
+
+next_steps = [
+  "PR olustur: release/oet-v2-live-readonly-v2 -> main",
+  "Production server deploy: Adem RDP onayindan sonra",
+]
+
+test_result   = "PASS"
+db_write      = false
+server_restart = false
+push_status   = "PENDING"
