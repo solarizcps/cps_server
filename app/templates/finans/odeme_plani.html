@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Cari Hareketler - Finans{% endblock %}
+{% block title %}Finans Yönetimi - Finans{% endblock %}
 
 {% set active = 'finans' %}
 
@@ -14,9 +14,9 @@
   {# [CH_HEADER_V1] Kompakt tek satır başlık #}
   <div class="op-ch-header">
     <div class="op-ch-header-left">
-      <nav class="op-ch-breadcrumb">Finans &gt; Cari Hareketler</nav>
+      <nav class="op-ch-breadcrumb">Finans &gt; Finans Yönetimi</nav>
       <div class="op-ch-title-row">
-        <h1 class="op-ch-title">Cari Hareketler</h1>
+        <h1 class="op-ch-title">Finans Yönetimi</h1>
         {# Durum göstergesi — tüm sekmeler için #}
         {% if payable_rm_v1 %}
           {% set _sl = rm_status_label %}

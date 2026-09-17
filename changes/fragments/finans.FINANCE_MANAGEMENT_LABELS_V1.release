@@ -1,0 +1,14 @@
+## finans.FINANCE_MANAGEMENT_LABELS_V1 — 2026-09-17
+
+**Finans Yönetimi görsel etiket hizalaması (KAPI48)**
+
+Sidebar ve `/finans/odeme-plani` sayfa başlığı **Finans Yönetimi** olarak hizalandı.
+Main’deki RM, müşteri/tedarikçi sekmeleri ve borç/alacak yönü korundu; yalnız iki template’te etiket hunks.
+
+### Onay
+- KAPI48A Adem görsel onay PASS
+- Route: `/finans/odeme-plani` (değişmedi)
+
+### Dosyalar
+- `app/templates/base.html`
+- `app/templates/finans/odeme_plani.html`
