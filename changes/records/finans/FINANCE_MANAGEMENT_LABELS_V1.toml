@@ -1,6 +1,6 @@
 schema_version = 1
 module = "finans"
-version = "v1.0.0"
+version = "FINANCE_MANAGEMENT_LABELS_V1"
 phase_code = "FINANCE_MANAGEMENT_LABELS_V1"
 title = "Finans Yönetimi — onaylı sidebar ve sayfa etiket hizalaması"
 status = "ONAYLANDI"
