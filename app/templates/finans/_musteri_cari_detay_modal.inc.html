@@ -1,0 +1,663 @@
+<div class="op-modal-backdrop" id="opCariDetayModal" hidden>
+  <div class="op-modal op-modal-cari-detay" id="opCariDetayPanel" role="dialog" aria-modal="true">
+    <div class="op-cd-head">
+      <div class="op-cd-head-text">
+        <div class="op-cd-title-row">
+          <span id="opCariDetayAdi" class="op-cd-title"></span>
+          <span id="opCariDetayDirBadge" class="op-cd-badge">Müşteri</span>
+        </div>
+        <div id="opCariDetayMeta" class="op-cd-meta"></div>
+      </div>
+      <button type="button" id="opCariDetayKapat" class="op-modal-close" aria-label="Kapat">&times;</button>
+    </div>
+
+    <div class="op-cd-ozet" id="opCariDetayOzet">
+      <!-- Birinci satır: açık gri bant, dikey ayraçlı dört kolon -->
+      <div class="op-cd-info-band">
+        <div class="op-cd-info-col" data-cd-card="calisma">
+          <div class="op-cd-info-ico" aria-hidden="true">🤝</div>
+          <div class="op-cd-info-text">
+            <div class="op-cd-info-label">Çalışma Şekli</div>
+            <div class="op-cd-info-value" id="opCdValCalisma">—</div>
+          </div>
+        </div>
+        <div class="op-cd-info-col" data-cd-card="vade">
+          <div class="op-cd-info-ico" aria-hidden="true">📅</div>
+          <div class="op-cd-info-text">
+            <div class="op-cd-info-label">Anlaşmalı Vade</div>
+            <div class="op-cd-info-value" id="opCdValVade">—</div>
+          </div>
+        </div>
+        <div class="op-cd-info-col" data-cd-card="ortalama">
+          <div class="op-cd-info-ico" aria-hidden="true">📊</div>
+          <div class="op-cd-info-text">
+            <div class="op-cd-info-label">Gerçekleşen Ort. Tahsilat</div>
+            <div class="op-cd-info-value" id="opCdValOrtalama">—</div>
+            <div class="op-cd-info-sub" id="opCdValOrtalamaSub" hidden></div>
+          </div>
+        </div>
+        <div class="op-cd-info-col op-cd-info-col-last" data-cd-card="yontem">
+          <div class="op-cd-info-ico" aria-hidden="true">💳</div>
+          <div class="op-cd-info-text">
+            <div class="op-cd-info-label">Ödeme Yöntemi</div>
+            <div class="op-cd-info-value" id="opCdValYontem">—</div>
+          </div>
+        </div>
+      </div>
+      <!-- İkinci satır: beş KPI kartı -->
+      <div class="op-cd-row-kpi">
+        <div class="op-cd-card" data-cd-card="acik">
+          <div class="op-cd-card-icon" aria-hidden="true">&#128196;</div>
+          <div class="op-cd-card-label" id="opCdLblAcik">Açık Alacak</div>
+          <div class="op-cd-card-value op-cd-val-danger" id="opCdValAcik">—</div>
+        </div>
+        <div class="op-cd-card" data-cd-card="tahsilat">
+          <div class="op-cd-card-icon" aria-hidden="true">&#10003;</div>
+          <div class="op-cd-card-label">Son Tahsilat</div>
+          <div class="op-cd-card-value" id="opCdValTahsilat">—</div>
+          <div class="op-cd-card-sub" id="opCdValTahsilatSub" hidden></div>
+        </div>
+        <div class="op-cd-card" data-cd-card="satis">
+          <div class="op-cd-card-icon" aria-hidden="true">&#128722;</div>
+          <div class="op-cd-card-label">Son Satış</div>
+          <div class="op-cd-card-value" id="opCdValSatis">—</div>
+          <div class="op-cd-card-sub" id="opCdValSatisSub" hidden></div>
+        </div>
+        <div class="op-cd-card" data-cd-card="cek">
+          <div class="op-cd-card-icon" aria-hidden="true">&#128203;</div>
+          <div class="op-cd-card-label">Portföy Çeki</div>
+          <div class="op-cd-card-value" id="opCdValCek">—</div>
+          <div class="op-cd-card-sub" id="opCdValCekSub" hidden></div>
+        </div>
+        <div class="op-cd-card" data-cd-card="soz">
+          <div class="op-cd-card-icon" aria-hidden="true">&#129309;</div>
+          <div class="op-cd-card-label">Ödeme Sözü</div>
+          <div class="op-cd-card-value" id="opCdValSoz">Söz yok</div>
+          <div class="op-cd-card-sub" id="opCdValSozSub" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="op-har-tabs op-cd-tabs" id="opCariDetayTabs">
+      <button type="button" class="op-har-tab active" data-cdtab="hareketler">Cari Hareketleri</button>
+      <button type="button" class="op-har-tab" data-cdtab="anlasmalar">Anlaşmalar</button>
+      <button type="button" class="op-har-tab" data-cdtab="planlama">Planlanan Tahsilat</button>
+      <button type="button" class="op-har-tab" data-cdtab="notlar">Takip Notları</button>
+    </div>
+
+    <div id="opCariDetayContent" class="op-cd-body">
+      <div id="opCdTabHareketler" class="op-cd-tab-panel">
+        <div class="op-cd-filtreler">
+          <div class="op-cd-search-wrap">
+            <svg class="op-cd-search-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg>
+            <input type="text" id="opCdMetin" class="op-cd-search" placeholder="Tarih, belge no veya açıklama ara...">
+          </div>
+          <div class="op-cd-daterange">
+            <button type="button" id="opCdTarihBtn" class="op-cd-daterange-btn">Tarih Aralığı Seçin</button>
+            <div id="opCdTarihPop" class="op-cd-daterange-pop" hidden>
+              <label>Başlangıç <input type="date" id="opCdTarihBas"></label>
+              <label>Bitiş <input type="date" id="opCdTarihBit"></label>
+            </div>
+          </div>
+          <button type="button" id="opCdFiltrele" class="op-cd-filtre-btn">
+            <svg class="op-cd-search-icon" style="position:static;width:12px;height:12px;transform:none;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg>
+            Filtrele
+          </button>
+        </div>
+        <div id="opCdLoadEl" class="op-cd-load">Yükleniyor…</div>
+        <div id="opCdErrEl" class="op-cd-err" hidden></div>
+        <div id="opCdTableEl" class="op-cd-tablo-wrap">
+          <table class="op-cd-table" id="opCdTable">
+            <thead>
+              <tr>
+                <th>Tarih</th>
+                <th>İşlem</th>
+                <th>Belge No</th>
+                <th>Açıklama</th>
+                <th>Vade</th>
+                <th class="op-num">Borç</th>
+                <th class="op-num">Alacak</th>
+                <th>PB</th>
+              </tr>
+            </thead>
+            <tbody id="opCdTbody">
+              <tr><td colspan="8" class="op-empty">Kayıt bulunamadı.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="opCdLazyLoader" class="op-cd-lazy" hidden>Yükleniyor…</div>
+      </div>
+      <div id="opCdTabAnlasmalar" class="op-cd-tab-panel" hidden>
+        <div class="op-cd-placeholder">Anlaşma kayıtları — yakında</div>
+      </div>
+      <div id="opCdTabPlanlama" class="op-cd-tab-panel" hidden>
+        <div class="op-cd-placeholder">Planlanan tahsilat — yakında</div>
+      </div>
+      <div id="opCdTabNotlar" class="op-cd-tab-panel" hidden>
+        <div class="op-cd-placeholder">Takip notları — yakında</div>
+      </div>
+    </div>
+
+    <div id="opCdAltBand" class="op-cd-alt">
+      <div class="op-cd-alt-card">
+        <div class="op-cd-alt-ico" aria-hidden="true">📄</div>
+        <div class="op-cd-alt-text">
+          <div class="op-cd-alt-label">Toplam Borç</div>
+          <div class="op-cd-alt-value" id="opCdFiltBorc">—</div>
+        </div>
+      </div>
+      <div class="op-cd-alt-card">
+        <div class="op-cd-alt-ico" aria-hidden="true">📄</div>
+        <div class="op-cd-alt-text">
+          <div class="op-cd-alt-label">Toplam Alacak</div>
+          <div class="op-cd-alt-value" id="opCdFiltAlacak">—</div>
+        </div>
+      </div>
+      <div class="op-cd-alt-card">
+        <div class="op-cd-alt-ico" aria-hidden="true">⚖️</div>
+        <div class="op-cd-alt-text">
+          <div class="op-cd-alt-label">Net Hareket</div>
+          <div class="op-cd-alt-value" id="opCdFiltNet">—</div>
+        </div>
+      </div>
+      <div class="op-cd-alt-card">
+        <div class="op-cd-alt-ico" aria-hidden="true">🔴</div>
+        <div class="op-cd-alt-text">
+          <div class="op-cd-alt-label" id="opCdLblGuncel">Güncel Açık Alacak</div>
+          <div class="op-cd-alt-value" id="opCdGuncelBakiye">—</div>
+        </div>
+      </div>
+      <div class="op-cd-alt-card">
+        <div class="op-cd-alt-ico" aria-hidden="true">📋</div>
+        <div class="op-cd-alt-text">
+          <div class="op-cd-alt-label">Hareket</div>
+          <div class="op-cd-alt-value" id="opCdFiltSay">0 hareket</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var _cdActive = false;
+  var _cdCtx = {};
+  var _cdPage = 1;
+  var _cdScrollY = 0;
+  var _cdNextCursor = null;
+  var _cdLoadedKeys = {};
+  var _cdIsLoading = false;
+  var _cdAllLoaded = false;
+  var _cdScrollListenerSet = false;
+  var _cdFilters = {metin:'', tarih_bas:'', tarih_bit:''};
+  var _cdSnap = null;
+
+  var CS_LABEL = {PESIN:'Peşin', VADELI:'Vadeli', KARMA:'Karma'};
+  var OY_LABEL = {
+    NAKIT:'Nakit', HAVALE:'Havale', CEK:'Çek', KREDI_KARTI:'Kredi Kartı',
+    NAKIT_HAVALE:'Nakit / Havale', HAVALE_CEK:'Havale / Çek', NAKIT_CEK:'Nakit / Çek', KARMA:'Karma'
+  };
+
+  function _titleTr(s) {
+    if (!s) return '';
+    var trMap = { 'İ':'i','I':'ı','Ş':'ş','Ğ':'ğ','Ü':'ü','Ö':'ö','Ç':'ç' };
+    return s.toLowerCase()
+      .replace(/[İIŞĞÜÖÇ]/gi, function(c){ return trMap[c] || c; })
+      .replace(/(?:^|\s|[.,\-–(\/])([a-züşğıöçi])/g, function(m, c) {
+        var up = {'i':'İ','ı':'I','ş':'Ş','ğ':'Ğ','ü':'Ü','ö':'Ö','ç':'Ç','â':'Â','î':'Î','û':'Û'};
+        return m.replace(c, up[c] || c.toUpperCase());
+      });
+  }
+  function _esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function _sym(pb) {
+    return pb === 'USD' ? '$' : pb === 'EUR' ? '€' : '₺';
+  }
+  function _fmtMoney(v, pb) {
+    if (v === null || v === undefined || v === '') return '';
+    var n = parseFloat(v);
+    if (isNaN(n) || n === 0) return '';
+    return _sym(pb || (_cdCtx && _cdCtx.pb) || 'TRY') + n.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function _fmtMoneyOrDash(v, pb) {
+    return _fmtMoney(v, pb) || '—';
+  }
+  function _fmtTotal(v, pb) {
+    if (v === null || v === undefined || v === '') return '—';
+    var n = parseFloat(v);
+    if (isNaN(n)) return '—';
+    return _sym(pb || (_cdCtx && _cdCtx.pb) || 'TRY') + n.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  /* Satır tutarı: "0" / "0.0" = boş değil — değeri olduğu zaman göster, yoksa — */
+  function _fmtRowAmount(v, pb) {
+    if (v === null || v === undefined || v === '') return '—';
+    var n = parseFloat(v);
+    if (isNaN(n) || n <= 0) return '—';
+    return _sym(pb || (_cdCtx && _cdCtx.pb) || 'TRY') + n.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function _fmtDate(s) {
+    if (!s) return '';
+    var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return m[3] + '.' + m[2] + '.' + m[1];
+    return String(s);
+  }
+  function _setText(id, val) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+  function _setSub(id, val) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (val) { el.textContent = val; el.hidden = false; }
+    else { el.textContent = ''; el.hidden = true; }
+  }
+  function _setInfoSub(id, val) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val || '';
+    el.hidden = !val;
+  }
+  function _toast(msg) {
+    var el = document.getElementById('opToast');
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+    setTimeout(function(){ el.hidden = true; }, 3500);
+  }
+
+  function _resetCards() {
+    _setText('opCdValCalisma', '—');
+    _setText('opCdValVade', '—');
+    _setText('opCdValOrtalama', '—');
+    _setSub('opCdValOrtalamaSub', '');
+    _setText('opCdValYontem', '—');
+    _setText('opCdLblAcik', 'Açık Alacak');
+    _setText('opCdValAcik', '—');
+    _setText('opCdValTahsilat', '—');
+    _setSub('opCdValTahsilatSub', '');
+    _setText('opCdValSatis', '—');
+    _setSub('opCdValSatisSub', '');
+    _setText('opCdValCek', '—');
+    _setSub('opCdValCekSub', '');
+    _setText('opCdValSoz', 'Söz yok');
+    _setSub('opCdValSozSub', '');
+    _setText('opCdFiltBorc', '—');
+    _setText('opCdFiltAlacak', '—');
+    _setText('opCdFiltNet', '—');
+    _setText('opCdLblGuncel', 'Güncel Açık Alacak');
+    _setText('opCdGuncelBakiye', '—');
+    _setText('opCdFiltSay', '0 hareket');
+  }
+
+  function _fillAyar(ayar, ortalama) {
+    var csMode = (ayar && (ayar.calisma_sekli_effective || ayar.calisma_sekli_mode)) || '';
+    csMode = String(csMode).toUpperCase();
+    _setText('opCdValCalisma', CS_LABEL[csMode] || '—');
+    var vade = ayar && ayar.anlasmali_vade_gun;
+    _setText('opCdValVade', (vade !== null && vade !== undefined && vade !== '') ? (vade + ' gün') : '—');
+    var oy = (ayar && (ayar.odeme_yontemi_effective || ayar.odeme_yontemi_mode)) || '';
+    oy = String(oy).toUpperCase();
+    _setText('opCdValYontem', OY_LABEL[oy] || '—');
+    if (ortalama && ortalama.ortalama_gun && parseInt(ortalama.ornek_sayisi || 0, 10) > 0) {
+      _setText('opCdValOrtalama', ortalama.ortalama_gun + ' gün');
+      _setInfoSub('opCdValOrtalamaSub', '');
+    } else {
+      _setText('opCdValOrtalama', '—');
+      _setInfoSub('opCdValOrtalamaSub', '');
+    }
+  }
+
+  function _fillOzet(d) {
+    _cdSnap = d || {};
+    var pb = _cdCtx.pb || 'TRY';
+    var acik = parseFloat(d.open_receivable || 0);
+    var avans = parseFloat(d.customer_overpayment || 0);
+    var acikEl = document.getElementById('opCdValAcik');
+    if (acik > 0) {
+      _setText('opCdLblAcik', 'Açık Alacak');
+      _setText('opCdValAcik', _fmtMoneyOrDash(d.open_receivable, pb));
+      if (acikEl) { acikEl.classList.add('op-cd-val-danger'); acikEl.classList.remove('op-cd-val-ok'); }
+    } else if (avans > 0) {
+      _setText('opCdLblAcik', 'Müşteri Avansı');
+      _setText('opCdValAcik', _fmtMoneyOrDash(d.customer_overpayment, pb));
+      if (acikEl) { acikEl.classList.add('op-cd-val-ok'); acikEl.classList.remove('op-cd-val-danger'); }
+    } else {
+      _setText('opCdLblAcik', 'Açık Alacak');
+      _setText('opCdValAcik', '—');
+      if (acikEl) { acikEl.classList.remove('op-cd-val-danger'); acikEl.classList.remove('op-cd-val-ok'); }
+    }
+
+    var tahTarih = _fmtDate(d.son_tahsilat_tarih);
+    var tahTutar = _fmtMoney(d.son_tahsilat_tutar, pb);
+    var tahYon = d.son_tahsilat_yontem || '';
+    if (tahTarih && tahTutar) {
+      _setText('opCdValTahsilat', tahTarih);
+      _setSub('opCdValTahsilatSub', tahTutar + (tahYon ? ' · ' + tahYon : ''));
+    } else if (tahTarih) {
+      _setText('opCdValTahsilat', tahTarih);
+      _setSub('opCdValTahsilatSub', tahYon || '');
+    } else if (tahTutar) {
+      _setText('opCdValTahsilat', tahTutar);
+      _setSub('opCdValTahsilatSub', tahYon || '');
+    } else {
+      _setText('opCdValTahsilat', '—');
+      _setSub('opCdValTahsilatSub', '');
+    }
+
+    var satTarih = _fmtDate(d.son_satis_tarih);
+    var satTutar = _fmtMoney(d.son_satis_tutar, pb);
+    _setText('opCdValSatis', satTarih || '—');
+    _setSub('opCdValSatisSub', satTutar || '');
+
+    var cekCnt = parseInt(d.portfoy_cek_cnt || 0, 10);
+    var cekTutar = _fmtMoney(d.portfoy_cek_tutar, pb);
+    var cekVade = _fmtDate(d.portfoy_cek_vade);
+    if (cekTutar) {
+      _setText('opCdValCek', cekTutar);
+      _setSub('opCdValCekSub', cekCnt > 0 ? (cekCnt + ' çek') : '');
+    } else if (cekCnt > 0) {
+      _setText('opCdValCek', cekCnt + ' çek');
+      _setSub('opCdValCekSub', '');
+    } else {
+      _setText('opCdValCek', '—');
+      _setSub('opCdValCekSub', '');
+    }
+    if (cekVade) {
+      var sub = document.getElementById('opCdValCekSub');
+      if (sub) {
+        sub.textContent = (sub.hidden ? '' : sub.textContent + ' · ') + 'vade: ' + cekVade;
+        sub.hidden = false;
+      }
+    }
+
+    if (d.soz_has_active && d.soz_amount_label) {
+      _setText('opCdValSoz', d.soz_amount_label);
+      _setSub('opCdValSozSub', 'Var');
+    } else {
+      _setText('opCdValSoz', 'Söz yok');
+      _setSub('opCdValSozSub', '');
+    }
+
+    if (acik > 0) {
+      _setText('opCdLblGuncel', 'Güncel Açık Alacak');
+      _setText('opCdGuncelBakiye', _fmtMoneyOrDash(d.open_receivable, pb));
+    } else if (avans > 0) {
+      _setText('opCdLblGuncel', 'Müşteri Avansı');
+      _setText('opCdGuncelBakiye', _fmtMoneyOrDash(d.customer_overpayment, pb));
+    } else {
+      _setText('opCdLblGuncel', 'Güncel Açık Alacak');
+      _setText('opCdGuncelBakiye', '—');
+    }
+  }
+
+  function _pillClass(tip) {
+    var t = String(tip || '').toLowerCase();
+    if (t.indexOf('çek') >= 0 || t.indexOf('cek') >= 0) return 'op-cd-pill-cek';
+    if (t.indexOf('nakit') >= 0) return 'op-cd-pill-nakit';
+    if (t.indexOf('tahsil') >= 0 || t.indexOf('banka') >= 0 || t.indexOf('havale') >= 0) return 'op-cd-pill-tahsilat';
+    if (t.indexOf('satış') >= 0 || t.indexOf('satis') >= 0 || t.indexOf('hizmet') >= 0) return 'op-cd-pill-fatura';
+    if (t.indexOf('iade') >= 0) return 'op-cd-pill-iade';
+    if (t.indexOf('düzelt') >= 0 || t.indexOf('duzelt') >= 0 || t.indexOf('mahsup') >= 0 || t.indexOf('virman') >= 0) return 'op-cd-pill-diger';
+    return 'op-cd-pill-diger';
+  }
+
+  function _openModal(cariKod, location, pb, cariAdi) {
+    if (!cariKod || !String(cariKod).match(/^120\./)) return;
+    _cdActive = true;
+    _cdCtx = { cariKod: cariKod, location: location, pb: pb || 'TRY', cariAdi: cariAdi || '' };
+    _cdPage = 1;
+    _cdNextCursor = null;
+    _cdLoadedKeys = {};
+    _cdAllLoaded = false;
+    _cdFilters = {metin:'', tarih_bas:'', tarih_bit:''};
+    _cdSnap = null;
+    document.getElementById('opCariDetayAdi').textContent = _titleTr(cariAdi) || cariKod;
+    document.getElementById('opCariDetayMeta').textContent = cariKod + ' · ' + (location || '—') + ' · ' + (pb || 'TRY');
+    var badge = document.getElementById('opCariDetayDirBadge');
+    if (badge) badge.textContent = 'Müşteri';
+    _resetCards();
+    document.getElementById('opCdMetin').value = '';
+    document.getElementById('opCdTarihBas').value = '';
+    document.getElementById('opCdTarihBit').value = '';
+    document.getElementById('opCdTarihBtn').textContent = 'Tarih Aralığı Seçin';
+    document.getElementById('opCdTarihPop').hidden = true;
+    document.querySelectorAll('#opCariDetayTabs .op-har-tab').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.cdtab === 'hareketler');
+    });
+    document.getElementById('opCdTabHareketler').hidden = false;
+    document.getElementById('opCdTabAnlasmalar').hidden = true;
+    document.getElementById('opCdTabPlanlama').hidden = true;
+    document.getElementById('opCdTabNotlar').hidden = true;
+    var tbody = document.getElementById('opCdTbody');
+    tbody.innerHTML = '<tr><td colspan="8" class="op-empty">Yükleniyor…</td></tr>';
+    document.getElementById('opCdErrEl').hidden = true;
+    _cdScrollY = window.scrollY || document.documentElement.scrollTop;
+    document.getElementById('opCariDetayModal').hidden = false;
+    _cdSetupScrollListener();
+    _cdLoadAyar();
+    _cdLoadOzet();
+    _cdLoadBatch(true);
+  }
+
+  function _closeModal() {
+    _cdActive = false;
+    document.getElementById('opCariDetayModal').hidden = true;
+    window.scrollTo(0, _cdScrollY);
+  }
+
+  function _cdLoadAyar() {
+    var url = '/finans/cariler/musteri/' + encodeURIComponent(_cdCtx.location) + '/' +
+              encodeURIComponent(_cdCtx.cariKod) + '/ayar';
+    fetch(url, {credentials:'same-origin', headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        if (!data || !data.ok) { _fillAyar({}, null); return; }
+        _fillAyar(data.ayar || {}, data.ortalama_gun || null);
+      })
+      .catch(function(){ _fillAyar({}, null); });
+  }
+
+  function _cdLoadOzet() {
+    var url = '/finans/cariler/musteri/' + encodeURIComponent(_cdCtx.location) + '/' +
+              encodeURIComponent(_cdCtx.cariKod) + '/ozet?pb=' + encodeURIComponent(_cdCtx.pb || 'TRY');
+    fetch(url, {credentials:'same-origin', headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.json(); })
+      .then(function(d) {
+        if (!d || !d.ok) return;
+        _fillOzet(d);
+      })
+      .catch(function(){});
+  }
+
+  function _cdLoadBatch(reset) {
+    if (!_cdCtx.cariKod || !_cdCtx.cariKod.match(/^120\./)) return;
+    if (_cdIsLoading || (!reset && _cdAllLoaded)) return;
+    if (reset) {
+      _cdNextCursor = null;
+      _cdLoadedKeys = {};
+      _cdAllLoaded = false;
+    }
+    _cdIsLoading = true;
+    var loadEl = document.getElementById('opCdLoadEl');
+    var loader = document.getElementById('opCdLazyLoader');
+    var errEl = document.getElementById('opCdErrEl');
+    if (!_cdNextCursor) {
+      if (loadEl) loadEl.style.display = 'block';
+    } else if (loader) {
+      loader.hidden = false;
+    }
+    var params = new URLSearchParams();
+    params.set('pb', _cdCtx.pb || 'TRY');
+    params.set('batch_size', '100');
+    if (_cdFilters.metin) params.set('metin', _cdFilters.metin);
+    if (_cdFilters.tarih_bas) params.set('tarih_bas', _cdFilters.tarih_bas);
+    if (_cdFilters.tarih_bit) params.set('tarih_bit', _cdFilters.tarih_bit);
+    if (_cdNextCursor) params.set('cursor_key', _cdNextCursor);
+    var url = '/finans/cariler/musteri/' + encodeURIComponent(_cdCtx.location) + '/' +
+              encodeURIComponent(_cdCtx.cariKod) + '/hareketler?' + params.toString();
+    fetch(url, {credentials:'same-origin', headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        _cdIsLoading = false;
+        if (loadEl) loadEl.style.display = 'none';
+        if (loader) loader.hidden = true;
+        if (!data || !data.ok) {
+          if (errEl) { errEl.textContent = 'Hareketler yüklenemedi.'; errEl.hidden = false; }
+          return;
+        }
+        if (errEl) errEl.hidden = true;
+        var ft = data.filtered_totals || {};
+        _setText('opCdFiltBorc', _fmtTotal(ft.borc, _cdCtx.pb));
+        _setText('opCdFiltAlacak', _fmtTotal(ft.alacak, _cdCtx.pb));
+        _setText('opCdFiltNet', _fmtTotal(ft.net, _cdCtx.pb));
+        _setText('opCdFiltSay', String(ft.filtered_count || 0) + ' hareket');
+        var tbody = document.getElementById('opCdTbody');
+        if (reset) tbody.innerHTML = '';
+        var rows = data.rows || [];
+        rows.forEach(function(r, i) {
+          var key = (r.tarih||'') + '|' + (r.belge_no||'') + '|' + i;
+          if (_cdLoadedKeys[key]) return;
+          _cdLoadedKeys[key] = 1;
+          tbody.appendChild(_cdBuildRow(r));
+        });
+        if (!tbody.children.length) {
+          tbody.innerHTML = '<tr><td colspan="8" class="op-empty">Kayıt bulunamadı.</td></tr>';
+        }
+        _cdNextCursor = data.next_cursor || null;
+        if (!_cdNextCursor || rows.length === 0) _cdAllLoaded = true;
+      })
+      .catch(function() {
+        _cdIsLoading = false;
+        if (loadEl) loadEl.style.display = 'none';
+        if (loader) loader.hidden = true;
+        var errEl = document.getElementById('opCdErrEl');
+        if (errEl) { errEl.textContent = 'Hareketler yüklenemedi.'; errEl.hidden = false; }
+      });
+  }
+
+  function _cdBuildRow(r) {
+    var tr = document.createElement('tr');
+    var pb = r.para_birimi || _cdCtx.pb || 'TRY';
+    var borcStr   = _fmtRowAmount(r.borc,   pb);
+    var alacakStr = _fmtRowAmount(r.alacak, pb);
+    var isBorc    = borcStr !== '—';
+    var isAlacak  = alacakStr !== '—';
+    var tip = r.hareket_turu_adi || r.hareket_turu_kodu || '—';
+    /* Açıklama: fatura için FaturaNo; boşsa belge_no; cfis için tanim */
+    var aciklama = (r.aciklama || '').trim() || String(r.belge_no || '—');
+    var vade = r.vade_tarihi ? _fmtDate(r.vade_tarihi) : '—';
+    tr.innerHTML =
+      '<td style="white-space:nowrap">' + _esc(_fmtDate(r.tarih) || '—') + '</td>' +
+      '<td style="white-space:nowrap"><span class="op-cd-pill ' + _pillClass(tip) + '">' + _esc(tip) + '</span></td>' +
+      '<td class="op-cd-belge">' + _esc(r.belge_no || '—') + '</td>' +
+      '<td class="op-cd-acik" title="' + _esc(r.aciklama || '') + '">' + _esc(aciklama) + '</td>' +
+      '<td style="white-space:nowrap">' + _esc(vade) + '</td>' +
+      '<td class="op-num' + (isBorc   ? ' op-hm-borc'   : '') + '">' + _esc(borcStr)   + '</td>' +
+      '<td class="op-num' + (isAlacak ? ' op-hm-alacak' : '') + '">' + _esc(alacakStr) + '</td>' +
+      '<td style="white-space:nowrap">' + _esc(pb) + '</td>';
+    return tr;
+  }
+
+  function _cdSetupScrollListener() {
+    if (_cdScrollListenerSet) return;
+    var wrap = document.getElementById('opCdTableEl');
+    if (!wrap) return;
+    wrap.addEventListener('scroll', function() {
+      if (_cdAllLoaded || _cdIsLoading) return;
+      if (wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 80) _cdLoadBatch(false);
+    });
+    _cdScrollListenerSet = true;
+  }
+
+  function _applyFilters() {
+    _cdFilters.metin = (document.getElementById('opCdMetin').value || '').trim();
+    _cdFilters.tarih_bas = document.getElementById('opCdTarihBas').value || '';
+    _cdFilters.tarih_bit = document.getElementById('opCdTarihBit').value || '';
+    var btn = document.getElementById('opCdTarihBtn');
+    if (_cdFilters.tarih_bas || _cdFilters.tarih_bit) {
+      btn.textContent = (_fmtDate(_cdFilters.tarih_bas) || '…') + ' – ' + (_fmtDate(_cdFilters.tarih_bit) || '…');
+    } else {
+      btn.textContent = 'Tarih Aralığı Seçin';
+    }
+    document.getElementById('opCdTarihPop').hidden = true;
+    _cdLoadBatch(true);
+  }
+
+  document.getElementById('opCariDetayKapat').addEventListener('click', _closeModal);
+  document.getElementById('opCariDetayModal').addEventListener('click', function(e) {
+    if (e.target === this) _closeModal();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && _cdActive) _closeModal();
+  });
+  document.querySelectorAll('#opCariDetayTabs .op-har-tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var tab = this.dataset.cdtab;
+      document.querySelectorAll('#opCariDetayTabs .op-har-tab').forEach(function(b){ b.classList.remove('active'); });
+      this.classList.add('active');
+      document.getElementById('opCdTabHareketler').hidden = tab !== 'hareketler';
+      document.getElementById('opCdTabAnlasmalar').hidden = tab !== 'anlasmalar';
+      document.getElementById('opCdTabPlanlama').hidden = tab !== 'planlama';
+      document.getElementById('opCdTabNotlar').hidden = tab !== 'notlar';
+    });
+  });
+  document.getElementById('opCdFiltrele').addEventListener('click', _applyFilters);
+  document.getElementById('opCdMetin').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') _applyFilters();
+  });
+  document.getElementById('opCdTarihBtn').addEventListener('click', function() {
+    var pop = document.getElementById('opCdTarihPop');
+    pop.hidden = !pop.hidden;
+  });
+
+  window.opOpenMusteriDetay = function(btn) {
+    _openModal(
+      btn.dataset.cariKod,
+      btn.dataset.location,
+      btn.dataset.pb || 'TRY',
+      btn.dataset.cariAdi || ''
+    );
+  };
+  window.opOpenTedarikciDetay = function() {
+    _toast('Tedarikçi detayı sonraki aşamada hazırlanacak');
+  };
+  window.opCloseMusteriDetay = _closeModal;
+  window.opDetayTabSwitch = function(tab, btn) {
+    document.querySelectorAll('#opCariDetayTabs .op-har-tab').forEach(function(b){ b.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+  };
+  window.opApplyTitleCase = function() {
+    document.querySelectorAll('.op-cari-name').forEach(function(el) {
+      if (!el.dataset.tcDone) {
+        el.textContent = _titleTr(el.textContent);
+        el.dataset.tcDone = '1';
+      }
+    });
+  };
+  function _domReady() {
+    window.opApplyTitleCase();
+    var gotoBtn = document.getElementById('opMusteriPgGotoBtn');
+    var gotoInput = document.getElementById('opMusteriPgGotoInput');
+    if (gotoBtn && gotoInput) {
+      gotoBtn.addEventListener('click', function() {
+        var p = parseInt(gotoInput.value, 10);
+        var max = parseInt(gotoInput.max, 10) || 1;
+        if (p >= 1 && p <= max) {
+          var url = new URL(window.location.href);
+          url.searchParams.set('sayfa', p);
+          window.location.href = url.toString();
+        }
+      });
+      gotoInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') gotoBtn.click();
+      });
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _domReady);
+  } else {
+    _domReady();
+  }
+})();
+</script>

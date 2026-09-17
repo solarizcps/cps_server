@@ -244,6 +244,7 @@ def _write_snapshot_rows(
     layer2: Optional[Dict[str, Any]] = None,
     takip_map: Optional[Dict[str, bool]] = None,
     enrichment_maps: Optional[Dict[str, Any]] = None,
+    balance_map: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> None:
     """
     Cari satırlarını rm_snapshot_row'a yazar — V2 tam UI contract.
@@ -298,20 +299,29 @@ def _write_snapshot_rows(
 
     today = _date.today()
 
+    from .rm_balance_resolver import (
+        BALANCE_FAIL_CLOSED_STATUS,
+        batch_resolve_canonical_supplier_balances,
+        supplier_bakiye_durumu,
+    )
+
+    if balance_map is None:
+        balance_map = batch_resolve_canonical_supplier_balances(
+            [(b.location, b.cari_kod, b.para_birimi) for b in balances]
+        )
+
     rows = []
     for b in balances:
-        net_d = D(str(b.bakiye)) if not isinstance(b.bakiye, D) else b.bakiye
-        # borc / alacak ayrımı
-        if net_d >= D("0"):
-            borc_str = "0"
-            alacak_str = _ds(net_d)
-        else:
-            borc_str = _ds(abs(net_d))
-            alacak_str = "0"
+        balance_res = balance_map[f"{b.location}:{b.cari_kod}:{b.para_birimi}"]
+        if balance_res.get("status") == "resolved" and balance_res.get("mirror_location") == b.location:
+            continue
+        net_d = D(str(balance_res.get("net") or b.bakiye or "0"))
+        borc_str = balance_res.get("borc") or "0"
+        alacak_str = balance_res.get("alacak") or "0"
+        durum = supplier_bakiye_durumu(net_d)
 
         net_str = _ds(net_d)
         disp = _ds(abs(net_d)) if not _net_is_zero(net_d) else "0"
-        durum = _bakiye_durumu(net_d)
         karar_badge, karar_class, karar_aksiyon = _karar(net_d)
         canonical_key = f"{b.location}:{b.cari_kod}:{b.para_birimi}"
         canonical_key_pipe = f"{b.location}|{b.cari_kod}"
@@ -702,8 +712,12 @@ def _do_refresh(
     _heartbeat(conn, lock_owner)
 
     # KPI özeti (float KULLANMA)
-    from .rm_parity import build_source_summary, _d, _q
-    source_summary = build_source_summary(supplier_master)
+    from .rm_balance_resolver import batch_resolve_canonical_supplier_balances
+    from .rm_parity import build_resolved_source_summary, _d, _q
+    _balance_map = batch_resolve_canonical_supplier_balances(
+        [(b.location, b.cari_kod, b.para_birimi) for b in supplier_master]
+    )
+    source_summary = build_resolved_source_summary(supplier_master, _balance_map)
 
     kpi_data = {
         "toplam_net": str(source_summary.kpi_toplam_net),
@@ -745,7 +759,8 @@ def _do_refresh(
     conn.execute("BEGIN IMMEDIATE")
     _write_snapshot_rows(conn, snapshot_id, supplier_master,
                          layer2=layer2, takip_map=takip_map,
-                         enrichment_maps=enrichment_maps)
+                         enrichment_maps=enrichment_maps,
+                         balance_map=_balance_map)
     conn.execute("COMMIT")
 
     fetch_completed = _now_iso()

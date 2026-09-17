@@ -71,7 +71,7 @@ def build_source_summary(balances: List[Any]) -> SourceSummary:
     KorgunFinanceAdapter'dan gelen SupplierBalanceDTO listesinden SourceSummary üretir.
 
     balances: List[SupplierBalanceDTO]  (location, cari_kod, para_birimi, bakiye alanları beklenir)
-    bakiye: net = alacak - borc  (KorgunFinanceAdapter semantiği — pozitif = alacaklıyız)
+    bakiye: net = borc - alacak  (kg_fn — pozitif = Alacaklıyız)
     """
     agg: Dict[Tuple[str, str], Dict[str, Decimal]] = {}
     cari_set: set = set()
@@ -84,16 +84,15 @@ def build_source_summary(balances: List[Any]) -> SourceSummary:
         cari = b.cari_kod
         pb = b.para_birimi
         net = _d(b.bakiye)
-
-        # borc / alacak: KorgunFinanceAdapter net semantiği
-        # net > 0  → alacaklıyız (alacak > borc)
-        # net < 0  → açık borç  (borc > alacak)
-        if net >= Decimal("0"):
-            borc_val = Decimal("0")
-            alacak_val = net
-        else:
-            borc_val = abs(net)
-            alacak_val = Decimal("0")
+        borc_val = _d(getattr(b, "borc", None))
+        alacak_val = _d(getattr(b, "alacak", None))
+        if borc_val == 0 and alacak_val == 0:
+            if net >= Decimal("0"):
+                borc_val = Decimal("0")
+                alacak_val = net
+            else:
+                borc_val = abs(net)
+                alacak_val = Decimal("0")
 
         key = (loc, pb)
         if key not in agg:
@@ -120,6 +119,59 @@ def build_source_summary(balances: List[Any]) -> SourceSummary:
 
     return SourceSummary(
         row_count=len(balances),
+        unique_cari=len(cari_set),
+        companies=frozenset(comp_set),
+        currencies=frozenset(pb_set),
+        company_pb_agg=agg,
+        kpi_toplam_net=_q(total_net),
+        canonical_hash=canonical_hash,
+    )
+
+
+def build_resolved_source_summary(
+    balances: List[Any],
+    balance_map: Dict[str, Dict[str, Any]],
+) -> SourceSummary:
+    """Snapshot yazımı ile aynı canonical/mirror kurallarından kaynak özet."""
+    agg: Dict[Tuple[str, str], Dict[str, Decimal]] = {}
+    cari_set: set = set()
+    comp_set: set = set()
+    pb_set: set = set()
+    hash_inputs: List[str] = []
+    row_count = 0
+
+    for b in balances:
+        key = f"{b.location}:{b.cari_kod}:{b.para_birimi}"
+        res = balance_map.get(key) or {}
+        if res.get("status") == "resolved" and res.get("mirror_location") == b.location:
+            continue
+
+        row_count += 1
+        loc = b.location
+        cari = b.cari_kod
+        pb = b.para_birimi
+        borc_val = _d(res.get("borc"))
+        alacak_val = _d(res.get("alacak"))
+        net = _d(res.get("net") if res.get("net") is not None else b.bakiye)
+
+        pb_key = (loc, pb)
+        if pb_key not in agg:
+            agg[pb_key] = {"borc": Decimal("0"), "alacak": Decimal("0"), "net": Decimal("0")}
+        agg[pb_key]["borc"] += borc_val
+        agg[pb_key]["alacak"] += alacak_val
+        agg[pb_key]["net"] += net
+
+        cari_set.add(f"{loc}:{cari}:{pb}")
+        comp_set.add(loc)
+        pb_set.add(pb)
+        hash_inputs.append(f"{loc}|{cari}|{pb}|{_q(net)}")
+
+    total_net = sum((v["net"] for v in agg.values()), Decimal("0"))
+    hash_inputs.sort()
+    canonical_hash = hashlib.sha256("\n".join(hash_inputs).encode("utf-8")).hexdigest()
+
+    return SourceSummary(
+        row_count=row_count,
         unique_cari=len(cari_set),
         companies=frozenset(comp_set),
         currencies=frozenset(pb_set),

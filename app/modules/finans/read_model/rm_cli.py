@@ -40,7 +40,14 @@ logger = logging.getLogger("cps.finans.rm_cli")
 
 def _parse_args(argv=None):
     parser = argparse.ArgumentParser(
-        description="CPS Ödeme Planı PAYABLE Read-Model Refresh CLI",
+        description="CPS Ödeme Planı Read-Model Refresh CLI",
+    )
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="payable-refresh",
+        choices=["payable-refresh", "receivable-refresh"],
+        help="Komut: payable-refresh (varsayılan) veya receivable-refresh",
     )
     parser.add_argument(
         "--db-path",
@@ -89,6 +96,34 @@ def main(argv=None) -> int:
 
     start = time.time()
 
+    # RECEIVABLE refresh
+    if getattr(args, 'command', 'payable-refresh') == 'receivable-refresh':
+        try:
+            from .rm_receivable_refresh import run_receivable_refresh
+            result = run_receivable_refresh(
+                rm_path=db_path,
+                locations=locations,
+            )
+        except Exception as exc:
+            from .rm_config import sanitize_error
+            logger.critical("RECEIVABLE refresh hatası: %s", sanitize_error(exc))
+            return 1
+
+        elapsed = int((time.time() - start) * 1000)
+        if result.get("success"):
+            logger.info(
+                "RECEIVABLE refresh başarılı: snapshot_id=%s rows=%d warns=%d elapsed=%dms",
+                result.get("snapshot_id"),
+                result.get("row_count", 0),
+                result.get("warn_count", 0),
+                elapsed,
+            )
+            return 0
+        else:
+            logger.error("RECEIVABLE refresh başarısız: %s elapsed=%dms", result.get("errors"), elapsed)
+            return 1
+
+    # PAYABLE refresh (default)
     try:
         from .rm_refresh import run_refresh
         result = run_refresh(

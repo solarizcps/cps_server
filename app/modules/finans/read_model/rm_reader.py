@@ -104,12 +104,32 @@ def _apply_filters(
     location: Optional[str],
     bakiye_f: Optional[str],
     tedarikci_q: Optional[str],
+    para_birimi: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Basit server-side filtre — mevcut UI filtre semantiğini korur."""
     result = rows
     if location and location.strip().upper():
         loc = location.strip().upper()
-        result = [r for r in result if r.get("location") == loc]
+        # Mantıksal şirket grubu genişletmesi
+        try:
+            from modules.finans.services.korgun_finance_adapter import COMPANY_FINANCE_LOCATION_MAP
+        except ImportError:
+            try:
+                from app.modules.finans.services.korgun_finance_adapter import COMPANY_FINANCE_LOCATION_MAP
+            except ImportError:
+                COMPANY_FINANCE_LOCATION_MAP = {}
+        _loc_group = COMPANY_FINANCE_LOCATION_MAP.get(loc)
+        if _loc_group:
+            _loc_set = set(_loc_group)
+        else:
+            _loc_set = {loc}
+        result = [r for r in result if r.get("location") in _loc_set]
+    # Para birimi filtresi — TL/TRY normalizasyonu burada da uygulanır
+    if para_birimi:
+        _PB_MAP = {'TL': 'TRY', 'TRY': 'TRY', 'US': 'USD', 'USD': 'USD', 'EU': 'EUR', 'EUR': 'EUR'}
+        _pb_norm = _PB_MAP.get(para_birimi.upper())
+        if _pb_norm:
+            result = [r for r in result if r.get("para_birimi") == _pb_norm]
     if bakiye_f:
         bf = bakiye_f.strip()
         if bf == "acik_borc":
@@ -189,6 +209,7 @@ def read_payable_snapshot(
     location: Optional[str] = None,
     bakiye_f: Optional[str] = None,
     tedarikci_q: Optional[str] = None,
+    para_birimi: Optional[str] = None,
     page: int = 1,
     page_size: int = 50,
 ) -> Dict[str, Any]:
@@ -236,7 +257,7 @@ def read_payable_snapshot(
 
         # Cari satırları — snapshot'tan oku, filtrele, paginate et
         all_rows = _load_cari_rows(conn, snapshot_id)
-        # location filtresi sonrası toplam (şirket filtreli evren)
+        # location filtresi sonrası toplam (şirket filtreli evren, PB filtresi olmadan)
         loc_rows = _apply_filters(all_rows, location, None, None)
         active_count = sum(1 for r in loc_rows if _is_hareketli(r))
         # Arama varsa hareketli/hareketsiz filtresini devre dışı bırak
@@ -244,7 +265,7 @@ def read_payable_snapshot(
         effective_bakiye_f = bakiye_f
         if tedarikci_q and tedarikci_q.strip() and bakiye_f in ('hareketli', 'hareketsiz'):
             effective_bakiye_f = None
-        filtered_rows = _apply_filters(all_rows, location, effective_bakiye_f, tedarikci_q)
+        filtered_rows = _apply_filters(all_rows, location, effective_bakiye_f, tedarikci_q, para_birimi)
         page_rows, total, page_out, total_pages = _paginate(filtered_rows, page, page_size)
 
         # Durum mesajı
@@ -432,6 +453,7 @@ def _load_cari_rows(conn: sqlite3.Connection, snapshot_id: str) -> List[Dict[str
             "son_odeme_pb": son_odeme_pb,
             # Son alış
             "son_alim_tarih": son_alim_tarih,
+            "son_alim_tutar": r[23],
             "son_alim_label": son_alim_label,
             "son_alim_tip": son_alim_tip,
             "son_alim_pb": son_alim_pb,

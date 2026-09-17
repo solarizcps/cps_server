@@ -1,0 +1,370 @@
+<!-- CPS_FINANCE_CARI_DETAIL_VISUAL_REDESIGN_V1 -->
+<div class="op-modal-backdrop" id="opCariDetayModal" hidden>
+  <div class="op-modal op-modal-cari-detay op-cd-v1" id="opCariDetayPanel" role="dialog" aria-modal="true" aria-labelledby="opCariDetayAdi">
+    <div class="op-cd-sticky-top">
+      <div class="op-cd-header">
+        <div class="op-cd-header-main">
+          <div class="op-cd-title-row">
+            <span id="opCariDetayAdi" class="op-cd-title"></span>
+            <span id="opCariDetayDirBadge" class="op-cd-badge"></span>
+          </div>
+          <div id="opCariDetayMeta" class="op-cd-meta"></div>
+          <div id="opCdCanonBadges" class="op-cd-chips"></div>
+        </div>
+        <button type="button" id="opCariDetayKapat" class="op-cd-close" aria-label="Kapat">&times;</button>
+      </div>
+      <div id="opCdRowAyar" class="op-cd-row op-cd-row-ayar">
+        <div class="op-cd-card"><div class="op-cd-card-lbl">Çalışma Şekli</div><div id="opCdDispCs" class="op-cd-card-val">—</div></div>
+        <div class="op-cd-card"><div class="op-cd-card-lbl">Anlaşmalı Vade</div><div id="opCdDispVade" class="op-cd-card-val">—</div></div>
+        <div class="op-cd-card"><div class="op-cd-card-lbl" id="opCdDispOrtLbl">Ort. Tahsilat</div><div id="opCdDispOrt" class="op-cd-card-val">—</div></div>
+        <div class="op-cd-card"><div class="op-cd-card-lbl">Ödeme Yöntemi</div><div id="opCdDispOy" class="op-cd-card-val">—</div></div>
+      </div>
+      <details class="op-cd-ayar-edit">
+        <summary>Cari ayar düzenle</summary>
+        <div class="op-cd-ayar-form">
+          <select id="opCdCsSekli" class="op-cd-inp"><option value="OTOMATIK">Otomatik</option><option value="PESIN">Peşin</option><option value="VADELI">Vadeli</option><option value="KARMA">Karma</option></select>
+          <input id="opCdVade" type="number" min="0" max="730" class="op-cd-inp" placeholder="Vade gün">
+          <select id="opCdOyMode" class="op-cd-inp"><option value="OTOMATIK">Otomatik</option><option value="NAKIT">Nakit</option><option value="HAVALE">Havale</option><option value="CEK">Çek</option><option value="KREDI_KARTI">Kredi Kartı</option><option value="KARMA">Karma</option></select>
+          <button id="opCdKaydetBtn" type="button" class="op-cd-btn-gold" onclick="_cdKaydet()">Kaydet</button>
+        </div>
+      </details>
+      <div id="opCariDetayOzet" class="op-cd-kpi-grid"></div>
+      <div id="opCdMutabakat" class="op-cd-mutabakat"></div>
+      <div class="op-cd-tabs" id="opCariDetayTabs">
+        <button type="button" class="op-cd-tab active" data-cdtab="hareketler">Cari Hareketleri</button>
+        <button type="button" class="op-cd-tab" data-cdtab="anlasmalar">Anlaşmalar</button>
+        <button type="button" class="op-cd-tab" data-cdtab="planlama" id="opCdTabPlanLbl">Planlanan Tahsilat</button>
+        <button type="button" class="op-cd-tab" data-cdtab="notlar">Takip Notları</button>
+      </div>
+      <div id="opCdKaynakFiltre" class="op-cd-kaynak-bar">
+        <button type="button" class="op-cd-kaynak active" data-cdkaynak="">Tümü</button>
+        <button type="button" class="op-cd-kaynak" data-cdkaynak="FATURA">Faturalar</button>
+        <button type="button" class="op-cd-kaynak" data-cdkaynak="CFIS">Tahsilat / Çek</button>
+      </div>
+      <div id="opCdHarFiltre" class="op-cd-filtre-bar">
+        <input type="text" id="opCdMetin" placeholder="Ara…" class="op-cd-inp">
+        <input type="date" id="opCdTarihBas" class="op-cd-inp">
+        <input type="date" id="opCdTarihBit" class="op-cd-inp">
+        <select id="opCdHarTuru" class="op-cd-inp"></select>
+        <button type="button" id="opCdFiltrele" class="op-cd-btn-gold" onclick="_cdResetAndLoad()">Filtrele</button>
+        <button type="button" id="opCdTemizle" class="op-cd-btn-ghost" onclick="_cdClearFilters()">Temizle</button>
+      </div>
+    </div>
+    <div id="opCariDetayContent" class="op-cd-body">
+      <div id="opCdTabHareketler" class="op-cd-tab-panel">
+        <div id="opCdLoadEl" class="op-cd-load">Yükleniyor…</div>
+        <div id="opCdErrEl" class="op-cd-err" hidden></div>
+        <div id="opCdTableEl" class="op-cd-table-wrap" hidden></div>
+        <div id="opCdLazyLoader" class="op-cd-lazy" hidden><span class="op-cd-spinner"></span> Daha fazla…</div>
+        <div id="opCdPaginEl" class="op-cd-pagin"></div>
+      </div>
+      <div id="opCdTabAnlasmalar" class="op-cd-tab-panel" hidden><div class="op-cd-empty">Anlaşma kayıtları — yakında</div></div>
+      <div id="opCdTabPlanlama" class="op-cd-tab-panel" hidden><div class="op-cd-empty">Planlanan işlemler — yakında</div></div>
+      <div id="opCdTabNotlar" class="op-cd-tab-panel" hidden><div class="op-cd-empty">Takip notları — yakında</div></div>
+    </div>
+    <div id="opCdStickyFooter" class="op-cd-sticky-bottom"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var _cdDir = null, _cdCtx = {}, _cdKaynak = '', _cdPage = 1, _cdPerPage = 50, _cdScrollY = 0;
+  var _cdOzet = null, _cdFt = null, _cdHarCount = 0;
+  var _cdAyarDirection = null, _cdAyarCompany = null, _cdAyarCariKod = null;
+  var _cdNextCursor = null, _cdLoadedKeys = new Set(), _cdIsLoading = false, _cdAllLoaded = false, _cdScrollListenerSet = false;
+  var _cdFilters = {metin:'', tarih_bas:'', tarih_bit:'', hareket_turu:'', pb:'TRY'};
+  var _HARET_TURU_OPTIONS = {
+    RECEIVABLE: [{v:'',l:'Tüm İşlemler'},{v:'SATIS_FATURASI',l:'Satış Faturaları'},{v:'IADE_FATURASI',l:'İade Faturaları'},{v:'TAHSILAT',l:'Tahsilatlar'},{v:'CEK',l:'Çekler'},{v:'DUZELTME',l:'Düzeltme / Mahsup'}],
+    PAYABLE: [{v:'',l:'Tüm İşlemler'},{v:'ALIS_FATURASI',l:'Alım Faturaları'},{v:'IADE_FATURASI',l:'İade Faturaları'},{v:'ODEME',l:'Ödemeler'},{v:'CEK',l:'Çekler'},{v:'DUZELTME',l:'Düzeltme / Mahsup'}]
+  };
+  var _CS_LABELS = {OTOMATIK:'Otomatik',PESIN:'Peşin',VADELI:'Vadeli',KARMA:'Karma'};
+  var _OY_LABELS = {OTOMATIK:'Otomatik',NAKIT:'Nakit',HAVALE:'Havale',CEK:'Çek',KREDI_KARTI:'Kredi Kartı',NAKIT_HAVALE:'Nakit / Havale',HAVALE_CEK:'Havale / Çek',NAKIT_CEK:'Nakit / Çek',KARMA:'Karma'};
+
+  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+  function _pbSym(pb){ pb=(pb||'TRY').toUpperCase(); if(pb==='EUR')return'€'; if(pb==='USD')return'$'; return'₺'; }
+  function _fmt(v,pb){ if(v==null||v==='')return'—'; var n=parseFloat(v); if(isNaN(n))return'—'; if(n===0&&v!=='0'&&v!==0)return'—'; return _pbSym(pb)+n.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function _titleTr(s){ if(!s)return''; return s.toLowerCase().replace(/(?:^|\s|[-/(])(\S)/g,function(m,c){return m.replace(c,c.toUpperCase());}); }
+
+  function _amtOrNote(dateKey, amt, note, pb) {
+    if(note) return note;
+    if(dateKey && (amt==null || parseFloat(amt)===0)) return 'Tutar kaynağı bulunamadı';
+    if(amt==null || amt==='') return '—';
+    return _fmt(amt, pb);
+  }
+
+  function _typeBadge(tur) {
+    var t=(tur||'').toLowerCase();
+    if(t.indexOf('satış')>=0||t.indexOf('satis')>=0) return 'op-cd-tb-fatura';
+    if(t.indexOf('çek')>=0||t.indexOf('cek')>=0) return 'op-cd-tb-cek';
+    if(t.indexOf('nakit')>=0) return 'op-cd-tb-nakit';
+    if(t.indexOf('banka')>=0||t.indexOf('dekont')>=0) return 'op-cd-tb-dekont';
+    if(t.indexOf('mahsup')>=0) return 'op-cd-tb-mahsup';
+    return 'op-cd-tb-diger';
+  }
+
+  function _updateAyarDisplay() {
+    var cs=(document.getElementById('opCdCsSekli')||{}).value||'OTOMATIK';
+    var v=(document.getElementById('opCdVade')||{}).value;
+    var oy=(document.getElementById('opCdOyMode')||{}).value||'OTOMATIK';
+    document.getElementById('opCdDispCs').textContent=_CS_LABELS[cs]||cs;
+    document.getElementById('opCdDispVade').textContent=v? (v+' gün'):'Tanımlı değil';
+    document.getElementById('opCdDispOy').textContent=_OY_LABELS[oy]||oy;
+  }
+
+  function _renderHeader(d) {
+    document.getElementById('opCariDetayAdi').textContent=_titleTr(_cdCtx.cariAdi)||_cdCtx.cariKod;
+    var badge=document.getElementById('opCariDetayDirBadge');
+    badge.textContent=_cdDir==='RECEIVABLE'?'Müşteri':'Tedarikçi';
+    badge.className='op-cd-badge '+(_cdDir==='RECEIVABLE'?'is-musteri':'is-tedarikci');
+    var pub=d&&d.snapshot_published_at?String(d.snapshot_published_at).slice(0,16).replace('T',' '):'—';
+    document.getElementById('opCariDetayMeta').innerHTML=
+      '<span>'+_esc(_cdCtx.cariKod)+'</span><span class="op-cd-dot">·</span>'+
+      '<span>'+_esc(_cdCtx.location)+'</span><span class="op-cd-dot">·</span>'+
+      '<span>'+_esc(d&&d.para_birimi||_cdCtx.pb)+'</span><span class="op-cd-dot">·</span>'+
+      '<span class="op-cd-snap">Snapshot: '+_esc(pub)+'</span>';
+    var chips='';
+    if(d&&d.canonical_location) chips+='<span class="op-cd-chip">Canonical: '+_esc(d.canonical_location)+'</span>';
+    if(d&&d.mirror_location) chips+='<span class="op-cd-chip warn">Mirror hariç: '+_esc(d.mirror_location)+'</span>';
+    document.getElementById('opCdCanonBadges').innerHTML=chips;
+    document.getElementById('opCdDispOrtLbl').textContent=_cdDir==='RECEIVABLE'?'Ort. Tahsilat Günü':'Ort. Ödeme Günü';
+    var planLbl=document.getElementById('opCdTabPlanLbl');
+    if(planLbl) planLbl.textContent=_cdDir==='RECEIVABLE'?'Planlanan Tahsilat':'Planlanan Ödeme';
+  }
+
+  function _renderKpi(d) {
+    var pb=d.para_birimi||_cdCtx.pb||'TRY';
+    var html='';
+    if(_cdDir==='RECEIVABLE') {
+      var balLbl=d.yon||'Bakiye';
+      var balAmt=_fmt(Math.abs(parseFloat(d.fn_net||0)), pb);
+      html+='<div class="op-cd-kpi primary"><div class="lbl">'+_esc(balLbl)+'</div><div class="val">'+balAmt+'</div></div>';
+      var thAmt=_amtOrNote(d.son_tahsilat_tarih,d.son_tahsilat_tutar,d.son_tahsilat_tutar_note,pb);
+      var thTur=d.son_tahsilat_tur?('<div class="sub">'+_esc(d.son_tahsilat_tur)+'</div>'):'';
+      html+='<div class="op-cd-kpi"><div class="lbl">Son Tahsilat</div><div class="val">'+_esc(thAmt)+'</div>'+(d.son_tahsilat_tarih?'<div class="sub">'+_esc(d.son_tahsilat_tarih)+'</div>':'')+thTur+'</div>';
+      var stAmt=_amtOrNote(d.son_satis_tarih,d.son_satis_tutar,d.son_satis_tutar_note,pb);
+      html+='<div class="op-cd-kpi"><div class="lbl">Son Satış</div><div class="val">'+_esc(stAmt)+'</div>'+(d.son_satis_tarih?'<div class="sub">'+_esc(d.son_satis_tarih)+'</div>':'')+'</div>';
+      var pcCnt=d.portfoy_cek_cnt||0;
+      html+='<div class="op-cd-kpi"><div class="lbl">Portföy Çek</div><div class="val">'+(pcCnt?pcCnt+' adet':'—')+'</div>'+(d.portfoy_cek_tutar?'<div class="sub">'+_fmt(d.portfoy_cek_tutar,pb)+'</div>':'')+'</div>';
+      html+='<div class="op-cd-kpi"><div class="lbl">Ödeme Sözü</div><div class="val muted">—</div></div>';
+    } else {
+      html+='<div class="op-cd-kpi primary"><div class="lbl">'+_esc(d.yon||'Bakiye')+'</div><div class="val">'+_fmt(Math.abs(parseFloat(d.fn_net||0)),pb)+'</div></div>';
+      var od=d.son_odeme||{};
+      var odAmt=od.tarih?_amtOrNote(od.tarih,od.tutar,null,od.pb||pb):'—';
+      html+='<div class="op-cd-kpi"><div class="lbl">Son Ödeme</div><div class="val">'+_esc(odAmt)+'</div>'+(od.tarih?'<div class="sub">'+_esc(od.tarih)+'</div>':'')+'</div>';
+      var al=d.son_alim||{};
+      var alAmt=al.tarih?_amtOrNote(al.tarih,al.tutar,null,al.pb||pb):'—';
+      html+='<div class="op-cd-kpi"><div class="lbl">Son Alım</div><div class="val">'+_esc(alAmt)+'</div>'+(al.tarih?'<div class="sub">'+_esc(al.tarih)+'</div>':'')+'</div>';
+      html+='<div class="op-cd-kpi"><div class="lbl">Verilen Çek</div><div class="val">'+(d.portfoy_cek_cnt?d.portfoy_cek_cnt+' adet':'—')+'</div></div>';
+      html+='<div class="op-cd-kpi"><div class="lbl">Ödeme Sözü</div><div class="val muted">—</div></div>';
+    }
+    document.getElementById('opCariDetayOzet').innerHTML=html;
+  }
+
+  function _renderMutabakat(d) {
+    var pb=d.para_birimi||_cdCtx.pb||'TRY';
+    var h='<div class="op-cd-mut-row"><span>Resmî bakiye</span><strong>'+_fmt(d.fn_net,pb)+'</strong></div>';
+    h+='<div class="op-cd-mut-row"><span>Hareket net</span><strong>'+_fmt(d.har_net,pb)+'</strong></div>';
+    h+='<div class="op-cd-mut-row"><span>Mutabakat farkı</span><strong>'+_fmt(d.delta_net,pb)+'</strong></div>';
+    if(d.parity_ok===true) h+='<div class="op-cd-parity ok">Tam mutabık</div>';
+    else if(d.parity_ok===false) {
+      h+='<div class="op-cd-parity warn">Hareket kapsamı resmî bakiyeyi tam karşılamıyor</div>';
+      var b=(d.parity_blocked_classes||[]).join(' / ');
+      if(b) h+='<div class="op-cd-parity-sub">Olası eksik kapsam: '+_esc(b)+'</div>';
+    }
+    document.getElementById('opCdMutabakat').innerHTML=h;
+  }
+
+  function _renderFooter() {
+    if(!_cdOzet) return;
+    var d=_cdOzet, pb=d.para_birimi||_cdCtx.pb||'TRY';
+    var ft=_cdFt||{};
+    var h='<div class="op-cd-foot-grid">';
+    if(_cdDir==='RECEIVABLE') {
+      h+='<div><span class="lbl">Toplam Satış/Borç</span><strong>'+_fmt(ft.borc,d.har_borc!=null?pb:null)+'</strong></div>';
+      h+='<div><span class="lbl">Toplam Tahsilat/Alacak</span><strong>'+_fmt(ft.alacak,d.har_alacak!=null?pb:null)+'</strong></div>';
+      h+='<div><span class="lbl">Net Hareket</span><strong>'+_fmt(ft.net,d.har_net!=null?pb:null)+'</strong></div>';
+      h+='<div><span class="lbl">Resmî Bakiye</span><strong class="gold">'+_fmt(d.fn_net,pb)+'</strong></div>';
+      h+='<div><span class="lbl">Portföy Çek</span><strong>'+(d.portfoy_cek_cnt||0)+' ad.</strong></div>';
+    } else {
+      h+='<div><span class="lbl">Toplam Alım/Alacak</span><strong>'+_fmt(ft.alacak,pb)+'</strong></div>';
+      h+='<div><span class="lbl">Toplam Ödeme/Borç</span><strong>'+_fmt(ft.borc,pb)+'</strong></div>';
+      h+='<div><span class="lbl">Net Hareket</span><strong>'+_fmt(ft.net,pb)+'</strong></div>';
+      h+='<div><span class="lbl">Resmî Bakiye</span><strong class="gold">'+_fmt(d.fn_net,pb)+'</strong></div>';
+      h+='<div><span class="lbl">Verilen Çek</span><strong>'+(d.portfoy_cek_cnt||0)+' ad.</strong></div>';
+    }
+    h+='<div><span class="lbl">Hareket Sayısı</span><strong>'+(_cdHarCount||0)+'</strong></div>';
+    h+='</div>';
+    document.getElementById('opCdStickyFooter').innerHTML=h;
+  }
+
+  function _cdLoadOzet() {
+    var url=_cdDir==='RECEIVABLE'
+      ? '/finans/cariler/musteri/'+encodeURIComponent(_cdCtx.location)+'/'+encodeURIComponent(_cdCtx.cariKod)+'/ozet?pb='+encodeURIComponent(_cdCtx.pb)
+      : '/finans/cariler/tedarikci/'+encodeURIComponent(_cdCtx.location)+'/'+encodeURIComponent(_cdCtx.cariKod)+'/ozet?pb='+encodeURIComponent(_cdCtx.pb);
+    fetch(url,{credentials:'same-origin'}).then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){ document.getElementById('opCariDetayOzet').innerHTML=''; return; }
+      _cdOzet=d; _renderHeader(d); _renderKpi(d); _renderMutabakat(d); _renderFooter();
+    }).catch(function(){});
+  }
+
+  function _cdFillHarTuruSelect(dir) {
+    var sel=document.getElementById('opCdHarTuru'); if(!sel) return;
+    sel.innerHTML=(_HARET_TURU_OPTIONS[dir]||[]).map(function(o){return '<option value="'+o.v+'">'+o.l+'</option>';}).join('');
+  }
+
+  function _cdClearFilterInputs() {
+    ['opCdMetin','opCdTarihBas','opCdTarihBit'].forEach(function(id){ var e=document.getElementById(id); if(e)e.value=''; });
+    var s=document.getElementById('opCdHarTuru'); if(s)s.value='';
+  }
+
+  function _cdLoadFilters() {
+    var g=function(id){return(document.getElementById(id)||{}).value||'';};
+    _cdFilters.metin=g('opCdMetin').trim(); _cdFilters.tarih_bas=g('opCdTarihBas'); _cdFilters.tarih_bit=g('opCdTarihBit'); _cdFilters.hareket_turu=g('opCdHarTuru');
+  }
+
+  function _cdRenderTableShell() {
+    return '<table class="op-cd-table"><thead><tr><th>Tarih</th><th>İşlem</th><th>Belge No</th><th>Açıklama</th><th>Vade</th><th class="num">Borç</th><th class="num">Alacak</th><th>PB</th><th>Kaynak</th></tr></thead><tbody></tbody></table>';
+  }
+
+  function _cdBuildRow(r) {
+    var tr=document.createElement('tr');
+    var borc=parseFloat(r.borc||0), alac=parseFloat(r.alacak||0);
+    var tip=r.hareket_turu_adi||r.hareket_turu_kodu||r.tur||'';
+    tr.innerHTML=
+      '<td class="nowrap">'+_esc(r.tarih||'—')+'</td>'+
+      '<td class="nowrap"><span class="op-cd-tb '+_typeBadge(tip)+'">'+_esc(tip||'—')+'</span></td>'+
+      '<td class="mono nowrap">'+_esc(r.belge_no||'—')+'</td>'+
+      '<td class="ellipsis" title="'+_esc(r.aciklama||'')+'">'+_esc(r.aciklama||'—')+'</td>'+
+      '<td class="nowrap">'+_esc(r.vade_tarihi||r.vade||'—')+'</td>'+
+      '<td class="num borc">'+(borc>0?_fmt(r.borc,r.para_birimi):'—')+'</td>'+
+      '<td class="num alac">'+(alac>0?_fmt(r.alacak,r.para_birimi):'—')+'</td>'+
+      '<td>'+_esc(r.para_birimi||'—')+'</td>'+
+      '<td><span class="op-cd-src">'+_esc(r.kaynak||'—')+'</span></td>';
+    return tr;
+  }
+
+  function _cdLoadBatch() {
+    if(_cdIsLoading||_cdAllLoaded) return;
+    _cdIsLoading=true;
+    var loadEl=document.getElementById('opCdLoadEl'), loader=document.getElementById('opCdLazyLoader'), tblEl=document.getElementById('opCdTableEl');
+    if(!_cdNextCursor){ if(loadEl)loadEl.hidden=false; if(tblEl)tblEl.hidden=true; } else { if(loader)loader.hidden=false; }
+    _cdLoadFilters();
+    var params=new URLSearchParams();
+    params.set('pb',_cdFilters.pb||_cdCtx.pb||'TRY');
+    if(_cdFilters.metin) params.set('metin',_cdFilters.metin);
+    if(_cdFilters.tarih_bas) params.set('tarih_bas',_cdFilters.tarih_bas);
+    if(_cdFilters.tarih_bit) params.set('tarih_bit',_cdFilters.tarih_bit);
+    if(_cdFilters.hareket_turu) params.set('hareket_turu',_cdFilters.hareket_turu);
+    if(_cdKaynak) params.set('kaynak',_cdKaynak);
+    if(_cdNextCursor) params.set('cursor_key',_cdNextCursor);
+    params.set('batch_size','100');
+    var base=_cdDir==='RECEIVABLE'
+      ? '/finans/cariler/musteri/'+encodeURIComponent(_cdCtx.location)+'/'+encodeURIComponent(_cdCtx.cariKod)+'/hareketler'
+      : '/finans/cariler/tedarikci/'+encodeURIComponent(_cdCtx.location)+'/'+encodeURIComponent(_cdCtx.cariKod)+'/hareketler';
+    fetch(base+'?'+params,{credentials:'same-origin',headers:{'Accept':'application/json'}}).then(function(r){return r.json();}).then(function(data){
+      if(loadEl) loadEl.hidden=true; if(loader) loader.hidden=true; _cdIsLoading=false;
+      if(!data.ok){ var e=document.getElementById('opCdErrEl'); if(e){e.hidden=false;e.textContent='Hata: '+(data.error||'?');} return; }
+      if(data.filtered_totals){ _cdFt=data.filtered_totals; _cdHarCount=data.filtered_totals.filtered_count||0; }
+      var rows=data.rows||[];
+      if(tblEl){ tblEl.hidden=false; var tbody=tblEl.querySelector('tbody'); if(!tbody){ tblEl.innerHTML=_cdRenderTableShell(); tbody=tblEl.querySelector('tbody'); }
+        rows.forEach(function(r,i){ var key=(r.tarih||'')+'|'+(r.belge_no||'')+'|'+i; if(_cdLoadedKeys.has(key))return; _cdLoadedKeys.add(key); tbody.appendChild(_cdBuildRow(r)); });
+      }
+      _cdNextCursor=data.next_cursor||null; if(!_cdNextCursor||!rows.length) _cdAllLoaded=true;
+      var pag=document.getElementById('opCdPaginEl');
+      if(pag&&_cdFt) pag.textContent=(_cdFt.displayed_count||rows.length)+' / '+(_cdFt.filtered_count||0)+' hareket'+(data.query_ms?' · '+data.query_ms+'ms':'');
+      _renderFooter();
+    }).catch(function(err){ if(loadEl)loadEl.hidden=true; _cdIsLoading=false; var e=document.getElementById('opCdErrEl'); if(e){e.hidden=false;e.textContent='Ağ hatası: '+err.message;} });
+  }
+
+  function _cdResetAndLoad(){ _cdNextCursor=null; _cdLoadedKeys=new Set(); _cdAllLoaded=false; var t=document.getElementById('opCdTableEl'); if(t){t.innerHTML='';t.hidden=true;} _cdLoadBatch(); }
+  window._cdClearFilters=function(){ _cdClearFilterInputs(); _cdResetAndLoad(); };
+
+  function _cdSetupScrollListener(){
+    if(_cdScrollListenerSet) return;
+    var w=document.getElementById('opCdTableEl');
+    if(!w) return;
+    w.addEventListener('scroll',function(){ if(_cdAllLoaded||_cdIsLoading)return; if(w.scrollTop+w.clientHeight>=w.scrollHeight-80) _cdLoadBatch(); });
+    _cdScrollListenerSet=true;
+  }
+
+  function _cdUpdateAyarForm(ayar){
+    if(document.getElementById('opCdCsSekli')) document.getElementById('opCdCsSekli').value=ayar.calisma_sekli_mode||'OTOMATIK';
+    if(document.getElementById('opCdVade')) document.getElementById('opCdVade').value=ayar.anlasmali_vade_gun||'';
+    if(document.getElementById('opCdOyMode')) document.getElementById('opCdOyMode').value=ayar.odeme_yontemi_mode||'OTOMATIK';
+    _updateAyarDisplay();
+  }
+
+  function _cdLoadAyar(direction,company,cariKod){
+    _cdAyarDirection=direction; _cdAyarCompany=company; _cdAyarCariKod=cariKod;
+    fetch('/finans/cariler/'+direction.toLowerCase()+'/'+encodeURIComponent(company)+'/'+encodeURIComponent(cariKod)+'/ayar',{credentials:'same-origin',headers:{'Accept':'application/json'}})
+      .then(function(r){return r.json();}).then(function(data){
+        if(!data.ok) return;
+        if(data.ayar) _cdUpdateAyarForm(data.ayar);
+        if(data.ortalama_gun) document.getElementById('opCdDispOrt').textContent=data.ortalama_gun.aciklama||'Yeterli veri yok';
+        else document.getElementById('opCdDispOrt').textContent='Yeterli veri yok';
+        if(data.sistem_oneri_odeme_yontemi&&(!data.ayar||data.ayar.odeme_yontemi_mode==='OTOMATIK'))
+          document.getElementById('opCdDispOy').textContent=data.sistem_oneri_odeme_yontemi;
+      }).catch(function(){});
+  }
+
+  window._cdKaydet=function(){
+    var payload={calisma_sekli_mode:(document.getElementById('opCdCsSekli')||{}).value||'OTOMATIK',anlasmali_vade_gun:(document.getElementById('opCdVade')||{}).value||null,odeme_yontemi_mode:(document.getElementById('opCdOyMode')||{}).value||'OTOMATIK'};
+    var dir=(_cdAyarDirection||_cdDir||'').toLowerCase();
+    fetch('/finans/cariler/'+dir+'/'+encodeURIComponent(_cdCtx.location)+'/'+encodeURIComponent(_cdCtx.cariKod)+'/ayar',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+      .then(function(r){return r.json();}).then(function(d){ if(d.ok&&d.ayar) _cdUpdateAyarForm(d.ayar); }).catch(function(){});
+  };
+
+  function _showTab(tab){
+    document.querySelectorAll('#opCariDetayTabs .op-cd-tab').forEach(function(b){ b.classList.toggle('active',b.dataset.cdtab===tab); });
+    var panels={hareketler:'opCdTabHareketler',anlasmalar:'opCdTabAnlasmalar',planlama:'opCdTabPlanlama',notlar:'opCdTabNotlar'};
+    Object.keys(panels).forEach(function(k){ var el=document.getElementById(panels[k]); if(el) el.hidden=(k!==tab); });
+    document.getElementById('opCdKaynakFiltre').hidden=(tab!=='hareketler');
+    document.getElementById('opCdHarFiltre').hidden=(tab!=='hareketler');
+  }
+
+  function _openModal(dir,cariKod,location,pb,cariAdi){
+    if(dir==='RECEIVABLE'&&!/^120\./.test(cariKod)) return;
+    if(dir==='PAYABLE'&&!/^320\./.test(cariKod)) return;
+    _cdDir=dir; _cdCtx={cariKod:cariKod,location:location,pb:pb||'TRY',cariAdi:cariAdi};
+    _cdKaynak=''; _cdOzet=null; _cdFt=null; _cdHarCount=0;
+    _cdNextCursor=null; _cdLoadedKeys=new Set(); _cdAllLoaded=false;
+    _cdFilters.pb=pb||'TRY'; _cdClearFilterInputs();
+    _renderHeader(null);
+    document.getElementById('opCariDetayOzet').innerHTML='<div class="op-cd-load">Özet yükleniyor…</div>';
+    document.getElementById('opCdMutabakat').innerHTML='';
+    document.getElementById('opCdStickyFooter').innerHTML='';
+    _showTab('hareketler');
+    document.querySelectorAll('#opCariDetayModal [data-cdkaynak]').forEach(function(b){ b.classList.toggle('active',!b.dataset.cdkaynak); });
+    var k1=document.querySelector('[data-cdkaynak="FATURA"]'), k2=document.querySelector('[data-cdkaynak="CFIS"]');
+    if(k1) k1.textContent=dir==='RECEIVABLE'?'Faturalar':'Faturalar (Alış)';
+    if(k2) k2.textContent=dir==='RECEIVABLE'?'Tahsilat / Çek':'Ödeme / Çek';
+    _cdScrollY=window.scrollY||0;
+    document.getElementById('opCariDetayModal').hidden=false;
+    document.getElementById('opCariDetayKapat').focus();
+    _cdFillHarTuruSelect(dir);
+    _cdLoadAyar(dir,location,cariKod);
+    _cdSetupScrollListener();
+    _cdLoadOzet();
+    _cdResetAndLoad();
+  }
+
+  function _closeModal(){ document.getElementById('opCariDetayModal').hidden=true; window.scrollTo(0,_cdScrollY); }
+
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!document.getElementById('opCariDetayModal').hidden) _closeModal(); });
+  document.getElementById('opCariDetayKapat').addEventListener('click',_closeModal);
+  document.getElementById('opCariDetayModal').addEventListener('click',function(e){ if(e.target===this) _closeModal(); });
+  document.querySelectorAll('#opCariDetayTabs .op-cd-tab').forEach(function(btn){
+    btn.addEventListener('click',function(){ _showTab(this.dataset.cdtab); });
+  });
+  document.querySelectorAll('#opCariDetayModal [data-cdkaynak]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('#opCariDetayModal [data-cdkaynak]').forEach(function(b){b.classList.remove('active');});
+      this.classList.add('active'); _cdKaynak=this.dataset.cdkaynak; _cdResetAndLoad();
+    });
+  });
+
+  window.opOpenMusteriDetay=function(btn){ _openModal('RECEIVABLE',btn.dataset.cariKod,btn.dataset.location,btn.dataset.pb||'TRY',btn.dataset.cariAdi||''); };
+  window.opOpenTedarikciDetay=function(btn){ _openModal('PAYABLE',btn.dataset.cariKod||btn.dataset.kod,btn.dataset.location||btn.dataset.loc,btn.dataset.pb||'TRY',btn.dataset.cariAdi||btn.dataset.unvan||''); };
+  window.opCloseMusteriDetay=_closeModal;
+})();
+</script>

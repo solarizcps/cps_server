@@ -1,0 +1,32 @@
+## finans.RECEIVABLE_CARI_LIST_RESTORE_V1 — 2026-09-17
+
+**Finans Cari Hareketler Liste Geri Yükleme — Integration Gate 40B/40C**
+
+Müşteri (RECEIVABLE) ve Tedarikçi (PAYABLE) Carileri listeleri ProgramData RM'den okunuyor.
+Müşteri veri akışı ve borç/alacak yönleri Adem tarafından 2026-09-17 tarihinde görsel olarak onaylandı.
+
+### Onaylanan Kapsam
+- PAYABLE: 1143 tedarikçi satırı (RM snapshot)
+- RECEIVABLE: 209 müşteri satırı, 206 görünür
+- Korgün liste yükü: 0 inline çağrı
+- net = borc - alacak; net > 0 = Açık Alacak; net < 0 = Müşteri Avansı
+
+### Ertelenen Konu
+- Müşteri detay modal içeriği eksik — KAPI 40E kapsamı
+- `FINANCE_DETAIL_MODAL_DEFERRED=true`
+
+### Değişiklikler
+- `rm_receivable_reader.py` — RECEIVABLE snapshot okuyucu (yeni)
+- `rm_balance_resolver.py`, `rm_snapshot_lookup.py` — destek modülleri (yeni)
+- `routes.py` — yukumlulukler sekmesi read_receivable_snapshot ile aktif
+- `musteri_hareket_service.py` — rm_receivable_refresh bağımlılığı temizlendi
+- 9 yeni finans test modülü
+- `odeme_plani.html`, `_odeme_plani_styles.inc.html` — UI güncellemeleri
+
+### Güvenlik
+- Canonical production DB: DOKUNULMADI
+- ProgramData Finance RM: DOKUNULMADI (yalnız temp kopya kullanıldı)
+- Refresh worker: DEVRE DIŞI
+
+### Test
+211 PASS · 1 FAIL (pre-existing test conflict; üretim koduna etkisi yok)

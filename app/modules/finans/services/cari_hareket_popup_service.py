@@ -62,11 +62,28 @@ def _net_is_zero(net: float) -> bool:
 
 
 def business_semantic(net: float) -> Dict[str, str]:
-    """P1.2B — raw signed net korunur, görsel yorum."""
+    """P1.2B — raw signed net korunur, görsel yorum. Tedarikçi yönü (kg_fn)."""
     if net > DEBT_NET_TOLERANCE:
         return {'status': 'ALACAKLIYIZ', 'label': 'Alacaklıyız', 'class': 'op-har-net-credit'}
     if net < -DEBT_NET_TOLERANCE:
         return {'status': 'ACIK_BORC', 'label': 'Açık Borç', 'class': 'op-har-net-debt'}
+    return {'status': 'BAKIYE_YOK', 'label': 'Bakiye Yok', 'class': 'op-har-net-zero'}
+
+
+def business_semantic_customer(net: float) -> Dict[str, str]:
+    """Müşteri yönü — yalnız kg_fn net."""
+    if net > DEBT_NET_TOLERANCE:
+        return {
+            'status': 'ACIK_ALACAK',
+            'label': 'Açık Alacak / Müşteri Borçlu',
+            'class': 'op-har-net-debt',
+        }
+    if net < -DEBT_NET_TOLERANCE:
+        return {
+            'status': 'MUSTERI_AVANSI',
+            'label': 'Müşteri Avansı',
+            'class': 'op-har-net-credit',
+        }
     return {'status': 'BAKIYE_YOK', 'label': 'Bakiye Yok', 'class': 'op-har-net-zero'}
 
 
@@ -481,7 +498,10 @@ def build_popup_summary(ledger: Dict[str, Any], today: Optional[date] = None) ->
         con.close()
 
     cek_oz = _cek_ozet(cekler, today)
-    sem = business_semantic(fn_net)
+    if str(ck).startswith('120.'):
+        sem = business_semantic_customer(fn_net)
+    else:
+        sem = business_semantic(fn_net)
 
     # Son Finansal Aksiyon — liste ile aynı semantik (max nakit/dekont vs çek)
     cash_date = last_pay.get('tarih') if last_pay else None
@@ -518,6 +538,21 @@ def build_popup_summary(ledger: Dict[str, Any], today: Optional[date] = None) ->
         'canli_alacak': ledger.get('fn_alacak'),
         'net_bakiye': fn_net,
         'para_birimi': ledger.get('para_birimi'),
+        'canonical_balance_source': 'kg_fn',
+        'movement_ledger_role': 'informational',
+        'fn_borc': ledger.get('fn_borc'),
+        'fn_alacak': ledger.get('fn_alacak'),
+        'fn_net': ledger.get('fn_net'),
+        'har_borc': ledger.get('har_borc'),
+        'har_alacak': ledger.get('har_alacak'),
+        'har_net': ledger.get('har_net'),
+        'delta_borc': ledger.get('delta_borc'),
+        'delta_alacak': ledger.get('delta_alacak'),
+        'delta_net': ledger.get('delta_net', ledger.get('parity_delta')),
+        'parity_ok': ledger.get('parity_ok'),
+        'parity_note': ledger.get('parity_note'),
+        'parity_blocked_classes': list(ledger.get('parity_blocked_classes') or []),
+        'yon': sem.get('label'),
         'business': sem,
         'son_odeme': last_pay,
         'son_cek': last_cek,
@@ -528,6 +563,73 @@ def build_popup_summary(ledger: Dict[str, Any], today: Optional[date] = None) ->
         'en_yakin_cek_vade': cek_oz.get('en_yakin_vade'),
         'en_yakin_cek_gun': cek_oz.get('en_yakin_gun'),
         'cek_ozet': cek_oz,
+    }
+
+
+def get_supplier_summary(
+    location: str,
+    cari_kod: str,
+    para_birimi: str = "TRY",
+) -> Dict[str, Any]:
+    """Tedarikçi detay özeti — yalnız RM snapshot (GET sırasında Korgün yok)."""
+    try:
+        from modules.finans.read_model.rm_snapshot_lookup import lookup_payable_row
+    except ImportError:
+        from app.modules.finans.read_model.rm_snapshot_lookup import lookup_payable_row
+
+    pb = (para_birimi or "TRY").strip().upper()
+    snap = lookup_payable_row(location, cari_kod, pb)
+    if not snap:
+        return {'ok': False, 'error': 'snapshot_row_not_found', 'cari_kod': cari_kod, 'location': location}
+
+    row = snap['row']
+    enrich = snap.get('enrichment') or {}
+    fn_net = float(row.get('net') or 0)
+    sem = business_semantic(fn_net)
+    son_odeme = None
+    if row.get('son_odeme_tarih'):
+        son_odeme = {
+            'tarih': row.get('son_odeme_tarih'),
+            'tutar': row.get('son_odeme_tutar'),
+            'pb': row.get('son_odeme_pb') or row.get('para_birimi'),
+        }
+    son_alim = None
+    if row.get('son_alim_tarih'):
+        son_alim = {
+            'tarih': row.get('son_alim_tarih'),
+            'tutar': row.get('son_alim_tutar'),
+            'pb': row.get('son_alim_pb') or row.get('para_birimi'),
+        }
+    return {
+        'ok': True,
+        'cari_kod': cari_kod,
+        'location': row.get('location') or location,
+        'para_birimi': row.get('para_birimi') or 'TRY',
+        'canonical_balance_source': 'kg_fn',
+        'balance_source': 'rm_snapshot',
+        'snapshot_id': snap.get('snapshot_id'),
+        'snapshot_published_at': snap.get('published_at'),
+        'canonical_location': enrich.get('canonical_balance_location'),
+        'mirror_location': enrich.get('mirror_location'),
+        'movement_ledger_role': 'informational',
+        'fn_borc': float(row.get('borc') or 0),
+        'fn_alacak': float(row.get('alacak') or 0),
+        'fn_net': fn_net,
+        'har_borc': enrich.get('info_har_borc'),
+        'har_alacak': enrich.get('info_har_alacak'),
+        'har_net': enrich.get('info_har_net'),
+        'delta_borc': enrich.get('info_delta_borc'),
+        'delta_alacak': enrich.get('info_delta_alacak'),
+        'delta_net': enrich.get('info_delta_net'),
+        'parity_ok': enrich.get('info_parity_ok'),
+        'parity_note': enrich.get('info_parity_note'),
+        'parity_blocked_classes': list(enrich.get('info_parity_blocked_classes') or []),
+        'yon': row.get('bakiye_durumu') or sem.get('label'),
+        'son_odeme': son_odeme,
+        'son_alim': son_alim,
+        'son_cek': None,
+        'portfoy_cek_cnt': enrich.get('portfoy_cek_cnt', 0),
+        'portfoy_cek_tutar': enrich.get('portfoy_cek_tutar'),
     }
 
 
