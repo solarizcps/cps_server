@@ -1,0 +1,57 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v2.0.0"
+phase_code = "ATP_GOLDEN_REINTEGRATION_V1"
+title = "ATP altin entegrasyon - gorsel onay sonrasi commit"
+status = "ONAYLANDI"
+date = "2026-09-17"
+summary = "KAPI 37A/37A1/37B: ATP altin paketiyle 10 modul, OET 103/103, ATP 450+ PASS, Adem gorsel onay."
+source_type = "commit"
+commit_sha = "cb802fdc3f027a2ebbd4351777552dacbda7300c"
+test_result = "ATP 450+ PASS / 0 FAIL (37A); OET 103/103 PASS (37A1); KAPI 37B PASS"
+db_write = false
+server_restart = false
+push_status = "PUSHED"
+approved_by = "Adem"
+worktree_fingerprint = "fix/atp-golden-reintegration-v1 7d197054"
+verification_date = "2026-09-17"
+verification_evidence = "KAPI 37B PASS: PID 7336 port 8080 temp DB mock."
+changes = [
+  "arac_geofence_service.py guncellendi.",
+  "arac_google_route_apply_service.py guncellendi.",
+  "arac_gps_poll_service.py guncellendi.",
+  "arac_route_apply_service.py guncellendi.",
+  "arac_takip_repo.py guncellendi.",
+  "arac_today_operations_service.py guncellendi.",
+  "planlama_arac_takip.js guncellendi.",
+  "planlama_arac_takip_route.js guncellendi.",
+  "planlama_arac_takip_route_explainer.js guncellendi.",
+  "arac_takip_plan.html guncellendi.",
+  "atp_stabilization_manifest.sha256 guncellendi.",
+  "test_pzm_cek_vade_gun.py OET fixture duzeltmesi.",
+]
+changed_files = [
+  "app/modules/planlama/arac_geofence_service.py",
+  "app/modules/planlama/arac_google_route_apply_service.py",
+  "app/modules/planlama/arac_gps_poll_service.py",
+  "app/modules/planlama/arac_route_apply_service.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/modules/planlama/arac_today_operations_service.py",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_route.js",
+  "app/static/js/planlama_arac_takip_route_explainer.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "docs/atp-lock/atp_stabilization_manifest.sha256",
+  "tests/nexgen/test_pzm_cek_vade_gun.py",
+]
+locked_rules = []
+tests = [
+  "ATP 450+ PASS / 0 FAIL (37A)",
+  "OET 103/103 PASS (37A1)",
+  "Gorsel onay KAPI 37B PASS (Adem)",
+]
+known_issues = []
+next_steps = [
+  "PR: fix/atp-golden-reintegration-v1 -> main",
+]
+related_commits = []

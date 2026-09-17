@@ -309,10 +309,26 @@ def apply_route_order_and_snapshot(
     finally:
         con.close()
 
+    geom_pairs = (route_dto.get('current') or {}).get('geometry') or []
+    est_return = None
+    if eta_by_task and isinstance(eta_by_task.get('__return__'), dict):
+        est_return = eta_by_task['__return__'].get('display_hhmm')
+    dep_hhmm = (departure_time or '').strip()[:5] or None
+    snapshot_out = {
+        **snapshot,
+        'routing_provider': prepared.routing_provider,
+        'total_distance_m': prepared.total_distance_m,
+        'total_duration_s': prepared.total_duration_s,
+        'stop_order': prepared.stop_order,
+        'geometry_pairs': geom_pairs,
+        'estimated_return_time': est_return,
+        'departure_time': dep_hhmm,
+    }
+
     tasks = list_plan_tasks(plan_date, arac_external_id)
     result = RouteApplyResult(
         tasks=tasks,
-        route_snapshot=snapshot,
+        route_snapshot=snapshot_out,
         route_version=int(snapshot['route_version']),
         deduplicated=bool(snapshot.get('dedup')),
         applied=True,

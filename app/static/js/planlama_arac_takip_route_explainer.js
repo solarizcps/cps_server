@@ -556,7 +556,9 @@
       ? _applyHooks.getPlanDate()
       : (global.ATP_PLAN_DATE || '');
     var taskIds = profileOnly
-      ? googleOrderTaskIds('current')
+      ? (typeof _applyHooks.getActiveRouteTaskIds === 'function'
+        ? _applyHooks.getActiveRouteTaskIds(String(vid))
+        : googleOrderTaskIds('current'))
       : googleOrderTaskIds('suggested');
     if (!vid || !planDate || !taskIds.length) {
       notify('Rota uygulanamadı: plan veya araç bilgisi eksik.');
@@ -603,14 +605,23 @@
           notify(successMsg);
           return;
         }
+        var profOpt = pickProfileOption(_googleDto.current, _selectedProfile);
+        var expectedReturn = (_selectedSummary(_route) || {}).estimated_return_time;
+        var expectedMetrics = {
+          departure_time: dep,
+          distance_m: profOpt && profOpt.distance_m,
+          total_plan_seconds: profOpt && profOpt.total_plan_seconds,
+        };
         var reloadArgs = profileOnly
-          ? [String(vid), taskIds, _selectedProfile, (_selectedSummary(_route) || {}).estimated_return_time]
-          : [String(vid), taskIds];
-        return reloadFn.apply(null, reloadArgs).then(function (ok) {
+          ? [String(vid), taskIds, _selectedProfile, expectedReturn, j, expectedMetrics]
+          : [String(vid), taskIds, j];
+        return reloadFn.apply(null, reloadArgs).then(function (outcome) {
           _googleApplyInFlight = false;
           closeModal();
-          if (ok) notify(successMsg);
-          else notify('Rota doğrulanamadı. Planı değişmiş kabul etmeyin.');
+          if (outcome === true) notify(successMsg);
+          else if (outcome === 'partial') {
+            notify('Rota kaydedildi ancak ekran doğrulanması yenilenemedi.');
+          } else notify('Rota doğrulanamadı. Planı değişmiş kabul etmeyin.');
         });
       })
       .catch(function () {

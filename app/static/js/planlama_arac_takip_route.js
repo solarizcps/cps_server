@@ -724,6 +724,80 @@
 
   }
 
+  function geoJsonToLatLngPairs(geo) {
+    if (!geo) return [];
+    if (Array.isArray(geo) && geo.length && Array.isArray(geo[0])) return geo;
+    if (geo.type === 'LineString' && geo.coordinates && geo.coordinates.length) {
+      return geo.coordinates.map(function (c) {
+        return [c[1], c[0]];
+      });
+    }
+    return [];
+  }
+
+  function taskIdsFromStopOrder(stopOrder) {
+    var ids = [];
+    (stopOrder || []).forEach(function (s) {
+      if (!s) return;
+      if (s.task_id) {
+        ids.push(String(s.task_id));
+        return;
+      }
+      if (s.plan_item_id != null && s.plan_item_id !== '') {
+        ids.push('pi-' + String(s.plan_item_id));
+      }
+    });
+    return ids;
+  }
+
+  /** Apply POST /route/apply route_snapshot onto lastRoute (no ORS refresh). Returns 'ok' | 'invalid'. */
+  function ingestGoogleApplyResponse(applyJson) {
+    var snap = applyJson && applyJson.route_snapshot;
+    if (!snap || !snap.routing_provider) return 'invalid';
+    var pairs = snap.geometry_pairs && snap.geometry_pairs.length
+      ? snap.geometry_pairs
+      : geoJsonToLatLngPairs(snap.geometry);
+    if (!lastRoute) {
+      lastRoute = { status: 'OK', current: {}, suggested: {}, gain: {} };
+    }
+    var cur = Object.assign({}, lastRoute.current || {});
+    cur.provider = snap.routing_provider;
+    cur.routing_provider = snap.routing_provider;
+    if (pairs.length) cur.geometry = pairs;
+    var distM = snap.google_distance_m != null ? snap.google_distance_m : snap.total_distance_m;
+    if (distM != null) {
+      cur.distance_m = distM;
+      cur.km = Math.round(Number(distM) / 100) / 10;
+    }
+    var totalSec = snap.google_total_plan_seconds != null
+      ? snap.google_total_plan_seconds
+      : snap.total_duration_s;
+    if (totalSec != null) {
+      cur.total_plan_seconds = Number(totalSec);
+      cur.duration_s = Number(totalSec);
+      var mins = Math.ceil(Number(totalSec) / 60);
+      cur.duration_label = mins + ' dk';
+    }
+    var ret = snap.google_return_display || snap.estimated_return_time;
+    if (ret) {
+      cur.estimated_return_time = ret;
+      cur.return_display = ret;
+    }
+    if (snap.departure_time) cur.departure_time = snap.departure_time;
+    var ids = taskIdsFromStopOrder(snap.stop_order);
+    if (ids.length) {
+      cur.full_task_ids = ids;
+      cur.task_ids = ids;
+    }
+    lastRoute = Object.assign({}, lastRoute, { status: 'OK', current: cur });
+    updateRouteCards(lastRoute);
+    renderPreviewMode();
+    if (global.AtpRouteExplainer && global.AtpRouteExplainer.updateExplainerButton) {
+      global.AtpRouteExplainer.updateExplainerButton(lastRoute);
+    }
+    return 'ok';
+  }
+
 
 
   function clearRouteDisplay() {
@@ -1423,7 +1497,11 @@
 
     isSameRoute: isSameRoute,
 
-    alreadyOptimalMessage: alreadyOptimalMessage
+    alreadyOptimalMessage: alreadyOptimalMessage,
+
+    ingestGoogleApplyResponse: ingestGoogleApplyResponse,
+
+    mergeApplySnapshotIntoLastRoute: ingestGoogleApplyResponse
 
   };
 

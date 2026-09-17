@@ -537,6 +537,12 @@
       } else if (nextLabel) {
         detailRows += '<div class="vcard-detail-row"><span class="icon">📅</span><span>Sıradaki: <strong>' +
           fmtVal(nextLabel) + '</strong></span></div>';
+        var etaFree = v.next_eta_time || '';
+        var etaNote = v.eta_honesty_note || '';
+        if (etaFree && etaNote) {
+          detailRows += '<div class="vcard-detail-row"><span class="icon">⏱</span><span>Tahmini (trafiksiz) ' +
+            fmtVal(fmtTime(etaFree) || etaFree) + '</span></div>';
+        }
       }
       if (deviating && v.deviation_m != null) {
         var km = (Number(v.deviation_m) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
@@ -752,6 +758,34 @@
       && domJobOk;
   }
 
+  function snapshotHasValidApplyReadback(snap) {
+    return !!(snap && snap.routing_provider);
+  }
+
+  function verifyGoogleSnapshotMetrics(snap, expectedProfile, expectedReturn, expectedMetrics) {
+    if (!snapshotHasValidApplyReadback(snap)) return false;
+    var want = expectedProfile === 'toll_free' ? 'traffic-free' : 'traffic-fast';
+    if (String(snap.routing_provider || '').indexOf(want) === -1) return false;
+    if (expectedReturn) {
+      var ret = snap.google_return_display || snap.estimated_return_time || '';
+      if (ret && String(ret) !== String(expectedReturn)) return false;
+    }
+    var metrics = expectedMetrics || {};
+    if (metrics.departure_time && snap.departure_time) {
+      var depExp = String(metrics.departure_time).trim().slice(0, 5);
+      if (String(snap.departure_time).slice(0, 5) !== depExp) return false;
+    }
+    if (metrics.distance_m != null && snap.google_distance_m != null) {
+      if (Math.round(Number(metrics.distance_m)) !== Math.round(Number(snap.google_distance_m))) return false;
+    }
+    if (metrics.total_plan_seconds != null && snap.google_total_plan_seconds != null) {
+      if (Math.round(Number(metrics.total_plan_seconds)) !== Math.round(Number(snap.google_total_plan_seconds))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   function verifyGoogleProfileApplyReadback(vid, expectedTaskIds, expectedProfile, expectedReturn) {
     if (!verifyGoogleApplyReadback(vid, expectedTaskIds)) return false;
     var route = window.AtpRoute && window.AtpRoute.getLastRoute && window.AtpRoute.getLastRoute();
@@ -766,26 +800,39 @@
     return true;
   }
 
-  function reloadAfterGoogleProfileApply(vid, expectedTaskIds, expectedProfile, expectedReturn) {
+  /** @returns {Promise<true|'partial'|false>} */
+  function reloadAfterGoogleProfileApply(vid, expectedTaskIds, expectedProfile, expectedReturn, applyJson, expectedMetrics) {
     if (vid) _activeVehicleExtId = String(vid);
     return loadOps().then(function (ok) {
-      if (!ok) return false;
-      return refreshPlanRoute(vid).then(function () {
-        updatePlanMap();
-        return verifyGoogleProfileApplyReadback(vid, expectedTaskIds, expectedProfile, expectedReturn);
-      });
+      if (!ok) return 'partial';
+      updatePlanMap();
+      var snap = applyJson && applyJson.route_snapshot;
+      var ing = window.AtpRoute && window.AtpRoute.ingestGoogleApplyResponse
+        ? window.AtpRoute.ingestGoogleApplyResponse(applyJson)
+        : 'invalid';
+      if (ing !== 'ok') return 'partial';
+      if (!verifyGoogleApplyReadback(vid, expectedTaskIds)) return false;
+      if (!verifyGoogleSnapshotMetrics(snap, expectedProfile, expectedReturn, expectedMetrics)) return 'partial';
+      return true;
     });
   }
 
-  function reloadAfterGoogleApply(vid, expectedTaskIds) {
+  /** @returns {Promise<true|'partial'|false>} */
+  function reloadAfterGoogleApply(vid, expectedTaskIds, applyJson) {
     if (vid) _activeVehicleExtId = String(vid);
     return loadOps().then(function (ok) {
-      if (!ok) return false;
-      return refreshPlanRoute(vid).then(function () {
-        updatePlanMap();
-        return verifyGoogleApplyReadback(vid, expectedTaskIds);
-      });
+      if (!ok) return 'partial';
+      updatePlanMap();
+      if (applyJson && window.AtpRoute && window.AtpRoute.ingestGoogleApplyResponse) {
+        if (window.AtpRoute.ingestGoogleApplyResponse(applyJson) !== 'ok') return 'partial';
+      }
+      return verifyGoogleApplyReadback(vid, expectedTaskIds) ? true : false;
     });
+  }
+
+  function getActiveRouteTaskIdsForVehicle(vid) {
+    var items = sortStopItems(filterItemsForVehicle(vid, lastOpsData.items || []));
+    return items.map(function (it) { return String(it.id); });
   }
 
   function setActiveVehicleCard(extId) {
@@ -3449,6 +3496,7 @@
       getVehicleId: vehicleId,
       getPlanDate: _planDateForApi,
       toast: toast,
+      getActiveRouteTaskIds: getActiveRouteTaskIdsForVehicle,
       reloadAfterApply: reloadAfterGoogleApply,
       reloadAfterProfileApply: reloadAfterGoogleProfileApply,
     });

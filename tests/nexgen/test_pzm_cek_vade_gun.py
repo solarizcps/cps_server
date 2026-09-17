@@ -195,7 +195,8 @@ class TestVadeMotoru(unittest.TestCase):
                 siparis_no TEXT,
                 vade_gun INTEGER,
                 anlasma_para_birimi TEXT,
-                odeme_tipi TEXT
+                odeme_tipi TEXT,
+                talep_referansi TEXT
             )
         """)
         con.execute("""
@@ -213,7 +214,7 @@ class TestVadeMotoru(unittest.TestCase):
         """gerçek sevk 2026-08-10 + 220 gün = 2027-03-19"""
         con = self._minimal_con()
         con.execute(
-            "INSERT INTO nexgen_planlama_siparis VALUES (759,'PZM-2026-0221',220,'USD','CEK')"
+            "INSERT INTO nexgen_planlama_siparis VALUES (759,'PZM-2026-0221',220,'USD','CEK',NULL)"
         )
         con.execute(
             "INSERT INTO mo_musteri_sevkiyat VALUES (227,759,'SEVK_EDILDI','2026-08-10',1)"
@@ -235,7 +236,7 @@ class TestVadeMotoru(unittest.TestCase):
         """sevk_tarihi NULL ise hedef_vade_tarihi None olmalı."""
         con = self._minimal_con()
         con.execute(
-            "INSERT INTO nexgen_planlama_siparis VALUES (759,'PZM-2026-0221',220,'USD','CEK')"
+            "INSERT INTO nexgen_planlama_siparis VALUES (759,'PZM-2026-0221',220,'USD','CEK',NULL)"
         )
         con.commit()
 
@@ -252,7 +253,7 @@ class TestVadeMotoru(unittest.TestCase):
         from modules.nexgen.mo_vade_kontrol_config import DURUM_NAKIT_PAKET
         con = self._minimal_con()
         con.execute(
-            "INSERT INTO nexgen_planlama_siparis VALUES (800,'PZM-2026-9999',0,'TRY','NAKIT')"
+            "INSERT INTO nexgen_planlama_siparis VALUES (800,'PZM-2026-9999',0,'TRY','NAKIT',NULL)"
         )
         con.execute(
             "INSERT INTO mo_musteri_sevkiyat VALUES (300,800,'SEVK_EDILDI','2026-08-10',1)"
