@@ -14,7 +14,7 @@ commit_sha     = ""
 approved_by    = "Adem"
 worktree_fingerprint = "oet-v2-live-readonly-v2"
 verification_date    = "2026-09-17"
-verification_evidence = "Adem visual approval on laptop CPS http://127.0.0.1:8080/online-eticaret/; 19 regression tests PASS; Solariz 123 pkgs + Epona 49 pkgs live GET verified; WRITE_ENDPOINT_COUNT=0; source_changeset=c6eb63aae24c87d1c0451bebd534b857f4eb90ac"
+verification_evidence = "Adem visual approval on laptop CPS http://127.0.0.1:8080/online-eticaret/; 19 regression tests PASS; Solariz 123 pkgs + Epona 49 pkgs live GET verified; WRITE_ENDPOINT_COUNT=0; source_changeset=c6eb63aae24c87d1c0451bebd534b857f4eb90ac; SOURCE_CODE_COMMIT=d06fc03519a70715e5a5c573f6b8e22c849b0559"
 
 summary = """
 Samet PR #5 (samet-e-ticaret-ui-performance-v1, d3bcbb1) laptop CPS entegrasyonu
@@ -64,4 +64,4 @@ next_steps = [
 test_result   = "PASS"
 db_write      = false
 server_restart = false
-push_status   = "PENDING"
+push_status   = "PUSHED"
