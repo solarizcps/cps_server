@@ -1009,22 +1009,32 @@ def get_plan_vehicle_meta(plan_date: str, arac_external_id: str) -> dict | None:
 
 
 def list_plan_tasks(plan_date: str, arac_external_id: str) -> list[dict]:
+    """Return all plan items for vehicle+day across ALL active plan_ids.
+
+    Cross-plan support: returns items from all non-cancelled plans for the
+    same vehicle+day, sorted globally by sira.  Single-plan setups are
+    unaffected (backward-compatible).
+    """
     if not tables_ready() or not arac_external_id:
         return []
     con = get_conn()
     try:
-        plan = con.execute(
+        plans = con.execute(
             """
             SELECT id FROM arac_gunluk_plan
-            WHERE plan_tarihi=? AND arac_provider='TURKCELL_FILOM' AND arac_external_id=?
+            WHERE plan_tarihi=? AND arac_external_id=?
+              AND durum NOT IN ('IPTAL', 'KAPANDI')
+            ORDER BY id
             """,
             (plan_date, str(arac_external_id)),
-        ).fetchone()
-        if not plan:
+        ).fetchall()
+        if not plans:
             return []
+        plan_ids = [p['id'] for p in plans]
+        placeholders = ','.join('?' * len(plan_ids))
         items = con.execute(
-            'SELECT * FROM arac_gunluk_plan_is WHERE plan_id=? ORDER BY sira',
-            (plan['id'],),
+            f'SELECT * FROM arac_gunluk_plan_is WHERE plan_id IN ({placeholders}) ORDER BY sira, id',
+            plan_ids,
         ).fetchall()
         result = []
         for item in items:
@@ -1034,10 +1044,14 @@ def list_plan_tasks(plan_date: str, arac_external_id: str) -> list[dict]:
             if not talep:
                 continue
             master = None
-            if talep['kayitli_yer_id']:
+            try:
+                yer_id = talep['kayitli_yer_id']
+            except (IndexError, KeyError):
+                yer_id = None
+            if yer_id:
                 master = con.execute(
                     'SELECT * FROM arac_kayitli_yer WHERE id=?',
-                    (talep['kayitli_yer_id'],),
+                    (yer_id,),
                 ).fetchone()
             result.append(_plan_task_dto(item, talep, master))
         _assign_display_order(result)

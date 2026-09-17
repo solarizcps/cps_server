@@ -271,6 +271,13 @@ def apply_google_route_order_and_snapshot(
         departure_time=departure_time.strip()[:5],
         skip_reorder=profile_only,
     )
+    result.route_snapshot = {
+        **result.route_snapshot,
+        'google_distance_m': float(opt.distance_m or 0),
+        'google_total_plan_seconds': float(opt.total_plan_seconds or 0),
+        'google_return_display': (opt.return_display or '').strip() or None,
+        'google_profile': google_profile,
+    }
     _write_route_apply_audit(
         plan_id=plan_id,
         arac_external_id=str(arac_external_id),
