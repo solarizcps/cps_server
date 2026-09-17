@@ -1,0 +1,1 @@
+OET V2 perf/status fix: package count labels, open/today poll scope, poll cache refresh, non-blocking Yenile with dedup. Adem visual approval on laptop. 84 tests PASS. GET-only; API_WRITE_ENABLED=false.

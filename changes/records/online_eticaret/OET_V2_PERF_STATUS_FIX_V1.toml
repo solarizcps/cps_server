@@ -1,0 +1,56 @@
+schema_version = 1
+module         = "online_eticaret"
+version        = "2.0.1"
+phase_code     = "OET_V2_PERF_STATUS_FIX_V1"
+title          = "OET V2 package count parity, poll scope, non-blocking refresh"
+status         = "ONAYLANDI"
+date           = "2026-09-17"
+
+source_type    = "verified_uncommitted"
+commit_sha     = ""
+approved_by    = "Adem"
+worktree_fingerprint = "fix/oet-v2-performance-status-v1"
+verification_date    = "2026-09-17"
+verification_evidence = "Adem laptop visual approval: non-blocking Yenile keeps table visible; open poll scope; package/paket labels; 84 tests PASS; API_WRITE_ENABLED=false; GET-only OET routes."
+
+summary = """
+Performance/status narrow fix: package vs quantity contract, open/today poll scope alignment,
+order cache update after poll, non-blocking manual refresh with poll/refresh live-fetch dedup.
+"""
+
+changes = [
+  "index.html: İşleme Alınan pill paket; cnt-toplaniyor cntPackages; non-blocking Yenile button",
+  "order_poll.py: open/today poll scope; store snapshot for cache; scope live-fetch dedup",
+  "routes.py: seed snapshot by active filter; poll cache refresh; refresh=1 scope guard",
+]
+
+changed_files = [
+  "app/modules/online_eticaret/routes.py",
+  "app/modules/online_eticaret/order_poll.py",
+  "app/templates/online_eticaret/index.html",
+  "dev_tests/test_oet_perf_status_fix_v1.py",
+  "dev_tests/test_oet_nonblocking_refresh_v1.py",
+]
+
+locked_rules = []
+
+tests = [
+  "dev_tests/test_oet_perf_status_fix_v1.py PASS",
+  "dev_tests/test_oet_nonblocking_refresh_v1.py PASS",
+  "dev_tests/test_oet_parity_v2.py PASS",
+  "84 total related tests PASS",
+  "NON_GET_REQUEST_COUNT=0",
+]
+
+known_issues = [
+  "Trendyol order fetch latency unchanged (~2s manual refresh backend)",
+]
+
+next_steps = [
+  "PR: fix/oet-v2-performance-status-v1 -> main",
+]
+
+test_result   = "PASS"
+db_write      = false
+server_restart = false
+push_status   = "PENDING"

@@ -43,6 +43,8 @@ _STORE_WORKERS = 2
 
 _POLL_LOCK = threading.Lock()
 _POLL_IN_FLIGHT = False
+# Manuel refresh (refresh=1) ile poll aynı anda canlı Trendyol fetch başlatmasın.
+_SCOPE_LIVE_FETCH = None
 _SNAPSHOT = {
     'date_filter': None,
     'packages': {},
@@ -87,6 +89,16 @@ def get_order_poll_stats():
 def get_snapshot_cursor():
     with _POLL_LOCK:
         return _SNAPSHOT.get('cursor')
+
+
+def get_poll_store_snapshots():
+    """KAPI-2: son poll'dan mağaza bazlı ham sipariş verisini döndür.
+
+    Routes order cache güncelleme için kullanır.
+    Snapshot items'ı döndürür; store -> {orders, model_map, image_map} yoksa boş dict.
+    """
+    with _POLL_LOCK:
+        return dict(_SNAPSHOT.get('store_orders') or {})
 
 
 def _line_fingerprint(item):
@@ -175,6 +187,8 @@ def _fetch_orders_poll_parallel(start_ms, end_ms, build_rows_fn, build_list_fn):
     rows_by_store = {}
     image_map_global = {}
     errors = []
+    # KAPI-2 FIX: store bazlı ham sipariş + map'i sakla → routes order cache güncelleyebilsin
+    store_raw_data = {}
 
     def worker(store_name):
         orders, model_map, image_map, err = _fetch_store_orders_poll(
@@ -197,9 +211,41 @@ def _fetch_orders_poll_parallel(start_ms, end_ms, build_rows_fn, build_list_fn):
                 image_map_global.update(image_map or {})
                 if orders:
                     pkg_date_ms.update(pkg_order_date_map(orders))
+                store_raw_data[store_name] = {
+                    'orders': orders or [],
+                    'model_map': {},
+                    'image_map': image_map or {},
+                }
 
     operasyon_listesi = build_list_fn(rows_by_store, image_map_global, pkg_date_ms)
-    return operasyon_listesi, errors
+    return operasyon_listesi, errors, store_raw_data
+
+
+def try_begin_scope_live_fetch(date_filter):
+    """Tek canlı sipariş fetch — poll veya sayfa refresh=1 (open/today)."""
+    global _SCOPE_LIVE_FETCH
+    if date_filter not in ('today', 'open'):
+        return True
+    with _POLL_LOCK:
+        if _POLL_IN_FLIGHT or _SCOPE_LIVE_FETCH is not None:
+            _POLL_STATS['duplicate_blocked'] += 1
+            return False
+        _SCOPE_LIVE_FETCH = date_filter
+        return True
+
+
+def end_scope_live_fetch(date_filter):
+    global _SCOPE_LIVE_FETCH
+    if date_filter not in ('today', 'open'):
+        return
+    with _POLL_LOCK:
+        if _SCOPE_LIVE_FETCH == date_filter:
+            _SCOPE_LIVE_FETCH = None
+
+
+def scope_live_fetch_busy():
+    with _POLL_LOCK:
+        return _POLL_IN_FLIGHT or _SCOPE_LIVE_FETCH is not None
 
 
 def _backoff_seconds():
@@ -213,9 +259,10 @@ def _backoff_seconds():
 
 
 def check_order_updates(date_filter, since_cursor, build_rows_fn, build_list_fn, ms_range_fn):
-    global _POLL_IN_FLIGHT, _CONSECUTIVE_ERRORS
+    global _POLL_IN_FLIGHT, _CONSECUTIVE_ERRORS, _SCOPE_LIVE_FETCH
 
-    if date_filter != 'today':
+    # KAPI-2 FIX: 'open' ve 'today' kapsamı destekleniyor; 7d yok.
+    if date_filter not in ('today', 'open'):
         return {
             'ok': False,
             'error': 'unsupported_filter',
@@ -223,7 +270,7 @@ def check_order_updates(date_filter, since_cursor, build_rows_fn, build_list_fn,
         }
 
     with _POLL_LOCK:
-        if _POLL_IN_FLIGHT:
+        if _POLL_IN_FLIGHT or _SCOPE_LIVE_FETCH is not None:
             _POLL_STATS['duplicate_blocked'] += 1
             return {
                 'ok': True,
@@ -232,6 +279,7 @@ def check_order_updates(date_filter, since_cursor, build_rows_fn, build_list_fn,
                 'backoff_seconds': get_order_poll_interval_seconds(),
             }
         _POLL_IN_FLIGHT = True
+        _SCOPE_LIVE_FETCH = date_filter
 
     started = time.perf_counter()
     metrics_before = tc.get_client_metrics()
@@ -239,7 +287,7 @@ def check_order_updates(date_filter, since_cursor, build_rows_fn, build_list_fn,
 
     try:
         start_ms, end_ms = ms_range_fn(date_filter)
-        operasyon_listesi, errors = _fetch_orders_poll_parallel(
+        operasyon_listesi, errors, store_raw_data = _fetch_orders_poll_parallel(
             start_ms, end_ms, build_rows_fn, build_list_fn
         )
         if errors:
@@ -256,10 +304,13 @@ def check_order_updates(date_filter, since_cursor, build_rows_fn, build_list_fn,
         current_keys = set(order)
         previous = {}
         with _POLL_LOCK:
-            if since_cursor and _SNAPSHOT.get('cursor') == since_cursor:
-                previous = copy.deepcopy(_SNAPSHOT.get('packages') or {})
-            elif _SNAPSHOT.get('packages'):
-                previous = copy.deepcopy(_SNAPSHOT.get('packages') or {})
+            # KAPI-2 FIX: yalnız aynı date_filter snapshot'ıyla karşılaştır
+            snap_filter = _SNAPSHOT.get('date_filter')
+            if snap_filter == date_filter:
+                if since_cursor and _SNAPSHOT.get('cursor') == since_cursor:
+                    previous = copy.deepcopy(_SNAPSHOT.get('packages') or {})
+                elif _SNAPSHOT.get('packages'):
+                    previous = copy.deepcopy(_SNAPSHOT.get('packages') or {})
 
         new_packages = []
         updated_packages = []
@@ -297,6 +348,8 @@ def check_order_updates(date_filter, since_cursor, build_rows_fn, build_list_fn,
             _SNAPSHOT['packages'] = packages_snapshot
             _SNAPSHOT['last_check_at'] = checked_at
             _SNAPSHOT['cursor'] = cursor
+            # KAPI-2 FIX: store bazlı ham veriyi sakla → routes cache güncelleyebilsin
+            _SNAPSHOT['store_orders'] = store_raw_data
             _CONSECUTIVE_ERRORS = 0
             _POLL_STATS['poll_runs'] += 1
             _POLL_STATS['new_packages'] += new_count
@@ -335,3 +388,5 @@ def check_order_updates(date_filter, since_cursor, build_rows_fn, build_list_fn,
     finally:
         with _POLL_LOCK:
             _POLL_IN_FLIGHT = False
+            if _SCOPE_LIVE_FETCH == date_filter:
+                _SCOPE_LIVE_FETCH = None
