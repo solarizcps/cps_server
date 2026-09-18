@@ -12,6 +12,7 @@ Tarayıcıdan:
 from flask import Flask, render_template, session, g, redirect, url_for, request, flash, jsonify
 from datetime import timedelta, datetime, date
 from config import Config
+from runtime_mock_badge import compute_show_mock_badge
 
 # Blueprint'ler
 from modules.auth import (auth_bp, kullanici_yetkileri, yetki_var,
@@ -186,6 +187,7 @@ def inject_globals():
             enj_home = False
     return {
         'DB_MODE':    Config.DB_MODE,
+        'SHOW_MOCK_BADGE': compute_show_mock_badge(),
         'APP_NAME':   'CPS Dev',
         'now':        date.today().strftime('%Y-%m-%d'),
         'g_user':     u,
