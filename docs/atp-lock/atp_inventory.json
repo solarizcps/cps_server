@@ -322,7 +322,7 @@
     "app/tools/atp_test_db_guard.py": "0f06957334bf10f131df523e7ee345cfe1184167b5317a7ca300cd0b42953b23",
     "docs/atp-lock/ATP_STABILIZATION_LOCK_POLICY.md": "c31e411b3515d964b76765c08bd634fdaee729cf546b8faec4f16be3eb1aa099",
     "docs/atp-lock/ENFORCEMENT.md": "2ca2c608deee1c1b7ca2b09da081ed2fd0427d69b4b753b82314d32b2d1daf38",
-    "docs/atp-lock/atp_touchpoints.sha256": "e3e6f87222e51d3ca7c10533d61ce0410b405c9f5673193c693d4bbad56a6b25",
+    "docs/atp-lock/atp_touchpoints.sha256": "eb4d472545abd65c02d05dda0924368447f6cd496dff72a05c77dac0d82f0468",
     "tests/planlama/_parity_helper.py": "cb528523d137504aa407c6c42bae4416b922660458d5ab4703ba8a467803971b",
     "tests/planlama/atp_canonical_forensic.py": "5ce52d99ff70a4c35f57fe25bfda60376a8759598f1ec855862c041be3ff77ba",
     "tests/planlama/atp_factory_link.py": "8bbc8d2e71b243c7e21e2a674f2973cc924771ad2dccfb700dc2e88dc3a6e375",
@@ -398,7 +398,7 @@
       "label": "blueprint_registration",
       "start_line": 38,
       "end_line": 73,
-      "sha256": "6cd35616536c5369cbba9441ec02158b0acd3d2b80aab7189af1f0c7b8a9e80f"
+      "sha256": "1d107ffa3eee69a4135082c3f572c7c154fde65ea4f13c88f216ca86cdce85e3"
     },
     {
       "path": "app/templates/base.html",
@@ -412,7 +412,7 @@
       "label": "sidebar_link_arac_takip",
       "start_line": 1242,
       "end_line": 1242,
-      "sha256": "583d7efbe7919ec0d52bdc47f952b10b220b7381819e685800dc8341665f5dc5"
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
     },
     {
       "path": "app/migrations/nexgen_manifest.py",
