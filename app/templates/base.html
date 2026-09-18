@@ -289,16 +289,10 @@ window.__cpsRootMap = function(pathname) {
     <div class="header-right">
 
 
-      {% if DB_MODE == 'mock' %}
+      {% if SHOW_MOCK_BADGE %}
 
 
         <span class="db-pill mock">MOCK</span>
-
-
-      {% else %}
-
-
-        <span class="db-pill prod">PROD</span>
 
 
       {% endif %}
