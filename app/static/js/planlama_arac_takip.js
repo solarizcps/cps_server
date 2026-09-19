@@ -79,6 +79,73 @@
     return isAcilPriority(it) ? acilBadgeHtml('') : '';
   }
 
+  function _taskTitle(it) {
+    return String((it && (it.job_title || it.yapilacak_is)) || '').trim();
+  }
+
+  function _companyName(it) {
+    return String((it && (it.company_name || it.firma)) || '').trim();
+  }
+
+  function _taskCompanySame(it) {
+    var job = _taskTitle(it);
+    var co = _companyName(it);
+    if (!job || !co) return false;
+    return job.toLowerCase() === co.toLowerCase();
+  }
+
+  function taskLocationLineHtml(it) {
+    var raw = String((it && (it.address_text || it.adres)) || '').trim();
+    if (!raw) {
+      if (it && it.latitude != null && it.longitude != null) {
+        var mapsUrl = 'https://www.google.com/maps?q=' + it.latitude + ',' + it.longitude;
+        return '<div class="atp-task-loc"><a href="' + mapsUrl + '" target="_blank" rel="noopener noreferrer" class="atp-loc-link" title="Konumu haritada gör">📍 Konum</a></div>';
+      }
+      return '';
+    }
+    if (_isUrl(raw)) {
+      if (it.latitude != null && it.longitude != null) {
+        var mapsUrl2 = 'https://www.google.com/maps?q=' + it.latitude + ',' + it.longitude;
+        return '<div class="atp-task-loc"><a href="' + mapsUrl2 + '" target="_blank" rel="noopener noreferrer" class="atp-loc-link">📍 Konum</a></div>';
+      }
+      return '';
+    }
+    return '<div class="atp-task-loc"><span class="atp-task-loc-ico" aria-hidden="true">📍</span><span class="atp-task-loc-text">' + fmtVal(raw) + '</span></div>';
+  }
+
+  function taskCompanyBlockHtml(it, opts) {
+    opts = opts || {};
+    var job = _taskTitle(it);
+    var co = _companyName(it);
+    var primary = job || co || '—';
+    var same = _taskCompanySame(it);
+    var acil = opts.acilInline !== false && isAcilPriority(it)
+      ? acilBadgeHtml(opts.acilCls || '')
+      : '';
+    var dot = opts.dotClass ? '<span class="dot ' + opts.dotClass + '"></span>' : '';
+    var html = '<div class="atp-task-co-block' + (opts.compact ? ' atp-task-co-block--compact' : '') + '">';
+    html += '<div class="atp-task-line1">' + dot +
+      '<span class="atp-task-title">' + fmtVal(primary) + '</span>';
+    if (acil) html += ' ' + acil;
+    html += '</div>';
+    if (co && !same) {
+      html += '<div class="atp-task-line2"><span class="atp-task-firma-ico" aria-hidden="true">🏢</span>' +
+        '<span class="atp-task-firma">Firma: ' + fmtVal(co) + '</span></div>';
+    }
+    if (opts.location !== false) {
+      html += taskLocationLineHtml(it);
+    }
+    html += '</div>';
+    return html;
+  }
+
+  window.AtpPresentation = {
+    taskCompanyBlockHtml: taskCompanyBlockHtml,
+    taskTitle: _taskTitle,
+    companyName: _companyName,
+    taskCompanySame: _taskCompanySame,
+  };
+
   /** Ziyaret kolonu — ACİL pill + ziyaret metni (firma satırından bağımsız). */
   function visitCellHtml(it) {
     var visitLabel = fmtVal(buildVisitLabel(it));
@@ -531,6 +598,10 @@
 
       /* Detail rows — plan state and GPS are independent */
       var detailRows = '';
+      if (v.driver_conflict && v.driver_conflict_message) {
+        detailRows += '<div class="vcard-detail-row warn"><span class="icon">⚠️</span><span>' +
+          fmtVal(v.driver_conflict_message) + '</span></div>';
+      }
       if (planEmpty) {
         detailRows += '<div class="vcard-detail-row"><span class="icon">📋</span>' +
           '<span style="color:var(--gray)">Sıradaki iş yok — plan boş</span></div>';
@@ -1220,21 +1291,6 @@
     return /^https?:\/\//i.test(s) || /^maps\.app\.goo/i.test(s);
   }
 
-  /* Build address sub-row: suppress raw URLs; show pin link instead if we have coords. */
-  function _addressSubHtml(it) {
-    var raw = it.address_text || '';
-    if (!raw) return '';
-    if (_isUrl(raw)) {
-      /* Replace bare URL with a small location link if coordinates exist */
-      if (it.latitude != null && it.longitude != null) {
-        var mapsUrl = 'https://www.google.com/maps?q=' + it.latitude + ',' + it.longitude;
-        return '<div class="job-firm-sub"><a href="' + mapsUrl + '" target="_blank" rel="noopener noreferrer" class="atp-loc-link" title="Konumu haritada gör">📍 Konum</a></div>';
-      }
-      return ''; /* hide bare URL entirely */
-    }
-    return '<div class="job-firm-sub">' + fmtVal(raw) + '</div>';
-  }
-
   function makeJobRow(it) {
     var dotCls = jobDotClass(it.status, it.visit_state);
     var visCls = visitRowClass(it.visit_state);
@@ -1250,13 +1306,11 @@
       ? '<span class="job-eta' + (isLate ? ' late' : '') + '">' + fmtVal(eta) + '</span>'
       : '<span class="job-eta-empty" title="ETA hesaplanmadı">—</span>';
 
-    var acilBadge = priorityAcilBadgeHtml(it);
     return '<tr data-plan-item="' + (it.plan_item_id || '') + '" data-item-id="' + itemId + '" data-vid="' + vidAttr + '">' +
       '<td class="job-eta-cell">' + etaHtml + '</td>' +
-      '<td><div class="job-firm"><span class="dot ' + dotCls + '"></span>' +
-        fmtVal(it.job_title) + (it.company_name ? ' / ' + it.company_name : '') +
-        (acilBadge ? ' ' + acilBadge : '') +
-        '</div>' + _addressSubHtml(it) + '</td>' +
+      '<td><div class="job-firm">' +
+        taskCompanyBlockHtml(it, { dotClass: dotCls, acilInline: true }) +
+        '</div></td>' +
       '<td class="job-driver-cell">' + fmtVal(it.driver || '—') + '</td>' +
       '<td><span class="badge ' + badgeCls + '">' + statusLabel + '</span></td>' +
       '<td class="job-visit-cell">' + visitCellHtml(it) + '</td>' +
@@ -1342,10 +1396,16 @@
   }
 
   function makePassiveJobRow(it, idx) {
-    var jobLabel = fmtVal(it.yapilacak_is) + (it.firma ? ' / ' + it.firma : '');
+    var passiveIt = {
+      job_title: it.yapilacak_is,
+      company_name: it.firma,
+      address_text: it.adres || it.address_text,
+    };
     return '<tr class="atp-passive-job-row" data-plan-item="' + (it.plan_is_id || '') + '">' +
       '<td class="job-time">' + fmtVal(it.planned_time) + '</td>' +
-      '<td><div class="job-firm" style="color:var(--gray)">' + jobLabel + '</div></td>' +
+      '<td><div class="job-firm atp-passive-task-co">' +
+        taskCompanyBlockHtml(passiveIt, { location: false, acilInline: false }) +
+        '</div></td>' +
       '<td style="font-size:11.5px;color:var(--gray)">' + fmtVal(it.sofor) + '</td>' +
       '<td><span class="badge ' + passiveStatusBadgeCls(it.new_durum) + '">' + fmtVal(it.new_durum_label || it.new_durum) + '</span></td>' +
       '<td style="font-size:11.5px;color:var(--gray);max-width:120px">' + fmtVal(it.reason) + '</td>' +
@@ -1391,7 +1451,7 @@
     panelEl.innerHTML =
       '<table class="jobs-tbl atp-passive-jobs-tbl">' +
       '<thead><tr>' +
-      '<th>Saat</th><th>İş / Firma</th><th>Şoför</th><th>Durum</th><th>Neden</th>' +
+      '<th>Saat</th><th>GÖREV VE FİRMA</th><th>Şoför</th><th>Durum</th><th>Neden</th>' +
       '<th>İşlem zamanı</th><th>İşlemi yapan</th><th></th>' +
       '</tr></thead><tbody>' +
       list.map(makePassiveJobRow).join('') +
@@ -1411,10 +1471,13 @@
     var title = qs('atpPassiveJobTitle');
     if (!backdrop || !body) return;
     if (title) title.textContent = it.message || 'İş plan dışına alındı';
-    var jobLabel = fmtVal(it.yapilacak_is) + (it.firma ? ' / ' + it.firma : '');
+    var passiveIt = { job_title: it.yapilacak_is, company_name: it.firma };
     body.innerHTML =
       '<div class="atp-passive-detail-grid">' +
-      '<div class="atp-passive-detail-row"><span class="lbl">Firma / İş</span><span class="val">' + jobLabel + '</span></div>' +
+      '<div class="atp-passive-detail-row"><span class="lbl">Görev</span><span class="val">' + fmtVal(_taskTitle(passiveIt)) + '</span></div>' +
+      (_companyName(passiveIt) && !_taskCompanySame(passiveIt)
+        ? '<div class="atp-passive-detail-row"><span class="lbl">Firma</span><span class="val">' + fmtVal(_companyName(passiveIt)) + '</span></div>'
+        : '') +
       '<div class="atp-passive-detail-row"><span class="lbl">Araç</span><span class="val">' + fmtVal(it.plaka) + '</span></div>' +
       '<div class="atp-passive-detail-row"><span class="lbl">Şoför</span><span class="val">' + fmtVal(it.sofor) + '</span></div>' +
       '<div class="atp-passive-detail-row"><span class="lbl">Eski durum</span><span class="val">' + fmtVal(it.old_durum_label || it.old_durum) + '</span></div>' +
@@ -1814,11 +1877,11 @@
         : '';
       var itemId = t.id ? String(t.id) : '';
       var talepId = t.is_talebi_id != null ? String(t.is_talebi_id) : '';
-      var priHtml = isAcilPriority(t) ? acilBadgeHtml('atp-acil-badge-stop') : '';
       return '<div class="' + cls + '" data-item-id="' + itemId + '" data-is-talebi-id="' + talepId + '">' +
         '<span class="' + numCls + '">' + seq + '</span>' +
-        '<span class="stop-name">' + fmtVal(t.company_name || t.job_title) + '</span>' +
-        priHtml +
+        '<div class="stop-main">' +
+        taskCompanyBlockHtml(t, { location: false, acilCls: 'atp-acil-badge-stop', acilInline: true }) +
+        '</div>' +
         '<span class="badge ' + badgeCls + '" style="margin-right:4px">' + badgeLbl + '</span>' +
         prevSiraHtml +
         '<span class="stop-time" style="' + (late ? 'color:var(--orange)' : '') + '">' +
@@ -4356,8 +4419,17 @@
           var sira = it.display_order_no != null ? it.display_order_no : (it.order_no || '');
           return '<tr data-item-id="' + escapeAttr(String(it.plan_item_id || '')) + '" data-category="' + escapeAttr(it.category || '') + '">' +
             '<td>' + escapeHtml(String(sira || '—')) + '</td>' +
-            '<td><div class="hdm-firma">' + escapeHtml(it.company_name || '—') + '</div>' +
-              '<div class="hdm-is">' + escapeHtml(it.job_title || '') + '</div></td>' +
+            '<td>' + (function () {
+              var job = String(it.job_title || '').trim();
+              var co = String(it.company_name || '').trim();
+              var primary = job || co || '—';
+              var same = job && co && job.toLowerCase() === co.toLowerCase();
+              var cell = '<div class="hdm-is">' + escapeHtml(primary) + '</div>';
+              if (co && !same) {
+                cell += '<div class="hdm-firma"><span class="atp-task-firma-ico">🏢</span> Firma: ' + escapeHtml(co) + '</div>';
+              }
+              return cell;
+            })() + '</td>' +
             '<td>' + _hdmAddressCell(it) + '</td>' +
             '<td class="hdm-pri">' + historyPriorityCellHtml(it) + '</td>' +
             '<td><span class="hdm-result-pill ' + pill.cls + '">' + escapeHtml(pill.label) + '</span></td>' +
@@ -4368,7 +4440,7 @@
           '<div class="hdm-stops-title">Duraklar</div>' +
           '<div class="hdm-table-wrap"><table class="hist-detail-tbl">' +
           '<colgroup><col class="hdm-c-sira"><col class="hdm-c-is"><col class="hdm-c-adres"><col class="hdm-c-pri"><col class="hdm-c-sonuc"><col></colgroup>' +
-          '<thead><tr><th>Sıra</th><th>İş / Firma</th><th>Adres</th><th>Öncelik</th><th>Sonuç</th><th>Ziyaret</th></tr></thead>' +
+          '<thead><tr><th>Sıra</th><th>GÖREV VE FİRMA</th><th>Adres</th><th>Öncelik</th><th>Sonuç</th><th>Ziyaret</th></tr></thead>' +
           '<tbody>' + (rows || '<tr><td colspan="6">Kayıt yok</td></tr>') + '</tbody></table></div>';
       })
       .catch(function () {
@@ -4471,6 +4543,121 @@
   removeLegacyWhatsappPreview();
 
   var _waInFlight = false;
+  var _waPreviewSendUrl = '';
+  var _waLastHttpStatus = null;
+
+  function ensureWhatsappPreviewModalDom() {
+    if (qs('atpWhatsappPreviewModal')) return;
+    var modal = document.createElement('div');
+    modal.id = 'atpWhatsappPreviewModal';
+    modal.className = 'atp-wa-preview-root';
+    modal.setAttribute('aria-hidden', 'true');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'atpWaPreviewTitle');
+    modal.innerHTML =
+      '<div class="atp-wa-preview-backdrop" data-atp-wa-preview-dismiss="1"></div>' +
+      '<div class="atp-wa-preview-dialog">' +
+        '<div class="atp-wa-preview-hdr">' +
+          '<span id="atpWaPreviewTitle">WhatsApp Plan Önizlemesi</span>' +
+          '<button type="button" class="atp-plan-map-modal-x" id="atpWaPreviewClose" aria-label="Kapat">✕</button>' +
+        '</div>' +
+        '<div class="atp-wa-preview-body">' +
+          '<div id="atpWaPreviewStops" class="atp-wa-preview-stops" aria-label="Durak özeti"></div>' +
+          '<pre id="atpWaPreviewText" class="atp-wa-preview-text"></pre>' +
+        '</div>' +
+        '<div class="atp-wa-preview-footer">' +
+          '<button type="button" class="btn btn-outline btn-sm" id="atpWaPreviewClose2">Kapat</button>' +
+          '<button type="button" class="btn btn-wa btn-sm" id="atpWaPreviewSend">WhatsApp Web\'de Aç (onay)</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+  }
+
+  function renderWhatsappPreviewStops(apiBody, previewText) {
+    var stopsWrap = qs('atpWaPreviewStops');
+    var pre = qs('atpWaPreviewText');
+    if (!stopsWrap || !pre) return;
+    var stops = (apiBody && apiBody.preview_stops) || [];
+    var html = '';
+    stops.forEach(function (s) {
+      var acil = s.is_acil ? acilBadgeHtml('') : '';
+      html += '<div class="atp-wa-preview-stop">' +
+        '<div class="atp-wa-preview-stop-line1">' +
+        '<span>' + fmtVal(s.order_no) + '.</span>' +
+        '<span>Görev: ' + fmtVal(s.job_title) + '</span>' + acil +
+        '</div>';
+      if (s.company_name) {
+        html += '<div class="atp-wa-preview-stop-line2">🏢 Firma: ' + fmtVal(s.company_name) + '</div>';
+      }
+      if (s.eta) {
+        html += '<div class="atp-wa-preview-stop-line2">Tahmini varış: ' + fmtVal(s.eta) + '</div>';
+      }
+      html += '</div>';
+    });
+    var meta = '';
+    if (apiBody && apiBody.estimated_return_time) {
+      meta += '<div><strong>Tahmini Fabrika Varışı:</strong> ' + fmtVal(apiBody.estimated_return_time) + '</div>';
+    }
+    meta += '<div>Başlangıç / Dönüş: Fabrika (mesaj metninde)</div>';
+    stopsWrap.innerHTML = html + (meta ? '<div class="atp-wa-preview-meta">' + meta + '</div>' : '');
+    pre.textContent = previewText || '';
+  }
+
+  function openWhatsappPreviewModal(text, webSendUrl, apiBody) {
+    ensureWhatsappPreviewModalDom();
+    bindWhatsappPreviewModal();
+    var modal = qs('atpWhatsappPreviewModal');
+    var pre = qs('atpWaPreviewText');
+    if (!modal || !pre) return false;
+    if (modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
+    }
+    _waPreviewSendUrl = webSendUrl || '';
+    renderWhatsappPreviewStops(apiBody || {}, text || '');
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('atp-wa-preview-open');
+    return true;
+  }
+
+  function closeWhatsappPreviewModal() {
+    var modal = qs('atpWhatsappPreviewModal');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('atp-wa-preview-open');
+    _waPreviewSendUrl = '';
+  }
+
+  function bindWhatsappPreviewModal() {
+    ['atpWaPreviewClose', 'atpWaPreviewClose2'].forEach(function (id) {
+      var btn = qs(id);
+      if (btn && btn.getAttribute('data-atp-wa-preview-bound') !== '1') {
+        btn.setAttribute('data-atp-wa-preview-bound', '1');
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          closeWhatsappPreviewModal();
+        });
+      }
+    });
+    var backdrop = document.querySelector('#atpWhatsappPreviewModal [data-atp-wa-preview-dismiss]');
+    if (backdrop && backdrop.getAttribute('data-atp-wa-preview-bound') !== '1') {
+      backdrop.setAttribute('data-atp-wa-preview-bound', '1');
+      backdrop.addEventListener('click', function () { closeWhatsappPreviewModal(); });
+    }
+    var sendBtn = qs('atpWaPreviewSend');
+    if (sendBtn && sendBtn.getAttribute('data-atp-wa-preview-bound') !== '1') {
+      sendBtn.setAttribute('data-atp-wa-preview-bound', '1');
+      sendBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (!_waPreviewSendUrl) return;
+        window.open(_waPreviewSendUrl, '_blank', 'noopener');
+      });
+    }
+  }
+  ensureWhatsappPreviewModalDom();
+  bindWhatsappPreviewModal();
 
   function isValidWhatsappUrl(url) {
     return typeof url === 'string' && /^https:\/\//.test(url);
@@ -4513,8 +4700,9 @@
         + '&vehicle_id=' + encodeURIComponent(vid);
       fetch(waUrl, { credentials: 'same-origin' })
         .then(function (r) {
+          _waLastHttpStatus = r.status;
           return r.json().then(function (j) {
-            return { httpOk: r.ok, body: j || {} };
+            return { httpOk: r.ok, status: r.status, body: j || {} };
           });
         })
         .then(function (res) {
@@ -4532,9 +4720,15 @@
             toast('WhatsApp planı hazırlanamadı.');
             return;
           }
-          var opened = window.open(webSendUrl, '_blank', 'noopener');
-          if (!opened) {
-            toast('Tarayıcı WhatsApp penceresini engelledi. Açılır pencerelere izin verin.');
+          var previewText = (j.message_preview || '').trim();
+          if (!previewText) {
+            try {
+              var u = new URL(j.whatsapp_url);
+              previewText = u.searchParams.get('text') || '';
+            } catch (eDec) { previewText = ''; }
+          }
+          if (!openWhatsappPreviewModal(previewText, webSendUrl, j)) {
+            toast('WhatsApp önizlemesi gösterilemedi.');
           }
         })
         .catch(function () {

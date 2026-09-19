@@ -236,7 +236,13 @@ def enrich_route_explainer_dto(
     cur_breakdown = build_leg_breakdown(base, routable_tasks, cur_legs, cur_timeline)
     cur_summary = _route_summary(cur_timeline, cur)
 
-    sug_stops = suggested_tasks if suggested_tasks else routable_tasks
+    sug_stops_raw = suggested_tasks if suggested_tasks else routable_tasks
+    sug_stops: list[dict] = []
+    for i, t in enumerate(sug_stops_raw):
+        st = dict(t)
+        st['display_order_no'] = i + 1
+        st['order_no'] = i + 1
+        sug_stops.append(st)
     sug_leg_details, sug_return_s = _leg_details_for_route(sug_stops, sug_legs)
     sug_timeline = build_timeline(
         plan_date, departure_hhmm, sug_stops,

@@ -2,6 +2,7 @@
 """Araç Takip V1.3 — canonical SQLite repository."""
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from datetime import date, datetime
@@ -1008,6 +1009,89 @@ def get_plan_vehicle_meta(plan_date: str, arac_external_id: str) -> dict | None:
         con.close()
 
 
+def _hhmm_from_route_snapshot_stop(stop: dict) -> str | None:
+    """Extract HH:mm from applied route stop_order entry (read path only)."""
+    pt = (stop.get('planned_time') or '').strip()
+    if pt and pt not in ('\u2014', '-', '\u2013'):
+        return pt[:5]
+    raw = (stop.get('eta_at') or '').strip()
+    if not raw:
+        return None
+    try:
+        from modules.planlama.arac_gps_poll_service import parse_gps_timestamp
+        dt = parse_gps_timestamp(raw)
+        if dt is not None:
+            return dt.strftime('%H:%M')
+    except Exception:
+        pass
+    if len(raw) >= 16 and raw[10] == 'T':
+        return raw[11:16]
+    return None
+
+
+def _route_snapshot_eta_by_plan_item_id_conn(
+    con: sqlite3.Connection,
+    plan_ids: list[int],
+) -> dict[str, str]:
+    """
+    Latest active route snapshot for vehicle-day plan group → pi-id → ETA HH:mm.
+    Cross-plan: snapshot may live on primary plan_id but list all stops by plan_item_id.
+    """
+    if not plan_ids:
+        return {}
+    if not con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='arac_plan_rota_snapshot'",
+    ).fetchone():
+        return {}
+    placeholders = ','.join('?' * len(plan_ids))
+    row = con.execute(
+        f"""
+        SELECT stop_order_json FROM arac_plan_rota_snapshot
+        WHERE plan_id IN ({placeholders}) AND is_active=1
+        ORDER BY route_version DESC, id DESC
+        LIMIT 1
+        """,
+        [int(p) for p in plan_ids],
+    ).fetchone()
+    if not row or not row['stop_order_json']:
+        return {}
+    try:
+        stops = json.loads(row['stop_order_json'])
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(stops, list):
+        return {}
+    out: dict[str, str] = {}
+    for stop in stops:
+        if not isinstance(stop, dict):
+            continue
+        pid = str(stop.get('plan_item_id') or '').strip()
+        if not pid.startswith('pi-'):
+            continue
+        hhmm = _hhmm_from_route_snapshot_stop(stop)
+        if hhmm:
+            out[pid] = hhmm
+    return out
+
+
+def _overlay_tasks_eta_from_route_snapshot(
+    tasks: list[dict],
+    eta_by_pi: dict[str, str],
+) -> None:
+    """Mutate task DTOs: apply ETA from active route snapshot by global plan_item id."""
+    if not eta_by_pi:
+        return
+    for task in tasks:
+        tid = str(task.get('id') or '')
+        if not tid.startswith('pi-'):
+            continue
+        hhmm = eta_by_pi.get(tid)
+        if not hhmm:
+            continue
+        task['tahmini_varis_saati'] = hhmm
+        task['eta_time'] = hhmm
+
+
 def list_plan_tasks(plan_date: str, arac_external_id: str) -> list[dict]:
     """Return all plan items for vehicle+day across ALL active plan_ids.
 
@@ -1054,6 +1138,8 @@ def list_plan_tasks(plan_date: str, arac_external_id: str) -> list[dict]:
                     (yer_id,),
                 ).fetchone()
             result.append(_plan_task_dto(item, talep, master))
+        eta_by_pi = _route_snapshot_eta_by_plan_item_id_conn(con, plan_ids)
+        _overlay_tasks_eta_from_route_snapshot(result, eta_by_pi)
         _assign_display_order(result)
         return result
     finally:
@@ -1316,6 +1402,87 @@ def list_plans_for_date(plan_date: str) -> list[dict]:
         con.close()
 
 
+def _group_plans_by_vehicle(plans: list[dict]) -> dict[str, list[dict]]:
+    groups: dict[str, list[dict]] = {}
+    for plan in plans:
+        vid = str(plan.get('arac_external_id') or '').strip()
+        if not vid:
+            continue
+        groups.setdefault(vid, []).append(plan)
+    return groups
+
+
+def _merge_vehicle_plan_group(group: list[dict]) -> tuple[list[dict], dict[str, Any]]:
+    """Cross-plan: one vehicle+day → merged tasks, global display_order_no, driver conflict."""
+    group = sorted(group, key=lambda p: int(p['plan_id']))
+    all_tasks: list[dict] = []
+    drivers: set[str] = set()
+    cikis_vals: set[str] = set()
+    sc = _empty_status_counts()
+    plan_ids: list[int] = []
+    for plan in group:
+        plan_ids.append(int(plan['plan_id']))
+        dname = (plan.get('sofor_adi_snapshot') or '').strip()
+        if dname:
+            drivers.add(dname)
+        cv = (plan.get('cikis_saati') or '').strip()
+        if cv:
+            cikis_vals.add(cv[:5])
+        for key in sc:
+            sc[key] += int(plan['status_counts'].get(key) or 0)
+        for task in plan['items']:
+            all_tasks.append(_attach_vehicle_context(task, plan))
+    all_tasks.sort(
+        key=lambda t: (int(t.get('order_no') or 0), int(t.get('plan_item_id') or 0)),
+    )
+    con = get_conn()
+    try:
+        eta_by_pi = _route_snapshot_eta_by_plan_item_id_conn(con, plan_ids)
+        _overlay_tasks_eta_from_route_snapshot(all_tasks, eta_by_pi)
+    finally:
+        con.close()
+    _assign_display_order(all_tasks)
+    next_item = _pick_next_task(all_tasks)
+    driver_conflict = len(drivers) > 1
+    driver_name = next(iter(drivers)) if len(drivers) == 1 else (sorted(drivers)[0] if drivers else None)
+    cikis = sorted(cikis_vals)[0] if len(cikis_vals) == 1 else (sorted(cikis_vals)[0] if cikis_vals else None)
+    cikis_conflict = len(cikis_vals) > 1
+    primary = group[0]
+    completed = sc.get('TAMAMLANDI', 0)
+    operational = _operational_count(sc)
+    meta = {
+        'plan_id': int(primary['plan_id']),
+        'plan_ids': plan_ids,
+        'arac_external_id': primary['arac_external_id'],
+        'arac_plaka_snapshot': primary['arac_plaka_snapshot'],
+        'sofor_id': primary.get('sofor_id'),
+        'sofor_adi_snapshot': driver_name,
+        'cikis_saati': cikis,
+        'driver_name': driver_name or '—',
+        'driver_conflict': driver_conflict,
+        'driver_conflict_names': sorted(drivers) if driver_conflict else [],
+        'driver_conflict_message': (
+            'Aynı araç ve gün için birden fazla şoför kaydı var: '
+            + ', '.join(sorted(drivers))
+            if driver_conflict else None
+        ),
+        'cikis_saati_conflict': cikis_conflict,
+        'status_counts': dict(sc),
+        'item_count': len(all_tasks),
+        'operational_total_count': operational,
+        'completed_count': completed,
+        'progress_completed': completed,
+        'progress_total': operational,
+        'progress_label': f'{completed}/{operational}',
+        'next_item': _next_item_summary(next_item),
+        'next_time': (next_item or {}).get('planned_time'),
+        'next_order_no': (next_item or {}).get('order_no'),
+        'next_stop_label': _format_next_stop_label(next_item),
+        'next_display_order_no': (next_item or {}).get('display_order_no'),
+    }
+    return all_tasks, meta
+
+
 def build_daily_plan_aggregate(plan_date: str) -> dict:
     """Gün geneli canonical read model — ham durum sayımları + plans/vehicles/items."""
     plans = list_plans_for_date(plan_date)
@@ -1325,37 +1492,17 @@ def build_daily_plan_aggregate(plan_date: str) -> dict:
     totals = _empty_status_counts()
     flat_items: list[dict] = []
     vehicles: list[dict] = []
+    grouped = _group_plans_by_vehicle(plans)
 
-    for plan in plans:
-        sc = plan['status_counts']
-        for key in PLAN_ITEM_STATUS_KEYS:
-            totals[key] += int(sc.get(key) or 0)
-        for task in plan['items']:
-            flat_items.append(_attach_vehicle_context(task, plan))
-        completed = sc.get('TAMAMLANDI', 0)
-        operational = _operational_count(sc)
-        next_item = plan.get('next_item')
-        vehicles.append({
-            'plan_id': plan['plan_id'],
-            'arac_external_id': plan['arac_external_id'],
-            'arac_plaka_snapshot': plan['arac_plaka_snapshot'],
-            'sofor_id': plan.get('sofor_id'),
-            'sofor_adi_snapshot': plan.get('sofor_adi_snapshot'),
-            'cikis_saati': plan.get('cikis_saati'),
-            'driver_name': plan.get('sofor_adi_snapshot'),
-            'status_counts': dict(sc),
-            'item_count': plan['item_count'],
-            'operational_total_count': operational,
-            'completed_count': completed,
-            'progress_completed': completed,
-            'progress_total': operational,
-            'progress_label': f'{completed}/{operational}',
-            'next_item': next_item,
-            'next_time': (next_item or {}).get('planned_time'),
-            'next_order_no': (next_item or {}).get('order_no'),
-            'next_stop_label': _format_next_stop_label(next_item),
-            'next_display_order_no': (next_item or {}).get('display_order_no'),
-        })
+    for vid in sorted(grouped.keys(), key=lambda x: (grouped[x][0].get('arac_plaka_snapshot') or '', x)):
+        group = grouped[vid]
+        for plan in group:
+            sc = plan['status_counts']
+            for key in PLAN_ITEM_STATUS_KEYS:
+                totals[key] += int(sc.get(key) or 0)
+        merged_tasks, vehicle_meta = _merge_vehicle_plan_group(group)
+        flat_items.extend(merged_tasks)
+        vehicles.append(vehicle_meta)
 
     flat_items.sort(key=_flat_item_sort_key)
     total_items = sum(totals.values())
@@ -1364,7 +1511,7 @@ def build_daily_plan_aggregate(plan_date: str) -> dict:
     return {
         'plan_date': plan_date,
         'plan_count': len(plans),
-        'planned_vehicle_count': len(plans),
+        'planned_vehicle_count': len(vehicles),
         'total_item_count': total_items,
         'operational_total_count': operational_total,
         'planned_count': totals['PLANLANDI'],
@@ -1998,7 +2145,7 @@ def _update_plan_item_times_bulk_conn(
             'SELECT id, plan_id, durum FROM arac_gunluk_plan_is WHERE id=?',
             (pi_id,),
         ).fetchone()
-        if not row or int(row['plan_id']) != int(plan_id):
+        if not row:
             continue
         if (row['durum'] or '').upper() in INACTIVE_PLAN_STATUSES:
             continue
@@ -2012,25 +2159,37 @@ def _reorder_plan_items_bulk_conn(
     arac_external_id: str,
     task_ids: list[str],
 ) -> int:
-    """Apply bulk reorder on open connection — no commit/close. Returns plan_id."""
-    plan = con.execute(
+    """Apply bulk reorder on open connection — vehicle+day, all active plan_ids. Returns primary plan_id."""
+    plans = con.execute(
         """
         SELECT id FROM arac_gunluk_plan
         WHERE plan_tarihi=? AND arac_provider='TURKCELL_FILOM' AND arac_external_id=?
+          AND durum NOT IN ('IPTAL', 'KAPANDI')
+        ORDER BY id
         """,
         (plan_date, str(arac_external_id)),
-    ).fetchone()
-    if not plan:
-        raise ValueError('Plan bulunamadı')
-    items = con.execute(
-        'SELECT * FROM arac_gunluk_plan_is WHERE plan_id=? ORDER BY sira',
-        (plan['id'],),
     ).fetchall()
-    by_id = {f"pi-{r['id']}": r for r in items}
+    if not plans:
+        raise ValueError('Plan bulunamadı')
+    plan_ids = [int(p['id']) for p in plans]
+    placeholders = ','.join('?' * len(plan_ids))
+    items = con.execute(
+        f"""
+        SELECT * FROM arac_gunluk_plan_is
+        WHERE plan_id IN ({placeholders})
+        ORDER BY sira, id
+        """,
+        plan_ids,
+    ).fetchall()
+    active_items = [
+        r for r in items
+        if (r['durum'] or '').upper() not in INACTIVE_PLAN_STATUSES
+    ]
+    by_id = {f"pi-{r['id']}": r for r in active_items}
     if set(task_ids) != set(by_id.keys()):
         raise ValueError('Görev listesi plan ile uyuşmuyor')
     ordered_rows = [by_id[tid] for tid in task_ids if tid in by_id]
-    if len(ordered_rows) != len(items):
+    if len(ordered_rows) != len(active_items):
         raise ValueError('Eksik görev sırası')
     now = _now_iso()
     for row in ordered_rows:
@@ -2043,11 +2202,12 @@ def _reorder_plan_items_bulk_conn(
             'UPDATE arac_gunluk_plan_is SET sira=? WHERE id=?',
             (i, row['id']),
         )
-    con.execute(
-        'UPDATE arac_gunluk_plan SET updated_at=?, updated_by=? WHERE id=?',
-        (now, session_user_id, plan['id']),
-    )
-    return int(plan['id'])
+    for pid in plan_ids:
+        con.execute(
+            'UPDATE arac_gunluk_plan SET updated_at=?, updated_by=? WHERE id=?',
+            (now, session_user_id, pid),
+        )
+    return int(plan_ids[0])
 
 
 # ─── Geçmiş Planlar (read-only) ─────────────────────────────────────────────

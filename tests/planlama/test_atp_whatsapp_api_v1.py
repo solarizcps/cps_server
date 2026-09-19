@@ -20,6 +20,7 @@ sys.path.insert(0, str(APP))
 sys.path.insert(0, str(APP.parent / 'tests' / 'planlama'))
 
 from atp_canonical_forensic import assert_canonical_atp_unchanged, canonical_logical_snapshot
+from atp_min_auth_schema import ensure_min_auth_schema
 from atp_plan2_fixture import PLAN_DATE, PLAN_ID, VEHICLE, insert_factory_base, seed_plan2_fixture
 from tools.nexgen_tmp_db import assert_resolved_db_is_tmp
 
@@ -75,6 +76,7 @@ def env():
     con.execute('DELETE FROM user_permission_override WHERE KullaniciId=31')
     con.commit()
     con.close()
+    ensure_min_auth_schema(db)
     _load_migration(MIG189).run(db)
     os.environ['CPS_MOCK_DB_PATH'] = db
     os.environ['CPS_TEST_DB_GUARD'] = '1'
@@ -155,6 +157,87 @@ def _decode_message(url: str) -> str:
     return urllib.parse.unquote(url.split('text=', 1)[1])
 
 
+_TIMELINE_MOCK = {
+    'estimated_return_time': '21:00',
+    'timeline_complete': True,
+    'status': 'HESAPLANDI',
+    'plan_departure_time': '19:00',
+    'estimated_total_seconds': 3600.0,
+}
+
+
+def _semantic_whatsapp_payload(body: dict) -> dict:
+    """Preview semantics only — no phone, token, or whatsapp_url."""
+    stops = body.get('preview_stops') or []
+    return {
+        'preview_stops': [
+            {
+                'order_no': s.get('order_no'),
+                'job_title': s.get('job_title'),
+                'company_name': s.get('company_name'),
+                'is_acil': s.get('is_acil'),
+                'eta': s.get('eta'),
+            }
+            for s in stops
+        ],
+        'estimated_return_time': body.get('estimated_return_time'),
+        'stop_count': body.get('stop_count'),
+        'order_ids': body.get('order_ids'),
+        'plan_id': body.get('plan_id'),
+        'vehicle_external_id': body.get('vehicle_external_id'),
+        'message_preview': body.get('message_preview'),
+    }
+
+
+class TestWhatsAppApiNarrowAuth:
+    """Dar yetki: planlama.arac_takip:can_view — fixture RolId=32, override yok."""
+
+    def test_admin_http_200(self, client, env):
+        _prepare_plan(env)
+        con = sqlite3.connect(env['db'])
+        _login(client, _user(con, 1))
+        con.close()
+        with patch(
+            'modules.planlama.arac_timeline_service.build_timeline_for_plan',
+            return_value=_TIMELINE_MOCK,
+        ):
+            r = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={VEHICLE}')
+        assert r.status_code == 200
+        assert r.get_json()['ok'] is True
+
+    def test_mehmet_http_200(self, client, env):
+        _prepare_plan(env)
+        con = sqlite3.connect(env['db'])
+        _login(client, _user(con, 31))
+        con.close()
+        with patch(
+            'modules.planlama.arac_timeline_service.build_timeline_for_plan',
+            return_value=_TIMELINE_MOCK,
+        ):
+            r = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={VEHICLE}')
+        assert r.status_code == 200
+        assert r.get_json()['ok'] is True
+
+    def test_unauthorized_http_403(self, client, env):
+        _prepare_plan(env)
+        con = sqlite3.connect(env['db'])
+        _login(client, _user(con, 49))
+        con.close()
+        r = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={VEHICLE}')
+        assert r.status_code == 403
+
+    def test_anonymous_no_session(self, client, env):
+        _prepare_plan(env)
+        with client.session_transaction() as sess:
+            sess.clear()
+        with patch(
+            'modules.planlama.arac_timeline_service.build_timeline_for_plan',
+            return_value=_TIMELINE_MOCK,
+        ):
+            r = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={VEHICLE}')
+        assert r.status_code in (302, 401)
+
+
 class TestWhatsAppApiV1:
     def test_missing_vehicle_id_400(self, client):
         con = sqlite3.connect(client.application.config.get('TESTING') and os.environ['CPS_MOCK_DB_PATH'])
@@ -218,12 +301,20 @@ class TestWhatsAppApiV1:
         admin = _user(con, 1)
         mehmet = _user(con, 31)
         con.close()
-        with patch('modules.planlama.arac_timeline_service.build_timeline_for_plan', return_value={'estimated_return_time': '21:00', 'timeline_complete': True, 'status': 'HESAPLANDI', 'plan_departure_time': '19:00', 'estimated_total_seconds': 3600.0}):
+        with patch(
+            'modules.planlama.arac_timeline_service.build_timeline_for_plan',
+            return_value=_TIMELINE_MOCK,
+        ):
             _login(client, admin)
             r_admin = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={VEHICLE}')
             _login(client, mehmet)
             r_mehmet = client.get(f'{URL}?date={PLAN_DATE}&vehicle_id={VEHICLE}')
-        assert r_admin.get_json()['whatsapp_url'] == r_mehmet.get_json()['whatsapp_url']
+        assert r_admin.status_code == 200
+        assert r_mehmet.status_code == 200
+        ba = r_admin.get_json()
+        bm = r_mehmet.get_json()
+        assert ba['ok'] is True and bm['ok'] is True
+        assert _semantic_whatsapp_payload(ba) == _semantic_whatsapp_payload(bm)
 
     def test_erhan_403(self, client, env):
         _prepare_plan(env)

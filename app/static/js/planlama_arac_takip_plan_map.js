@@ -390,16 +390,24 @@
     var html = '<div class="factory-row"><span class="fl">🏭</span><span class="factory-label">Başlangıç: ' + esc(base) + '</span></div><div class="stop-list">';
     (lastPlanPayload.stops || []).forEach(function (stop) {
       var n = esc(stop.display_order_no || stop.order_no || '?');
-      var firma = esc(stop.company_name || '—');
       var st = (stop.status || '').toUpperCase();
       var done = st === 'TAMAMLANDI';
       var active = st === 'BASLADI';
       var acil = ((stop.priority || '').toUpperCase() === 'ACIL')
         ? ' <span class="badge badge-red atp-acil-badge">ACİL</span>' : '';
+      var job = String(stop.job_title || '').trim();
+      var co = String(stop.company_name || '').trim();
+      var primary = esc(job || co || '—');
+      var same = job && co && job.toLowerCase() === co.toLowerCase();
+      var stack = '<div class="atp-task-co-block"><div class="atp-task-line1"><span class="atp-task-title">' + primary + '</span>' + acil + '</div>';
+      if (co && !same) {
+        stack += '<div class="atp-task-line2"><span class="atp-task-firma-ico">🏢</span><span class="atp-task-firma">Firma: ' + esc(co) + '</span></div>';
+      }
+      stack += '</div>';
       var numCls = 'stop-num' + (done ? ' done' : (active ? ' active' : ''));
       var cls = 'stop-item' + (done ? ' done' : (active ? ' active' : ''));
       html += '<div class="' + cls + '"><span class="' + numCls + '">' + n + '</span>' +
-        '<span class="stop-name">' + firma + '</span>' + acil +
+        '<div class="stop-main">' + stack + '</div>' +
         '<span class="badge badge-gray">' + esc(stop.status_label || stop.status || '—') + '</span></div>';
     });
     html += '</div><div class="factory-row" style="margin-top:4px"><span class="fl">🏭</span><span class="factory-label">Bitiş: Fabrika Dönüş — ' + esc(base) + '</span></div>';

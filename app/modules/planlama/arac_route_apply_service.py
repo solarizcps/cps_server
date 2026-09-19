@@ -163,6 +163,7 @@ def apply_route_order_and_snapshot(
     proposal_hash: str | None = None,
     proposal_expires_at: str | None = None,
     client_submit_id: str | None = None,
+    skip_traffic_proposal_validation: bool = False,
 ) -> RouteApplyResult:
     """
     Single unit-of-work: reorder plan items + persist route snapshot atomically.
@@ -209,7 +210,7 @@ def apply_route_order_and_snapshot(
     constraints = classify_route_tasks(current_tasks, visit_states)
 
     active_ordered = [str(t['id']) for t in active_tasks_sorted(current_tasks)]
-    if task_ids != active_ordered:
+    if task_ids != active_ordered and not skip_traffic_proposal_validation:
         from modules.planlama.arac_traffic_route_proposal_service import validate_proposal_for_apply
         validate_proposal_for_apply(
             tasks=current_tasks,

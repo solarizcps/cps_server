@@ -345,10 +345,11 @@ def _stop_is_acil(stop: dict) -> bool:
     return pri == 'ACIL'
 
 
-def _stop_heading_line(display_no: int, company: str, *, is_acil: bool) -> str:
+def _stop_heading_line(display_no: int, job: str, *, is_acil: bool) -> str:
+    title = (job or '').strip() or '—'
     if is_acil:
-        return f'*{display_no}. ACİL — {company}*'
-    return f'*{display_no}. {company}*'
+        return f'*{display_no}. ACİL — {title}*'
+    return f'*{display_no}. {title}*'
 
 
 def build_whatsapp_plan_message_v2(context: dict[str, Any]) -> str:
@@ -364,12 +365,14 @@ def build_whatsapp_plan_message_v2(context: dict[str, Any]) -> str:
 
     message_stops = order_stops_for_whatsapp_message(context.get('stops') or [])
     for idx, stop in enumerate(message_stops, start=1):
-        company = (stop.get('company_name') or '\u2014').strip()
-        job = (stop.get('job_title') or stop.get('yapilacak_is') or '\u2014').strip()
+        company = (stop.get('company_name') or '').strip()
+        job = (stop.get('job_title') or stop.get('yapilacak_is') or '').strip()
+        heading_job = job or company or '\u2014'
         eta = resolve_stop_eta(stop)
         is_acil = _stop_is_acil(stop)
-        lines.append(_stop_heading_line(idx, company, is_acil=is_acil))
-        lines.append(f'İş: {job}')
+        lines.append(_stop_heading_line(idx, heading_job, is_acil=is_acil))
+        if company and job and company.casefold() != job.casefold():
+            lines.append(f'Firma: {company}')
         lines.append(f'Tahmini varış: {eta}')
         if stop.get('phone'):
             lines.append(f'Telefon: {stop["phone"]}')
@@ -394,7 +397,7 @@ def build_whatsapp_plan_message_v2(context: dict[str, Any]) -> str:
         lines.append('*Dönüş:*')
         lines.append(_MISSING_BASE)
     ret = context.get('estimated_return_time')
-    lines.append(f'*Tahmini dönüş:* {ret if ret else _DASH}')
+    lines.append(f'*Tahmini Fabrika Varışı:* {ret if ret else _DASH}')
     return '\n'.join(lines).strip()
 
 
@@ -456,6 +459,26 @@ def load_whatsapp_plan_context(plan_date: str, vehicle_id: str) -> dict[str, Any
     }
 
 
+def _whatsapp_preview_stops(stops: list[dict]) -> list[dict[str, Any]]:
+    ordered = order_stops_for_whatsapp_message(stops or [])
+    out: list[dict[str, Any]] = []
+    for idx, stop in enumerate(ordered, start=1):
+        job = (stop.get('job_title') or stop.get('yapilacak_is') or '').strip()
+        company = (stop.get('company_name') or '').strip()
+        if not job and company:
+            job = company
+        same = bool(job and company and job.casefold() == company.casefold())
+        out.append({
+            'order_no': idx,
+            'display_order_no': stop.get('display_order_no') or stop.get('order_no') or idx,
+            'job_title': job or None,
+            'company_name': None if same else (company or None),
+            'is_acil': _stop_is_acil(stop),
+            'eta': resolve_stop_eta(stop),
+        })
+    return out
+
+
 def _whatsapp_order_ids(stops: list[dict]) -> list[str]:
     ids: list[str] = []
     for stop in stops:
@@ -512,6 +535,9 @@ def build_whatsapp_api_response(
     return {
         'ok': True,
         'whatsapp_url': whatsapp_url,
+        'message_preview': (payload.get('message') or '').strip(),
+        'preview_stops': _whatsapp_preview_stops(stops),
+        'estimated_return_time': context.get('estimated_return_time'),
         'driver_map_url': context.get('driver_map_url') or '',
         'vehicle_external_id': str(context.get('vehicle_external_id') or vehicle_id),
         'plan_id': context.get('plan_id'),

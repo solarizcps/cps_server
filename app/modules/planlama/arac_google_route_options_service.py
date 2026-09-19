@@ -122,20 +122,19 @@ def _suggested_order(
     active_tasks: list[dict],
     base: dict,
 ) -> list[dict]:
-    """Use CPS constraint + matrix-free ordering for the suggested order.
-    Falls back to current order if matrix (ORS) is unavailable.
-    Google waypoint optimization is NEVER used.
-    Returns tasks in suggested visit order.
-    """
+    """CPS R07 + ACİL-first segment optimizer via plan route DTO (matrix-backed)."""
     constraints = classify_route_tasks(active_tasks)
     eligible_ids = set(constraints.get('eligible_task_ids') or [])
     if len(eligible_ids) < 2:
         return list(active_tasks)
 
-    # Without a matrix we can only preserve current order.
-    # A future phase can inject an ORS matrix here if desired.
-    # The orchestration layer is responsible for providing the matrix.
-    return list(active_tasks)
+    from modules.planlama.road_routing.route_planner_service import build_plan_route_dto
+
+    route_dto = build_plan_route_dto(base, active_tasks)
+    sug_ids = (route_dto.get('suggested') or {}).get('full_task_ids') or []
+    id_to_task = {str(t['id']): t for t in active_tasks}
+    ordered = [id_to_task[i] for i in sug_ids if i in id_to_task]
+    return ordered if ordered else list(active_tasks)
 
 
 # ── Single-profile option builder ────────────────────────────────────────────
@@ -367,6 +366,80 @@ def compute_google_route_options(
         # reuse current results — same route, no extra Google calls
         sug_fast, sug_free = curr_fast, curr_free
 
+    def _profiles_ok(fast: GoogleRouteOptionDTO | None, free: GoogleRouteOptionDTO | None) -> bool:
+        return bool(
+            (fast and fast.calculation_complete)
+            or (free and free.calculation_complete)
+        )
+
+    from modules.planlama.arac_emergency_route_order import active_has_acil
+
+    apply_blocked_message: str | None = None
+    traffic_data_current = _profiles_ok(curr_fast, curr_free)
+    if not traffic_data_current:
+        apply_blocked_message = 'Google trafik verisi alınamadı; mevcut plan değiştirilmedi.'
+        order_changed = False
+        suggested_stops = list(current_stops)
+        suggested_ids = list(current_ids)
+        sug_fast, sug_free = curr_fast, curr_free
+    elif order_changed and not _profiles_ok(sug_fast, sug_free):
+        apply_blocked_message = 'Google trafik verisi alınamadı; mevcut plan değiştirilmedi.'
+        order_changed = False
+        suggested_ids = list(current_ids)
+        suggested_stops = list(current_stops)
+        sug_fast, sug_free = curr_fast, curr_free
+
+    emergency_applied = order_changed and active_has_acil(active)
+    emergency_explanation = None
+    if emergency_applied:
+        emergency_explanation = (
+            'ACİL işler normal işlerden önce tamamlanacak şekilde rota optimize edildi.'
+        )
+
+    def _pick_primary(opt_fast, opt_free):
+        if opt_fast and opt_fast.calculation_complete:
+            return opt_fast
+        if opt_free and opt_free.calculation_complete:
+            return opt_free
+        return opt_fast or opt_free
+
+    cur_primary = _pick_primary(curr_fast, curr_free)
+    sug_primary = _pick_primary(sug_fast, sug_free)
+    comparison: dict[str, object] = {
+        'current_order': current_ids,
+        'suggested_order': suggested_ids,
+        'departure_time': departure_hhmm,
+        'service_minutes_per_stop': _SERVICE_MINUTES,
+        'current_km': getattr(cur_primary, 'distance_km_display', None),
+        'suggested_km': getattr(sug_primary, 'distance_km_display', None),
+        'current_factory_arrival': getattr(cur_primary, 'return_display', None),
+        'suggested_factory_arrival': getattr(sug_primary, 'return_display', None),
+        'current_factory_arrival_exact': getattr(cur_primary, 'return_exact', None),
+        'suggested_factory_arrival_exact': getattr(sug_primary, 'return_exact', None),
+        'traffic_data_current': traffic_data_current,
+    }
+    if (
+        cur_primary
+        and sug_primary
+        and cur_primary.calculation_complete
+        and sug_primary.calculation_complete
+    ):
+        comparison['km_saved'] = round(
+            float(cur_primary.distance_km_display) - float(sug_primary.distance_km_display),
+            1,
+        )
+        comparison['duration_saved_seconds'] = round(
+            float(cur_primary.total_plan_seconds) - float(sug_primary.total_plan_seconds),
+            1,
+        )
+
+    apply_enabled = bool(
+        route_reorder_available
+        and order_changed
+        and traffic_data_current
+        and _profiles_ok(sug_fast, sug_free)
+    )
+
     return GoogleRouteOptionsDTO(
         provider='google-routes',
         departure_time=departure_hhmm,
@@ -390,4 +463,10 @@ def compute_google_route_options(
             fastest=sug_fast,
             toll_free=sug_free,
         ),
+        emergency_priority_applied=emergency_applied,
+        traffic_data_current=traffic_data_current,
+        apply_enabled=apply_enabled,
+        apply_blocked_message=apply_blocked_message,
+        emergency_explanation=emergency_explanation,
+        comparison=comparison,
     )

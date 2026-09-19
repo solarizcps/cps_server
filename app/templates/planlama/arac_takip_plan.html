@@ -4,7 +4,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=77">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/planlama_arac_takip.css') }}?v=79">
 {% endblock %}
 
 {% block content %}
@@ -172,7 +172,7 @@
                 <thead>
                   <tr>
                     <th title="Tahmini Varış Saati — sistem hesaplar">Tahmini Varış</th>
-                    <th>İş / Firma</th>
+                    <th>GÖREV VE FİRMA</th>
                     <th>Şoför</th>
                     <th>Plan</th>
                     <th>Ziyaret</th>
@@ -1135,16 +1135,34 @@
   </div>
 </div>
 
+<div id="atpWhatsappPreviewModal" class="atp-wa-preview-root" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="atpWaPreviewTitle">
+  <div class="atp-wa-preview-backdrop" data-atp-wa-preview-dismiss="1"></div>
+  <div class="atp-wa-preview-dialog">
+    <div class="atp-wa-preview-hdr">
+      <span id="atpWaPreviewTitle">WhatsApp Plan Önizlemesi</span>
+      <button type="button" class="atp-plan-map-modal-x" id="atpWaPreviewClose" aria-label="Kapat">✕</button>
+    </div>
+    <div class="atp-wa-preview-body">
+      <div id="atpWaPreviewStops" class="atp-wa-preview-stops" aria-label="Durak özeti"></div>
+      <pre id="atpWaPreviewText" class="atp-wa-preview-text"></pre>
+    </div>
+    <div class="atp-wa-preview-footer">
+      <button type="button" class="btn btn-outline btn-sm" id="atpWaPreviewClose2">Kapat</button>
+      <button type="button" class="btn btn-wa btn-sm" id="atpWaPreviewSend">WhatsApp Web'de Aç (onay)</button>
+    </div>
+  </div>
+</div>
+
 {# ── Scripts ── #}
 <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_map.js') }}?v=6"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=14"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_map.js') }}?v=15"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_route.js') }}?v=19"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=12"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip_route_explainer.js') }}?v=13"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_location.js') }}?v=4"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_manual_reorder.js') }}?v=1"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_manual_reorder_ui.js') }}?v=1"></script>
 <script src="{{ url_for('static', filename='js/planlama_arac_takip_plan_change.js') }}?v=10"></script>
-<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=107"></script>
+<script src="{{ url_for('static', filename='js/planlama_arac_takip.js') }}?v=110"></script>
 {# request.js and pool.js use old element IDs not present in V2 layout — skipped intentionally #}
 {% endblock %}

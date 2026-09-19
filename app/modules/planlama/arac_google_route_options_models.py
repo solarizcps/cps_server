@@ -78,3 +78,10 @@ class GoogleRouteOptionsDTO:
     # ── Route results ─────────────────────────────────────────────────────────
     current: GoogleRouteOrderDTO
     suggested: GoogleRouteOrderDTO
+    emergency_priority_applied: bool = False
+    traffic_data_current: bool = True
+    apply_enabled: bool = False
+    apply_blocked_message: str | None = None
+    emergency_explanation: str | None = None
+    factory_arrival_label: str = 'TAHMİNİ FABRİKA VARIŞI'
+    comparison: dict[str, Any] = field(default_factory=dict)

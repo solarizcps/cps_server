@@ -395,3 +395,25 @@ def test_profile_v1_readback_hooks():
     assert 'reloadAfterGoogleProfileApply' in MAIN
     assert 'reloadAfterProfileApply' in EXPLAINER
     assert 'traffic-free' in MAIN or 'traffic-fast' in MAIN
+
+
+def test_r2_emergency_factory_arrival_and_traffic_fail_copy():
+    assert 'TAHMİNİ FABRİKA VARIŞI' in EXPLAINER
+    assert 'factory_arrival_label' in EXPLAINER
+    assert (
+        'ACİL işler normal işlerden önce tamamlanacak şekilde rota optimize edildi.'
+        in EXPLAINER
+        or 'emergency_explanation' in EXPLAINER
+        or 'emergency_priority_applied' in EXPLAINER
+    )
+    assert 'apply_enabled' in EXPLAINER
+    assert 'apply_blocked_message' in EXPLAINER
+    assert 'postGoogleApply' in EXPLAINER and 'apply_source' in EXPLAINER
+    wa = (ROOT / 'app' / 'modules' / 'planlama' / 'arac_whatsapp_message_service.py').read_text(encoding='utf-8')
+    assert 'Tahmini Fabrika Varışı' in wa
+
+
+def test_r2_midnight_display_helper_in_explainer():
+    wa = (ROOT / 'app' / 'modules' / 'planlama' / 'arac_whatsapp_message_service.py').read_text(encoding='utf-8')
+    assert 'ertesi gün' in wa
+    assert 'return_display' in EXPLAINER or 'estimated_return_time' in EXPLAINER

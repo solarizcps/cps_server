@@ -259,16 +259,39 @@ def build_r07_constrained_full_order(
             if str(t['id']) in routable_by_id
         ]
 
-        output.extend(str(t['id']) for t in acil_seg)
+        from modules.planlama.arac_emergency_route_order import optimize_routable_segment_ids
 
-        if len(normal_routable) >= 2:
+        if acil_routable:
+            start_acil = _start_matrix_index(output, routable_by_id)
+            output.extend(
+                optimize_routable_segment_ids(
+                    acil_routable,
+                    duration_matrix,
+                    start_index=start_acil,
+                    return_to_factory=False,
+                    seed_order_fn=suggest_segment_order_fn,
+                )
+            )
+            routed_acil = {str(t['id']) for t in acil_routable}
+            output.extend(
+                str(t['id']) for t in acil_seg if str(t['id']) not in routed_acil
+            )
+        elif acil_seg:
+            output.extend(str(t['id']) for t in acil_seg)
+
+        if len(normal_routable) >= 1:
             start_index = _start_matrix_index(output, routable_by_id)
             old_order = [str(t['id']) for t in normal_routable]
-            new_order = suggest_segment_order_fn(
-                normal_routable,
-                duration_matrix,
-                start_index=start_index,
-            )
+            if len(normal_routable) >= 2:
+                new_order = optimize_routable_segment_ids(
+                    normal_routable,
+                    duration_matrix,
+                    start_index=start_index,
+                    return_to_factory=True,
+                    seed_order_fn=suggest_segment_order_fn,
+                )
+            else:
+                new_order = old_order
             warnings.extend(
                 detect_important_order_warnings(
                     old_order,
@@ -370,9 +393,19 @@ def validate_apply_task_ids(
         return [tid for tid in order if tid in allowed]
 
     if critical:
-        if _subseq(proposed, critical) != _subseq(canonical_ids, critical):
+        from modules.planlama.arac_emergency_route_order import acil_before_normal_violation
+
+        crit_set = {str(tid) for tid in critical}
+        unlocked = {tid for tid in canonical_ids if tid not in locked}
+        prop_unlocked = _subseq(proposed, unlocked)
+        active_unlocked = [t for t in active if str(t['id']) in unlocked]
+        if acil_before_normal_violation(
+            prop_unlocked,
+            active_unlocked,
+            critical_ids=crit_set,
+        ):
             raise RouteApplyConflictError(
                 'CRITICAL_ORDER_CHANGED',
-                'Acil işlerin sırası değiştirilemez.',
+                'Acil işler normal işlerden sonra gelemez.',
                 critical_task_ids=sorted(critical),
             )

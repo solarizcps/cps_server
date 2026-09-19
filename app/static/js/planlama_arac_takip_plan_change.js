@@ -140,12 +140,30 @@
     }
   }
 
+  function _taskCompanyPlain(d) {
+    var job = String(d.job_title || '').trim();
+    var co = String(d.company_name || '').trim();
+    if (job && co && job.toLowerCase() !== co.toLowerCase()) return job + '\nFirma: ' + co;
+    return job || co || '—';
+  }
+
+  function _taskCompanySummaryHtml(d) {
+    if (window.AtpPresentation && window.AtpPresentation.taskCompanyBlockHtml) {
+      return window.AtpPresentation.taskCompanyBlockHtml({
+        job_title: d.job_title,
+        company_name: d.company_name,
+        priority: d.priority || d.oncelik,
+      }, { location: false, acilInline: true });
+    }
+    var pri = (d.priority || d.oncelik || '').toString().trim().toUpperCase();
+    return fmtVal(d.job_title || d.company_name) +
+      (pri === 'ACIL' ? ' <span class="badge badge-red atp-acil-badge">ACİL</span>' : '');
+  }
+
   function populateSummary(d) {
     var jobEl = qs('atpPcSummaryJob');
     if (jobEl) {
-      var jobTxt = fmtVal(d.job_title) + (d.company_name ? ' / ' + d.company_name : '');
-      var pri = (d.priority || d.oncelik || '').toString().trim().toUpperCase();
-      jobEl.innerHTML = jobTxt + (pri === 'ACIL' ? ' <span class="badge badge-red atp-acil-badge">ACİL</span>' : '');
+      jobEl.innerHTML = _taskCompanySummaryHtml(d);
     }
     qs('atpPcSummaryDate').textContent = fmtVal(d.plan_tarihi);
     qs('atpPcSummaryVehicle').textContent = fmtVal(d.arac_plaka_snapshot) + ' · ' + fmtVal(d.sofor_adi_snapshot);
@@ -411,8 +429,7 @@
     var d = _state.detail || {};
     if (action === 'reorder_info') return true;
     if (action === 'cancel') {
-      var jobLabel = fmtVal(d.job_title) + (d.company_name ? ' / ' + d.company_name : '');
-      var msg = jobLabel + '\n\nBu iş aktif plandan kaldırılacak; geçmiş kaydı korunacaktır.\n\nOnaylıyor musunuz?';
+      var msg = _taskCompanyPlain(d) + '\n\nBu iş aktif plandan kaldırılacak; geçmiş kaydı korunacaktır.\n\nOnaylıyor musunuz?';
       if (!window.confirm(msg)) return false;
     }
     if (actionNeedsReason(action)) {

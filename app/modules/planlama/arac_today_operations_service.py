@@ -444,12 +444,19 @@ def _fmt_km(m: float | None) -> str:
     return f'{km:.1f} km'.replace('.', ',')
 
 
-def _route_status_label(state: str | None, deviation_m: float | None) -> str:
+def _route_status_label(
+    state: str | None,
+    deviation_m: float | None,
+    *,
+    has_active_plan_items: bool = False,
+) -> str:
     st = state or 'NO_ACTIVE_PLAN'
     if st == 'DEVIATING' and deviation_m:
         return f'Rotadan {_fmt_km(deviation_m)} saptı'
     if st == 'ON_ROUTE':
         return 'Rotada'
+    if has_active_plan_items and st in ('NO_ACTIVE_PLAN', 'NO_ROUTE_REFERENCE'):
+        return 'Planlandı'
     return ROUTE_LABELS.get(st, st)
 
 
@@ -1004,6 +1011,8 @@ def get_today_vehicle_operations(
             it for it in active_items_out
             if str(it.get('arac_external_id') or '') == vid
         ]
+        if vid_items and route_state == 'NO_ACTIVE_PLAN':
+            route_state = 'NO_ROUTE_REFERENCE'
         trip_started = _is_trip_started(
             plan_date, plan_id, vid_items, route_state, local_today=local_today,
         )
@@ -1057,7 +1066,9 @@ def get_today_vehicle_operations(
             'status_reason': status_reason,
             'physical_status': physical,
             'route_state': route_state,
-            'route_status_label': _route_status_label(route_state, deviation_m),
+            'route_status_label': _route_status_label(
+                route_state, deviation_m, has_active_plan_items=bool(vid_items),
+            ),
             'current_deviation_m': deviation_m,
             'deviation_m': deviation_m,
             'max_deviation_m': max_deviation_m,

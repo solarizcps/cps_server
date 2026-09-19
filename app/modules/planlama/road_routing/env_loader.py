@@ -23,10 +23,31 @@ def _project_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
+def _routing_env_file() -> Path | None:
+    """Preview/production routing secrets — never log values."""
+    explicit = (os.environ.get('CPS_ROUTING_ENV_FILE') or '').strip()
+    if explicit:
+        p = Path(explicit)
+        return p if p.is_file() else None
+    default = _project_root() / '.env'
+    return default if default.is_file() else None
+
+
+def routing_env_key_status() -> dict[str, str]:
+    """PRESENT/MISSING only — safe for logs and reports."""
+    load_routing_env(force_routing=False)
+    out: dict[str, str] = {}
+    for key in sorted(_ROUTING_KEYS):
+        out[key] = 'PRESENT' if (os.environ.get(key) or '').strip() else 'MISSING'
+    env_file = _routing_env_file()
+    out['CPS_ROUTING_ENV_FILE'] = 'PRESENT' if env_file else 'MISSING'
+    return out
+
+
 def load_routing_env(force_routing: bool = True) -> None:
     """Parse .env with BOM/quote normalization; optionally override routing os.environ."""
-    env_path = _project_root() / '.env'
-    if not env_path.is_file():
+    env_path = _routing_env_file()
+    if not env_path:
         return
     parsed: dict[str, str] = {}
     for raw in env_path.read_bytes().decode('utf-8-sig').splitlines():

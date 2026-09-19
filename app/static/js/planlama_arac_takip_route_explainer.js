@@ -156,7 +156,12 @@
       if (!stop.has_coordinates || stop.latitude == null) return;
       var lat = parseFloat(stop.latitude), lng = parseFloat(stop.longitude);
       var mk = L.marker([lat, lng], { icon: makeStopIcon(stop.order_no), zIndexOffset: 800 + (stop.order_no || 0) });
-      mk.bindPopup('<strong>' + esc(stop.order_no) + ' · ' + esc(stop.company_name) + '</strong><br>' + esc(stop.job_title || '—'));
+      var popJob = esc(stop.job_title || stop.company_name || '—');
+      var popCo = esc(stop.company_name || '');
+      var popSame = popCo && popJob && String(stop.job_title || '').trim().toLowerCase() === String(stop.company_name || '').trim().toLowerCase();
+      var popHtml = '<strong>' + esc(stop.order_no) + ' · ' + popJob + '</strong>';
+      if (popCo && !popSame) popHtml += '<br><span style="font-size:11px;color:#64748b">Firma: ' + popCo + '</span>';
+      mk.bindPopup(popHtml);
       mk.addTo(_map); _markers.push(mk); bounds.push([lat, lng]);
     });
 
@@ -185,10 +190,21 @@
       '<span class="atp-exp-name">Başlangıç: ' + esc(baseName) + '</span></div>';
     stopList.forEach(function (s) {
       var lockBadge = s.is_locked ? '<span class="atp-exp-lock" title="Kilitli">&#x1F512;</span>' : '';
+      var job = String(s.job_title || '').trim();
+      var co = String(s.company_name || '').trim();
+      var primary = job || co || '—';
+      var same = job && co && job.toLowerCase() === co.toLowerCase();
+      var stack = '<div class="atp-exp-stack">' +
+        '<div class="atp-exp-line1"><span class="atp-exp-task">' + esc(primary) + '</span>' +
+        priBadge(s.priority || 'NORMAL') + lockBadge + '</div>';
+      if (co && !same) {
+        stack += '<div class="atp-exp-line2"><span class="atp-exp-firma-ico">&#x1F3E2;</span>' +
+          '<span class="atp-exp-firma">Firma: ' + esc(co) + '</span></div>';
+      }
+      stack += '</div>';
       html += '<div class="atp-exp-row">' +
         '<span class="atp-exp-num">' + esc(s.order_no != null ? s.order_no : '—') + '</span>' +
-        '<span class="atp-exp-name">' + esc(s.company_name || '—') + '</span>' +
-        priBadge(s.priority || 'NORMAL') + lockBadge + '</div>';
+        '<span class="atp-exp-name atp-exp-name-stack">' + stack + '</span></div>';
     });
     html += '<div class="atp-exp-row base">' +
       '<span style="font-size:16px;line-height:1">&#x1F3ED;</span>' +
@@ -210,7 +226,7 @@
       ['İşlem', summary.service_formula || '—'],
       ['Toplam plan', summary.total_minutes != null ? summary.total_minutes + ' dk' : '—'],
       ['Çıkış', summary.departure_time || '—'],
-      ['Tahmini dönüş', summary.estimated_return_time || '—']
+      [summary.factory_arrival_label || 'TAHMİNİ FABRİKA VARIŞI', summary.estimated_return_time || '—']
     );
     return rows.map(function (r) {
       return '<div class="atp-exp-sum-row"><span>' + esc(r[0]) + '</span><strong>' + esc(r[1]) + '</strong></div>';
@@ -581,6 +597,7 @@
         departure_time: dep,
         keep_current_order: profileOnly,
         profile_only: profileOnly,
+        google_apply_proposal: profileOnly ? null : (_googleDto && _googleDto.apply_proposal) || null,
       }),
     })
       .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
@@ -1001,6 +1018,7 @@
       total_minutes: opt.total_plan_minutes_display != null ? opt.total_plan_minutes_display : ceilMin(opt.total_plan_seconds),
       departure_time: dto.departure_time || '—',
       estimated_return_time: opt.return_display || '—',
+      factory_arrival_label: (dto && dto.factory_arrival_label) || 'TAHMİNİ FABRİKA VARIŞI',
     };
   }
 
@@ -1055,6 +1073,7 @@
         service_formula: (dto.active_stop_count || names.length) + ' × ' + svcMin + ' dk',
         formula_text: (opt.total_plan_minutes_display != null ? opt.total_plan_minutes_display + ' dk' : '—'),
         estimated_return_time: opt.return_display || '—',
+      factory_arrival_label: (dto && dto.factory_arrival_label) || 'TAHMİNİ FABRİKA VARIŞI',
       },
     };
   }
@@ -1116,8 +1135,12 @@
       gain_comparison: { lines: lines },
       current_breakdown: activeView ? activeView.breakdown : optionToBreakdown(curOpt, dto, curStops),
       suggested_breakdown: optionToBreakdown(orderSame ? curOpt : sugOpt, dto, sugStops),
-      apply_disabled_reason_label: '',
-      constraint_labels: [],
+      apply_disabled_reason_label: dto.apply_blocked_message || '',
+      constraint_labels: dto.emergency_explanation ? [dto.emergency_explanation] : [],
+      emergency_priority_applied: !!dto.emergency_priority_applied,
+      apply_enabled: dto.apply_enabled !== false,
+      traffic_data_current: dto.traffic_data_current !== false,
+      google_comparison: dto.comparison || {},
       source_info: {
         provider: 'Google Routes',
         profile: profile === 'toll_free' ? 'Ücretli Geçişi Azaltan' : 'En Hızlı',
@@ -1272,7 +1295,7 @@
       '<div>Sürüş: <strong>' + esc(f.drive_minutes != null ? f.drive_minutes + ' dk' : '—') + '</strong></div>' +
       '<div>İşlem: <strong>' + esc(f.service_formula || '—') + '</strong></div>' +
       '<div>Toplam plan: <strong>' + esc(f.formula_text || '—') + '</strong></div>' +
-      '<div>Tahmini dönüş: <strong>' + esc(f.estimated_return_time || '—') + '</strong></div>' +
+      '<div>TAHMİNİ FABRİKA VARIŞI: <strong>' + esc(f.estimated_return_time || '—') + '</strong></div>' +
       '</div>';
     return html;
   }

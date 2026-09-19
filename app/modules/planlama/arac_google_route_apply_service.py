@@ -79,17 +79,6 @@ def _google_profile_code(profile: str) -> str:
     return _PROFILE_MAP[key]
 
 
-def _expected_task_ids_for_apply(tasks: list[dict], base: dict, *, keep_current: bool) -> list[str]:
-    from modules.planlama.road_routing.route_planner_service import build_plan_route_dto
-
-    route_dto = build_plan_route_dto(base, tasks)
-    side = route_dto.get('current' if keep_current else 'suggested') or {}
-    ids = side.get('full_task_ids') or []
-    if not ids and keep_current:
-        ids = [str(t['id']) for t in active_tasks_sorted(tasks)]
-    return [str(i) for i in ids]
-
-
 def _fetch_google_option(
     *,
     plan_date: str,
@@ -198,6 +187,7 @@ def apply_google_route_order_and_snapshot(
     user_id: int | None = None,
     keep_current_order: bool = False,
     profile_only: bool = False,
+    google_apply_proposal: dict | None = None,
 ) -> RouteApplyResult:
     """Validate CPS/Google, then delegate to atomic apply with Google route DTO."""
     if not tables_ready():
@@ -228,18 +218,29 @@ def apply_google_route_order_and_snapshot(
     active_ordered = [str(t['id']) for t in active_tasks_sorted(tasks)]
     active_ids = sorted(active_ordered)
 
-    if profile_only:
-        expected = active_ordered
-        keep_current_order = True
-    else:
-        expected = _expected_task_ids_for_apply(tasks, base, keep_current=keep_current_order)
-
     if sorted(norm_ids) != active_ids:
         raise RouteApplyValidationError('Gönderilen task_ids aktif plan işleri ile eşleşmiyor')
     if len(set(norm_ids)) != len(norm_ids):
         raise RouteApplyValidationError('Tekrarlı task_id gönderilemez')
-    if norm_ids != expected:
-        raise RouteApplyValidationError('Gönderilen sıra CPS rota önerisi ile eşleşmiyor')
+
+    from modules.planlama.arac_google_route_apply_proposal import validate_google_apply_proposal
+
+    if profile_only:
+        keep_current_order = True
+        if norm_ids != active_ordered:
+            raise RouteApplyValidationError(
+                'Profil-only uygulamada sıra mevcut plan ile aynı olmalıdır',
+            )
+    else:
+        validate_google_apply_proposal(
+            proposal=google_apply_proposal,
+            plan_date=plan_date,
+            vehicle_id=str(arac_external_id),
+            departure_time=departure_time.strip()[:5],
+            google_profile=google_profile,
+            task_ids=norm_ids,
+            tasks=tasks,
+        )
 
     id_to_task = {str(t['id']): t for t in active_tasks_sorted(tasks)}
     ordered_stops = [id_to_task[i] for i in norm_ids if i in id_to_task]
@@ -270,6 +271,7 @@ def apply_google_route_order_and_snapshot(
         route_dto_builder=_builder,
         departure_time=departure_time.strip()[:5],
         skip_reorder=profile_only,
+        skip_traffic_proposal_validation=True,
     )
     result.route_snapshot = {
         **result.route_snapshot,

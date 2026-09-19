@@ -22,6 +22,7 @@ sys.path.insert(0, str(APP))
 sys.path.insert(0, str(APP.parent / 'tests' / 'planlama'))
 
 from atp_canonical_forensic import assert_canonical_atp_unchanged, canonical_logical_snapshot
+from atp_min_auth_schema import ensure_min_auth_schema
 from atp_plan2_fixture import CIKIS, PLAN_DATE, PLAN_ID, VEHICLE, insert_factory_base, seed_plan2_fixture
 from tools.nexgen_tmp_db import assert_resolved_db_is_tmp
 
@@ -167,6 +168,7 @@ def env():
     db = os.path.join(tmp_dir, 'mock_data_test.db')
     shutil.copy2(live, db)
     assert_resolved_db_is_tmp(db, live)
+    ensure_min_auth_schema(db)
     _load_migration(MIG189).run(db)
     os.environ['CPS_MOCK_DB_PATH'] = db
     os.environ['CPS_TEST_DB_GUARD'] = '1'
@@ -275,7 +277,7 @@ class TestReturnScopeMatrix:
             ctx = load_whatsapp_plan_context(PLAN_DATE, VEHICLE)
         assert ctx['return_source'] == RETURN_SOURCE_NONE
         msg = ctx and build_whatsapp_payload(PLAN_DATE, VEHICLE)['message']
-        assert '*Tahmini dönüş:* —' in msg
+        assert '*Tahmini Fabrika Varışı:* —' in msg
 
     def test_t5_midnight_next_day_format(self):
         display = format_return_time_display(

@@ -447,7 +447,7 @@ def arac_takip_api_plana_al():
 
 
 @arac_takip_bp.route('/api/whatsapp', methods=['GET'])
-@yetki_gerekli('planlama', 'can_view')
+@yetki_gerekli('planlama.arac_takip', 'can_view')
 def arac_takip_api_whatsapp():
     date_raw = (request.args.get('date') or '').strip()
     vehicle_id = (request.args.get('vehicle_id') or request.args.get('arac_external_id') or '').strip()
@@ -852,6 +852,23 @@ def arac_takip_api_route_apply():
                 if not departure_time:
                     return jsonify({'ok': False, 'error': 'departure_time gerekli', 'code': 'INVALID_REQUEST'}), 400
                 from modules.planlama.arac_google_route_apply_service import apply_google_route_order_and_snapshot
+                google_apply_proposal = body.get('google_apply_proposal')
+                if isinstance(google_apply_proposal, dict):
+                    pass
+                elif body.get('proposal_hash') and body.get('suggested_order'):
+                    google_apply_proposal = {
+                        'source': 'google-routes-v1',
+                        'proposal_hash': body.get('proposal_hash'),
+                        'expires_at': body.get('proposal_expires_at') or body.get('expires_at'),
+                        'suggested_order': body.get('suggested_order'),
+                        'plan_date': plan_date_str,
+                        'vehicle_id': str(vehicle_id or ''),
+                        'departure_time': departure_time,
+                        'google_profile': google_profile,
+                        'coordinate_fingerprint': body.get('coordinate_fingerprint'),
+                    }
+                else:
+                    google_apply_proposal = None
                 result = apply_google_route_order_and_snapshot(
                     uid,
                     plan_date_str,
@@ -862,6 +879,7 @@ def arac_takip_api_route_apply():
                     user_id=uid,
                     keep_current_order=keep_current or profile_only,
                     profile_only=profile_only,
+                    google_apply_proposal=google_apply_proposal,
                 )
             else:
                 proposal_hash = (body.get('proposal_hash') or '').strip() or None
@@ -1491,11 +1509,36 @@ def arac_takip_api_plan_google_route_options():
             'code': 'NO_BASE',
         }), 422
 
-    # ── Suggested order: mevcut Rota Kararı servisi (ORS matrix) ─────────────
-    # build_plan_route_dto → suggested.full_task_ids (CPS sıralama mantığı)
-    # Google waypoint optimization KULLANILMAZ.
-    route_dto = build_plan_route_dto(base, tasks)
-    sug_full_ids = (route_dto.get('suggested') or {}).get('full_task_ids') or []
+    # ── Suggested order: ACİL ihlali varsa ACİL-first; aksi halde Rota Kararı DTO ──
+    from modules.planlama.arac_emergency_route_order import acil_before_normal_violation
+    from modules.planlama.arac_route_constraints import (
+        classify_route_tasks,
+        load_visit_states_for_tasks,
+        normalize_priority,
+    )
+
+    visit_states = load_visit_states_for_tasks(tasks)
+    constraints = classify_route_tasks(tasks, visit_states)
+    current_ids = [str(t['id']) for t in active]
+    critical_ids = set(constraints.get('critical_task_ids') or [])
+    if critical_ids and acil_before_normal_violation(
+        current_ids, active, critical_ids=critical_ids,
+    ):
+        acils = sorted(
+            [t for t in active if normalize_priority(t.get('priority')) == 'ACIL'],
+            key=lambda t: (
+                (t.get('company_name') or t.get('title') or str(t.get('id'))),
+                t.get('order_no') or 0,
+            ),
+        )
+        normals = sorted(
+            [t for t in active if normalize_priority(t.get('priority')) != 'ACIL'],
+            key=lambda t: (t.get('order_no') or 0, str(t.get('id'))),
+        )
+        sug_full_ids = [str(t['id']) for t in acils + normals]
+    else:
+        route_dto = build_plan_route_dto(base, tasks)
+        sug_full_ids = (route_dto.get('suggested') or {}).get('full_task_ids') or []
 
     id_to_task = {str(t['id']): t for t in active}
     suggested_stops_for_fn = [
@@ -1522,6 +1565,21 @@ def arac_takip_api_plan_google_route_options():
     result['ok'] = True
     result['plan_id'] = int(plan_row.get('id') or 0)
     result['vehicle_id'] = vehicle_id
+
+    from modules.planlama.arac_google_route_apply_proposal import build_google_apply_proposal
+
+    sug_ids = list((options_dto.suggested.order if options_dto.suggested else []) or [])
+    if options_dto.apply_enabled and sug_ids and options_dto.order_changed:
+        result['apply_proposal'] = build_google_apply_proposal(
+            plan_date=plan_date_str,
+            vehicle_id=str(vehicle_id),
+            departure_time=departure_raw[:5],
+            google_profile='fastest',
+            suggested_order=sug_ids,
+            tasks=tasks,
+        )
+    else:
+        result['apply_proposal'] = None
 
     return jsonify(result)
 
