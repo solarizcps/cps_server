@@ -21,6 +21,32 @@ from tools.nexgen_tmp_db import (
 
 _ATP_EXTRA: dict[str, Any] | None = None
 
+_PRODUCTION_CANONICAL_DB = Path(r'C:\Solariz_CPS_SERVER\app\mock_data.db')
+
+
+def production_canonical_db_path() -> str:
+    """Resolved live production mock_data.db — never a pytest write/delete target."""
+    return resolve_path(str(_PRODUCTION_CANONICAL_DB))
+
+
+def is_production_canonical_path(path: str | os.PathLike[str] | None) -> bool:
+    if path is None:
+        return False
+    raw = str(path).strip()
+    if not raw or raw == ':memory:':
+        return False
+    return resolve_path(raw) == production_canonical_db_path()
+
+
+def assert_not_production_canonical_path(path: str | os.PathLike[str], *, action: str = 'write') -> None:
+    if is_production_canonical_path(path):
+        raise LiveDbWriteError(
+            f'{CANONICAL_DB_WRITE_FORBIDDEN_IN_TEST}: {action} blocked for production canonical DB. '
+            f'attempted_path={path!r} production={production_canonical_db_path()!r}. '
+            f'Run pytest only from an isolated worktree with CPS_MOCK_DB_PATH temp DB.',
+            attempted_path=str(path),
+        )
+
 
 def is_test_guard_enabled() -> bool:
     return os.environ.get('CPS_TEST_DB_GUARD', '').strip() == '1'
@@ -53,6 +79,7 @@ def is_canonical_path(path: str | os.PathLike[str] | None) -> bool:
 
 
 def assert_not_canonical_path(path: str | os.PathLike[str], *, action: str = 'write') -> None:
+    assert_not_production_canonical_path(path, action=action)
     if is_canonical_path(path):
         raise LiveDbWriteError(
             f'{CANONICAL_DB_WRITE_FORBIDDEN_IN_TEST}: {action} blocked for canonical DB. '
@@ -73,6 +100,12 @@ def _forbidden_target_message(path: Any, action: str) -> str:
 def _guard_target(path: Any, action: str) -> None:
     if path is None:
         return
+    if is_production_canonical_path(path):
+        raise LiveDbWriteError(
+            f'{CANONICAL_DB_WRITE_FORBIDDEN_IN_TEST}: {action} blocked for production canonical DB. '
+            f'attempted_path={path!r} production={production_canonical_db_path()!r}.',
+            attempted_path=str(path),
+        )
     if is_canonical_path(path):
         raise LiveDbWriteError(
             _forbidden_target_message(path, action),

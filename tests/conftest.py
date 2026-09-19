@@ -23,6 +23,8 @@ from tools.atp_test_db_guard import (  # noqa: E402
     guard_stats,
     install_atp_test_db_guard,
     is_canonical_path,
+    is_production_canonical_path,
+    production_canonical_db_path,
     uninstall_atp_test_db_guard,
 )
 
@@ -61,6 +63,11 @@ def atp_global_db_guard_session(canonical_forensic_before):
     saved['Config_MOCK_DB_PATH'] = config.Config.MOCK_DB_PATH
 
     existing_mock = (saved['CPS_MOCK_DB_PATH'] or '').strip()
+    if existing_mock and is_production_canonical_path(existing_mock):
+        pytest.fail(
+            f'CPS_MOCK_DB_PATH points to production canonical before tests: {existing_mock!r} '
+            f'(resolved={production_canonical_db_path()!r})'
+        )
     if existing_mock and is_canonical_path(existing_mock):
         pytest.fail(
             f'CPS_MOCK_DB_PATH already points to canonical before tests: {existing_mock!r}'
@@ -72,6 +79,16 @@ def atp_global_db_guard_session(canonical_forensic_before):
 
     temp_dir, temp_db = create_empty_temp_db(prefix='atp_pytest_global_')
     bind_temp_db_path(temp_db)
+    if is_production_canonical_path(temp_db):
+        pytest.fail(
+            f'pytest temp DB resolved to production canonical: {temp_db!r}'
+        )
+    import config
+
+    if is_production_canonical_path(config.Config.MOCK_DB_PATH):
+        pytest.fail(
+            f'Config.MOCK_DB_PATH is production canonical after bind: {config.Config.MOCK_DB_PATH!r}'
+        )
 
     ctx = {
         'temp_dir': temp_dir,

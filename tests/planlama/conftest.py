@@ -74,13 +74,29 @@ def atp_ensure_repo_cwd():
 
 @pytest.fixture(autouse=True)
 def atp_worktree_canonical_leak_guard():
-    """Never leave worktree app/mock_data.db behind after a test."""
+    """Remove stray worktree test DB copies only — never production canonical mock_data.db."""
+    from tools.atp_test_db_guard import (
+        is_canonical_path,
+        is_production_canonical_path,
+        is_test_guard_enabled,
+    )
+
     wt = _APP_DIR / 'mock_data.db'
-    if wt.is_file():
+
+    def _maybe_unlink() -> None:
+        if not wt.is_file():
+            return
+        if is_production_canonical_path(wt):
+            return
+        if is_test_guard_enabled() and is_canonical_path(wt):
+            return
+        if is_canonical_path(wt):
+            return
         wt.unlink()
+
+    _maybe_unlink()
     yield
-    if wt.is_file():
-        wt.unlink()
+    _maybe_unlink()
 
 
 @pytest.fixture(autouse=True)
