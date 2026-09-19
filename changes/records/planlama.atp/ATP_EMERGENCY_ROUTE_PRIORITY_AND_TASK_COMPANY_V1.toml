@@ -1,0 +1,99 @@
+schema_version = 1
+module = "planlama.atp"
+version = "v2.1.0"
+phase_code = "ATP_EMERGENCY_ROUTE_PRIORITY_AND_TASK_COMPANY_V1"
+title = "R2 acil-first rota, cross-plan apply, ETA, WhatsApp onizleme, gorev/firma, dar yetki"
+status = "ONAYLANDI"
+date = "2026-09-19"
+summary = "Ekleme sirasi baglayici degil; tum ACIL duraklar once trafik/mesafe ile optimize; cross-plan global apply; Tahmini Fabrika Varisi; WhatsApp preview/sira; GOREV VE FIRMA gorsel ayrimi; /api/whatsapp planlama.arac_takip:can_view; canonical test DB guard (COMMIT_B)."
+source_type = "commit"
+commit_sha = "880b8cd0dff2ae04fc9acd1af6073ff18fa0774b"
+worktree_fingerprint = "hotfix/atp-emergency-route-priority-v1@616275dd"
+approved_by = "Adem"
+verification_date = "2026-09-19"
+verification_evidence = "345/345 PASS izole TEMP DB (_pytest_commits_ab_regression.log); preview 9/9 gorev/firma Adem visual gate; dar WhatsApp yetki 4/4; canonical guard 6/6."
+test_result = "345 PASS 0 FAIL (18 modul izole TEMP DB, CPS_TEST_DB_GUARD=1)"
+db_write = false
+server_restart = false
+push_status = "pending"
+deployment_status = "NOT_DEPLOYED"
+
+changes = [
+  "ACIL-first rota onerisi: ekleme/sira DB alani oncelik motoru degil; ACIL segment + normal segment trafik/mesafe optimizasyonu.",
+  "Google route-options ve apply: cross-plan arac-gunlu global sira; trafik yoksa apply kapali.",
+  "ETA ve Tahmini Fabrika Varisi: fabrika baslangic/donus; timeline overlay read.",
+  "WhatsApp V2 preview: preview_stops, message_preview, ACIL 1-2 / normal 3-9; dar planlama.arac_takip:can_view.",
+  "UI: GOREV VE FIRMA basligi, durak ozeti, onizleme modali.",
+  "Test: canonical DB guard fail-closed; leak_guard production canonical yolunu silmez.",
+]
+
+changed_files = [
+  "app/modules/planlama/arac_emergency_route_order.py",
+  "app/modules/planlama/arac_google_route_apply_proposal.py",
+  "app/modules/planlama/arac_google_route_apply_service.py",
+  "app/modules/planlama/arac_google_route_options_models.py",
+  "app/modules/planlama/arac_google_route_options_service.py",
+  "app/modules/planlama/arac_route_apply_service.py",
+  "app/modules/planlama/arac_route_constraints.py",
+  "app/modules/planlama/arac_route_explainer_dto.py",
+  "app/modules/planlama/arac_takip_repo.py",
+  "app/modules/planlama/arac_takip_routes.py",
+  "app/modules/planlama/arac_today_operations_service.py",
+  "app/modules/planlama/arac_whatsapp_message_service.py",
+  "app/modules/planlama/road_routing/env_loader.py",
+  "app/static/css/planlama_arac_takip.css",
+  "app/static/js/planlama_arac_takip.js",
+  "app/static/js/planlama_arac_takip_plan_change.js",
+  "app/static/js/planlama_arac_takip_plan_map.js",
+  "app/static/js/planlama_arac_takip_route_explainer.js",
+  "app/templates/planlama/arac_takip_plan.html",
+  "app/tools/atp_test_db_guard.py",
+  "tests/conftest.py",
+  "tests/planlama/conftest.py",
+  "tests/planlama/atp_min_auth_schema.py",
+  "tests/planlama/test_atp_canonical_db_guard_r2_v1.py",
+  "tests/planlama/test_atp_cross_plan_daily_card_v1.py",
+  "tests/planlama/test_atp_emergency_route_priority_v1.py",
+  "tests/planlama/test_atp_emergency_route_r2_e2e_v1.py",
+  "tests/planlama/test_atp_google_apply_proposal_r2_v1.py",
+  "tests/planlama/test_atp_r2_cross_plan_eta_read_overlay.py",
+  "tests/planlama/test_atp_task_company_visual_v1.py",
+  "tests/planlama/test_atp_whatsapp_api_v1.py",
+  "tests/planlama/test_atp_whatsapp_message_builder_v1.py",
+  "tests/planlama/test_atp_whatsapp_return_scope_v1.py",
+  "tests/planlama/test_google_route_options_ui.py",
+  "changes/records/planlama.atp/ATP_EMERGENCY_ROUTE_PRIORITY_AND_TASK_COMPANY_V1.toml",
+  "changes/fragments/planlama.atp.ATP_EMERGENCY_ROUTE_PRIORITY_AND_TASK_COMPANY_V1.release",
+]
+
+locked_rules = [
+  "Ekleme sirasi rota onerisini belirlemez; DB sira ACIL rank degildir.",
+  "Tum ACIL isler normal islerden once; ACIL ic sirasi rota motoru hesaplar.",
+  "Baslangic ve bitis Solariz Fabrika; Tahmini Fabrika Varisi donus ayagi dahil.",
+  "Trafik yoksa apply kapali; sahte suggested=current yok.",
+  "WhatsApp /api/whatsapp yetkisi planlama.arac_takip:can_view (genis planlama:can_view degil).",
+  "Pytest canonical production DB uzerinde calismaz; CPS_TEST_DB_GUARD zorunlu.",
+]
+
+tests = [
+  "tests/planlama/test_atp_emergency_route_priority_v1.py",
+  "tests/planlama/test_atp_emergency_route_r2_e2e_v1.py",
+  "tests/planlama/test_atp_google_apply_proposal_r2_v1.py",
+  "tests/planlama/test_atp_cross_plan_daily_card_v1.py",
+  "tests/planlama/test_atp_r2_cross_plan_eta_read_overlay.py",
+  "tests/planlama/test_atp_task_company_visual_v1.py",
+  "tests/planlama/test_atp_whatsapp_api_v1.py (dar yetki 4 test)",
+  "tests/planlama/test_atp_canonical_db_guard_r2_v1.py",
+  "18 modul izole regresyon 345 PASS",
+]
+
+known_issues = []
+
+next_steps = [
+  "COMMIT_C: stabilization manifest refresh (build_atp_lock_manifest.py).",
+  "Push/deploy Adem onayi sonrasi.",
+]
+
+related_commits = [
+  "616275dd5b803b49f2780afa75131b1e3a3e026a",
+]
