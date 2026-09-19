@@ -2,6 +2,7 @@
 """ATP Geofence A2 — APPROACHING, order block, EXIT 300m, atomic transaction."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
 import os
@@ -27,7 +28,10 @@ for _p in (str(_APP), str(_PLANLAMA_TESTS)):
         sys.path.insert(0, _p)
 
 os.environ.setdefault('CPS_TEST_DB_GUARD', '1')
-from tools.atp_test_db_guard import install_atp_test_db_guard  # noqa: E402
+from tools.atp_test_db_guard import (  # noqa: E402
+    install_atp_test_db_guard,
+    is_production_canonical_path,
+)
 
 os.environ.setdefault('CPS_CANONICAL_DB_SOURCE', str(CANONICAL_PATH))
 install_atp_test_db_guard(str(CANONICAL_PATH))
@@ -41,6 +45,32 @@ CANONICAL_BEFORE = (
 
 FIXED_NOW = datetime(2026, 12, 20, 12, 0, 0)
 PASS = FAIL = 0
+_APP_MOCK_DB = _APP / 'mock_data.db'
+_MODULE_PRODUCTION_FP: tuple[str, int, float] | None = None
+
+
+def _file_fingerprint(path: Path) -> tuple[str, int, float]:
+    h = hashlib.sha256()
+    with path.open('rb') as f:
+        for chunk in iter(lambda: f.read(65536), b''):
+            h.update(chunk)
+    st = path.stat()
+    return h.hexdigest().upper(), st.st_size, st.st_mtime
+
+
+def _assert_app_mock_data_guard(phase: str) -> None:
+    global _MODULE_PRODUCTION_FP
+    if not _APP_MOCK_DB.is_file():
+        return
+    resolved = str(_APP_MOCK_DB)
+    if is_production_canonical_path(resolved):
+        fp = _file_fingerprint(_APP_MOCK_DB)
+        if _MODULE_PRODUCTION_FP is None:
+            _MODULE_PRODUCTION_FP = fp
+        elif fp != _MODULE_PRODUCTION_FP:
+            bad('production_canonical_fingerprint', f'changed during {phase}')
+        return
+    bad('canonical_guard', f'unexpected worktree canonical db at {_APP_MOCK_DB}')
 
 
 def ok(name: str) -> None:
@@ -139,10 +169,11 @@ def temp_a2_db(*, stops: int = 1, second_offset_m: float = 800.0):
     con.close()
     import config
     with patch.object(config.Config, 'MOCK_DB_PATH', db_path):
-        worktree_canonical = _APP / 'mock_data.db'
-        if worktree_canonical.is_file():
-            bad('canonical_guard', f'unexpected worktree canonical db at {worktree_canonical}')
-        yield db_path, plan_id, plan_is_ids, lat, lng, coords
+        _assert_app_mock_data_guard('temp_a2_db enter')
+        try:
+            yield db_path, plan_id, plan_is_ids, lat, lng, coords
+        finally:
+            _assert_app_mock_data_guard('temp_a2_db exit')
 
 
 def _snap(con, vid, ts, lat, lng, *, stale=0):
@@ -676,6 +707,13 @@ def test_gf25_input_immutable(db_path, lat, lng) -> None:
         ok('GF25')
     else:
         bad('GF25', 'row mutated')
+
+
+@pytest.fixture(scope='module', autouse=True)
+def _a2_production_mock_guard():
+    _assert_app_mock_data_guard('before module')
+    yield
+    _assert_app_mock_data_guard('after module')
 
 
 @pytest.fixture(scope='module')

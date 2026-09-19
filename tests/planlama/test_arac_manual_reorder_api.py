@@ -2,6 +2,7 @@
 """U3C — Manual reorder API/service integration tests (temp DB only)."""
 from __future__ import annotations
 
+import hashlib
 import importlib
 import importlib.util
 import inspect
@@ -30,6 +31,7 @@ from tools.atp_test_db_guard import (  # noqa: E402
     bind_temp_db_path,
     install_atp_test_db_guard,
     is_canonical_path,
+    is_production_canonical_path,
     resolve_path,
 )
 
@@ -53,27 +55,53 @@ USER_ID = 1
 CONTEXT_URL = '/planlama/arac-takip/api/plan/manual-reorder-context'
 APPLY_URL = '/planlama/arac-takip/api/plan/manual-reorder'
 
+_MODULE_PRODUCTION_FP: tuple[str, int, float] | None = None
 
-def _assert_worktree_canonical_absent(phase: str) -> None:
-    if _WORKTREE_CANONICAL_DB.exists():
-        pytest.fail(
-            f'worktree app/mock_data.db must not exist ({phase}); '
-            f'path={_WORKTREE_CANONICAL_DB!s}',
-        )
+
+def _file_fingerprint(path: Path) -> tuple[str, int, float]:
+    h = hashlib.sha256()
+    with path.open('rb') as f:
+        for chunk in iter(lambda: f.read(65536), b''):
+            h.update(chunk)
+    st = path.stat()
+    return h.hexdigest().upper(), st.st_size, st.st_mtime
+
+
+def _assert_app_mock_data_guard(phase: str) -> None:
+    """Fail-closed on stray worktree DB copy; allow production canonical on disk."""
+    global _MODULE_PRODUCTION_FP
+    path = _WORKTREE_CANONICAL_DB
+    if not path.is_file():
+        return
+    resolved = str(path)
+    if is_production_canonical_path(resolved):
+        fp = _file_fingerprint(path)
+        if _MODULE_PRODUCTION_FP is None:
+            _MODULE_PRODUCTION_FP = fp
+        elif fp != _MODULE_PRODUCTION_FP:
+            pytest.fail(
+                f'production canonical fingerprint changed ({phase}); '
+                f'path={path!s}',
+            )
+        return
+    pytest.fail(
+        f'worktree app/mock_data.db must not exist ({phase}); '
+        f'path={path!s}',
+    )
 
 
 @pytest.fixture(scope='module', autouse=True)
 def _u3c_module_canonical_guard():
-    _assert_worktree_canonical_absent('before module')
+    _assert_app_mock_data_guard('before module')
     yield
-    _assert_worktree_canonical_absent('after module')
+    _assert_app_mock_data_guard('after module')
 
 
 @pytest.fixture(autouse=True)
 def _u3c_test_canonical_invariant():
-    _assert_worktree_canonical_absent('before test')
+    _assert_app_mock_data_guard('before test')
     yield
-    _assert_worktree_canonical_absent('after test')
+    _assert_app_mock_data_guard('after test')
 
 
 def _active_mock_db_path() -> str:
@@ -111,11 +139,11 @@ def _temp_atp_db(*, with_rota: bool = True, with_eta: bool = True):
         bound = bind_temp_db_path(db_path)
         assert not is_canonical_path(bound)
         assert resolve_path(bound) != resolve_path(str(_WORKTREE_CANONICAL_DB))
-        _assert_worktree_canonical_absent('temp_atp_db active')
+        _assert_app_mock_data_guard('temp_atp_db active')
         yield db_path
     finally:
         restore_env_state(saved)
-        _assert_worktree_canonical_absent('temp_atp_db teardown')
+        _assert_app_mock_data_guard('temp_atp_db teardown')
 
 
 def _conn(db_path: str) -> sqlite3.Connection:
@@ -305,7 +333,7 @@ def _seed_basic_plan(
 def _build_flask_client(*, can_update: bool = True):
     from functools import wraps
 
-    _assert_worktree_canonical_absent('flask client setup')
+    _assert_app_mock_data_guard('flask client setup')
     active = _active_mock_db_path()
     if is_canonical_path(active) or resolve_path(active) == resolve_path(str(_WORKTREE_CANONICAL_DB)):
         pytest.fail(f'Flask client requires temp DB binding; got {active!r}')
@@ -1128,17 +1156,17 @@ class TestNoOpAndAuth:
 
 class TestCanonicalDbSafety:
     def test_collection_import_worktree_canonical_absent(self):
-        _assert_worktree_canonical_absent('collection import check')
+        _assert_app_mock_data_guard('collection import check')
 
     def test_manual_reorder_modules_import_no_worktree_db(self):
         from modules.planlama import arac_manual_reorder_service  # noqa: F401
         from modules.planlama import arac_takip_routes  # noqa: F401
-        _assert_worktree_canonical_absent('after manual reorder imports')
+        _assert_app_mock_data_guard('after manual reorder imports')
 
     def test_flask_client_setup_no_worktree_db(self):
         with _temp_atp_db():
             _build_flask_client()
-            _assert_worktree_canonical_absent('after flask client setup')
+            _assert_app_mock_data_guard('after flask client setup')
 
     def test_context_get_no_worktree_db(self):
         with _temp_atp_db() as db_path:
@@ -1146,7 +1174,7 @@ class TestCanonicalDbSafety:
             client = _build_flask_client()
             resp = client.get(CONTEXT_URL, query_string={'plan_id': plan_id})
             assert resp.status_code == 200
-            _assert_worktree_canonical_absent('after context GET')
+            _assert_app_mock_data_guard('after context GET')
 
     def test_successful_reorder_post_no_worktree_db(self):
         with _temp_atp_db() as db_path:
@@ -1160,7 +1188,7 @@ class TestCanonicalDbSafety:
                 'ordered_item_ids': proposed,
             })
             assert resp.status_code == 200
-            _assert_worktree_canonical_absent('after successful reorder POST')
+            _assert_app_mock_data_guard('after successful reorder POST')
 
     def test_validation_409_no_worktree_db(self):
         with _temp_atp_db() as db_path:
@@ -1181,7 +1209,7 @@ class TestCanonicalDbSafety:
                 'ordered_item_ids': [ids[1], ids[0]],
             })
             assert resp.status_code == 409
-            _assert_worktree_canonical_absent('after validation 409')
+            _assert_app_mock_data_guard('after validation 409')
 
     def test_conflict_409_no_worktree_db(self):
         with _temp_atp_db() as db_path:
@@ -1199,14 +1227,14 @@ class TestCanonicalDbSafety:
                 'ordered_item_ids': ids,
             })
             assert resp.status_code == 409
-            _assert_worktree_canonical_absent('after conflict 409')
+            _assert_app_mock_data_guard('after conflict 409')
 
     def test_unauthorized_403_no_worktree_db(self):
         with _temp_atp_db():
             client = _build_flask_client(can_update=False)
             resp = client.post(APPLY_URL, json={'plan_id': 1, 'state_token': 'x', 'ordered_item_ids': []})
             assert resp.status_code == 403
-            _assert_worktree_canonical_absent('after unauthorized 403')
+            _assert_app_mock_data_guard('after unauthorized 403')
 
     def test_temp_db_under_temp_directory(self):
         with _temp_atp_db() as db_path:
@@ -1224,7 +1252,7 @@ class TestCanonicalDbSafety:
     def test_no_cleanup_deletes_worktree_canonical(self):
         src = inspect.getsource(_u3c_test_canonical_invariant)
         src_module = inspect.getsource(_u3c_module_canonical_guard)
-        combined = src + src_module + inspect.getsource(_assert_worktree_canonical_absent)
+        combined = src + src_module + inspect.getsource(_assert_app_mock_data_guard)
         assert 'unlink' not in combined
         assert 'remove(' not in combined
         assert 'os.remove' not in combined
@@ -1234,7 +1262,7 @@ class TestCanonicalDbSafety:
 
         with pytest.raises(LiveDbWriteError):
             sqlite3.connect(str(_CANONICAL_SOURCE))
-        _assert_worktree_canonical_absent('after guard_blocks_live_canonical_connect')
+        _assert_app_mock_data_guard('after guard_blocks_live_canonical_connect')
 
 
 # ── Inactive contract ─────────────────────────────────────────────────────────
